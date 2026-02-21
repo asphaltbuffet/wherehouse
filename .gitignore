@@ -8,3 +8,7 @@ CLAUDE.md
 AGENT*.md
 .claude/
 ai-docs/
+manpages/
+completions/
+release_notes/
+**/mocks/*
