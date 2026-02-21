@@ -1,15 +1,96 @@
 schema = 3
 
 [mod]
+  [mod."charm.land/lipgloss/v2"]
+    version = "v2.0.0-beta.3.0.20251106193318-19329a3e8410"
+    hash = "sha256-iLsJGqxaSpBKMpM+K8oA7OKUydjBAdDl80Y3Xnf1xVA="
+  [mod."github.com/charmbracelet/colorprofile"]
+    version = "v0.3.3"
+    hash = "sha256-OIbahp2GyekOAHw7RB7/4WEOEjqpP/PqK6wfIq1iSkk="
+  [mod."github.com/charmbracelet/fang"]
+    version = "v0.4.4"
+    hash = "sha256-KnwAd/LVJC5gxO/xT80NduudQqA8JNnoDRFE77k30qs="
+  [mod."github.com/charmbracelet/ultraviolet"]
+    version = "v0.0.0-20251106190538-99ea45596692"
+    hash = "sha256-dKNaSNSluFa250SfCOUKzSJ8WfBg03O9azcvhTq4qMM="
+  [mod."github.com/charmbracelet/x/ansi"]
+    version = "v0.11.0"
+    hash = "sha256-P3jCKqEem/gW8dUWiol7K1cZe1Zr2UE2jNe9j884+nk="
+  [mod."github.com/charmbracelet/x/exp/charmtone"]
+    version = "v0.0.0-20250603201427-c31516f43444"
+    hash = "sha256-x6EfMobGGF31tnkjXuoGLxAa6V1ozsR2Z43TQu9/mX0="
+  [mod."github.com/charmbracelet/x/term"]
+    version = "v0.2.2"
+    hash = "sha256-KF7IU1Luxl/sZP6XjomWB2e3lxSUS4/5AahhapGir/4="
+  [mod."github.com/charmbracelet/x/termios"]
+    version = "v0.1.1"
+    hash = "sha256-sri3LpHCBhGvnJldDzBxwbbZpeSGZVCJFOUL45uBFds="
+  [mod."github.com/charmbracelet/x/windows"]
+    version = "v0.2.2"
+    hash = "sha256-CvmE8kAC5wlPSeWjl2hc5xizvGS2FeOLHw84froldkk="
+  [mod."github.com/clipperhouse/displaywidth"]
+    version = "v0.4.1"
+    hash = "sha256-Cchc3GXYSn4eVbsY4DdqeCL0KAh1mYS/mMQnAzeVSBw="
+  [mod."github.com/clipperhouse/stringish"]
+    version = "v0.1.1"
+    hash = "sha256-Mp8M1CRbwr6dcJ4BD9tXD5I78ZgCFEm0GDxJv0GYReg="
+  [mod."github.com/clipperhouse/uax29/v2"]
+    version = "v2.3.0"
+    hash = "sha256-dLL70mEOxrmYVoQjy2K7QvZiahAlJKOcFDz2mW/R/Do="
   [mod."github.com/davecgh/go-spew"]
     version = "v1.1.1"
     hash = "sha256-nhzSUrE1fCkN0+RL04N4h8jWmRFPPPWbCuDc7Ss0akI="
+  [mod."github.com/inconshreveable/mousetrap"]
+    version = "v1.1.0"
+    hash = "sha256-XWlYH0c8IcxAwQTnIi6WYqq44nOKUylSWxWO/vi+8pE="
+  [mod."github.com/lucasb-eyer/go-colorful"]
+    version = "v1.3.0"
+    hash = "sha256-6BKrJsfmxie+YFAWzTYVPQfrwjQEXRo+J8LY+50C1BU="
+  [mod."github.com/mattn/go-runewidth"]
+    version = "v0.0.19"
+    hash = "sha256-GpnbKplhX410Q/eIdknvWbYZgdav1keN+7wNUeOSMHE="
+  [mod."github.com/muesli/cancelreader"]
+    version = "v0.2.2"
+    hash = "sha256-uEPpzwRJBJsQWBw6M71FDfgJuR7n55d/7IV8MO+rpwQ="
+  [mod."github.com/muesli/mango"]
+    version = "v0.1.0"
+    hash = "sha256-Xy63UxeZJMU4JlG6uuEpUeyxTGytx+NDbqCAgXpZrrU="
+  [mod."github.com/muesli/mango-cobra"]
+    version = "v1.2.0"
+    hash = "sha256-26X9H9t2Z/kLII2n/Zd+D568H2rlbVJPS11jT25bdUA="
+  [mod."github.com/muesli/mango-pflag"]
+    version = "v0.1.0"
+    hash = "sha256-qgUxVjVFmbcGjn8m58DRRu4hmYhirEUDy9TjkJYU8m4="
+  [mod."github.com/muesli/roff"]
+    version = "v0.1.0"
+    hash = "sha256-0A/M8h0+dSF1NruiGjs4WbfWENFbV3VpyIwJzHEeRlA="
   [mod."github.com/pmezard/go-difflib"]
     version = "v1.0.0"
     hash = "sha256-/FtmHnaGjdvEIKAJtrUfEhV7EVo5A/eYrtdnUkuxLDA="
+  [mod."github.com/rivo/uniseg"]
+    version = "v0.4.7"
+    hash = "sha256-rDcdNYH6ZD8KouyyiZCUEy8JrjOQoAkxHBhugrfHjFo="
+  [mod."github.com/spf13/cobra"]
+    version = "v1.10.2"
+    hash = "sha256-nbRCTFiDCC2jKK7AHi79n7urYCMP5yDZnWtNVJrDi+k="
+  [mod."github.com/spf13/pflag"]
+    version = "v1.0.9"
+    hash = "sha256-YAjyYpq5BXCosVJtvYLWFG1t4gma2ylzc7ILLoj/hD8="
   [mod."github.com/stretchr/testify"]
     version = "v1.11.1"
     hash = "sha256-sWfjkuKJyDllDEtnM8sb/pdLzPQmUYWYtmeWz/5suUc="
+  [mod."github.com/xo/terminfo"]
+    version = "v0.0.0-20220910002029-abceb7e1c41e"
+    hash = "sha256-GyCDxxMQhXA3Pi/TsWXpA8cX5akEoZV7CFx4RO3rARU="
+  [mod."golang.org/x/sync"]
+    version = "v0.17.0"
+    hash = "sha256-M85lz4hK3/fzmcUViAp/CowHSxnr3BHSO7pjHp1O6i0="
+  [mod."golang.org/x/sys"]
+    version = "v0.37.0"
+    hash = "sha256-5aT0xP02sW1o9sfJHtWoGGNVYDdwb9FyiX/n6RAlzPo="
+  [mod."golang.org/x/text"]
+    version = "v0.24.0"
+    hash = "sha256-qFbmteGOvJfvbLXiOSI8Fsz5Ixt2ZhSYx0/sIqApC7Y="
   [mod."gopkg.in/yaml.v3"]
     version = "v3.0.1"
     hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="

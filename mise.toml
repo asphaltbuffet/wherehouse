@@ -2,15 +2,8 @@
 semver = "latest"
 "aqua:golangci/golangci-lint" = "prefix:2.8"
 "aqua:gotestyourself/gotestsum" = "latest"
-"aqua:rhysd/actionlint" = "latest"
-"aqua:vektra/mockery" = "3"
 "go:github.com/nix-community/gomod2nix" = "latest"
 "go:golang.org/x/tools/cmd/stringer" = "latest"
-
-[tasks.actionlint]
-description = "lint GitHub Actions workflows"
-sources = [".github/workflows/*.yml"]
-run = "actionlint .github/workflows/*.yml"
 
 [tasks.build]
 description = "go build"
@@ -19,7 +12,7 @@ run = "go build -o dist/ ./..."
 
 [tasks.ci]
 description = "CI build pipeline"
-depends = ["actionlint","generate", "mock", "mod-tidy", "test", "cover", "build", "diff"]
+depends = ["actionlint","generate", "mod-tidy", "test", "cover", "build", "diff"]
 hide = true
 
 [tasks.clean]
@@ -49,7 +42,7 @@ run = [
 
 [tasks.dev]
 description = "dev build pipeline"
-depends = ["generate", "mock", "lint", "test", "snapshot"]
+depends = ["generate", "lint", "test", "snapshot"]
 
 [tasks.diff]
 description = "git diff"
@@ -73,7 +66,7 @@ run = "go generate ./..."
 
 [tasks.lint]
 description = "lint project files"
-depends = ["generate", "mock"]
+depends = ["generate"]
 sources = ["**/*.go", ".golangci.yml"]
 outputs = ["bin/golangci-lint.html"]
 run = [
@@ -90,11 +83,6 @@ run = [
   "mkdir manpages",
   "go run . man | gzip -c -9 >manpages/wherehouse.1.gz",
 ]
-
-[tasks.mock]
-description = "generate mocks"
-depends = ["generate"]
-run = "mockery --log-level=warn"
 
 [tasks.mod-tidy]
 description = "go mod tidy"
@@ -128,10 +116,10 @@ depends_post = ["mod-tidy"]
 
 [tasks.test]
 description = "run test suite"
-depends = ["generate", "mock"]
+depends = ["generate"]
 sources = ["**/*.go", "**/testdata/**"]
 outputs = ["bin/coverage.out"]
 run = [
   "mkdir -p bin",
-  "gotestsum -- -race -covermode=atomic -coverprofile=bin/coverage.out $(go list ./... | grep -v /mocks)",
+  "gotestsum -- -race -covermode=atomic -coverprofile=bin/coverage.out $(go list ./... | grep -v /mocks | grep -v /ai-docs)",
 ]
