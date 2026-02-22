@@ -92,9 +92,11 @@ func GetCurrentUsername() string {
 	if username := os.Getenv("USER"); username != "" {
 		return username
 	}
+
 	if username := os.Getenv("USERNAME"); username != "" {
 		return username
 	}
+
 	return "unknown"
 }
 
@@ -112,6 +114,7 @@ func ExpandPath(path string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("cannot expand ~: %w", err)
 		}
+
 		if path == "~" {
 			path = home
 		} else {
@@ -126,10 +129,5 @@ func ExpandPath(path string) (string, error) {
 	path = os.ExpandEnv(path)
 
 	// Make absolute
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("cannot make path absolute: %w", err)
-	}
-
-	return absPath, nil
+	return filepath.Abs(path)
 }

@@ -1,9 +1,10 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/goccy/go-json"
 
 	"charm.land/lipgloss/v2"
 )

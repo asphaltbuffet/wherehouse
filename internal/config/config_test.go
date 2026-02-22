@@ -24,7 +24,7 @@ func TestNew_WithDefaultPaths(t *testing.T) {
 			setupFS: func(_ afero.Fs) {
 				// No config files
 			},
-			expectedDBPath: "/home/user/.wherehouse/inventory.db", // Uses HOME from t.Setenv
+			expectedDBPath: "/home/user/.local/share/wherehouse/wherehouse.db", // XDG-compliant default on Linux
 			expectedUser:   "",
 			expectedFormat: "human",
 			expectError:    false,
@@ -108,6 +108,7 @@ quiet = true
 			// Set up HOME for global config path resolution
 			t.Setenv("HOME", "/home/user")
 			t.Setenv("XDG_CONFIG_HOME", "")
+			t.Setenv("XDG_DATA_HOME", "") // Ensure XDG_DATA_HOME is unset for consistent test behavior
 
 			// Setup filesystem state
 			tt.setupFS(fs)
@@ -235,10 +236,7 @@ func TestValidation(t *testing.T) {
 			err := validate(tt.config)
 
 			if tt.expectError {
-				assert.Error(t, err)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
-				}
+				assert.ErrorContains(t, err, tt.errorMsg)
 				return
 			}
 

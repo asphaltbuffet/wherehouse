@@ -160,7 +160,7 @@ Temporary use semantics:
 
 Return = normal `item.moved` from `Borrowed`.
 
-#### item.marked_missing
+#### item.missing
 
 - `item_id`
 - `previous_location_id`
@@ -170,7 +170,7 @@ Return = normal `item.moved` from `Borrowed`.
 
 Projection moves item to `MISSING`.
 
-#### item.marked_found
+#### item.found
 
 - `item_id`
 - `found_location_id`
