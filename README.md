@@ -23,17 +23,20 @@ wherehouse add location "Socket Set" --in Toolbox
 wherehouse add item "10mm socket wrench" --in "Socket Set"
 wherehouse add item "step ladder" --in Garage
 
-# Find anything instantly (coming soon)
-wherehouse where "socket"
+# Find anything instantly
+wherehouse find "socket"
 # → 10mm socket wrench
 #   Location: Garage >> Toolbox >> Socket Set
-#   Added: 2026-02-23 by you
 
 # Move items with context (coming soon)
 wherehouse move "ladder" Kitchen --project "change-lightbulb" --temporary
 
 # Track project items (coming soon)
-wherehouse where --project "change-lightbulb"
+wherehouse find --project "change-lightbulb"
+# → step ladder (temporary use, origin: Garage)
+
+# Track project items (coming soon)
+wherehouse find --project "change-lightbulb"
 # → step ladder (temporary use, origin: Garage)
 
 # Full history and audit trail (coming soon)
@@ -168,23 +171,34 @@ wherehouse add item "3/8\" drive ratchet" --in Toolbox
 ### 4. Find Items
 
 ```bash
-# Search by name
-wherehouse where "socket"
+# Search by name (substring matching)
+wherehouse find "socket"
+# → 10mm socket wrench
+#   Location: Garage >> Toolbox >> Socket Set
+#
+# → Socket set organizer
+#   Location: Garage >> Toolbox
 
-# Search by location
-wherehouse where --location Garage
+# Limit results
+wherehouse find "screw" -n 5
+# Shows only the 5 closest matches (by Levenshtein distance)
 
-# Search by project
-wherehouse where --project "bedroom-repaint"
+# Verbose output with match details
+wherehouse find "ladder" -v
+# → step ladder
+#   Location: Garage
+#   ID: 01HXXX...
+#   Match distance: 0 (exact match)
 
-# Verbose output
-wherehouse where "ladder" -v
-# → step ladder (id: 8f3a2c)
-#   Location: Garage (full path: Garage)
-#   Status: normal
-#   Project: none
-#   Added: 2026-02-20T14:30:00Z by alice
-#   Last updated: 2026-02-20T14:30:00Z
+# JSON output for scripting
+wherehouse find "socket" --json
+# → {"search_term":"socket","results":[...],"total_count":2,...}
+
+# Missing items show last known location
+wherehouse find "wrench"
+# → 10mm wrench (MISSING)
+#   Last location: Garage >> Toolbox
+#   Currently: Missing
 ```
 
 ### 5. Move Items
@@ -211,7 +225,7 @@ wherehouse missing "socket"
 # → Moved to Missing (last known: Garage >> Toolbox)
 
 # Search missing items
-wherehouse where --location Missing
+wherehouse find --location Missing
 
 # Mark as found
 wherehouse found "socket" Basement --home "Garage:Toolbox"
@@ -233,7 +247,7 @@ wherehouse [command] [flags]
 Item Management:
   add item ✅           Create new item in inventory
   move                 Move item to different location (coming soon)
-  where                Find item(s) by name, location, or project (coming soon)
+  where ✅             Find item(s) or locations by name
   history              Show complete timeline for item (coming soon)
   missing              Mark item as lost (coming soon)
   found                Mark missing item as found (coming soon)
@@ -281,7 +295,7 @@ wherehouse move "drill" Backyard --project deck-rebuild --temporary
 wherehouse move "level" Backyard --project deck-rebuild --temporary
 
 # Check project inventory
-wherehouse where --project deck-rebuild
+wherehouse find --project deck-rebuild
 
 # Complete project (shows items to return)
 wherehouse project complete deck-rebuild
@@ -298,7 +312,7 @@ wherehouse project complete deck-rebuild
 wherehouse borrow "ladder" --to "Bob" --note "for his garage project"
 
 # See all borrowed items
-wherehouse where --location Borrowed
+wherehouse find --location Borrowed
 
 # Return borrowed item
 wherehouse move "ladder" Garage --rehome
@@ -427,13 +441,13 @@ All commands support `--json` for machine-readable output:
 
 ```bash
 # Find all items in a project
-wherehouse where --project deck-rebuild --json | jq -r '.[] | .display_name'
+wherehouse find --project deck-rebuild --json | jq -r '.[] | .display_name'
 
 # Export locations as JSON
 wherehouse location list --json | jq '.[] | select(.parent_id == null)'
 
 # Check for missing items
-MISSING_COUNT=$(wherehouse where --location Missing --json | jq 'length')
+MISSING_COUNT=$(wherehouse find --location Missing --json | jq 'length')
 if [ "$MISSING_COUNT" -gt 0 ]; then
   echo "Warning: $MISSING_COUNT items are missing!"
 fi
@@ -456,7 +470,7 @@ fi
 **Find all tools in garage:**
 ```bash
 #!/bin/bash
-wherehouse where --location Garage --json \
+wherehouse find --location Garage --json \
   | jq -r '.[] | "\(.display_name) → \(.location)"'
 ```
 
@@ -478,7 +492,7 @@ ls -t "$BACKUP_DIR"/*.json | tail -n +11 | xargs rm -f
 #!/bin/bash
 # Add to crontab: 0 9 * * * /usr/local/bin/check-missing.sh
 
-MISSING=$(wherehouse where --location Missing --json)
+MISSING=$(wherehouse find --location Missing --json)
 COUNT=$(echo "$MISSING" | jq 'length')
 
 if [ "$COUNT" -gt 0 ]; then
@@ -688,6 +702,7 @@ mise run ci
 - [x] CLI command implementations (partial)
   - [x] `add item` - Add items to locations
   - [x] `add location` - Create location hierarchy
+  - [x] `where` - Find items/locations with intelligent ranking
   - [x] Basic output formatting (human-readable, JSON, quiet modes)
 
 ### 🚧 In Progress (v0.2.0 - Alpha)

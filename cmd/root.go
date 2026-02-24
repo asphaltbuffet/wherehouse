@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/charmbracelet/fang"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
+	"github.com/asphaltbuffet/wherehouse/cmd/find"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
 )
@@ -44,6 +44,7 @@ Examples:
 	// Add persistent flags for configuration
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file path (default searches global and local configs)")
 	rootCmd.PersistentFlags().Bool("no-config", false, "skip all config files (use defaults only)")
+	rootCmd.MarkFlagsMutuallyExclusive("config", "no-config")
 
 	// Add other global flags (to be bound to config values)
 	rootCmd.PersistentFlags().String("db", "", "database file path")
@@ -51,9 +52,9 @@ Examples:
 	rootCmd.PersistentFlags().Bool("json", false, "machine-readable JSON output")
 	rootCmd.PersistentFlags().CountP("quiet", "q", "quiet mode (-q = minimal, -qq = silent)")
 
-	// Register config command from config package
 	rootCmd.AddCommand(configpkg.GetConfigCmd())
 	rootCmd.AddCommand(add.GetAddCmd())
+	rootCmd.AddCommand(find.GetFindCmd())
 
 	return rootCmd
 }
@@ -64,31 +65,9 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 	configPath, _ := cmd.Flags().GetString("config")
 	noConfig, _ := cmd.Flags().GetBool("no-config")
 
-	// Check for conflicting flags
-	if configPath != "" && noConfig {
-		return errors.New("cannot use both --config and --no-config flags")
-	}
-
-	// If --no-config is set, skip config loading and use defaults
-	if noConfig {
-		globalConfig = config.GetDefaults()
-		ctx := context.WithValue(cmd.Context(), config.ConfigKey, globalConfig)
-		cmd.SetContext(ctx)
-		return nil
-	}
-
-	// Load configuration
-	cfg, err := config.New(configPath)
+	cfg, err := loadConfigOrDefaults(configPath, noConfig)
 	if err != nil {
-		// If explicit config path was provided, fail
-		if configPath != "" {
-			return fmt.Errorf("failed to load config from %q: %w", configPath, err)
-		}
-		// Otherwise, use defaults on any error
-		globalConfig = config.GetDefaults()
-		ctx := context.WithValue(cmd.Context(), config.ConfigKey, globalConfig)
-		cmd.SetContext(ctx)
-		return nil
+		return err
 	}
 
 	globalConfig = cfg
