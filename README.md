@@ -14,29 +14,34 @@
 # Initialize your inventory
 wherehouse init
 
-# Add items to locations
-wherehouse add "10mm socket wrench" --location "Garage:Toolbox:Socket Set"
-wherehouse add "step ladder" --location "Garage"
+# Create location hierarchy
+wherehouse add location Garage
+wherehouse add location Toolbox --in Garage
+wherehouse add location "Socket Set" --in Toolbox
 
-# Find anything instantly
+# Add items to locations
+wherehouse add item "10mm socket wrench" --in "Socket Set"
+wherehouse add item "step ladder" --in Garage
+
+# Find anything instantly (coming soon)
 wherehouse where "socket"
 # → 10mm socket wrench
 #   Location: Garage >> Toolbox >> Socket Set
-#   Added: 2026-02-20 by alice
+#   Added: 2026-02-23 by you
 
-# Move items with context
+# Move items with context (coming soon)
 wherehouse move "ladder" Kitchen --project "change-lightbulb" --temporary
 
-# Track project items
+# Track project items (coming soon)
 wherehouse where --project "change-lightbulb"
 # → step ladder (temporary use, origin: Garage)
 
-# Full history and audit trail
+# Full history and audit trail (coming soon)
 wherehouse history "ladder"
 # → 󰙴  Created in Garage (2026-02-15)
 #   󱁤  Moved to Kitchen (temporary, project: change-lightbulb)
 
-# Mark items as missing or borrowed
+# Mark items as missing or borrowed (coming soon)
 wherehouse missing "socket"  # lost it
 wherehouse found "socket" Basement --home Garage  # found it!
 ```
@@ -138,26 +143,26 @@ wherehouse config init
 
 ```bash
 # Create top-level locations
-wherehouse location add Garage
-wherehouse location add Basement
-wherehouse location add Kitchen
+wherehouse add location Garage
+wherehouse add location Basement
+wherehouse add location Kitchen
 
 # Create nested locations
-wherehouse location add Toolbox --parent Garage
-wherehouse location add "Socket Set" --parent "Garage:Toolbox"
+wherehouse add location Toolbox --in Garage
+wherehouse add location "Socket Set" --in Toolbox
 ```
 
 ### 3. Add Items
 
 ```bash
 # Add item to specific location
-wherehouse add "10mm socket wrench" --location "Garage:Toolbox:Socket Set"
+wherehouse add item "10mm socket wrench" --in "Socket Set"
 
-# Add with notes
-wherehouse add "step ladder" --location Garage --note "borrowed from neighbor"
+# Add multiple items at once
+wherehouse add item "step ladder" "work bench" "tool cart" --in Garage
 
-# Add and associate with project
-wherehouse add "paint roller" --location Basement --project "bedroom-repaint"
+# Items with special characters work fine
+wherehouse add item "3/8\" drive ratchet" --in Toolbox
 ```
 
 ### 4. Find Items
@@ -226,40 +231,40 @@ wherehouse move "socket" "Garage:Toolbox" --rehome
 wherehouse [command] [flags]
 
 Item Management:
-  add           Create new item in inventory
-  move          Move item to different location
-  where         Find item(s) by name, location, or project
-  history       Show complete timeline for item
-  missing       Mark item as lost
-  found         Mark missing item as found
-  delete        Permanently remove item
+  add item ✅           Create new item in inventory
+  move                 Move item to different location (coming soon)
+  where                Find item(s) by name, location, or project (coming soon)
+  history              Show complete timeline for item (coming soon)
+  missing              Mark item as lost (coming soon)
+  found                Mark missing item as found (coming soon)
+  delete               Permanently remove item (coming soon)
 
 Location Management:
-  location add      Create new location
-  location list     Show all locations
-  location tree     Display hierarchy as tree
-  location move     Reparent location in tree
-  location delete   Remove empty location
+  add location ✅      Create new location
+  location list        Show all locations (coming soon)
+  location tree        Display hierarchy as tree (coming soon)
+  location move        Reparent location in tree (coming soon)
+  location delete      Remove empty location (coming soon)
 
 Project Management:
-  project create    Start new project
-  project complete  Mark project as finished
-  project list      Show all projects
-  project delete    Remove project (if no items)
+  project create       Start new project (coming soon)
+  project complete     Mark project as finished (coming soon)
+  project list         Show all projects (coming soon)
+  project delete       Remove project (if no items) (coming soon)
 
 Database Operations:
-  init          Initialize new database
-  doctor        Validate database consistency
-  export        Export events and projections
-  import        Import from export file
+  init                 Initialize new database (coming soon)
+  doctor               Validate database consistency (partial)
+  export               Export events and projections (coming soon)
+  import               Import from export file (coming soon)
 
 Global Flags:
-  -h, --help           Show help
-  --version            Show version
-  --config <path>      Custom config file
-  -v, --verbose        Increase verbosity (-vv, -vvv)
-  -q, --quiet          Suppress non-error output
-  --json               Output as JSON
+  -h, --help           Show help ✅
+  --version            Show version ✅
+  --config <path>      Custom config file ✅
+  --json               Output as JSON ✅
+  -q, --quiet          Suppress non-error output ✅
+  -i, --in             Specify location (for add commands) ✅
 ```
 
 ### Common Workflows
@@ -680,16 +685,20 @@ mise run ci
 - [x] Validation and integrity checking
 - [x] XDG-compliant configuration
 - [x] 100+ integration tests
+- [x] CLI command implementations (partial)
+  - [x] `add item` - Add items to locations
+  - [x] `add location` - Create location hierarchy
+  - [x] Basic output formatting (human-readable, JSON, quiet modes)
 
 ### 🚧 In Progress (v0.2.0 - Alpha)
 
-- [ ] CLI command implementations
-  - [ ] `add`, `move`, `where`, `history`
-  - [ ] `location`, `project` subcommands
+- [ ] CLI command implementations (continued)
+  - [ ] `move`, `where`, `history`
+  - [ ] `project` subcommands
   - [ ] `doctor`, `export`, `import`
+  - [ ] `missing`, `found`, `borrow`
 - [ ] Shell completions (bash, zsh, fish)
 - [ ] Man page generation
-- [ ] JSON output mode
 
 ### 📋 Planned (v0.3.0 - Beta)
 

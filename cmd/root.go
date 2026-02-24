@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/fang"
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
@@ -52,6 +53,7 @@ Examples:
 
 	// Register config command from config package
 	rootCmd.AddCommand(configpkg.GetConfigCmd())
+	rootCmd.AddCommand(add.GetAddCmd())
 
 	return rootCmd
 }
