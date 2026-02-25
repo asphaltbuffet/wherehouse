@@ -214,6 +214,44 @@ func (d *Database) handleItemFound(ctx context.Context, tx *sql.Tx, event *Event
 	return nil
 }
 
+func (d *Database) handleItemLoaned(ctx context.Context, tx *sql.Tx, event *Event) error {
+	var payload struct {
+		ItemID         string `json:"item_id"`
+		FromLocationID string `json:"from_location_id"`
+		LoanedTo       string `json:"loaned_to"`
+	}
+
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	// Get system "Loaned" location
+	var loanedLocID string
+	err := tx.QueryRowContext(ctx,
+		"SELECT location_id FROM locations_current WHERE canonical_name = 'loaned' AND is_system = 1",
+	).Scan(&loanedLocID)
+	if err != nil {
+		return fmt.Errorf("failed to get Loaned location: %w", err)
+	}
+
+	// Update projection: move item to Loaned location
+	// Preserve temporary use state and project association (like item.missing pattern)
+	const query = `
+		UPDATE items_current
+		SET location_id = ?, last_event_id = ?, updated_at = ?
+		WHERE item_id = ?
+	`
+
+	_, err = tx.ExecContext(ctx, query,
+		loanedLocID, event.EventID, event.TimestampUTC, payload.ItemID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to mark item loaned: %w", err)
+	}
+
+	return nil
+}
+
 func (d *Database) handleItemDeleted(ctx context.Context, tx *sql.Tx, event *Event) error {
 	var payload struct {
 		ItemID string `json:"item_id"`

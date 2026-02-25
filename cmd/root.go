@@ -11,6 +11,7 @@ import (
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/cmd/find"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
+	"github.com/asphaltbuffet/wherehouse/cmd/loan"
 	"github.com/asphaltbuffet/wherehouse/cmd/lost"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
@@ -34,9 +35,6 @@ func GetRootCmd() *cobra.Command {
 		Short: "a personal inventory tracker",
 		Long: `Wherehouse helps you track where you put that thing.
 
-Currently in early development. Future versions will launch an interactive TUI
-when run without arguments.
-
 Examples:
   wherehouse --version        Show version information
   wherehouse --help           Show this help message`,
@@ -59,6 +57,7 @@ Examples:
 	rootCmd.AddCommand(add.GetAddCmd())
 	rootCmd.AddCommand(find.GetFindCmd())
 	rootCmd.AddCommand(history.GetHistoryCmd())
+	rootCmd.AddCommand(loan.GetLoanCmd())
 	rootCmd.AddCommand(lost.GetLostCmd())
 	rootCmd.AddCommand(move.GetMoveCmd())
 

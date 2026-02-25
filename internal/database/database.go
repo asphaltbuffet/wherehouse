@@ -17,6 +17,7 @@ type Database struct {
 	// System location caching for performance
 	missingLocationID   string
 	borrowedLocationID  string
+	loanedLocationID    string
 	systemLocationsOnce sync.Once
 }
 
@@ -195,7 +196,7 @@ func (d *Database) initSystemLocations(ctx context.Context) error {
 	const query = `
 		SELECT location_id, canonical_name
 		FROM locations_current
-		WHERE is_system = 1 AND canonical_name IN ('missing', 'borrowed')
+		WHERE is_system = 1 AND canonical_name IN ('missing', 'borrowed', 'loaned')
 	`
 
 	rows, err := d.db.QueryContext(ctx, query)
@@ -215,6 +216,8 @@ func (d *Database) initSystemLocations(ctx context.Context) error {
 			d.missingLocationID = locID
 		case "borrowed":
 			d.borrowedLocationID = locID
+		case "loaned":
+			d.loanedLocationID = locID
 		}
 	}
 

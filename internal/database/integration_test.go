@@ -475,7 +475,7 @@ func TestMigrationTracking(t *testing.T) {
 	t.Run("migration version is tracked", func(t *testing.T) {
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.Equal(t, uint(1), version, "should be at version 1 after initial migration")
+		assert.Equal(t, uint(2), version, "should be at version 2 after all migrations")
 		assert.False(t, dirty, "should not be dirty")
 	})
 

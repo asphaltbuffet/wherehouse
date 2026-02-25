@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -301,6 +302,37 @@ func (d *Database) ValidateFromParent(ctx context.Context, locationID string, ex
 			return fmt.Errorf("location parent mismatch: expected %q, got %q", *expectedFromParentID, *loc.ParentID)
 		}
 	}
+
+	return nil
+}
+
+// ValidateItemLoaned validates that an item can be loaned.
+// Checks: item exists, from_location matches projection, loaned_to is non-empty.
+// Re-loaning is allowed (item can be loaned from Loaned location).
+// Returns an error if validation fails.
+func (d *Database) ValidateItemLoaned(ctx context.Context, itemID, fromLocationID, loanedTo string) error {
+	// Check item exists and get current location
+	item, err := d.GetItem(ctx, itemID)
+	if err != nil {
+		return fmt.Errorf("failed to get item for loan validation: %w", err)
+	}
+
+	// Validate from_location matches projection (critical integrity check)
+	if item.LocationID != fromLocationID {
+		return &InvalidFromLocationError{
+			ItemID:           itemID,
+			ExpectedLocation: fromLocationID,
+			ActualLocation:   item.LocationID,
+		}
+	}
+
+	// Validate loaned_to is not empty (trimmed, no whitespace-only strings)
+	trimmedLoanedTo := strings.TrimSpace(loanedTo)
+	if trimmedLoanedTo == "" {
+		return errors.New("loaned_to cannot be empty or whitespace-only")
+	}
+
+	// Note: Re-loaning is explicitly allowed - no check for already being in Loaned location
 
 	return nil
 }

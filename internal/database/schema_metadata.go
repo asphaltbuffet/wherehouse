@@ -5,33 +5,26 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-// seedSystemLocations creates the system locations (Missing, Borrowed) if they don't exist.
+// seedSystemLocations creates the system locations (Missing, Borrowed, Loaned) if they don't exist.
 // This is called after the initial migration runs.
 // It's idempotent - safe to call multiple times.
+// Uses INSERT OR IGNORE to handle upgrades where only some system locations exist.
 func (d *Database) seedSystemLocations(ctx context.Context) error {
 	return d.ExecInTransaction(ctx, func(tx *sql.Tx) error {
-		// Check if system locations already exist
-		var count int
-		err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM locations_current WHERE is_system = 1").Scan(&count)
-		if err != nil {
-			return fmt.Errorf("failed to check for system locations: %w", err)
-		}
-
-		// Already seeded
-		if count > 0 {
-			return nil
-		}
-
 		now := time.Now().UTC().Format(time.RFC3339)
 
-		// Create Missing location
-		missingID := uuid.NewString()
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO locations_current (
+		// Deterministic UUIDs for system locations (same across all databases)
+		const (
+			missingID  = "00000000-0000-0000-0000-000000000001"
+			borrowedID = "00000000-0000-0000-0000-000000000002"
+			loanedID   = "00000000-0000-0000-0000-000000000003"
+		)
+
+		// Create Missing location (if not exists)
+		_, err := tx.ExecContext(ctx, `
+			INSERT OR IGNORE INTO locations_current (
 				location_id, display_name, canonical_name,
 				parent_id, full_path_display, full_path_canonical,
 				depth, is_system, updated_at
@@ -42,10 +35,9 @@ func (d *Database) seedSystemLocations(ctx context.Context) error {
 			return fmt.Errorf("failed to create Missing location: %w", err)
 		}
 
-		// Create Borrowed location
-		borrowedID := uuid.NewString()
+		// Create Borrowed location (if not exists)
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO locations_current (
+			INSERT OR IGNORE INTO locations_current (
 				location_id, display_name, canonical_name,
 				parent_id, full_path_display, full_path_canonical,
 				depth, is_system, updated_at
@@ -54,6 +46,19 @@ func (d *Database) seedSystemLocations(ctx context.Context) error {
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create Borrowed location: %w", err)
+		}
+
+		// Create Loaned location (if not exists)
+		_, err = tx.ExecContext(ctx, `
+			INSERT OR IGNORE INTO locations_current (
+				location_id, display_name, canonical_name,
+				parent_id, full_path_display, full_path_canonical,
+				depth, is_system, updated_at
+			) VALUES (?, ?, ?, NULL, ?, ?, 0, 1, ?)`,
+			loanedID, "Loaned", "loaned", "Loaned", "loaned", now,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create Loaned location: %w", err)
 		}
 
 		return nil

@@ -34,7 +34,7 @@ Where did I put my 10mm socket wrench?
 
 Primary daily workflows:
 
-- Fast lookup (`where`)
+- Fast lookup (`find`)
 - Intentional movement with context
     - Temporary use
     - Rehome
@@ -503,7 +503,7 @@ Example:
 ### Human-Centered Defaults
 
 - History shows interpreted summaries.
-- Project visible in `where`.
+- Project visible in `find`.
 - Examples embedded in help.
 - UUID hidden unless requested.
 

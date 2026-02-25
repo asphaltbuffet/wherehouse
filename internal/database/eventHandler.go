@@ -37,6 +37,8 @@ func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Even
 		return d.handleItemMissing(ctx, tx, event)
 	case "item.borrowed":
 		return d.handleItemBorrowed(ctx, tx, event)
+	case "item.loaned":
+		return d.handleItemLoaned(ctx, tx, event)
 	case "item.found":
 		return d.handleItemFound(ctx, tx, event)
 	case "item.deleted":

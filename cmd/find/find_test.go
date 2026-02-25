@@ -105,7 +105,7 @@ func TestFindCmd_BasicSearch(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, false)
+	outputHuman(&output, results, false, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "Hammer")
@@ -131,7 +131,7 @@ func TestFindCmd_VerboseMode(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, true)
+	outputHuman(&output, results, true, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "10mm Socket")
@@ -167,7 +167,7 @@ func TestFindCmd_MissingItemIndicator(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, false)
+	outputHuman(&output, results, false, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "Missing Hammer")
@@ -202,7 +202,7 @@ func TestFindCmd_BorrowedItemIndicator(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, false)
+	outputHuman(&output, results, false, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "Borrowed Screwdriver")
@@ -228,7 +228,7 @@ func TestFindCmd_LocationResult(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, false)
+	outputHuman(&output, results, false, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "Toolbox")
@@ -258,7 +258,7 @@ func TestFindCmd_JSONOutput_Item(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, outputJSON(&output, results, "hammer"))
+	require.NoError(t, outputJSON(&output, results, "hammer", nil))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(output.Bytes(), &result))
@@ -289,7 +289,7 @@ func TestFindCmd_JSONOutput_Location(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, outputJSON(&output, results, "toolbox"))
+	require.NoError(t, outputJSON(&output, results, "toolbox", nil))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(output.Bytes(), &result))
@@ -331,7 +331,7 @@ func TestFindCmd_JSONOutput_MixedResults(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, outputJSON(&output, results, "socket"))
+	require.NoError(t, outputJSON(&output, results, "socket", nil))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(output.Bytes(), &result))
@@ -361,7 +361,7 @@ func TestFindCmd_JSONOutput_MissingItem(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, outputJSON(&output, results, "hammer"))
+	require.NoError(t, outputJSON(&output, results, "hammer", nil))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(output.Bytes(), &result))
@@ -396,7 +396,7 @@ func TestFindCmd_NoLastLocationForMissing(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, false)
+	outputHuman(&output, results, false, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "Mystery Item")
@@ -435,7 +435,7 @@ func TestFindCmd_MultipleResults_Sorted(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, false)
+	outputHuman(&output, results, false, nil)
 	result := output.String()
 
 	// Verify results are present
@@ -463,7 +463,7 @@ func TestFindCmd_HierarchicalPath(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, false)
+	outputHuman(&output, results, false, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "Garage >> Toolbox >> Top Drawer >> Deep Drawer")
@@ -485,7 +485,7 @@ func TestFindCmd_VerboseMode_LocationWithDistance(t *testing.T) {
 		},
 	}
 
-	outputHuman(&output, results, true)
+	outputHuman(&output, results, true, nil)
 	result := output.String()
 
 	assert.Contains(t, result, "Cabinet")
@@ -515,7 +515,7 @@ func TestFindCmd_JSONOutput_StructuredSchema(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, outputJSON(&output, results, "torque"))
+	require.NoError(t, outputJSON(&output, results, "torque", nil))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(output.Bytes(), &result))
@@ -564,7 +564,7 @@ func TestFindCmd_OutputItem_InTemporaryUse(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, outputJSON(&output, results, "tool"))
+	require.NoError(t, outputJSON(&output, results, "tool", nil))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(output.Bytes(), &result))

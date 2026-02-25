@@ -37,10 +37,10 @@ func TestMigrations(t *testing.T) {
 		// Verify system locations were seeded
 		var count int
 		require.NoError(t, db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE is_system = 1").Scan(&count))
-		assert.Equal(t, 2, count, "should have 2 system locations (Missing and Borrowed)")
+		assert.Equal(t, 3, count, "should have 3 system locations (Missing, Borrowed, and Loaned)")
 
 		// Verify system locations have correct canonical names
-		var missing, borrowed int
+		var missing, borrowed, loaned int
 		require.NoError(
 			t,
 			db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE canonical_name = 'missing' AND is_system = 1").
@@ -54,6 +54,13 @@ func TestMigrations(t *testing.T) {
 				Scan(&borrowed),
 		)
 		assert.Equal(t, 1, borrowed, "should have Borrowed location")
+
+		require.NoError(
+			t,
+			db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE canonical_name = 'loaned' AND is_system = 1").
+				Scan(&loaned),
+		)
+		assert.Equal(t, 1, loaned, "should have Loaned location")
 	})
 
 	t.Run("version tracking", func(t *testing.T) {
@@ -72,7 +79,7 @@ func TestMigrations(t *testing.T) {
 		// Verify migration version
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 1, version, "should be at version 1 after initial migration")
+		assert.EqualValues(t, 2, version, "should be at version 2 after all migrations")
 		assert.False(t, dirty, "migration should not be dirty")
 	})
 
@@ -97,7 +104,7 @@ func TestMigrations(t *testing.T) {
 		// Verify system locations weren't duplicated
 		var count int
 		require.NoError(t, db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE is_system = 1").Scan(&count))
-		assert.Equal(t, 2, count, "should still have only 2 system locations")
+		assert.Equal(t, 3, count, "should still have only 3 system locations")
 	})
 
 	t.Run("dirty state detection", func(t *testing.T) {
@@ -107,12 +114,12 @@ func TestMigrations(t *testing.T) {
 		ctx := t.Context()
 
 		// Manually set dirty state
-		require.NoError(t, db.SetMigrationVersion(ctx, 1, true))
+		require.NoError(t, db.SetMigrationVersion(ctx, 2, true))
 
 		// Verify dirty state is detected
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 1, version)
+		assert.EqualValues(t, 2, version)
 		assert.True(t, dirty, "dirty flag should be set")
 	})
 }
@@ -133,8 +140,9 @@ func TestMigrationRollback(t *testing.T) {
 		`).Scan(&tableCount))
 		assert.Equal(t, 5, tableCount, "all tables should exist before rollback")
 
-		// Run rollback
-		require.NoError(t, db.RollbackMigration())
+		// Run rollback twice (we have 2 migrations now)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 2 (Loaned location)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 1 (initial schema)
 
 		// Verify tables removed
 		require.NoError(t, db.db.QueryRow(`
@@ -151,8 +159,9 @@ func TestMigrationRollback(t *testing.T) {
 		db := openTestDB(t)
 		defer db.Close()
 
-		// Rollback
-		require.NoError(t, db.RollbackMigration())
+		// Rollback twice (we have 2 migrations now)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 2 (Loaned location)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 1 (initial schema)
 
 		// Verify tables removed
 		var tableCount int
@@ -182,7 +191,7 @@ func TestMigrationRollback(t *testing.T) {
 		// Verify system locations re-seeded
 		var count int
 		require.NoError(t, db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE is_system = 1").Scan(&count))
-		assert.Equal(t, 2, count, "system locations should be re-seeded")
+		assert.Equal(t, 3, count, "system locations should be re-seeded")
 	})
 }
 
