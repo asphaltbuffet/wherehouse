@@ -11,6 +11,7 @@ import (
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/cmd/find"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
+	"github.com/asphaltbuffet/wherehouse/cmd/lost"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
@@ -58,6 +59,7 @@ Examples:
 	rootCmd.AddCommand(add.GetAddCmd())
 	rootCmd.AddCommand(find.GetFindCmd())
 	rootCmd.AddCommand(history.GetHistoryCmd())
+	rootCmd.AddCommand(lost.GetLostCmd())
 	rootCmd.AddCommand(move.GetMoveCmd())
 
 	return rootCmd
