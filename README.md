@@ -39,10 +39,15 @@ wherehouse find --project "change-lightbulb"
 wherehouse find --project "change-lightbulb"
 # → step ladder (temporary use, origin: Garage)
 
-# Full history and audit trail (coming soon)
+# Full history and audit trail
 wherehouse history "ladder"
-# → 󰙴  Created in Garage (2026-02-15)
-#   󱁤  Moved to Kitchen (temporary, project: change-lightbulb)
+# → ○  2 hours ago (alice)  item.moved
+#   │  Moved: Garage → Kitchen
+#   │  Type: temporary_use
+#   │  Project: change-lightbulb
+#   │
+#   ○  2026-02-15 10:30 (alice)  item.created
+#      Created at: Garage
 
 # Mark items as missing or borrowed (coming soon)
 wherehouse missing "socket"  # lost it
@@ -201,7 +206,40 @@ wherehouse find "wrench"
 #   Currently: Missing
 ```
 
-### 5. Move Items
+### 5. View Item History
+
+```bash
+# Show complete event timeline (newest first)
+wherehouse history "socket"
+# → ○  2 hours ago (alice)  item.moved
+#   │  Moved: Garage >> Toolbox → Kitchen >> Counter
+#   │  Type: temporary_use
+#   │
+#   ○  2026-02-20 14:30 (bob)  item.created
+#      Created at: Garage >> Toolbox
+
+# Limit to recent events
+wherehouse history "ladder" -n 5
+
+# Show events since a date
+wherehouse history "socket" --since "2026-02-01"
+
+# Natural language dates
+wherehouse history "wrench" --since "2 weeks ago"
+wherehouse history "socket" --since yesterday
+
+# Chronological order (oldest first)
+wherehouse history "ladder" --oldest-first
+
+# JSON output for scripting
+wherehouse history "socket" --json
+# → {"events":[...],"count":12}
+
+# Search by UUID instead of name
+wherehouse history --id "01HXXX-XXXX-..."
+```
+
+### 6. Move Items
 
 ```bash
 # Permanent move (rehome)
@@ -217,7 +255,7 @@ wherehouse move "paint roller" "Bedroom" --project "bedroom-repaint"
 wherehouse move "roller" Basement --keep-project
 ```
 
-### 6. Track Missing Items
+### 7. Track Missing Items
 
 ```bash
 # Mark as missing
@@ -248,7 +286,7 @@ Item Management:
   add item ✅           Create new item in inventory
   move                 Move item to different location (coming soon)
   where ✅             Find item(s) or locations by name
-  history              Show complete timeline for item (coming soon)
+  history ✅           Show complete event timeline for item
   missing              Mark item as lost (coming soon)
   found                Mark missing item as found (coming soon)
   delete               Permanently remove item (coming soon)
@@ -702,13 +740,14 @@ mise run ci
 - [x] CLI command implementations (partial)
   - [x] `add item` - Add items to locations
   - [x] `add location` - Create location hierarchy
-  - [x] `where` - Find items/locations with intelligent ranking
+  - [x] `where` (aliased as `find`) - Find items/locations with intelligent ranking
+  - [x] `history` - Show complete event timeline for items
   - [x] Basic output formatting (human-readable, JSON, quiet modes)
 
 ### 🚧 In Progress (v0.2.0 - Alpha)
 
 - [ ] CLI command implementations (continued)
-  - [ ] `move`, `where`, `history`
+  - [ ] `move` - Move items between locations
   - [ ] `project` subcommands
   - [ ] `doctor`, `export`, `import`
   - [ ] `missing`, `found`, `borrow`
