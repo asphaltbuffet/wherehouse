@@ -114,6 +114,47 @@ export PATH="$PATH:$HOME/.local/bin"  # add to ~/.bashrc or ~/.zshrc
 wherehouse --version
 ```
 
+### Nix
+
+**Standalone install** (no flake required):
+
+```bash
+nix profile install github:asphaltbuffet/wherehouse
+```
+
+**In a home-manager flake** — add as an input and load the bundled module:
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url      = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    wherehouse.url   = "github:asphaltbuffet/wherehouse";
+    wherehouse.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = { nixpkgs, home-manager, wherehouse, ... }: {
+    homeConfigurations."alice" = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      modules = [
+        wherehouse.homeManagerModules.default
+        {
+          programs.wherehouse.enable = true;
+          # see Configuration → Home Manager for all settings
+        }
+      ];
+    };
+  };
+}
+```
+
+**As a NixOS overlay** (adds `pkgs.wherehouse`):
+
+```nix
+nixpkgs.overlays = [ wherehouse.overlays.default ];
+```
+
 ### Using mise (Development)
 
 ```bash
@@ -388,62 +429,99 @@ wherehouse export > backup-$(date +%Y%m%d).json
 1. `--config <path>` flag
 2. `$WHEREHOUSE_CONFIG` environment variable
 3. `./wherehouse.toml` (current directory)
-4. `~/.config/wherehouse/config.toml` (default)
+4. `~/.config/wherehouse/wherehouse.toml` (default)
 
 **Data locations**:
-- Database: `~/.local/share/wherehouse/inventory.db`
-- Logs: `~/.local/share/wherehouse/logs/`
-- Cache: `~/.cache/wherehouse/`
+- Database: `~/.local/share/wherehouse/wherehouse.db`
 
 ### Configuration File
 
-**Example** (`~/.config/wherehouse/config.toml`):
+Create the default config with:
+
+```bash
+wherehouse config init
+```
+
+**Full example** (`~/.config/wherehouse/wherehouse.toml`):
 
 ```toml
-config_version = 1  # Required
-
-# Database location
-db_path = "~/.local/share/wherehouse/inventory.db"
+[database]
+# Path to SQLite database file. Supports ~ and $ENV_VARS.
+# Default: $XDG_DATA_HOME/wherehouse/wherehouse.db
+path = "~/.local/share/wherehouse/wherehouse.db"
 # Or network storage:
-# db_path = "/mnt/nas/shared/inventory.db"
+# path = "/mnt/nas/shared/wherehouse.db"
 
-# SQLite settings
-[sqlite]
-journal_mode = "WAL"         # Write-Ahead Logging (recommended)
-synchronous = "NORMAL"       # Balance safety vs performance
-busy_timeout = 30000         # 30 seconds (for network storage)
+[user]
+# Display name for event attribution. Empty = OS username.
+default_identity = ""
 
-# Display defaults
-[display]
-default_verbosity = "normal"  # quiet, normal, verbose
-default_grouping = "location" # location, project, status
-use_color = true              # colorized output
-use_icons = true              # emoji icons in output
+# Map OS usernames to display names.
+# os_username_map = { "jdoe" = "John Doe" }
+os_username_map = {}
 
-# User identity
-[users.alice]
-display_name = "Alice Smith"
-email = "alice@example.com"
+[output]
+# Default output format: "human" or "json"
+default_format = "human"
 
-[user_identity]
-# Map OS usernames to inventory users
-os_username_map = { "asmith" = "alice", "asmith-laptop" = "alice" }
+# Enable quiet mode by default
+quiet = false
 ```
+
+### Home Manager
+
+The flake ships a home-manager module at `homeManagerModules.default`. Enable it and
+configure `programs.wherehouse.settings` to generate `~/.config/wherehouse/wherehouse.toml`
+automatically — equivalent to running `wherehouse config init` and editing the result.
+
+```nix
+programs.wherehouse = {
+  enable = true;   # installs the package and enables the module
+
+  settings = {
+    database.path = "~/.local/share/wherehouse/wherehouse.db";
+
+    user = {
+      # Empty string means use the OS username.
+      defaultIdentity = "";
+
+      # Map OS usernames to display names.
+      osUsernameMap = {
+        jdoe   = "John Doe";
+        asmith = "Alice Smith";
+      };
+    };
+
+    output = {
+      defaultFormat = "human";  # "human" or "json"
+      quiet         = false;
+    };
+  };
+};
+```
+
+All `settings` fields are optional — omitting a field leaves the application default in
+effect. The config file is only written when at least one field is set.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `settings.database.path` | string | XDG data dir | Path to SQLite database file |
+| `settings.user.defaultIdentity` | string | OS username | Display name for attribution |
+| `settings.user.osUsernameMap` | attrset | `{}` | Map OS usernames to display names |
+| `settings.output.defaultFormat` | `"human"` \| `"json"` | `"human"` | Default output format |
+| `settings.output.quiet` | bool | `false` | Suppress non-essential output |
 
 ### Environment Variables
 
 ```bash
 # Override database path
-export WHEREHOUSE_DB_PATH="/mnt/nas/inventory.db"
+export WHEREHOUSE_DATABASE_PATH="/mnt/nas/wherehouse.db"
 
 # Override config location
 export WHEREHOUSE_CONFIG="$HOME/projects/workshop/wherehouse.toml"
 
-# Set log level
-export WHEREHOUSE_LOG_LEVEL="debug"  # debug, info, warn, error
-
-# Disable color output
-export NO_COLOR=1
+# Override output format
+export WHEREHOUSE_OUTPUT_DEFAULT_FORMAT="json"
 ```
 
 ---
