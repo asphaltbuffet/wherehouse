@@ -452,6 +452,20 @@ path = "~/.local/share/wherehouse/wherehouse.db"
 # Or network storage:
 # path = "/mnt/nas/shared/wherehouse.db"
 
+[logging]
+# Path to log file. Supports ~ and $ENV_VARS.
+# Default: $XDG_STATE_HOME/wherehouse/wherehouse.log
+# file_path = "~/.local/state/wherehouse/wherehouse.log"
+
+# Minimum log level: "debug", "info", "warn", "error". Default: "warn".
+level = "warn"
+
+# Max log file size (MB) before rotation. 0 = no rotation (default).
+# max_size_mb = 10
+
+# Number of old log files to keep when rotation is enabled. Default: 3.
+# max_backups = 3
+
 [user]
 # Display name for event attribution. Empty = OS username.
 default_identity = ""
@@ -492,6 +506,14 @@ programs.wherehouse = {
       };
     };
 
+    logging = {
+      # filePath defaults to $XDG_STATE_HOME/wherehouse/wherehouse.log
+      # filePath = "~/.local/state/wherehouse/wherehouse.log";
+      level      = "warn";  # "debug", "info", "warn", "error"
+      # maxSizeMB  = 10;    # enable log rotation at 10 MB
+      # maxBackups = 3;     # keep 3 rotated files
+    };
+
     output = {
       defaultFormat = "human";  # "human" or "json"
       quiet         = false;
@@ -506,6 +528,10 @@ effect. The config file is only written when at least one field is set.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `settings.database.path` | string | XDG data dir | Path to SQLite database file |
+| `settings.logging.filePath` | string | XDG state dir | Path to log file (file-only, never screen) |
+| `settings.logging.level` | `"debug"`…`"error"` | `"warn"` | Minimum log level |
+| `settings.logging.maxSizeMB` | int | `0` (disabled) | Max log size before rotation |
+| `settings.logging.maxBackups` | int | `3` (when rotating) | Old rotated files to keep |
 | `settings.user.defaultIdentity` | string | OS username | Display name for attribution |
 | `settings.user.osUsernameMap` | attrset | `{}` | Map OS usernames to display names |
 | `settings.output.defaultFormat` | `"human"` \| `"json"` | `"human"` | Default output format |
@@ -519,6 +545,9 @@ export WHEREHOUSE_DATABASE_PATH="/mnt/nas/wherehouse.db"
 
 # Override config location
 export WHEREHOUSE_CONFIG="$HOME/projects/workshop/wherehouse.toml"
+
+# Override log file path
+export WHEREHOUSE_LOG_PATH="/var/log/wherehouse/wherehouse.log"
 
 # Override output format
 export WHEREHOUSE_OUTPUT_DEFAULT_FORMAT="json"
