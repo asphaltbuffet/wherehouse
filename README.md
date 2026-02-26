@@ -11,8 +11,8 @@
 ## Quick Example
 
 ```bash
-# Initialize your inventory
-wherehouse init
+# Initialize your inventory database
+wherehouse initialize database
 
 # Create location hierarchy
 wherehouse add location Garage
@@ -179,16 +179,26 @@ mise run dev
 
 ## Quick Start
 
-### 1. Initialize Config
+### 1. Initialize Database
+
+```bash
+wherehouse initialize database
+# → Database initialized: ~/.local/share/wherehouse/wherehouse.db
+
+# If the database already exists, use --force to reinitialize (backs up first)
+wherehouse initialize database --force
+# → Backup created: ~/.local/share/wherehouse/wherehouse.db.backup.20260226
+# → Database initialized: ~/.local/share/wherehouse/wherehouse.db
+```
+
+### 2. Initialize Config
 
 ```bash
 wherehouse config init
-# → Created database at ~/.local/share/wherehouse/inventory.db
-# → Initialized event log and projections
-# → Created system locations (Missing, Borrowed)
+# → Created config at ~/.config/wherehouse/wherehouse.toml
 ```
 
-### 2. Create Location Hierarchy
+### 3. Create Location Hierarchy
 
 ```bash
 # Create top-level locations
@@ -201,7 +211,7 @@ wherehouse add location Toolbox --in Garage
 wherehouse add location "Socket Set" --in Toolbox
 ```
 
-### 3. Add Items
+### 4. Add Items
 
 ```bash
 # Add item to specific location
@@ -214,7 +224,7 @@ wherehouse add item "step ladder" "work bench" "tool cart" --in Garage
 wherehouse add item "3/8\" drive ratchet" --in Toolbox
 ```
 
-### 4. Find Items
+### 5. Find Items
 
 ```bash
 # Search by name (substring matching)
@@ -247,7 +257,7 @@ wherehouse find "wrench"
 #   Currently: Missing
 ```
 
-### 5. View Item History
+### 6. View Item History
 
 ```bash
 # Show complete event timeline (newest first)
@@ -280,7 +290,7 @@ wherehouse history "socket" --json
 wherehouse history --id "01HXXX-XXXX-..."
 ```
 
-### 6. Move Items
+### 7. Move Items
 
 ```bash
 # Permanent move (rehome)
@@ -296,7 +306,7 @@ wherehouse move "paint roller" "Bedroom" --project "bedroom-repaint"
 wherehouse move "roller" Basement --keep-project
 ```
 
-### 7. Track Missing Items
+### 8. Track Missing Items
 
 ```bash
 # Mark as missing
@@ -346,7 +356,7 @@ Project Management:
   project delete       Remove project (if no items) (coming soon)
 
 Database Operations:
-  init                 Initialize new database (coming soon)
+  initialize database ✅  Initialize new database (--force to overwrite with backup)
   doctor               Validate database consistency (partial)
   export               Export events and projections (coming soon)
   import               Import from export file (coming soon)
@@ -878,8 +888,10 @@ mise run ci
   - [x] `history` - Show complete event timeline for items
   - [x] `move` - Move items between locations (selectors, project tracking, temporary moves)
   - [x] `config` subcommands (init, get, set, check, edit, path) - viper-backed configuration
+  - [x] `initialize database` - create SQLite database with `--force` backup/overwrite
   - [x] Basic output formatting (human-readable, JSON, quiet modes)
   - [x] Flag overrides: `--db`, `--as` override config file values at runtime
+  - [x] Clear error when database file is missing (guides user to `initialize database`)
 
 ### 🚧 In Progress (v0.2.0 - Alpha)
 
@@ -946,9 +958,8 @@ ls -ld ~/.local/share/wherehouse/
 # Create directory if missing
 mkdir -p ~/.local/share/wherehouse
 
-# Remove corrupted database (backup first!)
-mv ~/.local/share/wherehouse/inventory.db{,.bak}
-wherehouse init
+# Reinitialize database (backs up existing file automatically)
+wherehouse initialize database --force
 ```
 
 ### `SQLITE_BUSY` or lock errors
@@ -1000,8 +1011,7 @@ ls -lh ~/.local/share/wherehouse/inventory.db
 
 # Export and reimport for defragmentation
 wherehouse export > backup.json
-mv ~/.local/share/wherehouse/inventory.db{,.old}
-wherehouse init
+wherehouse initialize database --force
 wherehouse import < backup.json
 ```
 
