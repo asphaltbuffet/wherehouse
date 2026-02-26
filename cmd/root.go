@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/fang"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
@@ -16,6 +18,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
+	"github.com/asphaltbuffet/wherehouse/internal/logging"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
@@ -78,6 +81,16 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 	}
 
 	globalConfig = cfg
+
+	// Initialize logging. Non-fatal: a warning is written to stderr and
+	// execution continues with a no-op (discard) logger.
+	logPath, err := cfg.GetLogPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not resolve log path: %v\n", err)
+	} else if initErr := logging.Init(afero.NewOsFs(), logPath, cfg.Logging.Level, cfg.Logging.MaxSizeMB, cfg.Logging.MaxBackups); initErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: logging unavailable: %v\n", initErr)
+	}
+
 	ctx := context.WithValue(cmd.Context(), config.ConfigKey, globalConfig)
 	cmd.SetContext(ctx)
 	return nil
@@ -104,6 +117,8 @@ func loadConfigOrDefaults(configPath string, noConfig bool) (*config.Config, err
 // Execute runs the root command using fang for enhanced styling and error handling.
 // This is called by main.main() and is the application entry point.
 func Execute(ctx context.Context) error {
+	defer logging.Close()
+
 	return fang.Execute(
 		ctx,
 		GetRootCmd(),

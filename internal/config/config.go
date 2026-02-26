@@ -18,8 +18,30 @@ const ConfigKey configKeyType = iota
 // Config represents the complete wherehouse configuration.
 type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
+	Logging  LoggingConfig  `mapstructure:"logging"`
 	User     UserConfig     `mapstructure:"user"`
 	Output   OutputConfig   `mapstructure:"output"`
+}
+
+// LoggingConfig holds logging-related configuration.
+type LoggingConfig struct {
+	// FilePath is the absolute path to the log file.
+	// Empty string causes logging.Init() to use DefaultLogPath().
+	FilePath string `mapstructure:"file_path"`
+
+	// Level is the minimum log level to record.
+	// Valid values (case-insensitive): "debug", "info", "warn", "warning", "error".
+	// Any unrecognized value defaults to slog.LevelWarn.
+	Level string `mapstructure:"level"`
+
+	// MaxSizeMB is the maximum log file size in megabytes before rotation.
+	// 0 (default) disables rotation and uses a plain append-mode file.
+	MaxSizeMB int `mapstructure:"max_size_mb"`
+
+	// MaxBackups is the number of old rotated log files to retain.
+	// Only meaningful when MaxSizeMB > 0. If 0 when rotation is active,
+	// Init() defaults this to 3.
+	MaxBackups int `mapstructure:"max_backups"`
 }
 
 // DatabaseConfig holds database-related configuration.
