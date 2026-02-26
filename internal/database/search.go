@@ -11,10 +11,7 @@ import (
 	"github.com/goccy/go-json"
 )
 
-const (
-	resultTypeItem     = "item"
-	resultTypeLocation = "location"
-)
+const resultTypeItem = "item"
 
 // LocationInfo contains basic information about a location.
 type LocationInfo struct {
@@ -223,7 +220,8 @@ func (d *Database) scanSearchResults(
 // enrichResultsWithLastNonSystemLocation populates LastNonSystemLocation for items in system locations.
 func (d *Database) enrichResultsWithLastNonSystemLocation(ctx context.Context, results []*SearchResult) {
 	for _, result := range results {
-		if result.Type == "item" && (result.IsMissing || result.IsBorrowed || result.IsLoaned) && result.ItemID != nil {
+		if result.Type == resultTypeItem && (result.IsMissing || result.IsBorrowed || result.IsLoaned) &&
+			result.ItemID != nil {
 			lastLoc, locErr := d.findLastNonSystemLocation(ctx, *result.ItemID)
 			if locErr == nil && lastLoc != nil {
 				result.LastNonSystemLocation = lastLoc

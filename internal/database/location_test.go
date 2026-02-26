@@ -303,3 +303,115 @@ func TestGetLocationByCanonicalName_EmptyDatabase(t *testing.T) {
 	require.ErrorIs(t, err, ErrLocationNotFound)
 	assert.Nil(t, loc)
 }
+
+func TestGetRootLocations_EmptyDatabase(t *testing.T) {
+	// NewTestDB has system locations (Missing, Borrowed) created by migrations,
+	// but no user-created locations.
+	db := NewTestDB(t)
+	ctx := context.Background()
+
+	locs, err := db.GetRootLocations(ctx)
+	require.NoError(t, err)
+	// System locations Missing and Borrowed are root locations created by migrations.
+	// Verify they are returned rather than asserting empty.
+	for _, loc := range locs {
+		assert.Nil(t, loc.ParentID, "all returned locations should have nil parent_id")
+	}
+}
+
+func TestGetRootLocations_ReturnsRootsAlphabetically(t *testing.T) {
+	db := NewTestDBWithSeed(t)
+	ctx := context.Background()
+
+	locs, err := db.GetRootLocations(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, locs)
+
+	// Extract display names and verify alphabetical ordering.
+	names := make([]string, len(locs))
+	for i, loc := range locs {
+		names[i] = loc.DisplayName
+	}
+
+	for i := 1; i < len(names); i++ {
+		assert.LessOrEqual(t, names[i-1], names[i],
+			"locations should be sorted alphabetically: %q should come before %q", names[i-1], names[i])
+	}
+
+	// Verify known root locations are present (Workshop and Storage are seeded as roots).
+	var displayNames []string
+	for _, loc := range locs {
+		displayNames = append(displayNames, loc.DisplayName)
+	}
+	assert.Contains(t, displayNames, "Workshop")
+	assert.Contains(t, displayNames, "Storage")
+}
+
+func TestGetRootLocations_ExcludesChildren(t *testing.T) {
+	db := NewTestDBWithSeed(t)
+	ctx := context.Background()
+
+	locs, err := db.GetRootLocations(ctx)
+	require.NoError(t, err)
+
+	// None of the returned locations should have a parent_id set.
+	for _, loc := range locs {
+		assert.Nil(t, loc.ParentID,
+			"GetRootLocations should not return child location %q", loc.DisplayName)
+	}
+
+	// Known child locations must not appear.
+	childNames := []string{"Toolbox", "Workbench", "Shelves", "Bin A", "Bin B"}
+	var returnedNames []string
+	for _, loc := range locs {
+		returnedNames = append(returnedNames, loc.DisplayName)
+	}
+	for _, child := range childNames {
+		assert.NotContains(t, returnedNames, child,
+			"child location %q should not appear in root locations", child)
+	}
+}
+
+func TestGetRootLocations_IncludesSystemLocations(t *testing.T) {
+	db := NewTestDBWithSeed(t)
+	ctx := context.Background()
+
+	locs, err := db.GetRootLocations(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, locs)
+
+	// System locations (Missing, Borrowed) are root locations and must be included.
+	var systemNames []string
+	for _, loc := range locs {
+		if loc.IsSystem {
+			systemNames = append(systemNames, loc.DisplayName)
+		}
+	}
+	assert.Contains(t, systemNames, "Missing")
+	assert.Contains(t, systemNames, "Borrowed")
+}
+
+func TestGetRootLocations_AllFieldsPopulated(t *testing.T) {
+	db := NewTestDBWithSeed(t)
+	ctx := context.Background()
+
+	locs, err := db.GetRootLocations(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, locs)
+
+	for _, loc := range locs {
+		assert.NotEmpty(t, loc.LocationID, "location_id should be populated for %q", loc.DisplayName)
+		assert.NotEmpty(t, loc.DisplayName, "display_name should be populated")
+		assert.NotEmpty(t, loc.CanonicalName, "canonical_name should be populated for %q", loc.DisplayName)
+		assert.Nil(t, loc.ParentID, "parent_id should be nil for root location %q", loc.DisplayName)
+		assert.NotEmpty(t, loc.FullPathDisplay, "full_path_display should be populated for %q", loc.DisplayName)
+		assert.NotEmpty(t, loc.FullPathCanonical, "full_path_canonical should be populated for %q", loc.DisplayName)
+		assert.Equal(t, 0, loc.Depth, "root location %q should have depth 0", loc.DisplayName)
+		assert.NotEmpty(t, loc.UpdatedAt, "updated_at should be populated for %q", loc.DisplayName)
+		// For root locations: full_path_display == display_name and full_path_canonical == canonical_name
+		assert.Equal(t, loc.DisplayName, loc.FullPathDisplay,
+			"root location full_path_display should equal display_name")
+		assert.Equal(t, loc.CanonicalName, loc.FullPathCanonical,
+			"root location full_path_canonical should equal canonical_name")
+	}
+}

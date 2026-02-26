@@ -17,23 +17,25 @@ func TestNew_WithDefaultPaths(t *testing.T) {
 		expectedDBPath string
 		expectedUser   string
 		expectedFormat string
-		expectError    bool
+		errAssertion   require.ErrorAssertionFunc
 	}{
 		{
 			name: "no config files - use defaults",
 			setupFS: func(_ afero.Fs) {
+				t.Helper()
 				// No config files
 			},
 			expectedDBPath: "/home/user/.local/share/wherehouse/wherehouse.db", // XDG-compliant default on Linux
 			expectedUser:   "",
 			expectedFormat: "human",
-			expectError:    false,
+			errAssertion:   require.NoError,
 		},
 		{
 			name: "global config only",
 			setupFS: func(fs afero.Fs) {
+				t.Helper()
 				globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-				require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+				require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 				content := `[database]
 path = "/global/db.sqlite"
 
@@ -43,35 +45,37 @@ default_identity = "alice"
 [output]
 default_format = "json"
 `
-				require.NoError(t, afero.WriteFile(fs, globalPath, []byte(content), 0644))
+				require.NoError(t, afero.WriteFile(fs, globalPath, []byte(content), 0o644))
 			},
 			expectedDBPath: "/global/db.sqlite",
 			expectedUser:   "alice",
 			expectedFormat: "json",
-			expectError:    false,
+			errAssertion:   require.NoError,
 		},
 		{
 			name: "local config only",
 			setupFS: func(fs afero.Fs) {
+				t.Helper()
 				content := `[database]
 path = "/local/db.sqlite"
 
 [user]
 default_identity = "bob"
 `
-				require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0644))
+				require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0o644))
 			},
 			expectedDBPath: "/local/db.sqlite",
 			expectedUser:   "bob",
 			expectedFormat: "human", // default
-			expectError:    false,
+			errAssertion:   require.NoError,
 		},
 		{
 			name: "global and local config - local overrides",
 			setupFS: func(fs afero.Fs) {
+				t.Helper()
 				// Global config
 				globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-				require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+				require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 				globalContent := `[database]
 path = "/global/db.sqlite"
 
@@ -82,7 +86,7 @@ default_identity = "alice"
 default_format = "json"
 quiet = false
 `
-				require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
+				require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
 				// Local config (overrides some values)
 				localContent := `[database]
@@ -91,18 +95,17 @@ path = "/local/db.sqlite"
 [output]
 quiet = true
 `
-				require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
+				require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0o644))
 			},
 			expectedDBPath: "/local/db.sqlite", // from local
 			expectedUser:   "alice",            // from global
 			expectedFormat: "json",             // from global
-			expectError:    false,
+			errAssertion:   require.NoError,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create in-memory filesystem
 			fs := afero.NewMemMapFs()
 
 			// Set up HOME for global config path resolution
@@ -110,18 +113,12 @@ quiet = true
 			t.Setenv("XDG_CONFIG_HOME", "")
 			t.Setenv("XDG_DATA_HOME", "") // Ensure XDG_DATA_HOME is unset for consistent test behavior
 
-			// Setup filesystem state
 			tt.setupFS(fs)
 
 			// Load config
 			cfg, err := NewWithFS(fs, "")
 
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
+			tt.errAssertion(t, err)
 			assert.Equal(t, tt.expectedDBPath, cfg.Database.Path)
 			assert.Equal(t, tt.expectedUser, cfg.User.DefaultIdentity)
 			assert.Equal(t, tt.expectedFormat, cfg.Output.DefaultFormat)
@@ -142,11 +139,12 @@ func TestNew_WithExplicitPath(t *testing.T) {
 			name:     "explicit file exists",
 			filepath: "/custom/config.toml",
 			setupFS: func(fs afero.Fs) {
-				require.NoError(t, fs.MkdirAll("/custom", 0755))
+				t.Helper()
+				require.NoError(t, fs.MkdirAll("/custom", 0o755))
 				content := `[database]
 path = "/custom/db.sqlite"
 `
-				require.NoError(t, afero.WriteFile(fs, "/custom/config.toml", []byte(content), 0644))
+				require.NoError(t, afero.WriteFile(fs, "/custom/config.toml", []byte(content), 0o644))
 			},
 			expectError: false,
 		},
@@ -154,6 +152,7 @@ path = "/custom/db.sqlite"
 			name:     "explicit file not found",
 			filepath: "/missing/config.toml",
 			setupFS: func(_ afero.Fs) {
+				t.Helper()
 				// File doesn't exist
 			},
 			expectError: true,
@@ -163,10 +162,11 @@ path = "/custom/db.sqlite"
 			name:     "explicit file with invalid TOML",
 			filepath: "/bad/config.toml",
 			setupFS: func(fs afero.Fs) {
-				require.NoError(t, fs.MkdirAll("/bad", 0755))
+				t.Helper()
+				require.NoError(t, fs.MkdirAll("/bad", 0o755))
 				content := `[database
 path = broken`
-				require.NoError(t, afero.WriteFile(fs, "/bad/config.toml", []byte(content), 0644))
+				require.NoError(t, afero.WriteFile(fs, "/bad/config.toml", []byte(content), 0o644))
 			},
 			expectError: true,
 			errorMsg:    "failed to read config file",
@@ -180,16 +180,12 @@ path = broken`
 
 			cfg, err := NewWithFS(fs, tt.filepath)
 
-			if tt.expectError {
-				assert.Error(t, err)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
-				}
-				return
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, cfg)
 			}
-
-			require.NoError(t, err)
-			assert.NotNil(t, cfg)
 		})
 	}
 }
@@ -197,10 +193,9 @@ path = broken`
 // TestValidation tests configuration validation.
 func TestValidation(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      *Config
-		expectError bool
-		errorMsg    string
+		name     string
+		config   *Config
+		errorMsg string
 	}{
 		{
 			name: "valid config",
@@ -209,7 +204,6 @@ func TestValidation(t *testing.T) {
 				User:     UserConfig{DefaultIdentity: "alice"},
 				Output:   OutputConfig{DefaultFormat: "human"},
 			},
-			expectError: false,
 		},
 		{
 			name: "empty database path",
@@ -217,8 +211,7 @@ func TestValidation(t *testing.T) {
 				Database: DatabaseConfig{Path: ""},
 				Output:   OutputConfig{DefaultFormat: "human"},
 			},
-			expectError: true,
-			errorMsg:    "path is required",
+			errorMsg: "path is required",
 		},
 		{
 			name: "invalid output format",
@@ -226,8 +219,7 @@ func TestValidation(t *testing.T) {
 				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
 				Output:   OutputConfig{DefaultFormat: "xml"},
 			},
-			expectError: true,
-			errorMsg:    "must be one of [human, json]",
+			errorMsg: "must be one of [human, json]",
 		},
 	}
 
@@ -235,12 +227,11 @@ func TestValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validate(tt.config)
 
-			if tt.expectError {
-				assert.ErrorContains(t, err, tt.errorMsg)
-				return
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
+			} else {
+				assert.NoError(t, err)
 			}
-
-			assert.NoError(t, err)
 		})
 	}
 }
@@ -263,64 +254,71 @@ func TestExpandPath(t *testing.T) {
 	t.Setenv("TESTVAR", "myvalue")
 
 	tests := []struct {
-		name        string
-		input       string
-		expectError bool
-		checkResult func(t *testing.T, result string)
+		name         string
+		input        string
+		errAssertion require.ErrorAssertionFunc
+		checkResult  func(t *testing.T, result string)
 	}{
 		{
-			name:        "empty path",
-			input:       "",
-			expectError: false,
+			name:         "empty path",
+			input:        "",
+			errAssertion: require.NoError,
 			checkResult: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Empty(t, result)
 			},
 		},
 		{
-			name:        "absolute path unchanged",
-			input:       "/absolute/path/to/db.sqlite",
-			expectError: false,
+			name:         "absolute path unchanged",
+			input:        "/absolute/path/to/db.sqlite",
+			errAssertion: require.NoError,
 			checkResult: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Equal(t, "/absolute/path/to/db.sqlite", result)
 			},
 		},
 		{
-			name:        "tilde expansion",
-			input:       "~/mydb.sqlite",
-			expectError: false,
+			name:         "tilde expansion",
+			input:        "~/mydb.sqlite",
+			errAssertion: require.NoError,
 			checkResult: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Equal(t, "/home/testuser/mydb.sqlite", result)
 			},
 		},
 		{
-			name:        "tilde only",
-			input:       "~",
-			expectError: false,
+			name:         "tilde only",
+			input:        "~",
+			errAssertion: require.NoError,
 			checkResult: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Equal(t, "/home/testuser", result)
 			},
 		},
 		{
-			name:        "tilde username rejected",
-			input:       "~bob/mydb.sqlite",
-			expectError: true,
+			name:         "tilde username rejected",
+			input:        "~bob/mydb.sqlite",
+			errAssertion: require.Error,
 			checkResult: func(_ *testing.T, _ string) {
+				t.Helper()
 				// Error should be returned
 			},
 		},
 		{
-			name:        "environment variable expansion",
-			input:       "/path/$TESTVAR/db.sqlite",
-			expectError: false,
+			name:         "environment variable expansion",
+			input:        "/path/$TESTVAR/db.sqlite",
+			errAssertion: require.NoError,
 			checkResult: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Equal(t, "/path/myvalue/db.sqlite", result)
 			},
 		},
 		{
-			name:        "relative path made absolute",
-			input:       "relative/path/db.sqlite",
-			expectError: false,
+			name:         "relative path made absolute",
+			input:        "relative/path/db.sqlite",
+			errAssertion: require.NoError,
 			checkResult: func(t *testing.T, result string) {
+				t.Helper()
 				assert.True(t, filepath.IsAbs(result))
 				assert.Contains(t, result, "relative/path/db.sqlite")
 			},
@@ -331,12 +329,7 @@ func TestExpandPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ExpandPath(tt.input)
 
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
+			tt.errAssertion(t, err)
 			tt.checkResult(t, result)
 		})
 	}
@@ -352,6 +345,7 @@ func TestGetCurrentUsername(t *testing.T) {
 		{
 			name: "USER environment variable set",
 			setupEnv: func(t *testing.T) {
+				t.Helper()
 				t.Setenv("USER", "alice")
 				t.Setenv("USERNAME", "")
 			},
@@ -360,6 +354,7 @@ func TestGetCurrentUsername(t *testing.T) {
 		{
 			name: "USERNAME environment variable set",
 			setupEnv: func(t *testing.T) {
+				t.Helper()
 				t.Setenv("USER", "")
 				t.Setenv("USERNAME", "bob")
 			},
@@ -368,6 +363,7 @@ func TestGetCurrentUsername(t *testing.T) {
 		{
 			name: "no environment variables set",
 			setupEnv: func(t *testing.T) {
+				t.Helper()
 				t.Setenv("USER", "")
 				t.Setenv("USERNAME", "")
 			},
@@ -394,14 +390,14 @@ func TestEnvironmentVariableOverride(t *testing.T) {
 
 	// Create global config
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	content := `[database]
 path = "/from/config.sqlite"
 
 [user]
 default_identity = "alice"
 `
-	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(content), 0644))
+	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(content), 0o644))
 
 	// Set environment variables to override config
 	t.Setenv("WHEREHOUSE_DATABASE_PATH", "/from/env.sqlite")
@@ -426,7 +422,7 @@ default_identity = ""
 "jdoe" = "john.doe"
 "asmith" = "alice.smith"
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0o644))
 
 	t.Setenv("HOME", "/home/user")
 
@@ -445,7 +441,7 @@ func TestQuietFlag(t *testing.T) {
 	content := `[output]
 quiet = 1
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0o644))
 
 	t.Setenv("HOME", "/home/user")
 
@@ -462,7 +458,7 @@ func TestGetDefaults(t *testing.T) {
 	assert.NotNil(t, cfg)
 	assert.NotEmpty(t, cfg.Database.Path)
 	assert.Equal(t, "human", cfg.Output.DefaultFormat)
-	assert.Equal(t, 0, cfg.Output.Quiet)
+	assert.Zero(t, cfg.Output.Quiet)
 	assert.NotNil(t, cfg.User.OSUsernameMap)
 }
 
@@ -476,27 +472,27 @@ func TestWHEREHOUSE_CONFIG(t *testing.T) {
 
 	// Create a custom config file
 	customPath := "/custom/my-config.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(customPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(customPath), 0o755))
 	content := `[database]
 path = "/custom/db.sqlite"
 
 [user]
 default_identity = "custom-user"
 `
-	require.NoError(t, afero.WriteFile(fs, customPath, []byte(content), 0644))
+	require.NoError(t, afero.WriteFile(fs, customPath, []byte(content), 0o644))
 
 	// Also create global and local configs (should be ignored)
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	globalContent := `[database]
 path = "/global/db.sqlite"
 `
-	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
 	localContent := `[database]
 path = "/local/db.sqlite"
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0o644))
 
 	// Set WHEREHOUSE_CONFIG environment variable
 	t.Setenv("WHEREHOUSE_CONFIG", customPath)
@@ -520,7 +516,7 @@ func TestConfigPrecedence(t *testing.T) {
 
 	// Create global config
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	globalContent := `[database]
 path = "/global/db.sqlite"
 
@@ -531,7 +527,7 @@ default_identity = "global-user"
 default_format = "json"
 quiet = 0
 `
-	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
 	// Create local config (overrides some global values)
 	localContent := `[database]
@@ -540,7 +536,7 @@ path = "/local/db.sqlite"
 [output]
 quiet = 1
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0o644))
 
 	// Set environment variables (override both config files)
 	t.Setenv("WHEREHOUSE_OUTPUT_DEFAULT_FORMAT", "human")
@@ -569,11 +565,11 @@ func TestXDG_CONFIG_HOME(t *testing.T) {
 
 	// Create config at XDG location
 	xdgPath := "/custom/config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(xdgPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(xdgPath), 0o755))
 	content := `[database]
 path = "/xdg/db.sqlite"
 `
-	require.NoError(t, afero.WriteFile(fs, xdgPath, []byte(content), 0644))
+	require.NoError(t, afero.WriteFile(fs, xdgPath, []byte(content), 0o644))
 
 	cfg, err := NewWithFS(fs, "")
 	require.NoError(t, err)
@@ -591,21 +587,21 @@ func TestExplicitFileOverridesDefaults(t *testing.T) {
 
 	// Create global and local configs
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(`[database]
 path = "/global/db.sqlite"
-`), 0644))
+`), 0o644))
 
 	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(`[database]
 path = "/local/db.sqlite"
-`), 0644))
+`), 0o644))
 
 	// Create explicit config file
 	customPath := "/custom/override.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(customPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(customPath), 0o755))
 	require.NoError(t, afero.WriteFile(fs, customPath, []byte(`[database]
 path = "/explicit/db.sqlite"
-`), 0644))
+`), 0o644))
 
 	// Load with explicit path
 	cfg, err := NewWithFS(fs, customPath)
@@ -626,7 +622,7 @@ func TestPathExpansionInConfig(t *testing.T) {
 	content := `[database]
 path = "~/mydb.sqlite"
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0o644))
 
 	cfg, err := NewWithFS(fs, "")
 	require.NoError(t, err)
@@ -650,7 +646,7 @@ func TestEmptyLocalConfigWithGlobalValues(t *testing.T) {
 
 	// Create global config
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	globalContent := `[database]
 path = "/global/db.sqlite"
 
@@ -661,10 +657,10 @@ default_identity = "alice"
 default_format = "json"
 quiet = false
 `
-	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
 	// Create empty local config
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(""), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(""), 0o644))
 
 	cfg, err := NewWithFS(fs, "")
 	require.NoError(t, err)
@@ -673,7 +669,7 @@ quiet = false
 	assert.Equal(t, "/global/db.sqlite", cfg.Database.Path)
 	assert.Equal(t, "alice", cfg.User.DefaultIdentity)
 	assert.Equal(t, "json", cfg.Output.DefaultFormat)
-	assert.Equal(t, 0, cfg.Output.Quiet)
+	assert.Zero(t, cfg.Output.Quiet)
 }
 
 // TestValidateExportedFunction tests the exported Validate function.
@@ -689,9 +685,7 @@ func TestValidateExportedFunction(t *testing.T) {
 
 	// Test validation error
 	cfg.Output.DefaultFormat = "invalid"
-	err = Validate(cfg)
-	require.Error(t, err, "validation should fail for invalid format")
-	assert.Contains(t, err.Error(), "must be one of [human, json]")
+	require.ErrorContains(t, Validate(cfg), "must be one of [human, json]")
 }
 
 // TestEnvironmentVariableOverrideAllLevels tests env vars override all config sources.
@@ -704,7 +698,7 @@ func TestEnvironmentVariableOverrideAllLevels(t *testing.T) {
 
 	// Create global config
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	globalContent := `[database]
 path = "/global/db.sqlite"
 
@@ -715,7 +709,7 @@ default_identity = "alice"
 default_format = "json"
 quiet = 0
 `
-	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
 	// Create local config with different values
 	localContent := `[database]
@@ -728,7 +722,7 @@ default_identity = "bob"
 default_format = "human"
 quiet = 0
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0o644))
 
 	// Set environment variables for all values
 	t.Setenv("WHEREHOUSE_DATABASE_PATH", "/env/db.sqlite")
@@ -756,7 +750,7 @@ func TestPartialLocalConfigOverride(t *testing.T) {
 
 	// Create global config with multiple values
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	globalContent := `[database]
 path = "/global/db.sqlite"
 
@@ -767,13 +761,13 @@ default_identity = "alice"
 default_format = "json"
 quiet = 0
 `
-	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
 	// Create local config that overrides ONLY database path
 	localContent := `[database]
 path = "/local/db.sqlite"
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0o644))
 
 	cfg, err := NewWithFS(fs, "")
 	require.NoError(t, err)
@@ -795,7 +789,7 @@ func TestComplexMergeScenario(t *testing.T) {
 
 	// Create global config
 	globalPath := "/home/user/.config/wherehouse/wherehouse.toml"
-	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0755))
+	require.NoError(t, fs.MkdirAll(filepath.Dir(globalPath), 0o755))
 	globalContent := `[database]
 path = "/global/db.sqlite"
 
@@ -806,7 +800,7 @@ default_identity = "alice"
 default_format = "json"
 quiet = 0
 `
-	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
 	// Create local config (overrides database and quiet)
 	localContent := `[database]
@@ -815,7 +809,7 @@ path = "/local/db.sqlite"
 [output]
 quiet = 1
 `
-	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
+	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0o644))
 
 	// Set environment variables (override output format)
 	t.Setenv("WHEREHOUSE_OUTPUT_DEFAULT_FORMAT", "human")
