@@ -50,8 +50,8 @@ func validateUser(_ *UserConfig) error {
 func validateOutput(cfg *OutputConfig) error {
 	// Validate default_format is one of allowed values
 	validFormats := map[string]bool{
-		"human": true,
-		"json":  true,
+		outputFormatHuman: true,
+		outputFormatJSON:  true,
 	}
 
 	if !validFormats[cfg.DefaultFormat] {

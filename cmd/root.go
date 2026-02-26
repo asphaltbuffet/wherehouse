@@ -69,6 +69,30 @@ Examples:
 	return rootCmd
 }
 
+// bindFlagsToConfig applies persistent flag overrides onto cfg after loading.
+// Only flags explicitly provided by the user (Changed == true) are applied,
+// so flag zero-values do not silently clobber config file values.
+func bindFlagsToConfig(cmd *cobra.Command, cfg *config.Config) {
+	if cmd.Flags().Changed("db") {
+		if val, _ := cmd.Flags().GetString("db"); val != "" {
+			cfg.Database.Path = val
+		}
+	}
+	if cmd.Flags().Changed("as") {
+		if val, _ := cmd.Flags().GetString("as"); val != "" {
+			cfg.User.DefaultIdentity = val
+		}
+	}
+	if cmd.Flags().Changed("json") {
+		cfg.Output.DefaultFormat = "json"
+	}
+	if cmd.Flags().Changed("quiet") {
+		if count, err := cmd.Flags().GetCount("quiet"); err == nil {
+			cfg.Output.Quiet = count
+		}
+	}
+}
+
 // initConfig initializes the configuration system.
 // Called before each command runs (PersistentPreRunE).
 func initConfig(cmd *cobra.Command, _ []string) error {
@@ -79,6 +103,8 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+
+	bindFlagsToConfig(cmd, cfg)
 
 	globalConfig = cfg
 

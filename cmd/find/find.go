@@ -48,7 +48,6 @@ Examples:
 
 	findCmd.Flags().IntP("limit", "n", 0, "Limit number of results (0 = unlimited)")
 	findCmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
-	findCmd.Flags().Bool("json", false, "Output as JSON")
 
 	return findCmd
 }
@@ -63,7 +62,7 @@ func runFind(cmd *cobra.Command, args []string) error {
 	// Get flags
 	limit, _ := cmd.Flags().GetInt("limit")
 	verbose, _ := cmd.Flags().GetBool("verbose")
-	jsonMode, _ := cmd.Flags().GetBool("json")
+	cfg := cli.MustGetConfig(ctx)
 
 	// Get database connection
 	db, err := openDatabase(ctx)
@@ -87,7 +86,7 @@ func runFind(cmd *cobra.Command, args []string) error {
 	loanedInfoMap := prefetchLoanedInfo(ctx, db, results)
 
 	// Format and output results
-	if jsonMode {
+	if cfg.IsJSON() {
 		return outputJSON(cmd.OutOrStdout(), results, searchTerm, loanedInfoMap)
 	}
 

@@ -74,9 +74,8 @@ func runAddItem(cmd *cobra.Command, args []string) error {
 	actorUserID := cli.GetActorUserID(ctx)
 
 	// Set up output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode := cli.IsQuietMode(cmd)
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(ctx)
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// Process each item (FAIL-FAST: exit on first error)
 	for _, itemName := range args {

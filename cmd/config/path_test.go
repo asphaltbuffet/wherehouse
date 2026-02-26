@@ -2,11 +2,14 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
 func TestConfigPath_ShowsGlobalPath(t *testing.T) {
@@ -21,6 +24,7 @@ func TestConfigPath_ShowsGlobalPath(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	result := cmd.Execute()
 

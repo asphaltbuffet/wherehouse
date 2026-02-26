@@ -49,12 +49,11 @@ func runLostItem(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode := cli.IsQuietMode(cmd)
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(cmd.Context())
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// Output result
-	if jsonMode {
+	if cfg.IsJSON() {
 		if jsonErr := out.JSON(result); jsonErr != nil {
 			return fmt.Errorf("failed to encode JSON output: %w", jsonErr)
 		}

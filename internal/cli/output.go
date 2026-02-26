@@ -7,6 +7,8 @@ import (
 	"github.com/goccy/go-json"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
 // OutputWriter handles formatted output with styling support.
@@ -27,6 +29,12 @@ type OutputStyles struct {
 	Info    lipgloss.Style
 	Key     lipgloss.Style
 	Value   lipgloss.Style
+}
+
+// NewOutputWriterFromConfig creates an output writer using settings from a Config.
+// Delegates to NewOutputWriter with cfg.IsJSON() and cfg.IsQuiet().
+func NewOutputWriterFromConfig(out, err io.Writer, cfg *config.Config) *OutputWriter {
+	return NewOutputWriter(out, err, cfg.IsJSON(), cfg.IsQuiet())
 }
 
 // NewOutputWriter creates an output writer with default lipgloss styles.

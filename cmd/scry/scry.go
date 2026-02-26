@@ -44,7 +44,6 @@ Examples:
 	}
 
 	scryCmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
-	scryCmd.Flags().Bool("json", false, "Output as JSON")
 
 	return scryCmd
 }
@@ -54,7 +53,7 @@ func runScry(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	verbose, _ := cmd.Flags().GetBool("verbose")
-	jsonMode, _ := cmd.Flags().GetBool("json")
+	cfg := cli.MustGetConfig(ctx)
 
 	db, err := cli.OpenDatabase(ctx)
 	if err != nil {
@@ -89,7 +88,7 @@ func runScry(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if jsonMode {
+	if cfg.IsJSON() {
 		return outputJSON(cmd.OutOrStdout(), result)
 	}
 

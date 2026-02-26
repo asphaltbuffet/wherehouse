@@ -38,23 +38,35 @@ Examples:
 }
 
 func runCheck(cmd *cobra.Command, _ []string) error {
-	// Create output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode, _ := cmd.Flags().GetBool("quiet")
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(cmd.Context())
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	globalPath := config.GetGlobalConfigPath()
 	localPath := config.GetLocalConfigPath()
 
-	expandedGlobal, _ := config.ExpandPath(globalPath)
-	expandedLocal, _ := config.ExpandPath(localPath)
+	expandedGlobal, err := config.ExpandPath(globalPath)
+	if err != nil {
+		out.Error(fmt.Sprintf("failed to expand global config path %q: %v", globalPath, err))
+		return fmt.Errorf("failed to expand global config path: %w", err)
+	}
+
+	expandedLocal, err := config.ExpandPath(localPath)
+	if err != nil {
+		out.Error(fmt.Sprintf("failed to expand local config path %q: %v", localPath, err))
+		return fmt.Errorf("failed to expand local config path: %w", err)
+	}
 
 	hasErrors := false
 
 	// Check global config
-	globalExists, _ := fileExists(cmdFS, expandedGlobal)
+	globalExists, err := fileExists(cmdFS, expandedGlobal)
+	if err != nil {
+		out.Error(fmt.Sprintf("cannot access global config %s: %v", expandedGlobal, err))
+		return fmt.Errorf("cannot access global config: %w", err)
+	}
 	if globalExists {
-		if err := loadConfigFile(cmdFS, expandedGlobal); err != nil {
+		err = config.Check(cmdFS, expandedGlobal)
+		if err != nil {
 			out.Error(fmt.Sprintf("Configuration invalid: %s", expandedGlobal))
 			out.Println(fmt.Sprintf("  Error: %v", err))
 			hasErrors = true
@@ -64,9 +76,14 @@ func runCheck(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Check local config
-	localExists, _ := fileExists(cmdFS, expandedLocal)
+	localExists, err := fileExists(cmdFS, expandedLocal)
+	if err != nil {
+		out.Error(fmt.Sprintf("cannot access local config %s: %v", expandedLocal, err))
+		return fmt.Errorf("cannot access local config: %w", err)
+	}
 	if localExists {
-		if err := loadConfigFile(cmdFS, expandedLocal); err != nil {
+		err = config.Check(cmdFS, expandedLocal)
+		if err != nil {
 			out.Error(fmt.Sprintf("Configuration invalid: %s", expandedLocal))
 			out.Println(fmt.Sprintf("  Error: %v", err))
 			hasErrors = true

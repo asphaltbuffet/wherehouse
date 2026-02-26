@@ -325,7 +325,7 @@ wherehouse [command] [flags]
 
 Item Management:
   add item ✅           Create new item in inventory
-  move                 Move item to different location (coming soon)
+  move ✅              Move item to different location
   where ✅             Find item(s) or locations by name
   history ✅           Show complete event timeline for item
   missing              Mark item as lost (coming soon)
@@ -351,10 +351,20 @@ Database Operations:
   export               Export events and projections (coming soon)
   import               Import from export file (coming soon)
 
+Configuration:
+  config init ✅       Create config file with defaults
+  config get ✅        Show configuration values
+  config set ✅        Set a configuration value
+  config check ✅      Validate config file
+  config edit ✅       Open config file in $EDITOR
+  config path ✅       Show config file path(s)
+
 Global Flags:
   -h, --help           Show help ✅
   --version            Show version ✅
   --config <path>      Custom config file ✅
+  --db <path>          Override database path ✅
+  --as <identity>      Override user identity ✅
   --json               Output as JSON ✅
   -q, --quiet          Suppress non-error output ✅
   -i, --in             Specify location (for add commands) ✅
@@ -442,7 +452,24 @@ Create the default config with:
 wherehouse config init
 ```
 
-**Full example** (`~/.config/wherehouse/wherehouse.toml`):
+The generated file contains all keys with their default values (no comments). Use
+`config edit` to open the file in `$EDITOR` if you want to annotate it.
+
+Individual values can be set via `config set <key> <value>`. All keys are supported:
+
+```bash
+wherehouse config set database.path /mnt/nas/wherehouse.db
+wherehouse config set logging.level debug
+wherehouse config set logging.max_size_mb 10
+wherehouse config set logging.max_backups 3
+wherehouse config set output.default_format json
+wherehouse config set output.quiet true
+wherehouse config set user.default_identity alice
+```
+
+> **Note**: `user.os_username_map` is a map type — edit the config file directly to set it.
+
+**Full annotated example** (`~/.config/wherehouse/wherehouse.toml`):
 
 ```toml
 [database]
@@ -849,12 +876,14 @@ mise run ci
   - [x] `add location` - Create location hierarchy
   - [x] `where` (aliased as `find`) - Find items/locations with intelligent ranking
   - [x] `history` - Show complete event timeline for items
+  - [x] `move` - Move items between locations (selectors, project tracking, temporary moves)
+  - [x] `config` subcommands (init, get, set, check, edit, path) - viper-backed configuration
   - [x] Basic output formatting (human-readable, JSON, quiet modes)
+  - [x] Flag overrides: `--db`, `--as` override config file values at runtime
 
 ### 🚧 In Progress (v0.2.0 - Alpha)
 
 - [ ] CLI command implementations (continued)
-  - [ ] `move` - Move items between locations
   - [ ] `project` subcommands
   - [ ] `doctor`, `export`, `import`
   - [ ] `missing`, `found`, `borrow`

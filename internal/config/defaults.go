@@ -26,7 +26,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Output.DefaultFormat == "" {
 		cfg.Output.DefaultFormat = "human"
 	}
-	// Quiet defaults to false (already zero value)
+	// Quiet defaults to 0 (already zero value for int)
 }
 
 // GetDefaults returns a Config struct populated with default values.

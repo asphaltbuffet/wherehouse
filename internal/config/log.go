@@ -23,7 +23,7 @@ import (
 // The returned path is absolute. The directory is NOT created here.
 func DefaultLogPath() string {
 	switch runtime.GOOS {
-	case "linux", "freebsd", "openbsd", "netbsd":
+	case goosLinux, goosFreeBSD, goosOpenBSD, goosNetBSD:
 		stateHome := os.Getenv("XDG_STATE_HOME")
 		if stateHome == "" {
 			home := os.Getenv("HOME")
@@ -34,14 +34,14 @@ func DefaultLogPath() string {
 		}
 		return filepath.Join(stateHome, "wherehouse", "wherehouse.log")
 
-	case "darwin":
+	case goosDarwin:
 		home := os.Getenv("HOME")
 		if home == "" {
 			return filepath.Join(".", "wherehouse.log")
 		}
 		return filepath.Join(home, "Library", "Logs", "wherehouse", "wherehouse.log")
 
-	case "windows":
+	case goosWindows:
 		localAppData := os.Getenv("LOCALAPPDATA")
 		if localAppData == "" {
 			userProfile := os.Getenv("USERPROFILE")

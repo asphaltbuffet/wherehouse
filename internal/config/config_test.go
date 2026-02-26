@@ -252,7 +252,7 @@ func TestDefaults(t *testing.T) {
 
 	assert.NotEmpty(t, cfg.Database.Path)
 	assert.Equal(t, "human", cfg.Output.DefaultFormat)
-	assert.False(t, cfg.Output.Quiet)
+	assert.Equal(t, 0, cfg.Output.Quiet)
 	assert.NotNil(t, cfg.User.OSUsernameMap)
 	assert.Empty(t, cfg.User.OSUsernameMap)
 }
@@ -443,7 +443,7 @@ func TestQuietFlag(t *testing.T) {
 	fs := afero.NewMemMapFs()
 
 	content := `[output]
-quiet = true
+quiet = 1
 `
 	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(content), 0644))
 
@@ -452,7 +452,7 @@ quiet = true
 	cfg, err := NewWithFS(fs, "")
 	require.NoError(t, err)
 
-	assert.True(t, cfg.Output.Quiet)
+	assert.Equal(t, 1, cfg.Output.Quiet)
 }
 
 // TestGetDefaults tests the GetDefaults helper function.
@@ -462,7 +462,7 @@ func TestGetDefaults(t *testing.T) {
 	assert.NotNil(t, cfg)
 	assert.NotEmpty(t, cfg.Database.Path)
 	assert.Equal(t, "human", cfg.Output.DefaultFormat)
-	assert.False(t, cfg.Output.Quiet)
+	assert.Equal(t, 0, cfg.Output.Quiet)
 	assert.NotNil(t, cfg.User.OSUsernameMap)
 }
 
@@ -529,7 +529,7 @@ default_identity = "global-user"
 
 [output]
 default_format = "json"
-quiet = false
+quiet = 0
 `
 	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
 
@@ -538,7 +538,7 @@ quiet = false
 path = "/local/db.sqlite"
 
 [output]
-quiet = true
+quiet = 1
 `
 	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
 
@@ -556,7 +556,7 @@ quiet = true
 	assert.Equal(t, "/local/db.sqlite", cfg.Database.Path)
 	assert.Equal(t, "global-user", cfg.User.DefaultIdentity)
 	assert.Equal(t, "human", cfg.Output.DefaultFormat)
-	assert.True(t, cfg.Output.Quiet)
+	assert.Equal(t, 1, cfg.Output.Quiet)
 }
 
 // TestXDG_CONFIG_HOME tests XDG_CONFIG_HOME environment variable support.
@@ -673,7 +673,7 @@ quiet = false
 	assert.Equal(t, "/global/db.sqlite", cfg.Database.Path)
 	assert.Equal(t, "alice", cfg.User.DefaultIdentity)
 	assert.Equal(t, "json", cfg.Output.DefaultFormat)
-	assert.False(t, cfg.Output.Quiet)
+	assert.Equal(t, 0, cfg.Output.Quiet)
 }
 
 // TestValidateExportedFunction tests the exported Validate function.
@@ -713,7 +713,7 @@ default_identity = "alice"
 
 [output]
 default_format = "json"
-quiet = false
+quiet = 0
 `
 	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
 
@@ -726,7 +726,7 @@ default_identity = "bob"
 
 [output]
 default_format = "human"
-quiet = false
+quiet = 0
 `
 	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
 
@@ -734,7 +734,7 @@ quiet = false
 	t.Setenv("WHEREHOUSE_DATABASE_PATH", "/env/db.sqlite")
 	t.Setenv("WHEREHOUSE_USER_DEFAULT_IDENTITY", "charlie")
 	t.Setenv("WHEREHOUSE_OUTPUT_DEFAULT_FORMAT", "json")
-	t.Setenv("WHEREHOUSE_OUTPUT_QUIET", "true")
+	t.Setenv("WHEREHOUSE_OUTPUT_QUIET", "1")
 
 	cfg, err := NewWithFS(fs, "")
 	require.NoError(t, err)
@@ -743,7 +743,7 @@ quiet = false
 	assert.Equal(t, "/env/db.sqlite", cfg.Database.Path)
 	assert.Equal(t, "charlie", cfg.User.DefaultIdentity)
 	assert.Equal(t, "json", cfg.Output.DefaultFormat)
-	assert.True(t, cfg.Output.Quiet)
+	assert.Equal(t, 1, cfg.Output.Quiet)
 }
 
 // TestPartialLocalConfigOverride tests that local config can override subset of global.
@@ -765,7 +765,7 @@ default_identity = "alice"
 
 [output]
 default_format = "json"
-quiet = false
+quiet = 0
 `
 	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
 
@@ -782,7 +782,7 @@ path = "/local/db.sqlite"
 	assert.Equal(t, "/local/db.sqlite", cfg.Database.Path)
 	assert.Equal(t, "alice", cfg.User.DefaultIdentity)
 	assert.Equal(t, "json", cfg.Output.DefaultFormat)
-	assert.False(t, cfg.Output.Quiet)
+	assert.Equal(t, 0, cfg.Output.Quiet)
 }
 
 // TestComplexMergeScenario tests complex three-level merge with all config sources.
@@ -804,7 +804,7 @@ default_identity = "alice"
 
 [output]
 default_format = "json"
-quiet = false
+quiet = 0
 `
 	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0644))
 
@@ -813,7 +813,7 @@ quiet = false
 path = "/local/db.sqlite"
 
 [output]
-quiet = true
+quiet = 1
 `
 	require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0644))
 
@@ -831,5 +831,95 @@ quiet = true
 	assert.Equal(t, "/local/db.sqlite", cfg.Database.Path)
 	assert.Equal(t, "alice", cfg.User.DefaultIdentity)
 	assert.Equal(t, "human", cfg.Output.DefaultFormat)
-	assert.True(t, cfg.Output.Quiet)
+	assert.Equal(t, 1, cfg.Output.Quiet)
+}
+
+// TestIsQuiet_AtZero tests IsQuiet returns false when Quiet == 0.
+func TestIsQuiet_AtZero(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{Quiet: 0},
+	}
+
+	assert.False(t, cfg.IsQuiet())
+}
+
+// TestIsQuiet_AtOne tests IsQuiet returns true when Quiet == 1.
+func TestIsQuiet_AtOne(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{Quiet: 1},
+	}
+
+	assert.True(t, cfg.IsQuiet())
+}
+
+// TestIsQuiet_AtTwo tests IsQuiet returns true when Quiet == 2.
+func TestIsQuiet_AtTwo(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{Quiet: 2},
+	}
+
+	assert.True(t, cfg.IsQuiet())
+}
+
+// TestQuietLevel_Returns0 tests QuietLevel returns exact count when 0.
+func TestQuietLevel_Returns0(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{Quiet: 0},
+	}
+
+	assert.Equal(t, 0, cfg.QuietLevel())
+}
+
+// TestQuietLevel_Returns1 tests QuietLevel returns exact count when 1.
+func TestQuietLevel_Returns1(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{Quiet: 1},
+	}
+
+	assert.Equal(t, 1, cfg.QuietLevel())
+}
+
+// TestQuietLevel_Returns2 tests QuietLevel returns exact count when 2.
+func TestQuietLevel_Returns2(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{Quiet: 2},
+	}
+
+	assert.Equal(t, 2, cfg.QuietLevel())
+}
+
+// TestIsJSON_WithEmptyString tests IsJSON returns false when DefaultFormat is empty.
+func TestIsJSON_WithEmptyString(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{DefaultFormat: ""},
+	}
+
+	assert.False(t, cfg.IsJSON())
+}
+
+// TestIsJSON_WithText tests IsJSON returns false when DefaultFormat is "text".
+func TestIsJSON_WithText(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{DefaultFormat: "text"},
+	}
+
+	assert.False(t, cfg.IsJSON())
+}
+
+// TestIsJSON_WithHuman tests IsJSON returns false when DefaultFormat is "human".
+func TestIsJSON_WithHuman(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{DefaultFormat: "human"},
+	}
+
+	assert.False(t, cfg.IsJSON())
+}
+
+// TestIsJSON_WithJSON tests IsJSON returns true when DefaultFormat is "json".
+func TestIsJSON_WithJSON(t *testing.T) {
+	cfg := &Config{
+		Output: OutputConfig{DefaultFormat: "json"},
+	}
+
+	assert.True(t, cfg.IsJSON())
 }
