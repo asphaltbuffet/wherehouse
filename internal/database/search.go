@@ -262,18 +262,23 @@ func (d *Database) findLastNonSystemLocation(
 	// join with locations_current to filter system locations, and return the most recent.
 	// Using a single query avoids nested connections against the single-connection pool.
 	const query = `
-		SELECT event_type, payload
-		FROM events
-		WHERE item_id = ?
-		  AND event_type IN (
-			'item.created',
-			'item.moved',
-			'item.missing',
-			'item.borrowed',
-			'item.loaned',
-			'item.found'
-		  )
-		ORDER BY event_id DESC
+		SELECT l.location_id, l.display_name, l.full_path_display, l.is_system
+		FROM (
+			SELECT
+				CASE event_type
+					WHEN 'item.created' THEN json_extract(payload, '$.location_id')
+					WHEN 'item.moved'   THEN json_extract(payload, '$.to_location_id')
+					WHEN 'item.found'   THEN json_extract(payload, '$.found_location_id')
+				END AS location_id,
+				event_id
+			FROM events
+			WHERE item_id = ?
+			  AND event_type IN ('item.created', 'item.moved', 'item.found')
+		) extracted
+		JOIN locations_current l ON extracted.location_id = l.location_id
+		WHERE l.is_system = 0
+		ORDER BY extracted.event_id DESC
+		LIMIT 1
 	`
 
 	var loc LocationInfo
