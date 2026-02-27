@@ -12,3 +12,4 @@ manpages/
 completions/
 release_notes/
 **/mocks/*
+.direnv/
