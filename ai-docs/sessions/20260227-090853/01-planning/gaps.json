@@ -1,0 +1,30 @@
+[
+  {
+    "question": "What should happen when the user runs `found` on an item that is NOT currently at the Missing location (e.g., it's at a normal location or at Borrowed)?",
+    "rationale": "The knowledge docs say to warn if current location is not Missing but allow. The codebase shows item.found handler doesn't validate current location at all. The command needs a decision: (a) warn and proceed, (b) error out, or (c) silently proceed. This affects user experience and what error/warning text to show."
+  },
+  {
+    "question": "When the item is at Missing and NOT in temporary use (in_temporary_use=false, temp_origin_location_id=NULL), and --home is not provided, should the command fail hard or look up the event log to find the previous location?",
+    "rationale": "The item projection does not store a 'home_location' field. If an item was moved directly to Missing (never in temporary use), there is no temp_origin_location_id to fall back on. Scanning the event log for the most recent item.marked_missing event's previous_location_id is possible but adds complexity. The alternative is to require --home in this case. Which is preferred?"
+  },
+  {
+    "question": "When found_location_id equals home_location_id (item found right where it belongs) and --return is specified, should the command fire item.found and skip item.moved, or fail entirely, or fire item.found only with a warning?",
+    "rationale": "The item.moved validation requires from_location_id != to_location_id, so firing item.moved with both equal would fail at the database layer. The command layer should detect this before attempting. The question is whether to: (a) fire item.found, skip item.moved, print note; (b) treat --return as implied no-op without note; (c) error before firing any event."
+  },
+  {
+    "question": "Should the `found` command accept items currently at the Borrowed system location, and if so, does it warn?",
+    "rationale": "If an item is marked as borrowed, 'found' is semantically odd - it's not lost, it's knowingly with someone. However the command would still work mechanically. Should this be: (a) allowed with a warning 'item is currently borrowed, use `return` command instead'; (b) blocked with an error; (c) silently allowed?"
+  },
+  {
+    "question": "Should --return clear the project association (default move behavior), or should there be project association flags on the `found` command?",
+    "rationale": "The move command has --project, --keep-project, --clear-project flags. When --return fires item.moved, it uses project_action='clear' by default. Is this the right default for `found --return`? Or should we always clear (simpler interface), always keep, or expose the flags? The item was found - arguably the project context may still be relevant."
+  },
+  {
+    "question": "What is the expected output when --return is specified but item.found succeeds and the subsequent item.moved fails (e.g., transaction error after first event commits)?",
+    "rationale": "Since AppendEvent uses its own transaction per call, if item.found commits but item.moved fails, the item is at found_location with in_temporary_use=true but not yet returned home. The command should report this partial state clearly. The error message strategy matters for the user understanding what happened."
+  },
+  {
+    "question": "The user request says `--in <location>` but the flag shorthand `-i` conflicts with potential future `-i` usage. Should the shorthand be `-i` (matching the `--in` flag name) or omitted?",
+    "rationale": "The move command uses `-t` for `--to`. By analogy, `found` could use `-i` for `--in`. However `-i` is sometimes convention for interactive mode or input in other tools. The choice affects shell ergonomics."
+  }
+]
