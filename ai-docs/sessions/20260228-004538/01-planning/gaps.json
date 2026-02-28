@@ -1,0 +1,18 @@
+[
+  {
+    "question": "Should `TestResolveLocation` and `TestResolveItemSelector` be removed entirely from helpers_test.go, given that they are testing thin pass-through wrappers (`resolveLocation` calls `cli.ResolveLocation` with no added logic), or should they be kept as 2-case smoke tests to verify the wiring between the cmd/move wrapper and internal/cli?",
+    "rationale": "The wrappers add zero logic. If internal/cli/selectors_test.go already covers all cases exhaustively, re-testing in cmd/move is redundant. However, keeping 1-2 cases as a wiring smoke test follows §4.5 intent. The correct answer depends on whether the project prefers full coverage deduplication or belt-and-suspenders wiring verification at each layer boundary."
+  },
+  {
+    "question": "Is the `moveItemFunc` injection approach (adding `NewMoveCmd(fn moveItemFunc)`) acceptable, or is a different testability seam preferred — such as swapping a package-level `var moveItemFn = moveItem` variable in tests?",
+    "rationale": "The package-level variable swap is simpler to implement but triggers the `reassign` linter and introduces shared state across parallel tests. The `NewMoveCmd` constructor approach is cleaner but requires changing the public API surface of the `move` package. The project's existing singleton pattern (`GetMoveCmd`) already uses a package-level var, which may mean the developer prefers the simpler swap approach."
+  },
+  {
+    "question": "Should the output routing tests (`TestRunMoveItem_JSONOutput_WritesToCmdOut`, etc.) drive through `cmd.Execute()` with a real in-memory database, or use a spy `moveItemFunc` that returns a canned `*Result` to avoid database setup overhead?",
+    "rationale": "The spy approach is faster and more focused (tests only output routing, not the full stack), but requires the `NewMoveCmd(fn)` injection. The real-database approach tests the full path but conflates output routing concerns with database behavior. The reference document (§5.4) shows the `SetOut` pattern with either real or mock deps, suggesting either is acceptable."
+  },
+  {
+    "question": "The `runMoveItem` function reads `cli.MustGetConfig(ctx)` to construct the output writer. For output routing tests that use `cmd.Execute()`, how should the test context carry a valid `*config.Config`? Should the test use `cmd.ExecuteContext(ctx)` with a pre-populated context, or is there a test helper in `internal/config` that creates a default test config?",
+    "rationale": "If `cli.MustGetConfig(ctx)` panics when config is missing from context (as the name suggests), every wiring test must supply a context with a valid config. This pattern is established in the project (see cmd/root.go `bindFlagsToConfig`) but the test plumbing for it needs to be clarified before the developer writes the wiring tests."
+  }
+]

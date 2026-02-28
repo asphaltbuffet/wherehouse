@@ -1,0 +1,48 @@
+{
+  "parallel_batches": [
+    {
+      "batch_id": 1,
+      "description": "Production code changes (parallel - both informed by final plan)",
+      "tasks": [
+        {
+          "task_id": "A",
+          "description": "Add LocationItemQuerier interface to internal/cli/selectors.go and update ResolveLocation/ResolveItemSelector signatures",
+          "files": ["internal/cli/selectors.go"],
+          "agent": "golang-developer"
+        },
+        {
+          "task_id": "B",
+          "description": "Refactor cmd/move production code: new mover.go file with moveDB interface, update helpers.go/item.go signatures, replace singleton in move.go, update root.go call site",
+          "files": ["cmd/move/mover.go", "cmd/move/helpers.go", "cmd/move/item.go", "cmd/move/move.go", "cmd/root.go"],
+          "agent": "golang-ui-developer"
+        }
+      ]
+    },
+    {
+      "batch_id": 2,
+      "depends_on": [1],
+      "description": "Build verification + mock generation",
+      "tasks": [
+        {
+          "task_id": "C",
+          "description": "Update .mockery.yaml and run mockery to generate cmd/move/mocks/mock_movedb.go",
+          "files": [".mockery.yaml", "cmd/move/mocks/mock_movedb.go"],
+          "agent": "golang-developer"
+        }
+      ]
+    },
+    {
+      "batch_id": 3,
+      "depends_on": [2],
+      "description": "Test rewrites",
+      "tasks": [
+        {
+          "task_id": "D",
+          "description": "Rewrite cmd/move tests: fix item_test.go, update helpers_test.go, create wiring_test.go",
+          "files": ["cmd/move/item_test.go", "cmd/move/helpers_test.go", "cmd/move/wiring_test.go"],
+          "agent": "golang-tester"
+        }
+      ]
+    }
+  ]
+}
