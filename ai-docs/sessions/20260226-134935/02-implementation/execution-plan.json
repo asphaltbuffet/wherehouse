@@ -1,0 +1,21 @@
+{
+  "parallel_batches": [
+    {
+      "batch_id": 1,
+      "tasks": [
+        {
+          "task_id": "A",
+          "description": "Add GetRootLocations function to internal/database/location.go and its tests",
+          "files": ["/internal/database/location.go", "/internal/database/location_test.go"],
+          "agent": "db-developer"
+        },
+        {
+          "task_id": "B",
+          "description": "Implement cmd/list/ package (list.go, output.go, helpers.go, doc.go + tests) and register in cmd/root.go. Run go get github.com/xlab/treeprint first.",
+          "files": ["/cmd/list/list.go", "/cmd/list/output.go", "/cmd/list/helpers.go", "/cmd/list/doc.go", "/cmd/list/list_test.go", "/cmd/root.go"],
+          "agent": "golang-ui-developer"
+        }
+      ]
+    }
+  ]
+}

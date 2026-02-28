@@ -1,0 +1,26 @@
+[
+  {
+    "question": "Should items appear before or after sub-locations within each tree node?",
+    "rationale": "The plan assumes items first, then sub-locations at each level. The alternative (sub-locations first) may be more natural for users who think of locations as containers. Either choice is fine but should be confirmed before implementation to avoid a test-breaking reversal."
+  },
+  {
+    "question": "Should `wherehouse list` (no args, no --recurse) show sub-location counts as annotations on each root location?",
+    "rationale": "The current plan shows item count (e.g., 'Garage (3 items)') on each location header. It is ambiguous whether the sub-location count should also be shown (e.g., 'Garage (3 items, 2 sub-locations)') in non-recursive mode. Showing it may be helpful but requires fetching children even in non-recursive mode."
+  },
+  {
+    "question": "Should `wherehouse list Garage` (specific location, no --recurse) show the items in Garage only, or also show the names of its direct child locations (without recursing into them)?",
+    "rationale": "The user request says '-r lists all contents, sub-locations, and their items', implying non-recursive only shows items. But it might be useful to list direct child location names as a hint that more content exists below, similar to how `ls` shows directories. This affects both the human output and the JSON schema."
+  },
+  {
+    "question": "What marker or annotation should be shown for borrowed/missing items that appear inside the Borrowed or Missing system locations?",
+    "rationale": "Items in Missing/Borrowed are special. The `*` marker is proposed for in_temporary_use items. Should borrowed and missing items also have their own markers (e.g., different symbol or label)? The search command (scry) already has this concept but list does not have a clear spec."
+  },
+  {
+    "question": "Should the `--recurse` flag without a location argument cap depth or warn on very large trees?",
+    "rationale": "A full recursive listing of all locations could be very large for complex inventories. No depth limit is specified by the user request. Confirming there is no limit (i.e., always show full tree) avoids adding an optional `--depth` flag that is not requested but might be expected."
+  },
+  {
+    "question": "What is the expected sort order for locations and items within each tree level?",
+    "rationale": "The plan uses alphabetical display_name ordering. The existing DB functions (GetLocationChildren, GetItemsByLocation) already ORDER BY display_name. Confirming this is the desired sort avoids a future breaking change if users expect case-insensitive or canonical-name ordering."
+  }
+]
