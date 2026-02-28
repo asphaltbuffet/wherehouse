@@ -1,0 +1,92 @@
+{
+  "parallel_batches": [
+    {
+      "batch_id": 1,
+      "description": "Core internal/config changes - toml tags + writer.go (same package, one agent to avoid conflicts)",
+      "tasks": [
+        {
+          "task_id": "A",
+          "description": "Phase 1+2: Add toml struct tags to internal/config/config.go AND create internal/config/writer.go with WriteDefault, Set, Check, GetValue, parseConfigValue, atomicWrite, newViperForFile",
+          "files": [
+            "/home/grue/dev/wherehouse/internal/config/config.go",
+            "/home/grue/dev/wherehouse/internal/config/writer.go"
+          ],
+          "agent": "golang-developer"
+        }
+      ]
+    },
+    {
+      "batch_id": 2,
+      "depends_on": [1],
+      "description": "All cmd/config refactors in parallel (independent files) + delete unset + flag binding",
+      "tasks": [
+        {
+          "task_id": "B",
+          "description": "Phase 3: Refactor cmd/config/init.go to use config.WriteDefault",
+          "files": ["/home/grue/dev/wherehouse/cmd/config/init.go"],
+          "agent": "golang-ui-developer"
+        },
+        {
+          "task_id": "C",
+          "description": "Phase 4: Refactor cmd/config/set.go to use config.Set - remove updateConfigValue function",
+          "files": ["/home/grue/dev/wherehouse/cmd/config/set.go"],
+          "agent": "golang-ui-developer"
+        },
+        {
+          "task_id": "D",
+          "description": "Phase 5: DELETE cmd/config/unset.go and cmd/config/unset_test.go. Remove unset subcommand registration from cmd/config/config.go",
+          "files": [
+            "/home/grue/dev/wherehouse/cmd/config/unset.go",
+            "/home/grue/dev/wherehouse/cmd/config/unset_test.go",
+            "/home/grue/dev/wherehouse/cmd/config/config.go"
+          ],
+          "agent": "golang-ui-developer"
+        },
+        {
+          "task_id": "E",
+          "description": "Phase 6: Refactor cmd/config/check.go to use config.Check instead of loadConfigFile",
+          "files": ["/home/grue/dev/wherehouse/cmd/config/check.go"],
+          "agent": "golang-ui-developer"
+        },
+        {
+          "task_id": "F",
+          "description": "Phase 7: Refactor cmd/config/get.go to use config.GetValue instead of getConfigValue",
+          "files": ["/home/grue/dev/wherehouse/cmd/config/get.go"],
+          "agent": "golang-ui-developer"
+        },
+        {
+          "task_id": "G",
+          "description": "Phase 10: Add bindFlagsToConfig to cmd/root.go initConfig to apply --db, --as, --json, --quiet overrides onto *Config struct after loading",
+          "files": ["/home/grue/dev/wherehouse/cmd/root.go"],
+          "agent": "golang-ui-developer"
+        }
+      ]
+    },
+    {
+      "batch_id": 3,
+      "depends_on": [2],
+      "description": "Cleanup helpers.go after all callers updated",
+      "tasks": [
+        {
+          "task_id": "H",
+          "description": "Phase 8: Clean up cmd/config/helpers.go - remove atomicWrite, marshalConfigWithComments, getConfigValue, setValueInMap, unsetValueInMap, loadConfigFile, determineConfigPath, configFilePerms, keyValueParts. Keep: cmdFS, SetFilesystem, fileExists, ensureDir",
+          "files": ["/home/grue/dev/wherehouse/cmd/config/helpers.go"],
+          "agent": "golang-ui-developer"
+        }
+      ]
+    },
+    {
+      "batch_id": 4,
+      "depends_on": [3],
+      "description": "Tests for writer.go",
+      "tasks": [
+        {
+          "task_id": "I",
+          "description": "Phase 9: Create internal/config/writer_test.go with programmatic round-trip tests for WriteDefault, Set, Check, GetValue. No golden files. All 15 test cases from the plan.",
+          "files": ["/home/grue/dev/wherehouse/internal/config/writer_test.go"],
+          "agent": "golang-tester"
+        }
+      ]
+    }
+  ]
+}

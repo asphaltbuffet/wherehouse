@@ -1,0 +1,20 @@
+Config Refactoring Plan Summary (Revised - viper-native write, no unset)
+
+- WriteDefault uses viper SetDefault + WriteConfigAs(path.toml): viper writes TOML
+  natively via pelletier/go-toml/v2 using the afero filesystem; no comments in output,
+  all keys present; replaces marshalConfigWithComments entirely. toml struct tags are
+  still required for config.Check which uses toml.Unmarshal directly to catch raw parse
+  errors.
+
+- Set uses viper ReadInConfig + v.Set(key, parsedValue) + WriteConfigAs: single source
+  of truth for type validation in parseConfigValue() covering all keys including logging.*;
+  validates via v.Unmarshal + validate() before writing; uses same afero fs instance.
+
+- config unset command REMOVED entirely: viper v1.21.0 has no key-delete API; rather
+  than implement awkward map manipulation, the command is deleted. cmd/config/unset.go
+  and unset_test.go are marked for deletion; Unset is not added to writer.go; users
+  restore defaults with 'config set <key> <default-value>' instead.
+
+- Flag binding via bindFlagsToConfig in cmd/root.go initConfig: applies --db, --as,
+  --json, --quiet overrides directly onto *Config struct after loading (avoids restructuring
+  loader.go); transient flags --config/--no-config and per-command flags are excluded.

@@ -1,0 +1,6 @@
+COMPLETE
+
+cmd/config/init.go refactored to call config.WriteDefault instead of manual file-write block.
+internal/config package builds cleanly.
+cmd/config package has pre-existing build failures (missing GetUnsetCmd, updateConfigValue) unrelated to this task.
+init_test.go tests remain compatible with new error handling.
