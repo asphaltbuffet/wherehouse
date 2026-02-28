@@ -1,0 +1,18 @@
+[
+  {
+    "question": "Should `init --database <path>` be a distinct flag from the root `--db` flag, or should `init` simply rely on the root `--db` persistent flag for path override? Making it a local flag on `init` is more discoverable for first-time users, but introduces two flags that resolve the same thing.",
+    "rationale": "The user request says `--database` flag on init specifies WHERE to create the database. The root command already has `--db` for the same purpose. Clarifying which takes precedence and whether `--database` is local-only or an alias avoids ambiguity in the implementation."
+  },
+  {
+    "question": "When `--force` is used and the backup file (`<path>.backup`) already exists from a previous `--force` run, should it be overwritten silently, should it error, or should a timestamp suffix be used (e.g., `.backup.20260226`)?",
+    "rationale": "The requirement says rename to `<filename>.backup` but does not specify what happens when that backup already exists. The most common expectation is silent overwrite, but a timestamp variant is safer."
+  },
+  {
+    "question": "Should `init` print the database path in its success message even in quiet mode (`-q`)? Or should quiet mode suppress all output including the path confirmation?",
+    "rationale": "For a setup command run once, the path is important feedback. Other commands suppress output in quiet mode. Clarifying whether `init` should always show the path or respect quiet mode ensures consistent UX."
+  },
+  {
+    "question": "Is `wherehouse init` expected to be idempotent (i.e., run multiple times safely without `--force`)? The current design errors if the DB already exists without `--force`. If idempotency is desired, a no-op success with a note like 'already initialized' would be more user-friendly for scripts.",
+    "rationale": "Many `init`-style commands in CLI tools are designed to be safely re-run. The requirement says 'fails if already present' which implies not idempotent, but confirming this prevents future confusion."
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "parallel_batches": [
+    {
+      "batch_id": 1,
+      "description": "Core database existence check - foundational, must complete before CLI can reference the new API",
+      "tasks": [
+        {
+          "task_id": "A",
+          "description": "Update internal/cli/database.go: add ErrDatabaseNotInitialized sentinel error, add CheckDatabaseExists function, update OpenDatabase to call CheckDatabaseExists before opening. Add tests in internal/cli/database_test.go.",
+          "files": [
+            "internal/cli/database.go",
+            "internal/cli/database_test.go"
+          ],
+          "agent": "golang-developer"
+        }
+      ]
+    },
+    {
+      "batch_id": 2,
+      "depends_on": [1],
+      "description": "CLI initialize command - depends on Batch 1 API being defined",
+      "tasks": [
+        {
+          "task_id": "B",
+          "description": "Create cmd/initialize/ package with parent command and database subcommand. Wire into cmd/root.go. Implement backup logic with date-stamped suffix and collision counter.",
+          "files": [
+            "cmd/initialize/doc.go",
+            "cmd/initialize/initialize.go",
+            "cmd/initialize/database.go",
+            "cmd/initialize/database_test.go",
+            "cmd/root.go"
+          ],
+          "agent": "golang-ui-developer"
+        }
+      ]
+    }
+  ]
+}
