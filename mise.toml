@@ -7,7 +7,6 @@ semver = "latest"
 
 [tasks.build]
 description = "go build"
-hide = true
 run = "go build -o dist/ ./..."
 
 [tasks.ci]

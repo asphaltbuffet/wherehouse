@@ -4,8 +4,6 @@ bin/
 dist/
 *.out
 *.test
-.claude/
-ai-docs/
 manpages/
 completions/
 release_notes/
