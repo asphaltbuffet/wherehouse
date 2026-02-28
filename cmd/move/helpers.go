@@ -16,7 +16,7 @@ func openDatabase(ctx context.Context) (*database.Database, error) {
 // Accepts either:
 // - Full UUID (verified against database).
 // - Display name or canonical name (looked up in projection).
-func resolveLocation(ctx context.Context, db *database.Database, input string) (string, error) {
+func resolveLocation(ctx context.Context, db moveDB, input string) (string, error) {
 	return cli.ResolveLocation(ctx, db, input)
 }
 
@@ -25,6 +25,6 @@ func resolveLocation(ctx context.Context, db *database.Database, input string) (
 //  1. UUID (exact ID)
 //  2. LOCATION:ITEM (both canonical names, filters by location)
 //  3. Canonical name (must match exactly 1 item)
-func resolveItemSelector(ctx context.Context, db *database.Database, selector string) (string, error) {
+func resolveItemSelector(ctx context.Context, db moveDB, selector string) (string, error) {
 	return cli.ResolveItemSelector(ctx, db, selector, "wherehouse move")
 }

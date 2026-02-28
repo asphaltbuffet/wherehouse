@@ -1,4 +1,4 @@
-package config
+package found
 
 import (
 	"testing"
@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfigCheck(t *testing.T) {
-	cmd1 := GetConfigCmd()
+func TestGetFoundCmd_Singleton(t *testing.T) {
+	cmd1 := GetFoundCmd()
 	require.NotNil(t, cmd1)
 
-	cmd2 := GetConfigCmd()
+	cmd2 := GetFoundCmd()
 
 	assert.Same(t, cmd1, cmd2)
 }

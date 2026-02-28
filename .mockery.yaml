@@ -10,3 +10,6 @@ packages:
   github.com/asphaltbuffet/wherehouse/internal/logging:
     interfaces:
       Logger:
+  github.com/asphaltbuffet/wherehouse/cmd/move:
+    interfaces:
+      moveDB:

@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
 // Result represents the result of a single item move operation.
@@ -22,8 +21,9 @@ type Result struct {
 	ProjectID     string `json:"project_id,omitempty"`
 }
 
-// runMoveItem is the main entry point for the move command.
-func runMoveItem(cmd *cobra.Command, args []string) error {
+// runMoveItemCore contains the main business logic for the move command.
+// The db connection lifecycle (Close) is owned by the RunE closures in move.go.
+func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 	ctx := cmd.Context()
 
 	// Parse flags
@@ -32,13 +32,6 @@ func runMoveItem(cmd *cobra.Command, args []string) error {
 	projectID, _ := cmd.Flags().GetString("project")
 	keepProject, _ := cmd.Flags().GetBool("keep-project")
 	note, _ := cmd.Flags().GetString("note")
-
-	// Open database
-	db, err := openDatabase(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
 
 	// Get actor user ID
 	actorUserID := cli.GetActorUserID(ctx)
@@ -114,7 +107,7 @@ func runMoveItem(cmd *cobra.Command, args []string) error {
 // moveItem performs a single item move operation.
 func moveItem(
 	ctx context.Context,
-	db *database.Database,
+	db moveDB,
 	itemID, toLocationID, moveType, projectAction, projectID, actorUserID, note string,
 ) (*Result, error) {
 	// Get current item state
@@ -196,7 +189,7 @@ func moveItem(
 }
 
 // validateDestinationNotSystem checks that destination is not a system location.
-func validateDestinationNotSystem(ctx context.Context, db *database.Database, locationID string) error {
+func validateDestinationNotSystem(ctx context.Context, db moveDB, locationID string) error {
 	loc, err := db.GetLocation(ctx, locationID)
 	if err != nil {
 		return fmt.Errorf("failed to get destination location: %w", err)

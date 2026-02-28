@@ -32,9 +32,3 @@ func fileExists(fs afero.Fs, path string) (bool, error) {
 	}
 	return false, err
 }
-
-// ensureDir creates a directory and all parent directories if they don't exist.
-// Permissions are set to 0755 (rwxr-xr-x).
-func ensureDir(fs afero.Fs, path string) error {
-	return fs.MkdirAll(path, 0755)
-}

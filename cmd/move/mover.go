@@ -1,0 +1,22 @@
+package move
+
+import (
+	"context"
+
+	"github.com/asphaltbuffet/wherehouse/internal/database"
+)
+
+// moveDB is the database interface required by the move command.
+// *database.Database satisfies this interface implicitly.
+//
+//go:generate mockery --name=moveDB
+type moveDB interface {
+	Close() error
+	GetItem(ctx context.Context, itemID string) (*database.Item, error)
+	GetLocation(ctx context.Context, locationID string) (*database.Location, error)
+	GetLocationByCanonicalName(ctx context.Context, canonicalName string) (*database.Location, error)
+	GetItemsByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Item, error)
+	ValidateFromLocation(ctx context.Context, itemID, expectedFromLocationID string) error
+	ValidateProjectExists(ctx context.Context, projectID string, requiredStatus *string) error
+	AppendEvent(ctx context.Context, eventType, actorUserID string, payload any, note string) (int64, error)
+}

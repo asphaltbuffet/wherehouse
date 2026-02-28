@@ -157,8 +157,15 @@ func toJSON(nodes []*LocationNode) OutputJSON {
 func nodeToJSON(node *LocationNode) LocationJSON {
 	if node.NotFound {
 		return LocationJSON{
-			DisplayName: node.InputArg,
-			NotFound:    true,
+			DisplayName:     node.InputArg,
+			NotFound:        true,
+			CanonicalName:   "",
+			FullPathDisplay: "",
+			IsSystem:        false,
+			ItemCount:       0,
+			LocationCount:   0,
+			Items:           nil,
+			Children:        nil,
 		}
 	}
 
@@ -196,5 +203,6 @@ func nodeToJSON(node *LocationNode) LocationJSON {
 		LocationCount:   locCount,
 		Items:           items,
 		Children:        children,
+		NotFound:        false,
 	}
 }
