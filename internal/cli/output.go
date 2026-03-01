@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/asphaltbuffet/wherehouse/internal/config"
+	"github.com/asphaltbuffet/wherehouse/internal/styles"
 )
 
 // OutputWriter handles formatted output with styling support.
@@ -18,7 +19,7 @@ type OutputWriter struct {
 	err       io.Writer
 	jsonMode  bool
 	quietMode bool
-	styles    *OutputStyles
+	styles    *styles.Styles
 }
 
 // OutputStyles contains lipgloss styles for consistent terminal formatting.
@@ -50,19 +51,7 @@ func NewOutputWriter(out, err io.Writer, jsonMode, quietMode bool) *OutputWriter
 		err:       err,
 		jsonMode:  jsonMode,
 		quietMode: quietMode,
-		styles:    defaultStyles(),
-	}
-}
-
-// defaultStyles creates the default lipgloss style set for terminal output.
-func defaultStyles() *OutputStyles {
-	return &OutputStyles{
-		Success: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),            // Green
-		Error:   lipgloss.NewStyle().Foreground(lipgloss.Color("9")),             // Red
-		Warning: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),            // Yellow
-		Info:    lipgloss.NewStyle().Foreground(lipgloss.Color("12")),            // Blue
-		Key:     lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true), // Cyan bold
-		Value:   lipgloss.NewStyle().Foreground(lipgloss.Color("15")),            // White
+		styles:    styles.DefaultStyles(),
 	}
 }
 
@@ -76,7 +65,7 @@ func (w *OutputWriter) Success(msg string) {
 		_ = w.printJSON(map[string]string{"status": "success", "message": msg})
 		return
 	}
-	fmt.Fprintln(w.out, w.styles.Success.Render(msg))
+	fmt.Fprintln(w.out, w.styles.MoveOk().Render(msg))
 }
 
 // Error prints an error message to stderr.
@@ -86,7 +75,7 @@ func (w *OutputWriter) Error(msg string) {
 		_ = w.printJSON(map[string]string{"status": "error", "message": msg})
 		return
 	}
-	fmt.Fprintln(w.err, w.styles.Error.Render("Error: "+msg))
+	fmt.Fprintln(w.err, w.styles.Error().Render("Error: "+msg))
 }
 
 // Warning prints a warning message to stderr.
@@ -99,19 +88,17 @@ func (w *OutputWriter) Warning(msg string) {
 		_ = w.printJSON(map[string]string{"status": "warning", "message": msg})
 		return
 	}
-	fmt.Fprintln(w.err, w.styles.Warning.Render("Warning: "+msg))
+	fmt.Fprintln(w.err, w.styles.WarningText().Render("Warning: "+msg))
 }
 
 // Info prints an informational message to stdout.
 // Suppressed in quiet mode. Not shown in JSON mode.
 func (w *OutputWriter) Info(msg string) {
-	if w.quietMode {
+	if w.quietMode || w.jsonMode {
 		return
 	}
-	if w.jsonMode {
-		return // Don't print info in JSON mode
-	}
-	fmt.Fprintln(w.out, w.styles.Info.Render(msg))
+
+	fmt.Fprintln(w.out, w.styles.Info().Render(msg))
 }
 
 // KeyValue prints a key-value pair with styled formatting.
@@ -125,8 +112,8 @@ func (w *OutputWriter) KeyValue(key, value string) {
 		return
 	}
 	fmt.Fprintf(w.out, "%s: %s\n",
-		w.styles.Key.Render(key),
-		w.styles.Value.Render(value))
+		w.styles.KVKey().Render(key),
+		w.styles.KVValue().Render(value))
 }
 
 // JSON prints arbitrary JSON data to stdout.

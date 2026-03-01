@@ -1,15 +1,14 @@
-with-expecter: true
 dir: "{{.InterfaceDir}}/mocks"
-outpkg: mocks
-mockname: "Mock{{.InterfaceName}}"
 filename: "mock_{{.InterfaceName | lower}}.go"
-resolve-type-alias: false
-disable-version-string: true
-issue-845-fix: true
+log-level: warn
+pkgname: mocks
+template: testify
+template-data:
+  unroll-variadic: true
 packages:
   github.com/asphaltbuffet/wherehouse/internal/logging:
     interfaces:
-      Logger:
+      Logger: {}
   github.com/asphaltbuffet/wherehouse/cmd/move:
     interfaces:
-      moveDB:
+      moveDB: {}

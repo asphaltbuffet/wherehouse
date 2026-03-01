@@ -8,8 +8,6 @@ import (
 
 // moveDB is the database interface required by the move command.
 // *database.Database satisfies this interface implicitly.
-//
-//go:generate mockery --name=moveDB
 type moveDB interface {
 	Close() error
 	GetItem(ctx context.Context, itemID string) (*database.Item, error)

@@ -10,13 +10,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/styles"
 )
 
 const (
 	hoursPerDay         = 24
-	selectorSplitParts  = 2
 	recentDaysThreshold = 7
 	uuidPrefixLength    = 8
+	eventTypeMissing    = "item.missing"
 )
 
 // formatOutput formats and writes the event history to the output.
@@ -30,6 +31,7 @@ func formatOutput(
 	if jsonMode {
 		return formatJSON(cmd.OutOrStdout(), events)
 	}
+
 	return formatHuman(ctx, cmd.OutOrStdout(), db, events)
 }
 
@@ -46,6 +48,7 @@ func formatJSON(w io.Writer, events []*database.Event) error {
 
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
+
 	return encoder.Encode(output)
 }
 
@@ -108,8 +111,12 @@ func formatEvent(
 	//   │
 	//   ○  2026-02-20 14:30 (bob)  item.created
 	//      Created at: Home/Garage/Toolbox
+	appStyles := styles.DefaultStyles()
 
 	connector := "│"
+	if event.EventType == "item.found" || event.EventType == eventTypeMissing {
+		connector = "⸾"
+	}
 	if isLast {
 		connector = " "
 	}
@@ -119,13 +126,20 @@ func formatEvent(
 	if event.EventType == "item.deleted" {
 		marker = "●" // Terminal event
 	}
+	if event.EventType == eventTypeMissing {
+		marker = "◌"
+	}
 
 	// Parse timestamp for relative display
 	timestamp := formatTimestamp(event.TimestampUTC)
 
 	// Header line
-	fmt.Fprintf(w, "%s  %s (%s)  %s\n",
-		marker, timestamp, event.ActorUserID, event.EventType)
+	fmt.Fprintf(w, "%s  %s  (%s)  %s\n",
+		appStyles.EventStyle(event.EventType).Render(marker),
+		appStyles.EventStyle(event.EventType).Render(event.EventType),
+		event.ActorUserID,
+		timestamp,
+	)
 
 	// Detail lines (event-specific)
 	details, err := formatEventDetails(ctx, db, event, locationCache)
@@ -133,17 +147,26 @@ func formatEvent(
 		return err
 	}
 	for _, line := range details {
-		fmt.Fprintf(w, "%s  %s\n", connector, line)
+		fmt.Fprintf(w, "%s  %s\n",
+			appStyles.EventStyle(event.EventType).Render(connector),
+			appStyles.EventStyle(event.EventType).Render(line),
+		)
 	}
 
 	// Note (if present)
 	if event.Note != nil && *event.Note != "" {
-		fmt.Fprintf(w, "%s  Note: %s\n", connector, *event.Note)
+		fmt.Fprintf(w, "%s  Note: %s\n",
+			appStyles.EventStyle(event.EventType).Render(connector),
+			appStyles.ItalicDim().Render(*event.Note),
+		)
 	}
 
 	// Blank line separator
 	if !isLast {
-		fmt.Fprintf(w, "%s\n", connector)
+		fmt.Fprintf(w,
+			"%s\n",
+			appStyles.EventStyle(event.EventType).Render(connector),
+		)
 	}
 
 	return nil
@@ -215,7 +238,7 @@ func formatEventDetails(
 		return formatItemMovedDetails(ctx, db, payload, locationCache), nil
 	case "item.borrowed":
 		return formatItemBorrowedDetails(payload), nil
-	case "item.missing":
+	case eventTypeMissing:
 		return formatItemMissingDetails(ctx, db, payload, locationCache), nil
 	case "item.found":
 		return formatItemFoundDetails(ctx, db, payload, locationCache), nil

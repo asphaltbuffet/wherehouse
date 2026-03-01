@@ -322,20 +322,6 @@ func TestOutputWriter_MultipleOperations(t *testing.T) {
 	assert.Contains(t, output, "Operation completed")
 }
 
-func TestOutputWriter_StylesNotNil(t *testing.T) {
-	out := &bytes.Buffer{}
-	err := &bytes.Buffer{}
-	w := NewOutputWriter(out, err, false, false)
-
-	require.NotNil(t, w.styles)
-	assert.NotNil(t, w.styles.Success)
-	assert.NotNil(t, w.styles.Error)
-	assert.NotNil(t, w.styles.Warning)
-	assert.NotNil(t, w.styles.Info)
-	assert.NotNil(t, w.styles.Key)
-	assert.NotNil(t, w.styles.Value)
-}
-
 // TestNewOutputWriterFromConfig_JSONTrue tests NewOutputWriterFromConfig with IsJSON() = true.
 func TestNewOutputWriterFromConfig_JSONTrue(t *testing.T) {
 	cfg := &config.Config{

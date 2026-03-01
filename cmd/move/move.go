@@ -42,7 +42,7 @@ func NewMoveCmd(db moveDB) *cobra.Command {
 		Use:   "move <item-selector>... --to <location>",
 		Short: "Move items to a different location",
 		Long:  moveLongDescription,
-		Args:  cobra.MinimumNArgs(1), //nolint:mnd // minimum 1 item selector required
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defer func() {
 				if closeErr := db.Close(); closeErr != nil {
@@ -65,7 +65,7 @@ func NewDefaultMoveCmd() *cobra.Command {
 		Use:   "move <item-selector>... --to <location>",
 		Short: "Move items to a different location",
 		Long:  moveLongDescription,
-		Args:  cobra.MinimumNArgs(1), //nolint:mnd // minimum 1 item selector required
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			db, err := openDatabase(cmd.Context())
 			if err != nil {

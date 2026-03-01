@@ -8,6 +8,7 @@ import (
 	"github.com/xlab/treeprint"
 
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/styles"
 )
 
 // LocationNode is one node in the rendered tree.
@@ -57,8 +58,10 @@ type OutputJSON struct {
 // locationHeader returns the formatted display string for a location node header.
 // e.g. "Garage (3 items, 2 locations)" or "Office (0 items, 0 locations)".
 func locationHeader(name string, itemCount, locationCount int) string {
+	appStyle := styles.DefaultStyles()
+
 	return fmt.Sprintf("%s (%d %s, %d %s)",
-		name,
+		appStyle.LocationStyle(name).Render(name),
 		itemCount, english.PluralWord(itemCount, "item", ""),
 		locationCount, english.PluralWord(locationCount, "location", ""),
 	)
@@ -68,13 +71,16 @@ func locationHeader(name string, itemCount, locationCount int) string {
 // Items appear before sub-locations; both groups are already in alphabetical
 // order from the database queries.
 func populateTree(branch treeprint.Tree, node *LocationNode) {
+	appStyle := styles.DefaultStyles()
+
 	// Items first (already alphabetical from DB)
 	for _, item := range node.Items {
 		label := item.DisplayName
 		if item.InTemporaryUse {
 			label += " *"
 		}
-		branch.AddNode(label)
+
+		branch.AddNode(appStyle.ItemStyle(item.InTemporaryUse).Render(label))
 	}
 
 	// Sub-locations
@@ -100,7 +106,7 @@ func populateTree(branch treeprint.Tree, node *LocationNode) {
 			childLocs = child.ChildLocationCount
 		}
 
-		header := "[" + child.Location.DisplayName + "] " +
+		header := appStyle.LocationStyle(child.Location.CanonicalName).Render("["+child.Location.DisplayName+"] ") +
 			fmt.Sprintf("(%d %s, %d %s)",
 				childItems, english.PluralWord(childItems, "item", ""),
 				childLocs, english.PluralWord(childLocs, "location", ""),
@@ -117,13 +123,17 @@ func populateTree(branch treeprint.Tree, node *LocationNode) {
 // renderTree renders a slice of root LocationNodes to w, one tree per root.
 // Roots are separated by blank lines.
 func renderTree(w io.Writer, nodes []*LocationNode) {
+	appStyle := styles.DefaultStyles()
+
 	for i, node := range nodes {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
 
 		if node.NotFound {
-			fmt.Fprintln(w, node.InputArg+" [not found]")
+			fmt.Fprintln(w,
+				appStyle.TextDim().Render(node.InputArg+" [not found]"),
+			)
 			continue
 		}
 
