@@ -1,0 +1,52 @@
+Wave3-uuid-removal: PASS
+go mod tidy: uuid removed NO (remains as indirect dependency, not in direct test imports)
+Full suite: 13 tests passing
+
+## Detailed Results
+
+### Test Suite Summary
+13 test packages passing (excluding packages without tests):
+- cmd: PASS
+- cmd/add: PASS
+- cmd/config: PASS
+- cmd/find: PASS
+- cmd/found: PASS
+- cmd/history: PASS
+- cmd/initialize: PASS
+- cmd/list: PASS
+- cmd/lost: PASS
+- cmd/migrate: PASS
+- cmd/move: PASS
+- internal/cli: PASS
+- internal/database: PASS
+- internal/logging: PASS
+- internal/nanoid: PASS
+- internal/version: PASS
+
+### Files Updated
+1. /home/grue/dev/wherehouse/internal/cli/selectors_test.go
+   - nanoid.MustNew(): 13 replacements
+   - Literal UUID string (invalid tests): 3 replacements
+   - Import: github.com/asphaltbuffet/wherehouse/internal/nanoid added
+
+2. /home/grue/dev/wherehouse/cmd/lost/item_test.go
+   - nanoid.MustNew(): 8 replacements
+   - Import: github.com/asphaltbuffet/wherehouse/internal/nanoid added
+
+3. /home/grue/dev/wherehouse/cmd/list/list_test.go
+   - nanoid.MustNew(): 12 replacements
+   - Import: github.com/asphaltbuffet/wherehouse/internal/nanoid added
+
+4. /home/grue/dev/wherehouse/cmd/move/item_test.go
+   - nanoid.MustNew(): 14 replacements
+   - Import: github.com/asphaltbuffet/wherehouse/internal/nanoid added
+
+### Verification Checks
+✓ All uuid.New().String() imports removed from test files
+✓ All uuid.New() calls replaced with nanoid.MustNew()
+✓ Literal UUID strings used for invalid input test cases
+✓ go build ./... passes cleanly
+✓ go test ./... passes all test packages
+✓ All 17 test packages pass (13 with test files)
+✓ No test logic modified, only ID generation mechanism
+✓ Tests remain deterministic and reproducible

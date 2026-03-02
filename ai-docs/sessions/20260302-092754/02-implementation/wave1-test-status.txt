@@ -1,0 +1,69 @@
+Wave 1 Test Status Report
+========================
+Date: 2026-03-02
+Status: ALL TESTS FAILING (EXPECTED - RED phase of TDD)
+
+Test File: internal/nanoid/nanoid_test.go
+Status: FAILING - Build error
+Reason: Package internal/nanoid does not exist
+Error: "no non-test Go files in /home/grue/dev/wherehouse/internal/nanoid"
+Tests written:
+  - TestIDLength_IsCorrectValue (expects nanoid.IDLength constant = 10)
+  - TestNew_ReturnsIDOfCorrectLength (expects New() to return 10 chars)
+  - TestNew_ReturnsAlphanumericOnly (expects only A-Za-z0-9)
+  - TestNew_NoDuplicates (expects no collisions in 1000 generated IDs)
+  - TestMustNew_ReturnsIDOfCorrectLength (expects MustNew() to return 10 chars)
+  - TestMustNew_ReturnsAlphanumericOnly (expects only A-Za-z0-9)
+
+Test File: internal/database/helper_test.go
+Status: PASSING (currently)
+Reason: Old UUID seed data still works with old UUID constants removed
+Note: These constants were updated from UUIDs to 10-char alphanumeric format:
+  - TestLocationWorkshop: "01936e3e-1000-7890-abcd-ef0123456789" → "tst0loc001"
+  - TestLocationStorage: "01936e3e-1001-7890-abcd-ef0123456789" → "tst0loc002"
+  - TestLocationToolbox: "01936e3e-1002-7890-abcd-ef0123456789" → "tst0loc003"
+  - TestLocationWorkbench: "01936e3e-1003-7890-abcd-ef0123456789" → "tst0loc004"
+  - TestLocationShelves: "01936e3e-1004-7890-abcd-ef0123456789" → "tst0loc005"
+  - TestLocationBinA: "01936e3e-1005-7890-abcd-ef0123456789" → "tst0loc006"
+  - TestLocationBinB: "01936e3e-1006-7890-abcd-ef0123456789" → "tst0loc007"
+  - TestItem10mmSocket: "01936e3e-2000-7890-abcd-ef0123456789" → "tst0itm001"
+  - TestItemScrewdriverSet: "01936e3e-2001-7890-abcd-ef0123456789" → "tst0itm002"
+  - TestItemHammer: "01936e3e-2002-7890-abcd-ef0123456789" → "tst0itm003"
+  - TestItemDrillBits: "01936e3e-2003-7890-abcd-ef0123456789" → "tst0itm004"
+  - TestItemSandpaper: "01936e3e-2004-7890-abcd-ef0123456789" → "tst0itm005"
+  - TestItemMissingWrench: "01936e3e-2005-7890-abcd-ef0123456789" → "tst0itm006"
+  - TestItemBorrowedSaw: "01936e3e-2006-7890-abcd-ef0123456789" → "tst0itm007"
+
+Test File: internal/cli/selectors_test.go
+Status: FAILING - Compile error
+Reason: Function LooksLikeID does not exist yet
+Error: "undefined: LooksLikeID at line 171"
+Tests written:
+  - TestLooksLikeID (renamed from TestLooksLikeUUID)
+  - 12 test cases covering:
+    * Valid 10-char alphanumeric (aB3xK9mPqR, 0000000000, AAAAAAAAAA, tst0loc001)
+    * Invalid UUID format (36-char with dashes)
+    * Invalid too short (< 10 chars)
+    * Invalid too long (> 10 chars)
+    * Invalid with underscore or hyphen
+    * Invalid empty string
+
+Test File: cmd/move/helpers_test.go
+Status: FAILING - Compile error
+Reason: Function cli.LooksLikeID does not exist yet
+Error: "undefined: cli.LooksLikeID at line 79"
+Tests written:
+  - TestLooksLikeID (renamed from TestLooksLikeUUID)
+  - 11 test cases with same coverage as internal/cli/selectors_test.go
+
+Summary
+=======
+✓ nanoid_test.go written and failing correctly (package missing)
+✓ helper_test.go constants updated to 10-char alphanumeric format
+✓ selectors_test.go TestLooksLikeID written and failing correctly (function missing)
+✓ cmd/move/helpers_test.go TestLooksLikeID written and failing correctly (function missing)
+
+All failures are due to missing implementation, not test code errors.
+Test code follows testify patterns (require/assert), no t.Fatal/t.Error used.
+
+Ready for Wave 1-impl phase.

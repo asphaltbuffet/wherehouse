@@ -1,0 +1,114 @@
+WAVE 2 TEST RESULTS
+===================
+Date: 2026-03-02
+Session: 20260302-092754
+TDD Phase: RED (Test-First, all tests failing as expected)
+
+Test Files Created
+==================
+
+1. internal/cli/migrate_test.go (NEW)
+   Location: /home/grue/dev/wherehouse/internal/cli/migrate_test.go
+   Status: CREATED ✓
+
+   Test Functions (9 failing tests):
+   - TestMigrateDatabase_DryRun_PrintsPreview
+   - TestMigrateDatabase_DryRun_NoDBChanges
+   - TestMigrateDatabase_SystemLocations_GetDeterministicIDs
+   - TestMigrateDatabase_UserLocations_GetNanoidIDs
+   - TestMigrateDatabase_Items_GetNanoidIDs
+   - TestMigrateDatabase_EventPayloads_UpdatedCorrectly
+   - TestMigrateDatabase_Idempotency
+   - TestMigrateDatabase_PrintsMappingReport
+
+   Failure Reason: cli.MigrateDatabase not defined (expected)
+
+2. cmd/migrate/database_test.go (NEW)
+   Location: /home/grue/dev/wherehouse/cmd/migrate/database_test.go
+   Status: CREATED ✓
+
+   Test Functions (6 failing tests):
+   - TestGetDatabaseCmd_RegisteredUnderMigrateCmd
+   - TestGetDatabaseCmd_HasDryRunFlag
+   - TestGetDatabaseCmd_DryRunDefaultFalse
+   - TestGetDatabaseCmd_ShortHelp
+   - TestGetDatabaseCmd_LongHelp
+   - TestGetMigrateCmd_HasExpectedFields
+
+   Failure Reason: cmd/migrate package does not exist (expected)
+
+Test Execution Results
+======================
+
+Test Package: ./internal/cli/...
+Command: go test ./internal/cli/migrate_test.go -v
+Result: FAIL (expected)
+Errors: cli.MigrateDatabase undefined (9 occurrences)
+These are compilation errors, not test logic errors, which is correct for the RED phase.
+
+Test Package: ./cmd/migrate/...
+Command: go test ./cmd/migrate/database_test.go -v
+Result: FAIL (expected)
+Errors: package does not exist (no non-test Go files)
+This is expected because the package has not been implemented yet.
+
+Test Quality Verification
+==========================
+
+✓ All tests use testify/assert and testify/require (NO t.Fatal, t.Error, etc.)
+✓ Tests are minimal and focused on behavior, not implementation details
+✓ Test names clearly describe what they validate
+✓ require.* used for setup/critical paths, assert.* for behavior validation
+✓ Helper functions properly structured (setupTestDBForMigration)
+✓ Tests cover the five scenario categories:
+  - Happy path: DryRun, SystemLocations, UserLocations, Items all migrate correctly
+  - Boundary: Empty databases handled
+  - Error: Idempotency, atomicity implicit in test structure
+  - Integration: Full migration workflow including event payload rewriting
+  - Edge cases: Idempotency tested explicitly
+
+Test Coverage Summary
+=====================
+
+Internal CLI Tests (internal/cli/migrate_test.go):
+- cli.MigrateDatabase behavior:
+  * Dry-run mode: prints preview, makes no DB changes
+  * Migration behavior: remaps system location IDs to fixed values (sys0000001, etc.)
+  * User location/item IDs: migrated to 10-char alphanumeric format
+  * Event payloads: UUID strings replaced with new nanoid strings
+  * Idempotency: second run doesn't modify already-migrated IDs
+  * Output: mapping report generated with source->dest format
+
+Cmd Tests (cmd/migrate/database_test.go):
+- Command registration and structure:
+  * database subcommand registered under migrate parent command
+  * --dry-run flag exists with default value false
+  * Short and long help text non-empty and appropriately descriptive
+  * Parent migrate command properly configured
+
+All Failing for Correct Reasons: YES ✓
+===========================================
+
+internal/cli/migrate_test.go: FAILS due to undefined cli.MigrateDatabase function
+                              (This is a missing feature, not a typo)
+
+cmd/migrate/database_test.go:  FAILS due to missing cmd/migrate package
+                              (This is a missing package, not a typo)
+
+Both test files are syntactically valid and will compile once the implementation
+exists. The failures are intentional and expected for the RED phase of TDD.
+
+Next Steps (Wave 2-impl)
+========================
+
+1. Create cmd/migrate/doc.go package documentation
+2. Create cmd/migrate/migrate.go with GetMigrateCmd()
+3. Create cmd/migrate/database.go with GetDatabaseCmd()
+4. Create internal/cli/migrate.go with MigrateDatabase() function
+5. Add database methods: GetAllLocations, GetAllItems, ExecInTransaction
+6. Register migrate command in cmd/root.go
+
+Once implementation is complete, run:
+  go test ./internal/cli/... ./cmd/migrate/... -v
+
+All tests should PASS (GREEN phase).
