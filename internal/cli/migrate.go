@@ -124,6 +124,10 @@ func buildMigrateMapping(ctx context.Context, db *database.Database) (*migrateMa
 
 // applyMigration applies the full ID rewrite within a transaction.
 func applyMigration(ctx context.Context, tx *sql.Tx, mapping *migrateMapping) error {
+	// Defer FK checks to commit time so we can rewrite parent PKs before updating child FKs.
+	if _, err := tx.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`); err != nil {
+		return fmt.Errorf("failed to enable deferred foreign keys: %w", err)
+	}
 	if err := migrateLocationRows(ctx, tx, mapping.Locations); err != nil {
 		return err
 	}
