@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
 func TestResolveLocation(t *testing.T) {
@@ -17,8 +17,8 @@ func TestResolveLocation(t *testing.T) {
 	db := setupTestDB(t)
 
 	// Create test locations via events
-	garageID := uuid.New().String()
-	basementID := uuid.New().String()
+	garageID := nanoid.MustNew()
+	basementID := nanoid.MustNew()
 
 	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
 		"location_id":  garageID,
@@ -48,7 +48,7 @@ func TestResolveLocation(t *testing.T) {
 		},
 		{
 			name:    "valid UUID does not exist - falls through to canonical",
-			input:   uuid.New().String(),
+			input:   "550e8400-e29b-41d4-a716-446655440000",
 			want:    "",
 			wantErr: true,
 		},
@@ -98,35 +98,55 @@ func TestResolveLocation(t *testing.T) {
 	}
 }
 
-func TestLooksLikeUUID(t *testing.T) {
+func TestLooksLikeID(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
 		want  bool
 	}{
 		{
-			name:  "valid UUID v4",
-			input: "550e8400-e29b-41d4-a716-446655440000",
+			name:  "valid 10-char alphanumeric",
+			input: "aB3xK9mPqR",
 			want:  true,
 		},
 		{
-			name:  "valid UUID v7",
-			input: uuid.New().String(),
+			name:  "valid all digits",
+			input: "0000000000",
 			want:  true,
+		},
+		{
+			name:  "valid all uppercase",
+			input: "AAAAAAAAAA",
+			want:  true,
+		},
+		{
+			name:  "valid test format",
+			input: "tst0loc001",
+			want:  true,
+		},
+		{
+			name:  "invalid UUID format",
+			input: "550e8400-e29b-41d4-a716-446655440000",
+			want:  false,
 		},
 		{
 			name:  "too short",
-			input: "550e8400-e29b-41d4-a716",
+			input: "aB3xK9mPq",
 			want:  false,
 		},
 		{
 			name:  "too long",
-			input: "550e8400-e29b-41d4-a716-446655440000-extra",
+			input: "aB3xK9mPqRx",
 			want:  false,
 		},
 		{
-			name:  "invalid format",
-			input: "not-a-uuid-at-all-really-not-one",
+			name:  "contains underscore",
+			input: "aB3xK9mP_R",
+			want:  false,
+		},
+		{
+			name:  "contains hyphen",
+			input: "aB3xK9mP-R",
 			want:  false,
 		},
 		{
@@ -148,7 +168,7 @@ func TestLooksLikeUUID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := LooksLikeUUID(tt.input)
+			got := LooksLikeID(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -214,8 +234,8 @@ func TestResolveItemSelector(t *testing.T) {
 	db := setupTestDB(t)
 
 	// Create test locations
-	garageID := uuid.New().String()
-	basementID := uuid.New().String()
+	garageID := nanoid.MustNew()
+	basementID := nanoid.MustNew()
 
 	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
 		"location_id":  garageID,
@@ -232,9 +252,9 @@ func TestResolveItemSelector(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create test items
-	wrench1ID := uuid.New().String()
-	wrench2ID := uuid.New().String()
-	hammerID := uuid.New().String()
+	wrench1ID := nanoid.MustNew()
+	wrench2ID := nanoid.MustNew()
+	hammerID := nanoid.MustNew()
 
 	// Two wrenches in different locations (to test ambiguity)
 	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
@@ -276,7 +296,7 @@ func TestResolveItemSelector(t *testing.T) {
 		},
 		{
 			name:        "valid UUID does not exist",
-			selector:    uuid.New().String(),
+			selector:    "550e8400-e29b-41d4-a716-446655440000",
 			commandName: "wherehouse move",
 			want:        "",
 			wantErr:     true,
@@ -374,7 +394,7 @@ func TestResolveLocationItemSelector(t *testing.T) {
 	db := setupTestDB(t)
 
 	// Create test location
-	garageID := uuid.New().String()
+	garageID := nanoid.MustNew()
 	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
@@ -383,7 +403,7 @@ func TestResolveLocationItemSelector(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create test items
-	wrenchID := uuid.New().String()
+	wrenchID := nanoid.MustNew()
 	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
 		"item_id":      wrenchID,
 		"display_name": "Wrench",
@@ -458,7 +478,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 	db := setupTestDB(t)
 
 	// Create test location
-	garageID := uuid.New().String()
+	garageID := nanoid.MustNew()
 	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
@@ -467,7 +487,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create unique item
-	hammerID := uuid.New().String()
+	hammerID := nanoid.MustNew()
 	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
 		"item_id":      hammerID,
 		"display_name": "Hammer",
@@ -476,7 +496,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create duplicate wrenches
-	wrench1ID := uuid.New().String()
+	wrench1ID := nanoid.MustNew()
 	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
 		"item_id":      wrench1ID,
 		"display_name": "Wrench",
@@ -484,7 +504,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 	}, "")
 	require.NoError(t, err)
 
-	wrench2ID := uuid.New().String()
+	wrench2ID := nanoid.MustNew()
 	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
 		"item_id":      wrench2ID,
 		"display_name": "Wrench",
@@ -554,7 +574,7 @@ func TestBuildAmbiguousItemError(t *testing.T) {
 	db := setupTestDB(t)
 
 	// Create test location
-	garageID := uuid.New().String()
+	garageID := nanoid.MustNew()
 	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
@@ -563,8 +583,8 @@ func TestBuildAmbiguousItemError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create duplicate items
-	item1ID := uuid.New().String()
-	item2ID := uuid.New().String()
+	item1ID := nanoid.MustNew()
+	item2ID := nanoid.MustNew()
 
 	items := []*database.Item{
 		{ItemID: item1ID, DisplayName: "Wrench", CanonicalName: "wrench", LocationID: garageID},

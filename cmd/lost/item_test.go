@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
 // testIDs holds unique IDs for a test run.
@@ -36,15 +36,15 @@ func setupLostTest(t *testing.T) (*database.Database, context.Context, testIDs) 
 	require.NoError(t, err)
 
 	// Generate unique IDs for this test to avoid constraint violations
-	prefix := uuid.New().String()[:8]
+	prefix := nanoid.MustNew()
 
 	ids := testIDs{
-		garageID:   uuid.New().String(),
-		missingID:  uuid.New().String(),
-		borrowedID: uuid.New().String(),
-		itemID1:    uuid.New().String(),
-		itemID2:    uuid.New().String(),
-		itemID3:    uuid.New().String(),
+		garageID:   nanoid.MustNew(),
+		missingID:  nanoid.MustNew(),
+		borrowedID: nanoid.MustNew(),
+		itemID1:    nanoid.MustNew(),
+		itemID2:    nanoid.MustNew(),
+		itemID3:    nanoid.MustNew(),
 	}
 
 	// Create normal location
@@ -98,7 +98,7 @@ func TestMarkItemLost_BorrowedItem_Success(t *testing.T) {
 	defer db.Close()
 
 	// Create item in borrowed location
-	borrowedItemID := uuid.New().String()
+	borrowedItemID := nanoid.MustNew()
 	err := db.CreateItem(ctx, borrowedItemID, "borrowed tool", ids.borrowedID, 4, "2025-01-01T00:00:06Z")
 	require.NoError(t, err)
 
@@ -129,7 +129,7 @@ func TestMarkItemLost_AlreadyMissing_Error(t *testing.T) {
 	defer db.Close()
 
 	// Create item in missing location
-	alreadyMissingItemID := uuid.New().String()
+	alreadyMissingItemID := nanoid.MustNew()
 	err := db.CreateItem(ctx, alreadyMissingItemID, "already lost", ids.missingID, 5, "2025-01-01T00:00:07Z")
 	require.NoError(t, err)
 
@@ -147,7 +147,7 @@ func TestMarkItemLost_ItemNotFound_Error(t *testing.T) {
 	defer db.Close()
 
 	// Attempt to mark non-existent item as lost
-	nonExistentID := uuid.New().String()
+	nonExistentID := nanoid.MustNew()
 	result, err := markItemLost(ctx, db, nonExistentID, "testuser", "")
 
 	require.Error(t, err)
@@ -213,7 +213,7 @@ func TestMarkItemLost_DifferentActors_EventCreated(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			itemID := uuid.New().String()
+			itemID := nanoid.MustNew()
 			garageID := ids.garageID
 
 			// Create item for this test

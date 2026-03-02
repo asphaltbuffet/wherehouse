@@ -79,7 +79,7 @@ func TestMigrations(t *testing.T) {
 		// Verify migration version
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 2, version, "should be at version 2 after all migrations")
+		assert.EqualValues(t, 3, version, "should be at version 3 after all migrations")
 		assert.False(t, dirty, "migration should not be dirty")
 	})
 
@@ -113,13 +113,13 @@ func TestMigrations(t *testing.T) {
 
 		ctx := t.Context()
 
-		// Manually set dirty state
-		require.NoError(t, db.SetMigrationVersion(ctx, 2, true))
+		// Manually set dirty state at current version
+		require.NoError(t, db.SetMigrationVersion(ctx, 3, true))
 
 		// Verify dirty state is detected
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 2, version)
+		assert.EqualValues(t, 3, version)
 		assert.True(t, dirty, "dirty flag should be set")
 	})
 }
@@ -140,7 +140,8 @@ func TestMigrationRollback(t *testing.T) {
 		`).Scan(&tableCount))
 		assert.Equal(t, 5, tableCount, "all tables should exist before rollback")
 
-		// Run rollback twice (we have 2 migrations now)
+		// Run rollback three times (we have 3 migrations now)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 3 (nanoid marker)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 2 (Loaned location)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 1 (initial schema)
 
@@ -159,7 +160,8 @@ func TestMigrationRollback(t *testing.T) {
 		db := openTestDB(t)
 		defer db.Close()
 
-		// Rollback twice (we have 2 migrations now)
+		// Rollback three times (we have 3 migrations now)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 3 (nanoid marker)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 2 (Loaned location)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 1 (initial schema)
 

@@ -3,11 +3,11 @@ package add
 import (
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
 var itemCmd *cobra.Command
@@ -23,11 +23,11 @@ func GetItemCmd() *cobra.Command {
 		Short: "Add one or more items to a location",
 		Long: `Add one or more items to a specified location.
 
-Each item name becomes a separate item with a unique UUID. Multiple identical
+Each item name becomes a separate item with a unique ID. Multiple identical
 names will create separate items (useful for bulk additions like "nail" "nail" "nail").
 
 The --in flag specifies the location where items are stored. Location can be
-specified by canonical name or UUID.
+specified by canonical name or ID.
 
 Examples:
   wherehouse add item "10mm Socket" --in Garage
@@ -59,7 +59,7 @@ func runAddItem(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	// Resolve location to UUID
+	// Resolve location to ID
 	locationID, err := resolveLocation(ctx, db, locationInput)
 	if err != nil {
 		return fmt.Errorf("failed to resolve location %q: %w", locationInput, err)
@@ -84,12 +84,11 @@ func runAddItem(cmd *cobra.Command, args []string) error {
 			return validateErr // FAIL-FAST: exit on first error
 		}
 
-		// Generate UUID v7
-		itemUUID, uuidErr := uuid.NewV7()
-		if uuidErr != nil {
-			return fmt.Errorf("failed to generate UUID: %w", uuidErr)
+		// Generate ID
+		itemID, idErr := nanoid.New()
+		if idErr != nil {
+			return fmt.Errorf("failed to generate ID: %w", idErr)
 		}
-		itemID := itemUUID.String()
 
 		// Build event payload
 		payload := map[string]any{

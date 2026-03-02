@@ -12,9 +12,9 @@ func openDatabase(ctx context.Context) (*database.Database, error) {
 	return cli.OpenDatabase(ctx)
 }
 
-// resolveLocation attempts to resolve a name or UUID to a location UUID.
+// resolveLocation attempts to resolve a name or ID to a location ID.
 // Accepts either:
-// - Full UUID (verified against database).
+// - Full ID (verified against database).
 // - Display name or canonical name (looked up in projection).
 func resolveLocation(ctx context.Context, db *database.Database, input string) (string, error) {
 	return cli.ResolveLocation(ctx, db, input)

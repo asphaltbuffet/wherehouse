@@ -11,39 +11,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test Constants - Fixed UUIDs for reproducible tests.
+// Test Constants - Fixed 10-character alphanumeric IDs for reproducible tests.
 const (
-	// TestLocationWorkshop is a root-level test location UUID.
-	TestLocationWorkshop = "01936e3e-1000-7890-abcd-ef0123456789"
-	// TestLocationStorage is a root-level test location UUID.
-	TestLocationStorage = "01936e3e-1001-7890-abcd-ef0123456789"
+	// TestLocationWorkshop is a root-level test location ID.
+	TestLocationWorkshop = "tst0loc001"
+	// TestLocationStorage is a root-level test location ID.
+	TestLocationStorage = "tst0loc002"
 
-	// TestLocationToolbox is a Workshop child location UUID.
-	TestLocationToolbox = "01936e3e-1002-7890-abcd-ef0123456789"
-	// TestLocationWorkbench is a Workshop child location UUID.
-	TestLocationWorkbench = "01936e3e-1003-7890-abcd-ef0123456789"
+	// TestLocationToolbox is a Workshop child location ID.
+	TestLocationToolbox = "tst0loc003"
+	// TestLocationWorkbench is a Workshop child location ID.
+	TestLocationWorkbench = "tst0loc004"
 
-	// TestLocationShelves is a Storage child location UUID.
-	TestLocationShelves = "01936e3e-1004-7890-abcd-ef0123456789"
-	// TestLocationBinA is a Shelves child location UUID.
-	TestLocationBinA = "01936e3e-1005-7890-abcd-ef0123456789"
-	// TestLocationBinB is a Shelves child location UUID.
-	TestLocationBinB = "01936e3e-1006-7890-abcd-ef0123456789"
+	// TestLocationShelves is a Storage child location ID.
+	TestLocationShelves = "tst0loc005"
+	// TestLocationBinA is a Shelves child location ID.
+	TestLocationBinA = "tst0loc006"
+	// TestLocationBinB is a Shelves child location ID.
+	TestLocationBinB = "tst0loc007"
 
-	// TestItem10mmSocket is a test item UUID.
-	TestItem10mmSocket = "01936e3e-2000-7890-abcd-ef0123456789"
-	// TestItemScrewdriverSet is a test item UUID.
-	TestItemScrewdriverSet = "01936e3e-2001-7890-abcd-ef0123456789"
-	// TestItemHammer is a test item UUID.
-	TestItemHammer = "01936e3e-2002-7890-abcd-ef0123456789"
-	// TestItemDrillBits is a test item UUID.
-	TestItemDrillBits = "01936e3e-2003-7890-abcd-ef0123456789"
-	// TestItemSandpaper is a test item UUID.
-	TestItemSandpaper = "01936e3e-2004-7890-abcd-ef0123456789"
-	// TestItemMissingWrench is a test item UUID.
-	TestItemMissingWrench = "01936e3e-2005-7890-abcd-ef0123456789"
-	// TestItemBorrowedSaw is a test item UUID.
-	TestItemBorrowedSaw = "01936e3e-2006-7890-abcd-ef0123456789"
+	// TestItem10mmSocket is a test item ID.
+	TestItem10mmSocket = "tst0itm001"
+	// TestItemScrewdriverSet is a test item ID.
+	TestItemScrewdriverSet = "tst0itm002"
+	// TestItemHammer is a test item ID.
+	TestItemHammer = "tst0itm003"
+	// TestItemDrillBits is a test item ID.
+	TestItemDrillBits = "tst0itm004"
+	// TestItemSandpaper is a test item ID.
+	TestItemSandpaper = "tst0itm005"
+	// TestItemMissingWrench is a test item ID.
+	TestItemMissingWrench = "tst0itm006"
+	// TestItemBorrowedSaw is a test item ID.
+	TestItemBorrowedSaw = "tst0itm007"
 
 	// TestProjectDeck is a test project ID.
 	TestProjectDeck = "test-project-deck"

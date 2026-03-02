@@ -21,7 +21,7 @@ The item's home location is preserved and the recipient's name is recorded in th
 Items can be loaned from ANY location, including Missing, Borrowed, and even Loaned (re-loaning).
 
 Selector types:
-  - UUID: 550e8400-e29b-41d4-a716-446655440001 (exact ID)
+  - ID: aB3xK9mPqR (exact ID)
   - LOCATION:ITEM: garage:socket (both canonical names, filters by location)
   - Canonical name: "10mm socket" (must match exactly 1 item)
 
@@ -38,7 +38,7 @@ Examples:
   wherehouse loan garage:socket --to "Bob Smith"
   wherehouse loan "10mm socket" --to alice@example.com
   wherehouse loan wrench screwdriver --to "Friend's name" --note "for weekend project"
-  wherehouse loan 550e8400-e29b-41d4-a716-446655440001 --to Bob`,
+  wherehouse loan aB3xK9mPqR --to Bob`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: runLoanItem,
 	}

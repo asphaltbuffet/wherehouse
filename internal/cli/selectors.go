@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
-
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
 // LocationItemQuerier is the database query interface required by resolver functions.
@@ -20,30 +19,25 @@ type LocationItemQuerier interface {
 	GetItemsByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Item, error)
 }
 
-// ResolveLocation resolves a location by UUID or canonical name.
-// UUIDs are verified against the database before being returned.
-// Supports both UUID string format and display/canonical names.
+// ResolveLocation resolves a location by ID or canonical name.
+// IDs are verified against the database before being returned.
+// Supports both nanoid string format and display/canonical names.
 //
 // Resolution order:
-//  1. If input looks like UUID, verify it exists in database
-//  2. If not found or not UUID-like, try canonical name lookup
+//  1. Try direct ID lookup in the database
+//  2. If not found by ID, try canonical name lookup
 //
-// Returns the location UUID string or error if not found.
+// Returns the location ID string or error if not found.
 func ResolveLocation(ctx context.Context, db LocationItemQuerier, input string) (string, error) {
-	// Try UUID resolution first
-	if LooksLikeUUID(input) {
-		// Valid UUID format, try to get location by ID
-		loc, err := db.GetLocation(ctx, input)
-		if err == nil {
-			return loc.LocationID, nil
-		}
-		// If UUID format but not found as ID, fall through to try as canonical name
-		// This handles cases where user might have a UUID-like name
+	// Try direct ID lookup first
+	loc, err := db.GetLocation(ctx, input)
+	if err == nil {
+		return loc.LocationID, nil
 	}
 
 	// Try as canonical name
 	canonicalName := database.CanonicalizeString(input)
-	loc, err := db.GetLocationByCanonicalName(ctx, canonicalName)
+	loc, err = db.GetLocationByCanonicalName(ctx, canonicalName)
 	if err != nil {
 		if errors.Is(err, database.ErrLocationNotFound) {
 			return "", fmt.Errorf("location %q not found", input)
@@ -54,46 +48,59 @@ func ResolveLocation(ctx context.Context, db LocationItemQuerier, input string) 
 	return loc.LocationID, nil
 }
 
-// LooksLikeUUID checks if a string looks like a UUID.
-// Returns true if the string has the correct length and format.
-func LooksLikeUUID(s string) bool {
-	const uuidLength = 36
-	// UUIDs are 36 characters with 4 dashes
-	if len(s) != uuidLength {
+// LooksLikeID checks if a string looks like a nanoid.
+// Returns true if the string is exactly nanoid.IDLength characters from nanoid.Alphabet.
+func LooksLikeID(s string) bool {
+	if len(s) != nanoid.IDLength {
 		return false
 	}
-	// Try parsing as UUID
-	_, err := uuid.Parse(s)
-	return err == nil
+	for _, c := range s {
+		if !strings.ContainsRune(nanoid.Alphabet, c) {
+			return false
+		}
+	}
+	return true
 }
 
-// ResolveItemSelector resolves an item selector to an item UUID.
+// ResolveItemSelector resolves an item selector to an item ID.
 // Supports three selector types:
-//  1. UUID (exact ID, verified against database)
+//  1. ID (exact ID, verified against database)
 //  2. LOCATION:ITEM (both canonical names, filters by location)
 //  3. Canonical name (must match exactly 1 item)
 //
 // The commandName parameter is used in error messages to provide context
 // (e.g., "wherehouse move", "wherehouse history").
 //
-// Returns the item UUID string or error if not found or ambiguous.
+// Returns the item ID string or error if not found or ambiguous.
 func ResolveItemSelector(
 	ctx context.Context,
 	db LocationItemQuerier,
 	selector string,
 	commandName string,
 ) (string, error) {
-	// Priority 1: UUID pattern match
-	if LooksLikeUUID(selector) {
+	// Priority 1: ID lookup — try direct DB lookup for any ID-like string
+	if LooksLikeID(selector) {
 		item, err := db.GetItem(ctx, selector)
 		if err == nil {
 			return item.ItemID, nil
 		}
-		// If UUID format but not found, return error
+		// ID-like string but not found, return error
 		if errors.Is(err, database.ErrItemNotFound) {
 			return "", fmt.Errorf("item with ID %q not found", selector)
 		}
 		return "", fmt.Errorf("failed to get item %q: %w", selector, err)
+	}
+
+	// Also try direct ID lookup for non-nanoid formats (e.g. legacy UUID strings)
+	if !strings.Contains(selector, ":") {
+		item, err := db.GetItem(ctx, selector)
+		if err == nil {
+			return item.ItemID, nil
+		}
+		if !errors.Is(err, database.ErrItemNotFound) {
+			return "", fmt.Errorf("failed to get item %q: %w", selector, err)
+		}
+		// Not found by ID; fall through to name resolution
 	}
 
 	// Priority 2: LOCATION:ITEM selector

@@ -16,7 +16,6 @@ import (
 const (
 	hoursPerDay         = 24
 	recentDaysThreshold = 7
-	uuidPrefixLength    = 8
 	eventTypeMissing    = "item.missing"
 )
 
@@ -339,9 +338,6 @@ func resolveLocationPath(
 	}
 	path, err := getLocationPath(ctx, db, locationID, cache)
 	if err != nil {
-		if len(locationID) >= uuidPrefixLength {
-			return fmt.Sprintf("location:%s", locationID[:uuidPrefixLength])
-		}
 		return fmt.Sprintf("location:%s", locationID)
 	}
 	return path

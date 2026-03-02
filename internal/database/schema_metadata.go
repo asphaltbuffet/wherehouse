@@ -15,11 +15,11 @@ func (d *Database) seedSystemLocations(ctx context.Context) error {
 	return d.ExecInTransaction(ctx, func(tx *sql.Tx) error {
 		now := time.Now().UTC().Format(time.RFC3339)
 
-		// Deterministic UUIDs for system locations (same across all databases)
+		// Deterministic IDs for system locations (same across all databases)
 		const (
-			missingID  = "00000000-0000-0000-0000-000000000001"
-			borrowedID = "00000000-0000-0000-0000-000000000002"
-			loanedID   = "00000000-0000-0000-0000-000000000003"
+			missingID  = "sys0000001"
+			borrowedID = "sys0000002"
+			loanedID   = "sys0000003"
 		)
 
 		// Create Missing location (if not exists)

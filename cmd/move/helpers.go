@@ -12,17 +12,17 @@ func openDatabase(ctx context.Context) (*database.Database, error) {
 	return cli.OpenDatabase(ctx)
 }
 
-// resolveLocation attempts to resolve a name or UUID to a location UUID.
+// resolveLocation attempts to resolve a name or ID to a location ID.
 // Accepts either:
-// - Full UUID (verified against database).
+// - Full ID (verified against database).
 // - Display name or canonical name (looked up in projection).
 func resolveLocation(ctx context.Context, db moveDB, input string) (string, error) {
 	return cli.ResolveLocation(ctx, db, input)
 }
 
-// resolveItemSelector resolves an item selector to an item UUID.
+// resolveItemSelector resolves an item selector to an item ID.
 // Supports three selector types:
-//  1. UUID (exact ID)
+//  1. ID (exact match)
 //  2. LOCATION:ITEM (both canonical names, filters by location)
 //  3. Canonical name (must match exactly 1 item)
 func resolveItemSelector(ctx context.Context, db moveDB, selector string) (string, error) {
