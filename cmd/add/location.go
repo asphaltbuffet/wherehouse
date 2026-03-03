@@ -109,7 +109,7 @@ func runAddLocation(cmd *cobra.Command, args []string) error {
 		}
 
 		// Insert event and update projection atomically
-		_, insertErr := db.AppendEvent(ctx, "location.created", actorUserID, payload, "")
+		_, insertErr := db.AppendEvent(ctx, database.LocationCreatedEvent, actorUserID, payload, "")
 		if insertErr != nil {
 			return fmt.Errorf("failed to create location %q: %w", locationName, insertErr)
 		}

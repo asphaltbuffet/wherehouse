@@ -172,7 +172,7 @@ func loanItem(
 	}
 
 	// Insert event and update projection atomically
-	eventID, err := db.AppendEvent(ctx, "item.loaned", actorUserID, payload, note)
+	eventID, err := db.AppendEvent(ctx, database.ItemLoanedEvent, actorUserID, payload, note)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create loaned event: %w", err)
 	}

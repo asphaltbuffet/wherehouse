@@ -122,11 +122,11 @@ func TestCreateLocationMoveItemWorkflow(t *testing.T) {
 			"display_name": "New Location",
 			"parent_id":    nil,
 		}
-		_, err := db.insertEvent(ctx, "location.created", "test-user", locPayload, "")
+		_, err := db.insertEvent(ctx, LocationCreatedEvent, "test-user", locPayload, "")
 		require.NoError(t, err)
 
 		// Apply event to projection
-		events, err := db.GetEventsByType(ctx, "location.created")
+		events, err := db.GetEventsByType(ctx, LocationCreatedEvent)
 		require.NoError(t, err)
 		require.NotEmpty(t, events)
 		require.NoError(t, db.ProcessEvent(ctx, events[len(events)-1]))
@@ -144,11 +144,11 @@ func TestCreateLocationMoveItemWorkflow(t *testing.T) {
 			"canonical_name": "test_item",
 			"location_id":    "new-loc-1",
 		}
-		_, err = db.insertEvent(ctx, "item.created", "test-user", itemPayload, "")
+		_, err = db.insertEvent(ctx, ItemCreatedEvent, "test-user", itemPayload, "")
 		require.NoError(t, err)
 
 		// Apply event to projection
-		events, err = db.GetEventsByType(ctx, "item.created")
+		events, err = db.GetEventsByType(ctx, ItemCreatedEvent)
 		require.NoError(t, err)
 		require.NotEmpty(t, events)
 		require.NoError(t, db.ProcessEvent(ctx, events[len(events)-1]))
@@ -167,11 +167,11 @@ func TestCreateLocationMoveItemWorkflow(t *testing.T) {
 			"move_type":        "rehome",
 			"project_action":   "clear",
 		}
-		_, err = db.insertEvent(ctx, "item.moved", "test-user", movePayload, "")
+		_, err = db.insertEvent(ctx, ItemMovedEvent, "test-user", movePayload, "")
 		require.NoError(t, err)
 
 		// Apply event to projection
-		events, err = db.GetEventsByType(ctx, "item.moved")
+		events, err = db.GetEventsByType(ctx, ItemMovedEvent)
 		require.NoError(t, err)
 		require.NotEmpty(t, events)
 		require.NoError(t, db.ProcessEvent(ctx, events[len(events)-1]))
@@ -241,14 +241,14 @@ func TestEventLog(t *testing.T) {
 
 	t.Run("events are recorded in order", func(t *testing.T) {
 		// Create location event
-		eventID1, err := db.insertEvent(ctx, "location.created", "test-user", map[string]any{
+		eventID1, err := db.insertEvent(ctx, LocationCreatedEvent, "test-user", map[string]any{
 			"location_id":  "event-loc-1",
 			"display_name": "Event Location 1",
 		}, "first location")
 		require.NoError(t, err)
 
 		// Create item event
-		eventID2, err := db.insertEvent(ctx, "item.created", "test-user", map[string]any{
+		eventID2, err := db.insertEvent(ctx, ItemCreatedEvent, "test-user", map[string]any{
 			"item_id":      "event-item-1",
 			"display_name": "Event Item 1",
 		}, "first item")
@@ -270,33 +270,33 @@ func TestEventLog(t *testing.T) {
 
 	t.Run("get events by type", func(t *testing.T) {
 		// Insert location events
-		_, err := db.insertEvent(ctx, "location.created", "test-user", map[string]any{
+		_, err := db.insertEvent(ctx, LocationCreatedEvent, "test-user", map[string]any{
 			"location_id":  "loc-type-1",
 			"display_name": "Loc Type 1",
 		}, "")
 		require.NoError(t, err)
 
-		_, err = db.insertEvent(ctx, "location.created", "test-user", map[string]any{
+		_, err = db.insertEvent(ctx, LocationCreatedEvent, "test-user", map[string]any{
 			"location_id":  "loc-type-2",
 			"display_name": "Loc Type 2",
 		}, "")
 		require.NoError(t, err)
 
 		// Insert item event
-		_, err = db.insertEvent(ctx, "item.created", "test-user", map[string]any{
+		_, err = db.insertEvent(ctx, ItemCreatedEvent, "test-user", map[string]any{
 			"item_id":      "item-type-1",
 			"display_name": "Item Type 1",
 		}, "")
 		require.NoError(t, err)
 
 		// Get location events
-		locEvents, err := db.GetEventsByType(ctx, "location.created")
+		locEvents, err := db.GetEventsByType(ctx, LocationCreatedEvent)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(locEvents), 2)
 
 		// Verify all are location events
 		for _, evt := range locEvents {
-			assert.Equal(t, "location.created", evt.EventType)
+			assert.Equal(t, LocationCreatedEvent, evt.EventType)
 		}
 	})
 }
@@ -352,7 +352,7 @@ func TestEventOrdering(t *testing.T) {
 				"display_name": "Location " + string(rune('0'+i)),
 				"parent_id":    nil,
 			}
-			_, err := db.insertEvent(ctx, "location.created", "test-user", payload, "")
+			_, err := db.insertEvent(ctx, LocationCreatedEvent, "test-user", payload, "")
 			require.NoError(t, err)
 		}
 

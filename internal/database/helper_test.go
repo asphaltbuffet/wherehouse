@@ -116,7 +116,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 	// Insert all events first (without processing)
 
 	// Create root locations via events
-	if _, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  TestLocationWorkshop,
 		"display_name": "Workshop",
 		"parent_id":    nil,
@@ -124,7 +124,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  TestLocationStorage,
 		"display_name": "Storage",
 		"parent_id":    nil,
@@ -134,7 +134,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 
 	// Create Workshop children
 	workshopPtr := TestLocationWorkshop
-	if _, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  TestLocationToolbox,
 		"display_name": "Toolbox",
 		"parent_id":    workshopPtr,
@@ -142,7 +142,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  TestLocationWorkbench,
 		"display_name": "Workbench",
 		"parent_id":    workshopPtr,
@@ -152,7 +152,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 
 	// Create Storage hierarchy
 	storagePtr := TestLocationStorage
-	if _, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  TestLocationShelves,
 		"display_name": "Shelves",
 		"parent_id":    storagePtr,
@@ -161,7 +161,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 	}
 
 	shelvesPtr := TestLocationShelves
-	if _, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  TestLocationBinA,
 		"display_name": "Bin A",
 		"parent_id":    shelvesPtr,
@@ -169,7 +169,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  TestLocationBinB,
 		"display_name": "Bin B",
 		"parent_id":    shelvesPtr,
@@ -178,7 +178,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 	}
 
 	// Create items in locations
-	if _, err := db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 		"item_id":        TestItem10mmSocket,
 		"display_name":   "10mm Socket",
 		"canonical_name": CanonicalizeString("10mm Socket"),
@@ -187,7 +187,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err := db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 		"item_id":        TestItemScrewdriverSet,
 		"display_name":   "Screwdriver Set",
 		"canonical_name": CanonicalizeString("Screwdriver Set"),
@@ -196,7 +196,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err := db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 		"item_id":        TestItemHammer,
 		"display_name":   "Hammer",
 		"canonical_name": CanonicalizeString("Hammer"),
@@ -205,7 +205,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err := db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 		"item_id":        TestItemDrillBits,
 		"display_name":   "Drill Bits",
 		"canonical_name": CanonicalizeString("Drill Bits"),
@@ -214,7 +214,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err := db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+	if _, err := db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 		"item_id":        TestItemSandpaper,
 		"display_name":   "Sandpaper",
 		"canonical_name": CanonicalizeString("Sandpaper"),
@@ -234,7 +234,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 	}
 
 	// Create items in system locations
-	if _, err = db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+	if _, err = db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 		"item_id":        TestItemMissingWrench,
 		"display_name":   "Missing Wrench",
 		"canonical_name": CanonicalizeString("Missing Wrench"),
@@ -243,7 +243,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	if _, err = db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+	if _, err = db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 		"item_id":        TestItemBorrowedSaw,
 		"display_name":   "Borrowed Saw",
 		"canonical_name": CanonicalizeString("Borrowed Saw"),
@@ -253,14 +253,14 @@ func SeedTestData(ctx context.Context, db *Database) error {
 	}
 
 	// Create projects via events
-	if _, err = db.insertEvent(ctx, "project.created", TestActorUser, map[string]any{
+	if _, err = db.insertEvent(ctx, ProjectCreatedEvent, TestActorUser, map[string]any{
 		"project_id": TestProjectDeck,
 		"status":     "active",
 	}, ""); err != nil {
 		return err
 	}
 
-	if _, err = db.insertEvent(ctx, "project.created", TestActorUser, map[string]any{
+	if _, err = db.insertEvent(ctx, ProjectCreatedEvent, TestActorUser, map[string]any{
 		"project_id": TestProjectShelving,
 		"status":     "completed",
 	}, ""); err != nil {
@@ -268,7 +268,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 	}
 
 	// Associate Drill Bits with test-project-deck (via item.moved event with project action)
-	if _, err = db.insertEvent(ctx, "item.moved", TestActorUser, map[string]any{
+	if _, err = db.insertEvent(ctx, ItemMovedEvent, TestActorUser, map[string]any{
 		"item_id":          TestItemDrillBits,
 		"from_location_id": TestLocationBinA,
 		"to_location_id":   TestLocationBinA, // Same location, just setting project
@@ -280,7 +280,7 @@ func SeedTestData(ctx context.Context, db *Database) error {
 	}
 
 	// Associate Sandpaper with test-project-deck (via item.moved event with project action)
-	if _, err = db.insertEvent(ctx, "item.moved", TestActorUser, map[string]any{
+	if _, err = db.insertEvent(ctx, ItemMovedEvent, TestActorUser, map[string]any{
 		"item_id":          TestItemSandpaper,
 		"from_location_id": TestLocationBinB,
 		"to_location_id":   TestLocationBinB, // Same location, just setting project
@@ -312,7 +312,8 @@ func SeedTestData(ctx context.Context, db *Database) error {
 // batch-inserted before being processed.
 func (d *Database) insertEvent(
 	ctx context.Context,
-	eventType, actorUserID string,
+	eventType EventType,
+	actorUserID string,
 	payload any,
 	note string,
 ) (int64, error) {

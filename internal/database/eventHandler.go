@@ -19,39 +19,39 @@ func (d *Database) ProcessEvent(ctx context.Context, event *Event) error {
 func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Event) error {
 	switch event.EventType {
 	// location event handling
-	case "location.created":
+	case LocationCreatedEvent:
 		return d.handleLocationCreated(ctx, tx, event)
-	case "location.renamed":
+	case LocationRenamedEvent:
 		return d.handleLocationRenamed(ctx, tx, event)
-	case "location.reparented":
+	case LocationMovedEvent:
 		return d.handleLocationReparented(ctx, tx, event)
-	case "location.deleted":
+	case LocationDeletedEvent:
 		return d.handleLocationDeleted(ctx, tx, event)
 
 	// item event handling
-	case "item.created":
+	case ItemCreatedEvent:
 		return d.handleItemCreated(ctx, tx, event)
-	case "item.moved":
+	case ItemMovedEvent:
 		return d.handleItemMoved(ctx, tx, event)
-	case "item.missing":
+	case ItemMissingEvent:
 		return d.handleItemMissing(ctx, tx, event)
-	case "item.borrowed":
+	case ItemBorrowedEvent:
 		return d.handleItemBorrowed(ctx, tx, event)
-	case "item.loaned":
+	case ItemLoanedEvent:
 		return d.handleItemLoaned(ctx, tx, event)
-	case "item.found":
+	case ItemFoundEvent:
 		return d.handleItemFound(ctx, tx, event)
-	case "item.deleted":
+	case ItemDeletedEvent:
 		return d.handleItemDeleted(ctx, tx, event)
 
 	// project event handling
-	case "project.created":
+	case ProjectCreatedEvent:
 		return d.handleProjectCreated(ctx, tx, event)
-	case "project.completed":
+	case ProjectCompletedEvent:
 		return d.handleProjectCompleted(ctx, tx, event)
-	case "project.reopened":
+	case ProjectReopenedEvent:
 		return d.handleProjectReopened(ctx, tx, event)
-	case "project.deleted":
+	case ProjectDeletedEvent:
 		return d.handleProjectDeleted(ctx, tx, event)
 
 	default:

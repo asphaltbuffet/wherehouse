@@ -185,7 +185,7 @@ func foundItem(
 		"home_location_id":  homeLocationID,
 	}
 
-	foundEventID, err := db.AppendEvent(ctx, "item.found", actorUserID, foundPayload, note)
+	foundEventID, err := db.AppendEvent(ctx, database.ItemFoundEvent, actorUserID, foundPayload, note)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create found event: %w", err)
 	}
@@ -228,7 +228,7 @@ func foundItem(
 				"project_action":   "clear",
 			}
 
-			returnEventID, moveErr := db.AppendEvent(ctx, "item.moved", actorUserID, movePayload, note)
+			returnEventID, moveErr := db.AppendEvent(ctx, database.ItemMovedEvent, actorUserID, movePayload, note)
 			if moveErr != nil {
 				return nil, fmt.Errorf("failed to create return event: %w", moveErr)
 			}

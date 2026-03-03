@@ -13,7 +13,7 @@ import (
 // Event represents a single event from the event log.
 type Event struct {
 	EventID      int64
-	EventType    string
+	EventType    EventType
 	TimestampUTC string
 	ActorUserID  string
 	Payload      json.RawMessage
@@ -31,7 +31,8 @@ type Event struct {
 // batch-insert events before processing them with ProcessEvent.
 func (d *Database) AppendEvent(
 	ctx context.Context,
-	eventType, actorUserID string,
+	eventType EventType,
+	actorUserID string,
 	payload any,
 	note string,
 ) (int64, error) {
@@ -167,7 +168,7 @@ func (d *Database) GetEventByID(ctx context.Context, eventID int64) (*Event, err
 }
 
 // GetEventsByType retrieves all events of a specific type, ordered by event_id.
-func (d *Database) GetEventsByType(ctx context.Context, eventType string) ([]*Event, error) {
+func (d *Database) GetEventsByType(ctx context.Context, eventType EventType) ([]*Event, error) {
 	const query = `
 		SELECT
 			event_id,
