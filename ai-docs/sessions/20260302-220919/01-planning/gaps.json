@@ -1,0 +1,22 @@
+[
+  {
+    "question": "Should ParseEventType live in eventTypes.go alongside the constants, or in a separate eventTypes_sql.go file alongside Value/Scan?",
+    "rationale": "ParseEventType is needed by Scan() but is also independently useful for validation in command handlers. Placing it in eventTypes.go keeps all enum-related logic together and avoids a circular dependency, but mixing generated-adjacent code with hand-written code in the same file can be confusing. The answer affects where db-developer places the function."
+  },
+  {
+    "question": "Should the mocks in cmd/move/mocks/ be regenerated automatically (e.g. with mockery //go:generate) or updated by hand?",
+    "rationale": "The mover.go interface change propagates to the mock. If the project uses mockery or a similar generator, a //go:generate directive should be added or run. If mocks are hand-written, they need a manual update. The codebase has no existing //go:generate directives, so the preferred approach is unclear."
+  },
+  {
+    "question": "Does internal/cli/selectors_test.go belong to golang-developer or golang-ui-developer scope, given it is under internal/cli/ but calls database.AppendEvent?",
+    "rationale": "The routing table assigns internal/ (excluding tui/ and database/) to golang-developer. selectors_test.go is in internal/cli/ so it should go to golang-developer. Confirming this avoids a scope disagreement between agents when splitting work."
+  },
+  {
+    "question": "Is the stringer tool available in the project's toolchain / mise tasks, or does it need to be added as a dependency?",
+    "rationale": "go:generate directives are only useful if `stringer` is installed. The project uses mise for task running. If `stringer` is not in go.tool or the PATH, the generate step will silently fail or error. The db-developer needs to know whether to add it or assume it is present."
+  },
+  {
+    "question": "Should GetEventsByType remain a public API or should callers be migrated away from it in favour of typed queries?",
+    "rationale": "GetEventsByType is called from integration_test.go with raw string types. Changing the signature to accept EventType is safe, but if external packages call it with dynamic/unknown strings the change will break them. A quick audit found only test usage, but confirmation is needed before finalising the signature change."
+  }
+]
