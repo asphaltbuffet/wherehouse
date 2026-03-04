@@ -1,7 +1,6 @@
 package initialize
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
@@ -32,7 +32,11 @@ The --force flag renames the existing database to <path>.backup.<YYYYMMDD>
 before creating a fresh one.
 
 The database path is controlled by the root --db flag or the database.path
-config value. Default: $XDG_DATA_HOME/wherehouse/wherehouse.db`,
+config value. Default: $XDG_DATA_HOME/wherehouse/wherehouse.db
+
+Examples:
+  wherehouse initialize database           # Create the database
+  wherehouse initialize database --force   # Reinitialize (backs up existing)`,
 		RunE: runInitializeDatabase,
 	}
 
@@ -88,7 +92,8 @@ func runInitializeDatabase(cmd *cobra.Command, _ []string) error {
 	_ = db.Close()
 
 	// Output.
-	return printInitResult(cmd, cfg, dbPath, backupPath)
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
+	return printInitResult(out, cfg, dbPath, backupPath)
 }
 
 // handleExistingDatabase checks whether a database file already exists at dbPath
@@ -161,17 +166,14 @@ func backupDatabase(dbPath string) (string, error) {
 	return candidate, nil
 }
 
-func printInitResult(cmd *cobra.Command, cfg *config.Config, dbPath, backupPath string) error {
+func printInitResult(out *cli.OutputWriter, cfg *config.Config, dbPath, backupPath string) error {
 	if cfg.IsJSON() {
 		result := initResult{
 			Status:     "initialized",
 			Path:       dbPath,
 			BackupPath: backupPath,
 		}
-		enc := json.NewEncoder(cmd.OutOrStdout())
-		enc.SetIndent("", "  ")
-
-		return enc.Encode(result)
+		return out.JSON(result)
 	}
 
 	if cfg.IsQuiet() {
@@ -180,10 +182,10 @@ func printInitResult(cmd *cobra.Command, cfg *config.Config, dbPath, backupPath 
 
 	// Human-readable.
 	if backupPath != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Backed up existing database to %s\n", backupPath)
+		out.Info(fmt.Sprintf("Backed up existing database to %s", backupPath))
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Database initialized at %s\n", dbPath)
+	out.Success(fmt.Sprintf("Database initialized at %s", dbPath))
 
 	return nil
 }
