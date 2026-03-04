@@ -1,0 +1,1 @@
+PARTIAL: 2 lint issues — (1) cmd/add/helpers.go unused functions (openDatabase, resolveLocation) caused by our change; will be resolved when golang-ui-developer deletes helpers.go in Step 2. (2) internal/cli/output.go:137 godoclint pre-existing issue not introduced by this task. Tests pass (internal/cli and cmd/add both green).

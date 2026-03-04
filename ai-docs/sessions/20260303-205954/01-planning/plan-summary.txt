@@ -1,0 +1,43 @@
+IMPLEMENTATION PLAN SUMMARY
+Session: 20260303-205954
+
+STEP 0 — Add Writer() accessor to OutputWriter (internal/cli/output.go)
+  Agent: golang-developer | No dependencies | Unblocks Step 3 history work
+  Change: Add `func (w *OutputWriter) Writer() io.Writer { return w.out }`
+
+STEP 1 — Extract domain logic to internal/cli/ [THREE PARALLEL SUB-STEPS]
+  1a (golang-developer): internal/cli/locations.go — cli.AddLocations (mirrors cli.AddItems)
+  1b (golang-developer): internal/cli/found.go    — cli.FoundItem (~115 lines extracted)
+  1c (golang-developer): internal/cli/loan.go + lost.go — cli.LoanItem, cli.LostItem
+  All cmd/ thin-wrapper updates handled by golang-ui-developer in the same sub-steps.
+  Steps 1a, 1b, 1c are fully parallel (different files, no shared state).
+
+STEP 2 — Standardize DI across ALL commands (move-pattern: db.go + New*Cmd constructors)
+  Agent: golang-ui-developer | Depends on: Step 1 complete
+  Creates db.go + mocks/ in: found, loan, lost, add, list, history, find, scry
+  Deletes helpers.go in: add, list, lost, loan, history (and inline wrapper in find)
+  Updates cmd/root.go to use NewDefault*Cmd() constructors
+
+STEP 3 — Adopt OutputWriter in find, scry, history, initialize [PARALLEL WITH STEP 4]
+  Agent: golang-ui-developer | Depends on: Step 0, Step 2
+  find/scry: results via out.Println (always visible); info/warnings via out.Info (quiet-suppressible)
+  history: formatOutput signature gains *cli.OutputWriter; lipgloss lines use out.Writer()
+  initialize: printInitResult replaced with out.JSON / out.Success / out.Info calls
+  Eliminates all 5 duplicate json.NewEncoder setups via out.JSON()
+
+STEP 4 — Remove ALL inline timestamp logic in history [PARALLEL WITH STEP 3]
+  Agent: golang-ui-developer | Depends on: Step 2
+  Delete formatRelativeTime(d time.Duration) and the 7-day threshold entirely
+  formatTimestamp reduced to: parse → return cli.FormatRelativeTime(t)
+  go-humanize handles all time distances naturally; no threshold needed
+
+STEP 5 — Normalize help text (independent, run any time in parallel with all other steps)
+  Agent: golang-ui-developer | No dependencies
+  5a: Capitalize migrate Short descriptions (migrate.go, database.go)
+  5b: Add # comment style to config Long examples
+  5c: Fix column alignment in add parent command Long description
+
+PARALLELIZATION OPPORTUNITIES:
+  Wave 1 (all parallel): Step 0 + Step 1a + Step 1b + Step 1c + Step 5
+  Wave 2 (after Wave 1): Step 2
+  Wave 3 (after Step 2): Step 3 + Step 4 in parallel
