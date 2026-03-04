@@ -47,13 +47,15 @@ DO NOT use Task tool to invoke yourself. **Delegate to OTHER agent types only:**
 
 1. **Quality Over Quantity**: 10 well-designed tests beat 100 redundant ones.
 
-2. **Clear Intent**: Each test validates one clear aspect. Names read like docs: `TestMove_FromLocationMismatch_ReturnsError`.
+2. **Isolated Focus**: Tests use mocks whenever possible to isolate behavior and execute faster.
 
 3. **Reproducibility**: Tests must be deterministic and isolated. No flaky tests. Clean state between tests.
 
 4. **Maintainability**: Easy to update when requirements evolve. Avoid brittle assertions on implementation details.
 
 5. **Event-Sourcing Awareness**: Tests must validate deterministic replay, projection consistency, and event immutability.
+
+6. **Efficiency**: Tests are table-driven where it eliminates duplicated setup. Tests are designed for parallel execution `t.Parallel()` when possible.
 
 ## Testify Patterns (CRITICAL)
 
@@ -80,7 +82,7 @@ import (
 // CORRECT: require for error (item could be nil), assert for details
 func TestGetItem_NotFound(t *testing.T) {
     store := setupTestStore(t)
-    item, err := store.GetByID(context.Background(), "missing-id")
+    item, err := store.GetByID(t.Context(), "missing-id")
     require.Error(t, err)
     assert.Nil(t, item)
     assert.ErrorIs(t, err, database.ErrNotFound)
@@ -89,14 +91,14 @@ func TestGetItem_NotFound(t *testing.T) {
 // CORRECT: require for setup, assert for multiple independent checks
 func TestAction_Success(t *testing.T) {
     store := setupTestStore(t)
-    record, err := store.Create(context.Background(), &Record{...})
+    record, err := store.Create(t.Context(), &Record{...})
     require.NoError(t, err)
     require.NotNil(t, record)
 
-    err = store.PerformAction(context.Background(), record.ID, targetID)
+    err = store.PerformAction(t.Context(), record.ID, targetID)
     require.NoError(t, err)
 
-    updated, err := store.GetByID(context.Background(), record.ID)
+    updated, err := store.GetByID(t.Context(), record.ID)
     require.NoError(t, err)
     assert.Equal(t, targetID, updated.TargetField)
     assert.False(t, updated.SomeFlag)
@@ -125,9 +127,6 @@ Invalid inputs, failure modes, error propagation, constraint violations.
 ### 4. Edge Cases
 Uncommon but valid scenarios.
 
-### 5. Integration
-Full workflow tests across components.
-
 ## Event-Sourcing Test Patterns
 
 ### Deterministic Replay Test
@@ -138,18 +137,18 @@ func TestProjectionRebuild_DeterministicReplay(t *testing.T) {
 
     // Apply events in sequence
     for _, event := range testEvents {
-        require.NoError(t, store.ApplyEvent(context.Background(), event))
+        require.NoError(t, store.ApplyEvent(t.Context(), event))
     }
 
     // Capture state
-    before, err := store.GetByID(context.Background(), entityID)
+    before, err := store.GetByID(t.Context(), entityID)
     require.NoError(t, err)
 
     // Rebuild projections from scratch
-    require.NoError(t, store.RebuildProjections(context.Background()))
+    require.NoError(t, store.RebuildProjections(t.Context()))
 
     // Verify state matches
-    after, err := store.GetByID(context.Background(), entityID)
+    after, err := store.GetByID(t.Context(), entityID)
     require.NoError(t, err)
     assert.Equal(t, before.StateField, after.StateField)
     assert.Equal(t, before.LastEventID, after.LastEventID)
@@ -163,14 +162,14 @@ func TestReplay_StateMismatch_StopsReplay(t *testing.T) {
     store := setupTestStore(t)
 
     // Setup initial state
-    require.NoError(t, store.ApplyEvent(context.Background(), createEvent))
+    require.NoError(t, store.ApplyEvent(t.Context(), createEvent))
 
     // Corrupt projection to simulate bug
     _, err = store.db.Exec("UPDATE records_current SET state = ? WHERE id = ?", "wrong", entityID)
     require.NoError(t, err)
 
     // Apply event expecting original state — must fail
-    err = store.ApplyEvent(context.Background(), actionEvent) // expects original state
+    err = store.ApplyEvent(t.Context(), actionEvent) // expects original state
     require.Error(t, err)
     assert.ErrorIs(t, err, database.ErrStateMismatch)
 }
@@ -178,14 +177,14 @@ func TestReplay_StateMismatch_StopsReplay(t *testing.T) {
 
 ## Database Test Patterns
 
-### In-Memory Database for Tests
+### In-Memory Database for Tests (Only if Mocking isn't possible)
 
 ```go
 func setupTestStore(t *testing.T) *database.Store {
     t.Helper()
     store, err := database.Open(":memory:")
     require.NoError(t, err)
-    require.NoError(t, store.ApplyMigrations(context.Background()))
+    require.NoError(t, store.ApplyMigrations(t.Context()))
     t.Cleanup(func() { store.Close() })
     return store
 }
@@ -198,7 +197,7 @@ func TestEvent_ErrorInProjection_RollsBack(t *testing.T) {
     store := setupTestStore(t)
 
     // Event that will fail during projection update (e.g., FK violation)
-    err := store.ApplyEvent(context.Background(), invalidEvent)
+    err := store.ApplyEvent(t.Context(), invalidEvent)
     require.Error(t, err)
 
     // Event must NOT have been inserted
@@ -212,17 +211,14 @@ func TestEvent_ErrorInProjection_RollsBack(t *testing.T) {
 
 **Run in this order** (commands from `project-config.md` → Build & Tooling):
 ```bash
-# 1. Run all tests
-go test ./... -v -race -coverprofile=coverage.out
+# 1. Coverage (automatically runs tests first)
+mise run cover
 
-# 2. Coverage
-go tool cover -func=coverage.out
-
-# 3. Lint (BLOCKING — must pass with zero errors)
+# 2. Lint (BLOCKING — must pass with zero errors)
 mise run lint   # preferred
 # fallback: golangci-lint run
 ```
-
+**BLOCKING RULE**: If testing reports ANY errors, overall status is FAIL.
 **BLOCKING RULE**: If linting reports ANY errors, overall status is FAIL.
 
 **Success criteria** (ALL must be true):
@@ -234,9 +230,12 @@ mise run lint   # preferred
 
 - [ ] New tests use testify patterns (require/assert)?
 - [ ] No usage of `t.Fatal`, `t.Error`, etc.?
+- [ ] Tests use `require`/`assert.Error()` unless there is value in checking specific type/string?
+- [ ] Tests use `t.Context()` when context is needed?
 - [ ] Table-driven tests used where appropriate?
 - [ ] Tests are deterministic (no randomness, no time dependencies)?
 - [ ] Tests are isolated (no shared state)?
+- [ ] Tests use mocks if available?
 - [ ] Event-sourcing tests validate replay and consistency?
 - [ ] Database tests use in-memory databases?
 - [ ] All tests pass locally?

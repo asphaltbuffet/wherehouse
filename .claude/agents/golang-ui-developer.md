@@ -77,70 +77,88 @@ Three research files in `docs/research/tui/` cover the Bubbletea ecosystem. **Do
 ### Cobra Command Structure
 
 ```go
-var actionCmd = &cobra.Command{
-    Use:   "action SELECTOR [flags]",
-    Short: "Short description",
-    Long: `Longer description.
+// each command is in `cmd/<command>/<command>.go`. Any subcommands are in `cmd/<command>/<subcommand>.go`.
+func NewActionCommand() *cobra.Command {
+    cmd := &cobra.Command{
+        Use:   "action",
+        Short: "Short description",
+        Long: `Longer description.
 
-Examples:
-  myapp action "item name"
-  myapp action location:item --flag value`,
-    Args: cobra.ExactArgs(1),
-    RunE: runAction,
+    Examples:
+      myapp action "item name"
+      myapp action location:item --flag value`,
+        Args: cobra.ExactArgs(1),
+        RunE: runAction,
+    }
+
+        cmd.Flags().String("option", "", "Option description")
+    }
+
+    return cmd
 }
 
-func init() {
-    rootCmd.AddCommand(actionCmd)
-    actionCmd.Flags().String("option", "", "Option description")
-    actionCmd.Flags().Bool("json", false, "Output JSON")
-    actionCmd.Flags().CountP("quiet", "q", "Quiet output (-q minimal, -qq silent)")
-    actionCmd.Flags().CountP("verbose", "v", "Verbose output (-v detailed, -vv debug)")
+// root command defined in cmd/root.go
+func NewRootCommand() *cobra.Command {
+    cmd := &cobra.Command{
+        // Root command is set up here
+    }
+
+    cmd.Flags().Bool("json", false, "Output JSON")
+    cmd.Flags().CountP("quiet", "q", "Quiet output (-q minimal, -qq silent)")
+    cmd.Flags().CountP("verbose", "v", "Verbose output (-v detailed, -vv debug)")
+    
+    // Add subcommands
+    rootCmd.AddCommand(NewActionCommand())
+
+    return cmd
 }
 ```
 
-### Flag Handling Pattern
+### Flag Handling Pattern (non-persistent flags)
 
 ```go
 func runAction(cmd *cobra.Command, args []string) error {
     option, _ := cmd.Flags().GetString("option")
-    jsonOutput, _ := cmd.Flags().GetBool("json")
-    quiet, _ := cmd.Flags().GetCount("quiet")
-    verbose, _ := cmd.Flags().GetCount("verbose")
 
-    result, err := domain.PerformAction(args[0], domain.Options{Option: option})
-    if err != nil {
-        return formatError(err)
-    }
+    fmt.Fprintln(cmd.OutOrStdout, option)
 
-    if jsonOutput {
-        return outputJSON(result)
-    } else if quiet == 0 {
-        return outputHuman(result, verbose)
-    }
-    return nil // quiet >= 1: silent
+    return nil
 }
 ```
 
 ### Output Formatting Pattern
 
 ```go
-func outputHuman(result *Result, verbose int) error {
-    if verbose >= 1 {
-        fmt.Printf("Action: %s\n", result.EntityName)
-        // detail fields...
-        if verbose >= 2 {
-            fmt.Printf("Event ID: %d\n", result.EventID)
-        }
-    } else {
-        fmt.Printf("Done: %s\n", result.EntityName) // silence is success
-    }
-    return nil
+type OutputWriter struct {
+    out       io.Writer
+    err       io.Writer
+    jsonMode  bool
+    verbosity int
+    styles    *styles.Styles
 }
 
-func outputJSON(result *Result) error {
-    enc := json.NewEncoder(os.Stdout)
-    enc.SetIndent("", "  ")
-    return enc.Encode(result)
+func NewOutputWriter(cmd *cobra.Command, cfg *config.Config) *OutputWriter {
+	return &OutputWriter{
+        out: cmd.OutOrStdout(),
+        err: cmd.ErrOrStderr(),
+        jsonMode: cfg.IsJSON(),
+        verbosity: cfg.Verbosity,
+    }
+}
+
+func (r *Result) Print(w *OutputWriter) {
+    switch {
+    case w.quietMode:
+        return
+    case w.jsonMode:
+        w.JSON(result)
+    case w.verbosity == 1:
+        w.Success(r.EventID)
+    case w.verbosity == 2:
+        w.KeyValue(r.EntityName, r.EventID)
+    default:
+        // silence is success
+    }
 }
 ```
 
@@ -164,16 +182,16 @@ func formatError(err error) error {
 Before finalizing:
 - [ ] Follows Unix CLI conventions?
 - [ ] All required flags from CLI contract implemented? (see `project-config.md` knowledge base)
-- [ ] `--json` flag works correctly?
-- [ ] `-q`/`-qq` and `-v`/`-vv` flags work?
+- [ ] Persistent flags are not duplicated locally?
+- [ ] Persistent flags (`--json`, `-q`/`-qq`, and `-v`/`-vv`) work?
 - [ ] Error messages clear and actionable?
 - [ ] Help text has examples?
-- [ ] Calls core logic, doesn't duplicate it?
+- [ ] Calls core logic from `internal/cli/` (no business logic in `cmd/`)?
 - [ ] Exit codes correct (0 = success, non-zero = error)?
 - [ ] Styles use `appStyles` singleton (not inline `lipgloss.NewStyle()`)?
 - [ ] `go vet` and `golangci-lint run` pass?
 
-## Output Format
+## Your Output Format
 
 ```
 # CLI/TUI Implementation Complete

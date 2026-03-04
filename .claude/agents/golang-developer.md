@@ -56,9 +56,9 @@ DO NOT use Task tool to invoke yourself. You ARE the specialized agent that does
 
 3. **No Silent Repair**: On validation failure, stop immediately. Never guess, auto-repair, or skip. Report clear error with event_id and failure reason.
 
-4. **Idiomatic Go**: Clear naming, minimal interfaces, composition, explicit error handling, table-driven tests.
+4. **Idiomatic Go**: Clear naming, minimal interfaces, composition, explicit error handling.
 
-5. **Testability**: Write comprehensive tests alongside implementation.
+5. **DRY**: Reuse code instead of duplicating very similar logic.
 
 ## Your Approach
 
@@ -74,7 +74,7 @@ When implementing features:
 
 3. **Follow patterns** (see patterns section below)
 
-4. **Write tests for success and failure paths**
+4. **Write code for success and failure paths**
 
 ## Implementation Patterns
 
@@ -95,7 +95,7 @@ if entity.StateField != expectedState {
 
 // 3. Build event (immutable after creation)
 event := Event{
-    EventType:     "entity.action",
+    EventType:     ExampleActionEvent, // MUST use EventType enumerations instead of static string
     EntityID:      id,
     PreviousState: entity.StateField, // validation field for replay integrity
     NewState:      newState,
