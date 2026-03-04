@@ -29,10 +29,10 @@ Use --local to create a project-specific configuration file at ./wherehouse.toml
 Use --force to overwrite an existing file.
 
 Examples:
-  wherehouse config init              Create global config
-  wherehouse config init --local      Create local config
-  wherehouse config init --force      Overwrite existing global config
-  wherehouse --config custom.toml config init  Create config at custom path`,
+  wherehouse config init                          # Create global config
+  wherehouse config init --local                  # Create local config
+  wherehouse config init --force                  # Overwrite existing global config
+  wherehouse --config custom.toml config init     # Create config at custom path`,
 		RunE: runInit,
 	}
 

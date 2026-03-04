@@ -30,10 +30,10 @@ Use --json for machine-readable output.
 Use --sources to show where each value comes from.
 
 Examples:
-  wherehouse config get                    Show all configuration
-  wherehouse config get database.path      Show specific value
-  wherehouse config get --json             JSON output
-  wherehouse config get --sources          Show value sources`,
+  wherehouse config get                    # Show all configuration
+  wherehouse config get database.path      # Show specific value
+  wherehouse config get --json             # JSON output
+  wherehouse config get --sources          # Show value sources`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runGet,
 	}

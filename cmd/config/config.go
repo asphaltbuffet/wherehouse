@@ -26,12 +26,12 @@ Wherehouse supports both global and local configuration files:
 Local configuration overrides global configuration.
 
 Examples:
-  wherehouse config init              Create global config file
-  wherehouse config init --local      Create local config file
-  wherehouse config get               Show all configuration values
-  wherehouse config get database.path Show specific configuration value
-  wherehouse config set database.path /custom/path  Set configuration value
-  wherehouse config check             Validate configuration`,
+  wherehouse config init                             # Create global config file
+  wherehouse config init --local                     # Create local config file
+  wherehouse config get                              # Show all configuration values
+  wherehouse config get database.path                # Show specific configuration value
+  wherehouse config set database.path /custom/path   # Set configuration value
+  wherehouse config check                            # Validate configuration`,
 	}
 
 	// Register all subcommands using their Get* functions
