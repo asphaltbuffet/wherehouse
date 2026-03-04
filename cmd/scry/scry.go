@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
@@ -15,18 +14,7 @@ import (
 // labelWidth is the fixed width of the label column (right-padded with spaces).
 const labelWidth = 26
 
-var scryCmd *cobra.Command
-
-// GetScryCmd returns the scry command, initializing it if necessary.
-func GetScryCmd() *cobra.Command {
-	if scryCmd != nil {
-		return scryCmd
-	}
-
-	scryCmd = &cobra.Command{
-		Use:   "scry <name>",
-		Short: "Suggest locations for a missing item based on history",
-		Long: `Suggest where to look for an item currently marked as missing.
+const scryLongDescription = `Suggest where to look for an item currently marked as missing.
 
 Scry analyzes event history to rank likely locations:
   1. Home location: where the item was created or originally lived
@@ -38,28 +26,81 @@ The item must be in the Missing system location before scrying.
 
 Examples:
   wherehouse scry "10mm socket"        # Suggest locations for a missing item
-  wherehouse scry missing:screwdriver  # Same, with explicit Missing: prefix`,
-		Args: cobra.ExactArgs(1),
-		RunE: runScry,
+  wherehouse scry missing:screwdriver  # Same, with explicit Missing: prefix`
+
+// NewScryCmd returns a scry command that uses the provided db for all database
+// operations. The caller retains no reference to db after this call; the
+// returned command's RunE closes it via defer before returning.
+func NewScryCmd(db scryDB) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "scry <name>",
+		Short: "Suggest locations for a missing item based on history",
+		Long:  scryLongDescription,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runScryCore(cmd, args, db)
+		},
 	}
 
-	scryCmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
-
-	return scryCmd
+	registerScryFlags(cmd)
+	return cmd
 }
 
-// runScry implements the scry command logic.
-func runScry(cmd *cobra.Command, args []string) error {
+// NewDefaultScryCmd returns a scry command that opens the database from context
+// configuration at runtime. This is the production entry point registered with
+// the root command.
+func NewDefaultScryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "scry <name>",
+		Short: "Suggest locations for a missing item based on history",
+		Long:  scryLongDescription,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			db, err := cli.OpenDatabase(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("failed to open database: %w", err)
+			}
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runScryCore(cmd, args, db)
+		},
+	}
+
+	registerScryFlags(cmd)
+	return cmd
+}
+
+// registerScryFlags attaches all scry-specific flags to cmd.
+// Called by both NewScryCmd and NewDefaultScryCmd to ensure identical flag sets.
+func registerScryFlags(cmd *cobra.Command) {
+	cmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
+}
+
+// GetScryCmd returns the scry command using the default database.
+//
+// Deprecated: Use NewDefaultScryCmd instead.
+func GetScryCmd() *cobra.Command {
+	return NewDefaultScryCmd()
+}
+
+// ensure *database.Database satisfies scryDB at compile time.
+var _ scryDB = (*database.Database)(nil)
+
+// runScryCore implements the scry command logic.
+func runScryCore(cmd *cobra.Command, args []string, db scryDB) error {
 	ctx := cmd.Context()
 
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	cfg := cli.MustGetConfig(ctx)
-
-	db, err := cli.OpenDatabase(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	itemID, err := cli.ResolveItemSelector(ctx, db, args[0], "wherehouse scry")
 	if err != nil {
@@ -84,22 +125,22 @@ func runScry(cmd *cobra.Command, args []string) error {
 		len(result.FoundLocations) == 0 &&
 		len(result.TempUseLocations) == 0 &&
 		len(result.SimilarItemLocations) == 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "No suggestions found for %q\n", item.DisplayName)
+		out.Println(fmt.Sprintf("No suggestions found for %q", item.DisplayName))
 		return nil
 	}
 
 	if cfg.IsJSON() {
-		return outputJSON(cmd.OutOrStdout(), result)
+		return outputJSON(out, result)
 	}
 
-	outputHuman(cmd.OutOrStdout(), result, verbose)
+	outputHuman(out.Writer(), result, verbose)
 
 	return nil
 }
 
 // validateItemIsMissing checks that the item is in the Missing system location.
 // Returns specific errors for Borrowed and Loaned items.
-func validateItemIsMissing(ctx context.Context, db *database.Database, item *database.Item) error {
+func validateItemIsMissing(ctx context.Context, db scryDB, item *database.Item) error {
 	missingID, borrowedID, loanedID, err := db.GetSystemLocationIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get system locations: %w", err)
@@ -233,7 +274,7 @@ type jsonSimilarLoc struct {
 }
 
 // outputJSON formats scry results as JSON.
-func outputJSON(w io.Writer, result *database.ScryResult) error {
+func outputJSON(out *cli.OutputWriter, result *database.ScryResult) error {
 	output := jsonScryOutput{
 		ItemID:               result.ItemID,
 		DisplayName:          result.DisplayName,
@@ -287,8 +328,5 @@ func outputJSON(w io.Writer, result *database.ScryResult) error {
 		})
 	}
 
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(output)
+	return out.JSON(output)
 }
