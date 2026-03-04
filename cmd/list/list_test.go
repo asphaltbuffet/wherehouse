@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -109,6 +108,11 @@ func setupListTest(t *testing.T) testFixture {
 	t.Cleanup(func() { db.Close() })
 
 	return f
+}
+
+// newTestContext returns a context with the given config stored under config.ConfigKey.
+func newTestContext(cfg *config.Config) context.Context {
+	return context.WithValue(context.Background(), config.ConfigKey, cfg)
 }
 
 // ---- buildLocationNodeFlat tests ----
@@ -543,7 +547,7 @@ func TestLocationHeader_MultipleItemsAndLocations(t *testing.T) {
 	assert.Equal(t, "Basement (5 items, 2 locations)", stripANSI(result))
 }
 
-// ---- runList integration tests ----
+// ---- runListCore integration tests ----
 
 func TestRunList_NoArgs_ShowsAllRootLocations(t *testing.T) {
 	f := setupListTest(t)
@@ -561,41 +565,18 @@ func TestRunList_NoArgs_ShowsAllRootLocations(t *testing.T) {
 	officeDisplayName := office.DisplayName
 	missingDisplayName := missing.DisplayName
 
-	var buf bytes.Buffer
-	cmd := GetListCmd()
-	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{})
-
-	// Create context with a background parent (not nil)
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, testDatabaseKey, f.db)
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx = context.WithValue(ctx, testConfigKey, testCfg)
+	ctx := newTestContext(testCfg)
+
+	var buf bytes.Buffer
+	cmd := NewListCmd(f.db)
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{})
 	cmd.SetContext(ctx)
 
-	// Override openDatabase to use injected DB
-	testOpenDatabase = func(ctx context.Context) (*database.Database, error) {
-		if db, ok := ctx.Value(testDatabaseKey).(*database.Database); ok {
-			return db, nil
-		}
-		return nil, errors.New("database not found in context")
-	}
-	defer func() { testOpenDatabase = nil }()
-
-	// Override cli.MustGetConfig to use injected config
-	testMustGetConfig = func(ctx context.Context) *config.Config {
-		if cfg, ok := ctx.Value(testConfigKey).(*config.Config); ok {
-			return cfg
-		}
-		return &config.Config{
-			Output: config.OutputConfig{DefaultFormat: "text"},
-		}
-	}
-	defer func() { testMustGetConfig = nil }()
-
-	err := runList(cmd, []string{})
+	err := cmd.ExecuteContext(ctx)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -613,37 +594,18 @@ func TestRunList_SingleArgFound_ShowsLocationItems(t *testing.T) {
 	garageCanonicalName := garage.CanonicalName
 	garageDisplayName := garage.DisplayName
 
-	var buf bytes.Buffer
-	cmd := GetListCmd()
-	cmd.SetOut(&buf)
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, testDatabaseKey, f.db)
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx = context.WithValue(ctx, testConfigKey, testCfg)
+	ctx := newTestContext(testCfg)
+
+	var buf bytes.Buffer
+	cmd := NewListCmd(f.db)
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{garageCanonicalName})
 	cmd.SetContext(ctx)
 
-	testOpenDatabase = func(ctx context.Context) (*database.Database, error) {
-		if db, ok := ctx.Value(testDatabaseKey).(*database.Database); ok {
-			return db, nil
-		}
-		return nil, errors.New("database not found in context")
-	}
-	defer func() { testOpenDatabase = nil }()
-
-	testMustGetConfig = func(ctx context.Context) *config.Config {
-		if cfg, ok := ctx.Value(testConfigKey).(*config.Config); ok {
-			return cfg
-		}
-		return &config.Config{
-			Output: config.OutputConfig{DefaultFormat: "text"},
-		}
-	}
-	defer func() { testMustGetConfig = nil }()
-
-	err := runList(cmd, []string{garageCanonicalName})
+	err := cmd.ExecuteContext(ctx)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -655,37 +617,18 @@ func TestRunList_SingleArgFound_ShowsLocationItems(t *testing.T) {
 func TestRunList_SingleArgNotFound_RendersNotFound(t *testing.T) {
 	f := setupListTest(t)
 
-	var buf bytes.Buffer
-	cmd := GetListCmd()
-	cmd.SetOut(&buf)
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, testDatabaseKey, f.db)
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx = context.WithValue(ctx, testConfigKey, testCfg)
+	ctx := newTestContext(testCfg)
+
+	var buf bytes.Buffer
+	cmd := NewListCmd(f.db)
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"does_not_exist"})
 	cmd.SetContext(ctx)
 
-	testOpenDatabase = func(ctx context.Context) (*database.Database, error) {
-		if db, ok := ctx.Value(testDatabaseKey).(*database.Database); ok {
-			return db, nil
-		}
-		return nil, errors.New("database not found in context")
-	}
-	defer func() { testOpenDatabase = nil }()
-
-	testMustGetConfig = func(ctx context.Context) *config.Config {
-		if cfg, ok := ctx.Value(testConfigKey).(*config.Config); ok {
-			return cfg
-		}
-		return &config.Config{
-			Output: config.OutputConfig{DefaultFormat: "text"},
-		}
-	}
-	defer func() { testMustGetConfig = nil }()
-
-	err := runList(cmd, []string{"does_not_exist"})
+	err := cmd.ExecuteContext(ctx)
 	require.NoError(t, err) // no error on not-found
 
 	output := buf.String()
@@ -701,37 +644,18 @@ func TestRunList_MixedArgsBothRender(t *testing.T) {
 	garageCanonicalName := garage.CanonicalName
 	garageDisplayName := garage.DisplayName
 
-	var buf bytes.Buffer
-	cmd := GetListCmd()
-	cmd.SetOut(&buf)
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, testDatabaseKey, f.db)
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx = context.WithValue(ctx, testConfigKey, testCfg)
+	ctx := newTestContext(testCfg)
+
+	var buf bytes.Buffer
+	cmd := NewListCmd(f.db)
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{garageCanonicalName, "ghost_location"})
 	cmd.SetContext(ctx)
 
-	testOpenDatabase = func(ctx context.Context) (*database.Database, error) {
-		if db, ok := ctx.Value(testDatabaseKey).(*database.Database); ok {
-			return db, nil
-		}
-		return nil, errors.New("database not found in context")
-	}
-	defer func() { testOpenDatabase = nil }()
-
-	testMustGetConfig = func(ctx context.Context) *config.Config {
-		if cfg, ok := ctx.Value(testConfigKey).(*config.Config); ok {
-			return cfg
-		}
-		return &config.Config{
-			Output: config.OutputConfig{DefaultFormat: "text"},
-		}
-	}
-	defer func() { testMustGetConfig = nil }()
-
-	err := runList(cmd, []string{garageCanonicalName, "ghost_location"})
+	err := cmd.ExecuteContext(ctx)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -748,38 +672,17 @@ func TestRunList_RecurseFlag_IncludesSublocationsRecursively(t *testing.T) {
 
 	garageDisplayName := garage.DisplayName
 
-	var buf bytes.Buffer
-	cmd := GetListCmd()
-	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{"--recurse"})
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, testDatabaseKey, f.db)
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx = context.WithValue(ctx, testConfigKey, testCfg)
+	ctx := newTestContext(testCfg)
+
+	var buf bytes.Buffer
+	cmd := NewListCmd(f.db)
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"--recurse"})
 	cmd.SetContext(ctx)
 
-	testOpenDatabase = func(ctx context.Context) (*database.Database, error) {
-		if db, ok := ctx.Value(testDatabaseKey).(*database.Database); ok {
-			return db, nil
-		}
-		return nil, errors.New("database not found in context")
-	}
-	defer func() { testOpenDatabase = nil }()
-
-	testMustGetConfig = func(ctx context.Context) *config.Config {
-		if cfg, ok := ctx.Value(testConfigKey).(*config.Config); ok {
-			return cfg
-		}
-		return &config.Config{
-			Output: config.OutputConfig{DefaultFormat: "text"},
-		}
-	}
-	defer func() { testMustGetConfig = nil }()
-
-	// Must call with the correct args to GetListCmd
 	err := cmd.ExecuteContext(ctx)
 	require.NoError(t, err)
 
@@ -801,36 +704,16 @@ func TestRunList_JSONFlag_OutputsValidJSON(t *testing.T) {
 	garageID := garage.LocationID
 	garageCanonicalName := garage.CanonicalName
 
-	var buf bytes.Buffer
-	cmd := GetListCmd()
-	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{garageCanonicalName})
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, testDatabaseKey, f.db)
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "json"},
 	}
-	ctx = context.WithValue(ctx, testConfigKey, testCfg)
+	ctx := newTestContext(testCfg)
+
+	var buf bytes.Buffer
+	cmd := NewListCmd(f.db)
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{garageCanonicalName})
 	cmd.SetContext(ctx)
-
-	testOpenDatabase = func(ctx context.Context) (*database.Database, error) {
-		if db, ok := ctx.Value(testDatabaseKey).(*database.Database); ok {
-			return db, nil
-		}
-		return nil, errors.New("database not found in context")
-	}
-	defer func() { testOpenDatabase = nil }()
-
-	testMustGetConfig = func(ctx context.Context) *config.Config {
-		if cfg, ok := ctx.Value(testConfigKey).(*config.Config); ok {
-			return cfg
-		}
-		return &config.Config{
-			Output: config.OutputConfig{DefaultFormat: "json"},
-		}
-	}
-	defer func() { testMustGetConfig = nil }()
 
 	err := cmd.ExecuteContext(ctx)
 	require.NoError(t, err)
@@ -854,36 +737,16 @@ func TestRunList_JSONWithNotFound_IncludesNotFoundMarker(t *testing.T) {
 
 	garageCanonicalName := garage.CanonicalName
 
-	var buf bytes.Buffer
-	cmd := GetListCmd()
-	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{garageCanonicalName, "nonexistent_location"})
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, testDatabaseKey, f.db)
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "json"},
 	}
-	ctx = context.WithValue(ctx, testConfigKey, testCfg)
+	ctx := newTestContext(testCfg)
+
+	var buf bytes.Buffer
+	cmd := NewListCmd(f.db)
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{garageCanonicalName, "nonexistent_location"})
 	cmd.SetContext(ctx)
-
-	testOpenDatabase = func(ctx context.Context) (*database.Database, error) {
-		if db, ok := ctx.Value(testDatabaseKey).(*database.Database); ok {
-			return db, nil
-		}
-		return nil, errors.New("database not found in context")
-	}
-	defer func() { testOpenDatabase = nil }()
-
-	testMustGetConfig = func(ctx context.Context) *config.Config {
-		if cfg, ok := ctx.Value(testConfigKey).(*config.Config); ok {
-			return cfg
-		}
-		return &config.Config{
-			Output: config.OutputConfig{DefaultFormat: "json"},
-		}
-	}
-	defer func() { testMustGetConfig = nil }()
 
 	err := cmd.ExecuteContext(ctx)
 	require.NoError(t, err)
@@ -898,13 +761,3 @@ func TestRunList_JSONWithNotFound_IncludesNotFoundMarker(t *testing.T) {
 	assert.True(t, result.Locations[1].NotFound)
 	assert.Equal(t, "nonexistent_location", result.Locations[1].DisplayName)
 }
-
-// Test helpers for dependency injection
-
-type testDatabaseKeyType string
-type testConfigKeyType string
-
-const (
-	testDatabaseKey testDatabaseKeyType = "testDatabase"
-	testConfigKey   testConfigKeyType   = "testConfig"
-)
