@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
@@ -14,18 +13,7 @@ import (
 
 const resultTypeItem = "item"
 
-var findCmd *cobra.Command
-
-// GetFindCmd returns the find command, initializing it if necessary.
-func GetFindCmd() *cobra.Command {
-	if findCmd != nil {
-		return findCmd
-	}
-
-	findCmd = &cobra.Command{
-		Use:   "find <name>",
-		Short: "Find items or locations by name",
-		Long: `Search for items or locations matching the given name.
+const findLongDescription = `Search for items or locations matching the given name.
 
 Returns all items with names containing the search term, showing their
 current locations. Also returns locations with matching names.
@@ -41,19 +29,77 @@ Examples:
   wherehouse find screwdriver          # Find all screwdrivers
   wherehouse find toolbox              # Find toolbox location
   wherehouse find socket -n 5          # Limit to 5 closest matches
-  wherehouse find "10mm" -v            # Verbose output with IDs`,
-		Args: cobra.ExactArgs(1),
-		RunE: runFind,
+  wherehouse find "10mm" -v            # Verbose output with IDs`
+
+// NewFindCmd returns a find command that uses the provided db for all database
+// operations. The caller retains no reference to db after this call; the
+// returned command's RunE closes it via defer before returning.
+func NewFindCmd(db findDB) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "find <name>",
+		Short: "Find items or locations by name",
+		Long:  findLongDescription,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runFindCore(cmd, args, db)
+		},
 	}
 
-	findCmd.Flags().IntP("limit", "n", 0, "Limit number of results (0 = unlimited)")
-	findCmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
-
-	return findCmd
+	registerFindFlags(cmd)
+	return cmd
 }
 
-// runFind implements the find command logic.
-func runFind(cmd *cobra.Command, args []string) error {
+// NewDefaultFindCmd returns a find command that opens the database from context
+// configuration at runtime. This is the production entry point registered with
+// the root command.
+func NewDefaultFindCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "find <name>",
+		Short: "Find items or locations by name",
+		Long:  findLongDescription,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			db, err := cli.OpenDatabase(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("failed to open database: %w", err)
+			}
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runFindCore(cmd, args, db)
+		},
+	}
+
+	registerFindFlags(cmd)
+	return cmd
+}
+
+// registerFindFlags attaches all find-specific flags to cmd.
+// Called by both NewFindCmd and NewDefaultFindCmd to ensure identical flag sets.
+func registerFindFlags(cmd *cobra.Command) {
+	cmd.Flags().IntP("limit", "n", 0, "Limit number of results (0 = unlimited)")
+	cmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
+}
+
+// GetFindCmd returns the find command using the default database.
+//
+// Deprecated: Use NewDefaultFindCmd instead.
+func GetFindCmd() *cobra.Command {
+	return NewDefaultFindCmd()
+}
+
+// ensure *database.Database satisfies findDB at compile time.
+var _ findDB = (*database.Database)(nil)
+
+// runFindCore implements the find command logic.
+func runFindCore(cmd *cobra.Command, args []string, db findDB) error {
 	ctx := cmd.Context()
 
 	// Get search term
@@ -63,13 +109,7 @@ func runFind(cmd *cobra.Command, args []string) error {
 	limit, _ := cmd.Flags().GetInt("limit")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	cfg := cli.MustGetConfig(ctx)
-
-	// Get database connection
-	db, err := openDatabase(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// Execute search
 	results, err := db.SearchByName(ctx, searchTerm, limit)
@@ -87,10 +127,10 @@ func runFind(cmd *cobra.Command, args []string) error {
 
 	// Format and output results
 	if cfg.IsJSON() {
-		return outputJSON(cmd.OutOrStdout(), results, searchTerm, loanedInfoMap)
+		return outputJSON(out, results, searchTerm, loanedInfoMap)
 	}
 
-	outputHuman(cmd.OutOrStdout(), results, verbose, loanedInfoMap)
+	outputHuman(out.Writer(), results, verbose, loanedInfoMap)
 
 	return nil
 }
@@ -99,7 +139,7 @@ func runFind(cmd *cobra.Command, args []string) error {
 // Returns a map keyed by item ID.
 func prefetchLoanedInfo(
 	ctx context.Context,
-	db *database.Database,
+	db findDB,
 	results []*database.SearchResult,
 ) map[string]*database.LoanedInfo {
 	loanedInfoMap := make(map[string]*database.LoanedInfo)
@@ -256,7 +296,7 @@ type jsonLocationInfo struct {
 
 // outputJSON formats results as JSON.
 func outputJSON(
-	w io.Writer,
+	out *cli.OutputWriter,
 	results []*database.SearchResult,
 	searchTerm string,
 	loanedInfoMap map[string]*database.LoanedInfo,
@@ -281,9 +321,7 @@ func outputJSON(
 
 	output.TotalCount = len(results)
 
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(output)
+	return out.JSON(output)
 }
 
 // buildItemJSONResult builds a JSON result for an item search result.
@@ -341,9 +379,4 @@ func buildLocationJSONResult(r *database.SearchResult) *jsonResult {
 		FullPath:            r.FullPath,
 		IsSystem:            r.IsSystem,
 	}
-}
-
-// openDatabase opens the database connection using config settings.
-func openDatabase(ctx context.Context) (*database.Database, error) {
-	return cli.OpenDatabase(ctx)
 }
