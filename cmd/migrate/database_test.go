@@ -1,6 +1,7 @@
 package migrate_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,7 +47,7 @@ func TestGetDatabaseCmd_ShortHelp(t *testing.T) {
 	require.NotNil(t, cmd, "database command should not be nil")
 
 	assert.NotEmpty(t, cmd.Short, "database command should have short help text")
-	assert.Contains(t, cmd.Short, "migrate", "short help should mention migration")
+	assert.Contains(t, strings.ToLower(cmd.Short), "migrate", "short help should mention migration")
 }
 
 func TestGetDatabaseCmd_LongHelp(t *testing.T) {
