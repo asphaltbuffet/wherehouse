@@ -6,7 +6,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.0
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
-	github.com/charmbracelet/fang v0.4.4
+	github.com/charmbracelet/fang v1.0.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/goccy/go-json v0.10.5
 	github.com/golang-migrate/migrate/v4 v4.19.1
