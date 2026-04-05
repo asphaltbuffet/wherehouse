@@ -160,6 +160,7 @@ results, err := store.GetByIDs(ids)
 - [ ] Proper error handling (wrapped with context)
 - [ ] No dead code or commented-out code
 - [ ] Consistent formatting (`gofmt`/`golangci-lint` clean)
+- [ ] Comments and function documentation are useful without repeating the obvious.
 
 ```go
 // ❌ BAD: Swallowing errors
@@ -202,7 +203,8 @@ return tx.Commit()
 - [ ] Styles use `appStyles` singleton (not inline `lipgloss.NewStyle()`)
 - [ ] Enums use typed `iota` constants (not bare integers)
 - [ ] `ORDER BY` includes a tiebreaker
-- [ ] Error messages include: failure, likely cause, remediation step
+- [ ] User-facing error messages include: failure, likely cause, remediation step
+- [ ] Logging statements are used to provide relevant context for troubleshooting
 
 ## Confidence Scoring
 

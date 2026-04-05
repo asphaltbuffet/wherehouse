@@ -64,9 +64,16 @@ Used by the `/dev` orchestrator and all agents to determine scope.
 
 - **VCS**: jj (Jujutsu) — **no `git` commands**
 - **Main branch**: `main`
-- **Commit style**: conventional commits (see `/commit` command)
 
 ---
+
+## Shell Tools
+
+Prefer modern version of tools:
+- **`fd`**: better filesystem search performance than `find`
+- **`rg`**: better search across multiple files than `grep`
+- **`jq`**: more effective use of `json` than `grep`
+- **`sd`**: more efficient search and replace than `sed` or `awk`
 
 ## Knowledge Base
 
@@ -74,14 +81,14 @@ All domain reference documents live here:
 
 | Document | Path |
 |----------|------|
-| Index / where to look | `ai-docs/knowledge/knowledge/README.md` |
-| Business rules & invariants | `ai-docs/knowledge/knowledge/business-rules.md` |
-| Event schemas | `ai-docs/knowledge/knowledge/events.md` |
-| Projection schemas | `ai-docs/knowledge/knowledge/projections.md` |
-| CLI contract | `ai-docs/knowledge/knowledge/cli-contract.md` |
-| Domain model | `ai-docs/knowledge/knowledge/domain-model.md` |
-| Architecture | `ai-docs/knowledge/knowledge/architecture.md` |
-| Critical constraints | `ai-docs/knowledge/knowledge/critical-constraints.md` |
+| Index / where to look | `ai-docs/knowledge/README.md` |
+| Business rules & invariants | `ai-docs/knowledge/business-rules.md` |
+| Event schemas | `ai-docs/knowledge/events.md` |
+| Projection schemas | `ai-docs/knowledge/projections.md` |
+| CLI contract | `ai-docs/knowledge/cli-contract.md` |
+| Domain model | `ai-docs/knowledge/domain-model.md` |
+| Architecture | `ai-docs/knowledge/architecture.md` |
+| Critical constraints | `ai-docs/knowledge/critical-constraints.md` |
 
 ---
 
@@ -110,7 +117,7 @@ All domain reference documents live here:
 ## Session Artifacts
 
 - **Session directory**: `ai-docs/sessions/YYYYMMDD-HHMMSS/`
-- **Knowledge base**: `ai-docs/knowledge/knowledge/`
+- **Knowledge base**: `ai-docs/knowledge/`
 - **Research**: `ai-docs/research/`
 
 ---

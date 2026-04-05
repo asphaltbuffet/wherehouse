@@ -37,11 +37,9 @@ You are now running the **Development Orchestrator**, a file-based workflow coor
 
 **When to Sequence**:
 - ❌ Database schema changes → application logic using schema (dependency)
-- ❌ Implementation → tests (dependency)
+- ❌ Implementation → tests (TDD created dependency)
 - ❌ Core model changes → CLI using models (dependency)
 - ❌ Refactoring shared code (conflicts)
-
-**Performance Target**: For N independent tasks, aim for near-linear speedup.
 
 ### 3. Agent Selection by Scope
 
@@ -111,7 +109,7 @@ Return ONLY a brief status message (max 3 sentences) confirming you've written t
 After completion, read ONLY `$SESSION_DIR/01-planning/summary.txt` to display to user.
 
 ### Step 1.3: Ask Clarification Questions
-Read `$SESSION_DIR/01-planning/gaps.json` and extract up to 3 most important questions.
+Read `$SESSION_DIR/01-planning/gaps.json` and extract up to 5 most important questions.
 
 Use AskUserQuestion tool. Write answers to: `$SESSION_DIR/01-planning/clarifications.md`
 
@@ -388,7 +386,6 @@ All session files: $SESSION_DIR/
 ### Step 6.2: Offer Next Steps
 
 Ask user:
-- "Create commit"
 - "Generate documentation"
 - "Start new dev session"
 - "Done"

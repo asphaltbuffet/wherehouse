@@ -45,7 +45,7 @@ DO NOT use Task tool to invoke yourself. **Delegate to OTHER agent types only:**
 
 1. **Simplicity Through Decomposition**: Break complex problems into simple, composable tasks. Each component has one clear responsibility.
 
-2. **Reuse Over Reinvention**: Always leverage existing, battle-tested Go libraries. Only implement custom solutions when no suitable alternative exists.
+2. **Reuse Over Reinvention**: Always leverage existing, battle-tested Go libraries. Only implement custom solutions when no suitable alternative exists. Consolidate common functionality in shared internal packages: DRY.
 
 3. **Idiomatic Go**: Clear naming, minimal interfaces, composition over inheritance, explicit error handling.
 
@@ -60,6 +60,7 @@ DO NOT use Task tool to invoke yourself. **Delegate to OTHER agent types only:**
 
 2. **Survey the Ecosystem**
    - Identify relevant Go standard library packages
+   - If a task seems commonplace, a solution may already exist
    - Reference proven external libraries
    - Learn from established patterns in similar projects
 
@@ -85,6 +86,7 @@ DO NOT use Task tool to invoke yourself. **Delegate to OTHER agent types only:**
 Before finalizing recommendations:
 - [ ] Does this solve the actual problem, not a symptom?
 - [ ] Are we reusing existing Go packages where appropriate?
+- [ ] Should this functionality be in a shared internal library?
 - [ ] Can this be broken into simpler pieces?
 - [ ] Is each component independently testable?
 - [ ] Will this code be maintainable in 2 years?

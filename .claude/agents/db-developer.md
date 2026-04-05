@@ -189,7 +189,7 @@ func setupTestStore(t *testing.T) *Store {
     t.Helper()
     store, err := Open(":memory:")
     require.NoError(t, err)
-    require.NoError(t, store.ApplyMigrations(context.Background()))
+    require.NoError(t, store.ApplyMigrations(t.Context()))
     t.Cleanup(func() { store.Close() })
     return store
 }
