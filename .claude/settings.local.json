@@ -29,8 +29,15 @@
       "Bash(wc:*)",
       "Skill(claude-md-management:revise-claude-md)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:pkg.go.dev)"
+      "WebFetch(domain:pkg.go.dev)",
+      "mcp__serena__check_onboarding_performed",
+      "mcp__serena__onboarding",
+      "mcp__serena__list_dir",
+      "mcp__serena__write_memory"
     ]
   },
+  "enabledMcpjsonServers": [
+    "serena"
+  ],
   "outputStyle": "default"
 }
