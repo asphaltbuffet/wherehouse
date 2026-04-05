@@ -1,0 +1,30 @@
+[
+  {
+    "question": "Should the 'wherehouse db migrate-ids' command be a new subcommand added to the CLI, or should it be a standalone one-off migration script that the user runs separately (e.g., a separate binary or a Go main file)?",
+    "rationale": "The migration command needs to rewrite all existing database IDs and their JSON payload references. Embedding it in the main CLI as a subcommand is more polished but requires adding new cobra command scaffolding. A standalone script is simpler to implement but less discoverable. The choice affects where the code lives and how users invoke it."
+  },
+  {
+    "question": "Should the ID migration be required (enforced automatically on next 'wherehouse' invocation via the migration system) or opt-in (user must explicitly run 'wherehouse db migrate-ids')?",
+    "rationale": "Automatic migration via golang-migrate on Open() is clean but the data-rewriting step cannot be a pure SQL file — it requires Go logic. If we make it automatic, we need to hook Go code into the migration runner. If opt-in, old UUIDs remain in the database until the user explicitly migrates, which means the app could be in a mixed state where old UUID records exist alongside new nanoid records. The user's requirement says 'migrate existing database' but does not specify timing."
+  },
+  {
+    "question": "What should happen to the database if the ID migration fails partway through? Should the migration be atomic (all-or-nothing in one transaction) or resumable (track progress per entity)?",
+    "rationale": "An atomic single-transaction migration is safest and simplest to implement, but for large databases it could be slow and hold the SQLite write lock for a long time. A resumable migration is more complex but safer for large datasets. For a personal inventory tool the database is likely small, making the atomic approach practical."
+  },
+  {
+    "question": "The system location IDs ('Missing', 'Borrowed', 'Loaned') are currently deterministic UUIDs. After migration, what format should their new fixed IDs take? The plan proposes 'sys0000001', 'sys0000002', 'sys0000003'. Are these acceptable, or would you prefer a different naming convention (e.g., 'MISSING___', '_borrowed_', or fully random nanoids)?",
+    "rationale": "System location IDs must be stable constants hardcoded in Go source because they are referenced in seeding logic, the migration SQL, and potentially by users who have scripted around them. The format needs to be exactly 10 characters and use only the nanoid alphabet (A-Za-z0-9_-). The proposed values are functional but somewhat arbitrary."
+  },
+  {
+    "question": "The 'history' command currently shows the first 8 characters of a location ID when the location cannot be resolved (as a fallback display). With 10-character nanoid IDs, should the fallback show all 10 characters (the full ID), or keep showing just 8?",
+    "rationale": "With 36-character UUIDs, showing only 8 characters was a reasonable truncation for display. With 10-character nanoids, showing all 10 is trivial and more useful. This is a minor UX question but affects the constant 'uuidPrefixLength = 8' in cmd/history/output.go."
+  },
+  {
+    "question": "The nanoid default alphabet is 'A-Za-z0-9_-' (64 characters, URL-safe). Is this alphabet acceptable, or would you prefer alphanumeric-only (A-Za-z0-9, 62 characters) to avoid underscores and hyphens that might complicate shell usage or display?",
+    "rationale": "The default nanoid alphabet includes underscore and hyphen, which are valid in shells but could cause issues if IDs are used as filename components or in certain CLI contexts. A purely alphanumeric alphabet reduces the keyspace slightly (62^10 vs 64^10) but is more universally safe. The choice also affects the 'LooksLikeID' detection function's alphabet validation."
+  },
+  {
+    "question": "The user-facing documentation requirement says 'document the change to nanoid and any mitigation steps the user needs to take.' Should this be a markdown file committed to the repository (e.g., docs/migration-nanoid.md), or output printed to the terminal when the migration command runs, or both?",
+    "rationale": "A committed markdown file is discoverable and can be referenced in release notes. Terminal output is immediately actionable when the user runs the migration. The scope of 'documentation' affects what files need to be created."
+  }
+]

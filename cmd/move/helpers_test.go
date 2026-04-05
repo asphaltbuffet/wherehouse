@@ -11,34 +11,59 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
-func TestLooksLikeUUID(t *testing.T) {
+func TestLooksLikeID(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
 		want  bool
 	}{
 		{
-			name:  "valid UUID v4",
+			name:  "valid 10-char alphanumeric",
+			input: "aB3xK9mPqR",
+			want:  true,
+		},
+		{
+			name:  "valid all digits",
+			input: "0000000000",
+			want:  true,
+		},
+		{
+			name:  "valid all uppercase",
+			input: "AAAAAAAAAA",
+			want:  true,
+		},
+		{
+			name:  "valid test format",
+			input: "tst0loc001",
+			want:  true,
+		},
+		{
+			name:  "invalid UUID format",
 			input: "550e8400-e29b-41d4-a716-446655440000",
-			want:  true,
+			want:  false,
 		},
 		{
-			name:  "valid UUID v7",
-			input: "018e1234-5678-7abc-def0-123456789abc",
-			want:  true,
-		},
-		{
-			name:  "not a UUID - too short",
+			name:  "too short",
 			input: "socket",
 			want:  false,
 		},
 		{
-			name:  "not a UUID - wrong format",
+			name:  "too long",
+			input: "aB3xK9mPqRx",
+			want:  false,
+		},
+		{
+			name:  "contains hyphen",
 			input: "not-a-uuid-format-string",
 			want:  false,
 		},
 		{
-			name:  "not a UUID - no dashes",
+			name:  "contains underscore",
+			input: "aB3xK9mP_R",
+			want:  false,
+		},
+		{
+			name:  "no dashes",
 			input: "550e8400e29b41d4a716446655440000",
 			want:  false,
 		},
@@ -51,8 +76,8 @@ func TestLooksLikeUUID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := cli.LooksLikeUUID(tt.input)
-			assert.Equal(t, tt.want, got, "LooksLikeUUID() mismatch")
+			got := cli.LooksLikeID(tt.input)
+			assert.Equal(t, tt.want, got, "LooksLikeID() mismatch")
 		})
 	}
 }

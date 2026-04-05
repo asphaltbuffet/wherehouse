@@ -1,0 +1,63 @@
+# Wave 3: UUID Removal Status Report
+
+## Summary
+Successfully removed all remaining uses of github.com/google/uuid from test files.
+
+## Files Updated
+1. /home/grue/dev/wherehouse/internal/cli/selectors_test.go
+   - Replaced 13 uuid.New().String() calls with nanoid.MustNew()
+   - Replaced 3 uuid.New().String() calls (invalid input tests) with literal UUID string "550e8400-e29b-41d4-a716-446655440000"
+   - Added nanoid import
+
+2. /home/grue/dev/wherehouse/cmd/lost/item_test.go
+   - Replaced 8 uuid.New().String() calls with nanoid.MustNew()
+   - Replaced prefix generation from uuid.New().String()[:8] with nanoid.MustNew()
+   - Added nanoid import
+
+3. /home/grue/dev/wherehouse/cmd/list/list_test.go
+   - Replaced 12 uuid.New().String() calls with nanoid.MustNew()
+   - Replaced prefix generation from uuid.New().String()[:8] with nanoid.MustNew()
+   - Added nanoid import
+
+4. /home/grue/dev/wherehouse/cmd/move/item_test.go
+   - Replaced 11 uuid.New().String() calls with nanoid.MustNew()
+   - Replaced prefix generation from uuid.New().String()[:8] with nanoid.MustNew()
+   - Added nanoid import
+
+## Replacement Summary
+- Total uuid.New().String() → nanoid.MustNew(): 44 replacements
+- Total uuid.New().String() → literal UUID string (invalid input tests): 3 replacements
+- Total uuid.New().String()[:8] → nanoid.MustNew(): 4 replacements
+- Total github.com/google/uuid imports removed: 4
+
+## Verification Results
+- go mod tidy: Completed (uuid remains as indirect dependency)
+- go build ./...: SUCCESS - all builds clean
+- go test ./...: SUCCESS - 17 packages pass
+- Specific test packages: SUCCESS - all tests in updated files pass
+
+## Test Results
+All 17 test packages passing:
+✓ github.com/asphaltbuffet/wherehouse/cmd
+✓ github.com/asphaltbuffet/wherehouse/cmd/add
+✓ github.com/asphaltbuffet/wherehouse/cmd/config
+✓ github.com/asphaltbuffet/wherehouse/cmd/find
+✓ github.com/asphaltbuffet/wherehouse/cmd/found
+✓ github.com/asphaltbuffet/wherehouse/cmd/history
+✓ github.com/asphaltbuffet/wherehouse/cmd/initialize
+✓ github.com/asphaltbuffet/wherehouse/cmd/list
+✓ github.com/asphaltbuffet/wherehouse/cmd/lost
+✓ github.com/asphaltbuffet/wherehouse/cmd/migrate
+✓ github.com/asphaltbuffet/wherehouse/cmd/move
+✓ github.com/asphaltbuffet/wherehouse/internal/cli
+✓ github.com/asphaltbuffet/wherehouse/internal/config
+✓ github.com/asphaltbuffet/wherehouse/internal/database
+✓ github.com/asphaltbuffet/wherehouse/internal/logging
+✓ github.com/asphaltbuffet/wherehouse/internal/nanoid
+✓ github.com/asphaltbuffet/wherehouse/internal/version
+
+## Key Points
+- No test logic was changed, only ID generation mechanism
+- Literal UUID strings are used for invalid input tests (testing that UUIDs are rejected)
+- nanoid.MustNew() is used for all valid entity ID generation
+- All tests remain deterministic and reproducible

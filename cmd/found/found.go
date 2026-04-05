@@ -27,7 +27,7 @@ The item's home location is NOT changed by default. Use --return to also
 move the item back to its home location immediately.
 
 Selector types:
-  - UUID:          550e8400-e29b-41d4-a716-446655440001
+  - ID:            aB3xK9mPqR
   - LOCATION:ITEM: garage:socket (both canonical names)
   - Canonical:     "10mm socket" (must match exactly 1 item)
 

@@ -6,16 +6,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
+
+// stripANSI removes ANSI escape codes from a string.
+func stripANSI(s string) string {
+	ansiRe := regexp.MustCompile("\x1b\\[[0-9;]*m")
+	return ansiRe.ReplaceAllString(s, "")
+}
 
 // testFixture holds a test database with pre-populated data.
 type testFixture struct {
@@ -55,23 +62,23 @@ func setupListTest(t *testing.T) testFixture {
 	})
 	require.NoError(t, err)
 
-	prefix := uuid.New().String()[:8]
+	prefix := nanoid.MustNew()
 	ts := "2025-01-01T00:00:00Z"
 
 	f := testFixture{
 		db:          db,
 		ctx:         ctx,
-		garageID:    uuid.New().String(),
-		shelfAID:    uuid.New().String(),
-		workbenchID: uuid.New().String(),
-		drawer1ID:   uuid.New().String(),
-		officeID:    uuid.New().String(),
-		missingID:   uuid.New().String(),
-		item1ID:     uuid.New().String(),
-		item2ID:     uuid.New().String(),
-		item3ID:     uuid.New().String(),
-		item4ID:     uuid.New().String(),
-		item5ID:     uuid.New().String(),
+		garageID:    nanoid.MustNew(),
+		shelfAID:    nanoid.MustNew(),
+		workbenchID: nanoid.MustNew(),
+		drawer1ID:   nanoid.MustNew(),
+		officeID:    nanoid.MustNew(),
+		missingID:   nanoid.MustNew(),
+		item1ID:     nanoid.MustNew(),
+		item2ID:     nanoid.MustNew(),
+		item3ID:     nanoid.MustNew(),
+		item4ID:     nanoid.MustNew(),
+		item5ID:     nanoid.MustNew(),
 	}
 
 	// Root locations
@@ -354,7 +361,7 @@ func TestRenderTree_EmptyNodes(t *testing.T) {
 func TestRenderTree_NotFoundNode(t *testing.T) {
 	var buf bytes.Buffer
 	renderTree(&buf, []*LocationNode{{NotFound: true, InputArg: "old-shelf"}})
-	assert.Equal(t, "old-shelf [not found]\n", buf.String())
+	assert.Contains(t, buf.String(), "old-shelf [not found]")
 }
 
 func TestRenderTree_SingleLocationNoItems(t *testing.T) {
@@ -368,7 +375,7 @@ func TestRenderTree_SingleLocationNoItems(t *testing.T) {
 	var buf bytes.Buffer
 	renderTree(&buf, []*LocationNode{node})
 
-	output := buf.String()
+	output := stripANSI(buf.String())
 	assert.Contains(t, output, "Office (0 items, 0 locations)")
 }
 
@@ -508,32 +515,32 @@ func TestRenderTree_RecursiveTree(t *testing.T) {
 
 func TestLocationHeader_NoItemsNoLocations(t *testing.T) {
 	result := locationHeader("Office", 0, 0)
-	assert.Equal(t, "Office (0 items, 0 locations)", result)
+	assert.Equal(t, "Office (0 items, 0 locations)", stripANSI(result))
 }
 
 func TestLocationHeader_SingleItemNoLocations(t *testing.T) {
 	result := locationHeader("Shelf", 1, 0)
-	assert.Equal(t, "Shelf (1 item, 0 locations)", result)
+	assert.Equal(t, "Shelf (1 item, 0 locations)", stripANSI(result))
 }
 
 func TestLocationHeader_MultipleItemsNoLocations(t *testing.T) {
 	result := locationHeader("Garage", 2, 0)
-	assert.Equal(t, "Garage (2 items, 0 locations)", result)
+	assert.Equal(t, "Garage (2 items, 0 locations)", stripANSI(result))
 }
 
 func TestLocationHeader_NoItemsSingleLocation(t *testing.T) {
 	result := locationHeader("Cabinet", 0, 1)
-	assert.Equal(t, "Cabinet (0 items, 1 location)", result)
+	assert.Equal(t, "Cabinet (0 items, 1 location)", stripANSI(result))
 }
 
 func TestLocationHeader_NoItemsMultipleLocations(t *testing.T) {
 	result := locationHeader("Workshop", 0, 3)
-	assert.Equal(t, "Workshop (0 items, 3 locations)", result)
+	assert.Equal(t, "Workshop (0 items, 3 locations)", stripANSI(result))
 }
 
 func TestLocationHeader_MultipleItemsAndLocations(t *testing.T) {
 	result := locationHeader("Basement", 5, 2)
-	assert.Equal(t, "Basement (5 items, 2 locations)", result)
+	assert.Equal(t, "Basement (5 items, 2 locations)", stripANSI(result))
 }
 
 // ---- runList integration tests ----

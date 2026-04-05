@@ -1,0 +1,45 @@
+UUID to nanoid Migration — TDD-Structured Implementation Plan
+=============================================================
+
+1. IRON LAW: No production code without a failing test first. Every implementation
+   wave is preceded by a golang-tester wave that writes failing tests, and followed
+   by a verification wave that confirms all tests are green.
+
+2. WAVE STRUCTURE: Three test/impl/verify cycles.
+   - Wave 1: nanoid package tests (nanoid_test.go) + updated helper_test.go constants
+     + LooksLikeID tests — all written failing before any Wave 1 implementation.
+     Wave 1-impl: nanoid package, schema_metadata.go system IDs, SQL migration
+     files, history output.go cleanup, and doc string updates (all parallel).
+   - Wave 2: migrate_test.go (dry-run, rollback, remapping, idempotency) +
+     cmd/migrate/database_test.go — written failing before Wave 2 implementation.
+     Wave 2-impl: LooksLikeID in selectors.go, full migrate command + business
+     logic in internal/cli/migrate.go, add command nanoid generation (all parallel).
+   - Wave 3: go mod tidy + docs/migration-nanoid.md. Final full `go test ./...` green bar.
+
+3. KEY TDD SUBTASKS: internal/nanoid/nanoid_test.go tests New(), MustNew(), IDLength,
+   alphabet-only output; internal/cli/migrate_test.go covers dry-run preview, atomic
+   rollback on error, correct system location IDs (sys0000001-3), event payload JSON
+   rewriting, and idempotency; cmd/migrate/database_test.go covers command registration,
+   --dry-run flag existence and default.
+
+4. FAILING-FIRST CHECKPOINTS: helper_test.go constants are written with 10-char
+   alphanumeric values in Wave 1-test, immediately causing database test failures that
+   persist until schema_metadata.go and seed data align in Wave 1-impl. LooksLikeID
+   test files are written before selectors.go is modified, failing to compile until
+   Wave 2-impl Task 3 completes.
+
+5. AGENT ROLES BY WAVE: golang-tester owns all -test waves and all -verify waves.
+   golang-developer owns Wave 1-impl (nanoid package, constants, SQL, cleanup) and
+   Wave 2-impl (selectors, migrate command, add commands). No specialist agent may
+   begin implementation until the golang-tester agent has confirmed the corresponding
+   tests are written and failing for the right reason.
+
+6. TESTIFY REQUIREMENT: ALL test code MUST use github.com/stretchr/testify (assert/require).
+   t.Fatal, t.Fatalf, t.Error, and t.Errorf are forbidden in all test files. Use
+   require.NoError/require.Equal (stops test on failure) and assert.NoError/assert.Equal
+   (continues after failure) instead. Testify is already present in go.mod (v1.11.1).
+
+7. OUTPUT: 8 new files (2 test files, 6 production files), 21 modified files.
+   New database methods required: GetAllLocations, GetAllItems, ExecInTransaction.
+   Critical constraint: do NOT edit 000002 SQL migration (checksum protected);
+   migration 003 Go command rewrites UUID data at runtime.

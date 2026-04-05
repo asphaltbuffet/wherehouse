@@ -67,6 +67,9 @@ schema = 3
   [mod."github.com/lucasb-eyer/go-colorful"]
     version = "v1.3.0"
     hash = "sha256-6BKrJsfmxie+YFAWzTYVPQfrwjQEXRo+J8LY+50C1BU="
+  [mod."github.com/matoous/go-nanoid/v2"]
+    version = "v2.1.0"
+    hash = "sha256-SapI0yn7X8Ao2QOfrT1dZu67qFSLd/jqxDfk3yiYWOI="
   [mod."github.com/mattn/go-isatty"]
     version = "v0.0.20"
     hash = "sha256-qhw9hWtU5wnyFyuMbKx+7RB8ckQaFQ8D+8GKPkN3HHQ="

@@ -388,6 +388,33 @@ func (d *Database) computeLocationPathTx(
 	return fullPathDisplay, fullPathCanonical, depth, nil
 }
 
+// GetAllLocations retrieves all locations from the projection table.
+// Used by migration operations that need to enumerate all entity IDs.
+func (d *Database) GetAllLocations(ctx context.Context) ([]*Location, error) {
+	const query = `
+		SELECT
+			location_id,
+			display_name,
+			canonical_name,
+			parent_id,
+			full_path_display,
+			full_path_canonical,
+			depth,
+			is_system,
+			updated_at
+		FROM locations_current
+		ORDER BY depth, display_name
+	`
+
+	rows, err := d.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all locations: %w", err)
+	}
+	defer rows.Close()
+
+	return scanLocations(rows)
+}
+
 // scanLocations is a helper to scan multiple locations from rows.
 func scanLocations(rows *sql.Rows) ([]*Location, error) {
 	var locations []*Location

@@ -18,6 +18,7 @@ import (
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
 	"github.com/asphaltbuffet/wherehouse/cmd/loan"
 	"github.com/asphaltbuffet/wherehouse/cmd/lost"
+	"github.com/asphaltbuffet/wherehouse/cmd/migrate"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
@@ -69,6 +70,7 @@ Examples:
 	rootCmd.AddCommand(listcmd.GetListCmd())
 	rootCmd.AddCommand(loan.GetLoanCmd())
 	rootCmd.AddCommand(lost.GetLostCmd())
+	rootCmd.AddCommand(migrate.GetMigrateCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
 	rootCmd.AddCommand(scry.GetScryCmd())
 

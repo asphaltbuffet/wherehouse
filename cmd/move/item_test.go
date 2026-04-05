@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
 // testIDs holds unique IDs for a test run.
@@ -38,17 +38,17 @@ func setupMoveTest(t *testing.T) (*database.Database, context.Context, testIDs) 
 	require.NoError(t, err)
 
 	// Generate unique IDs for this test to avoid constraint violations
-	prefix := uuid.New().String()[:8]
+	prefix := nanoid.MustNew()
 
 	ids := testIDs{
-		garageID:   uuid.New().String(),
-		toolboxID:  uuid.New().String(),
-		deskID:     uuid.New().String(),
-		missingID:  uuid.New().String(),
-		borrowedID: uuid.New().String(),
-		itemID1:    uuid.New().String(),
-		itemID2:    uuid.New().String(),
-		itemID3:    uuid.New().String(),
+		garageID:   nanoid.MustNew(),
+		toolboxID:  nanoid.MustNew(),
+		deskID:     nanoid.MustNew(),
+		missingID:  nanoid.MustNew(),
+		borrowedID: nanoid.MustNew(),
+		itemID1:    nanoid.MustNew(),
+		itemID2:    nanoid.MustNew(),
+		itemID3:    nanoid.MustNew(),
 	}
 
 	// Create normal locations with unique display names
@@ -176,7 +176,7 @@ func TestMoveItem_FromSystemLocation_Missing_Fails(t *testing.T) {
 	defer db.Close()
 
 	// Create item in missing location to test moving from it
-	itemInMissingID := uuid.New().String()
+	itemInMissingID := nanoid.MustNew()
 	err := db.CreateItem(ctx, itemInMissingID, "lost item", ids.missingID, 4, "2025-01-01T00:00:08Z")
 	require.NoError(t, err)
 
@@ -194,7 +194,7 @@ func TestMoveItem_FromSystemLocation_Borrowed_Fails(t *testing.T) {
 	defer db.Close()
 
 	// Create item in borrowed location
-	itemInBorrowedID := uuid.New().String()
+	itemInBorrowedID := nanoid.MustNew()
 	err := db.CreateItem(ctx, itemInBorrowedID, "borrowed item", ids.borrowedID, 5, "2025-01-01T00:00:09Z")
 	require.NoError(t, err)
 
@@ -238,7 +238,7 @@ func TestMoveItem_ItemNotFound_Fails(t *testing.T) {
 	defer db.Close()
 
 	// Attempt to move non-existent item
-	result, err := moveItem(ctx, db, uuid.New().String(), ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, nanoid.MustNew(), ids.toolboxID, "rehome", "clear", "", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -251,7 +251,7 @@ func TestMoveItem_DestinationNotFound_Fails(t *testing.T) {
 	defer db.Close()
 
 	// Attempt to move to non-existent location
-	result, err := moveItem(ctx, db, ids.itemID3, uuid.New().String(), "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, ids.itemID3, nanoid.MustNew(), "rehome", "clear", "", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -364,7 +364,7 @@ func TestValidateDestinationNotSystem(t *testing.T) {
 // Test: Result struct JSON marshaling.
 func TestResult_JSONMarshal(t *testing.T) {
 	result := &Result{
-		ItemID:        uuid.New().String(),
+		ItemID:        nanoid.MustNew(),
 		DisplayName:   "10mm socket",
 		FromLocation:  "Garage",
 		ToLocation:    "Tool Box",

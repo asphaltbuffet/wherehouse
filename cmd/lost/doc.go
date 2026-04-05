@@ -5,7 +5,7 @@
 // location is preserved so it can be returned when found.
 //
 // The command supports multiple selector types for item identification:
-//   - UUID: Exact ID match (verified against database)
+//   - ID: Exact ID match (verified against database)
 //   - LOCATION:ITEM: Scoped selector using canonical names
 //   - Canonical name: Must match exactly one item
 //
@@ -27,5 +27,5 @@
 //
 //	wherehouse lost "10mm socket"
 //	wherehouse lost garage:socket --note "checked toolbox"
-//	wherehouse lost 550e8400-e29b-41d4-a716-446655440001
+//	wherehouse lost aB3xK9mPqR
 package lost

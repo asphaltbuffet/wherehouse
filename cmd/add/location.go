@@ -3,11 +3,11 @@ package add
 import (
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
 var locationCmd *cobra.Command
@@ -26,7 +26,7 @@ func GetLocationCmd() *cobra.Command {
 If --in is specified, locations are created as children of that parent.
 Otherwise, locations are created at the root level.
 
-Each location receives a unique UUID and is validated for name uniqueness.
+Each location receives a unique ID and is validated for name uniqueness.
 
 Examples:
   wherehouse add location Garage            # Create root location
@@ -93,12 +93,11 @@ func runAddLocation(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("location %q already exists: %w", locationName, uniqueErr)
 		}
 
-		// Generate UUID v7
-		locationUUID, uuidErr := uuid.NewV7()
-		if uuidErr != nil {
-			return fmt.Errorf("failed to generate UUID for location %q: %w", locationName, uuidErr)
+		// Generate ID
+		locationID, idErr := nanoid.New()
+		if idErr != nil {
+			return fmt.Errorf("failed to generate ID for location %q: %w", locationName, idErr)
 		}
-		locationID := locationUUID.String()
 
 		// Build event payload
 		payload := map[string]any{

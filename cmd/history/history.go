@@ -27,7 +27,7 @@ func GetHistoryCmd() *cobra.Command {
 Item selector can be:
   - Canonical name: "10mm_socket"
   - Location-scoped: "garage:10mm_socket"
-  - UUID: --id <uuid>
+  - ID: --id <id>
 
 Examples:
   wherehouse history 10mm_socket
@@ -38,7 +38,7 @@ Examples:
 		RunE: runHistory,
 	}
 
-	historyCmd.Flags().StringP("id", "i", "", "Item UUID (alternative to name selector)")
+	historyCmd.Flags().StringP("id", "i", "", "Item ID (alternative to name selector)")
 	historyCmd.Flags().IntP("limit", "n", 0, "Maximum number of events (0 = unlimited)")
 	historyCmd.Flags().String("since", "", "Show events since date/relative-time (e.g. '2 weeks ago')")
 	historyCmd.Flags().Bool("oldest-first", false, "Show oldest events first (default: newest first)")
@@ -71,7 +71,7 @@ func runHistory(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	// Resolve item selector to UUID
+	// Resolve item selector to ID
 	if itemID == "" {
 		itemID, err = resolveItemSelector(ctx, db, args[0])
 		if err != nil {

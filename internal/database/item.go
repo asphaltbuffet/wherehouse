@@ -273,6 +273,33 @@ func (d *Database) DeleteItem(ctx context.Context, itemID string) error {
 	return nil
 }
 
+// GetAllItems retrieves all items from the projection table.
+// Used by migration operations that need to enumerate all entity IDs.
+func (d *Database) GetAllItems(ctx context.Context) ([]*Item, error) {
+	const query = `
+		SELECT
+			item_id,
+			display_name,
+			canonical_name,
+			location_id,
+			in_temporary_use,
+			temp_origin_location_id,
+			project_id,
+			last_event_id,
+			updated_at
+		FROM items_current
+		ORDER BY display_name
+	`
+
+	rows, err := d.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all items: %w", err)
+	}
+	defer rows.Close()
+
+	return scanItems(rows)
+}
+
 // scanItems is a helper to scan multiple items from rows.
 func scanItems(rows *sql.Rows) ([]*Item, error) {
 	var items []*Item

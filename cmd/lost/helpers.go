@@ -12,9 +12,9 @@ func openDatabase(ctx context.Context) (*database.Database, error) {
 	return cli.OpenDatabase(ctx)
 }
 
-// resolveItemSelector resolves an item selector to an item UUID.
+// resolveItemSelector resolves an item selector to an item ID.
 // Supports three selector types:
-//  1. UUID (exact ID)
+//  1. ID (exact match)
 //  2. LOCATION:ITEM (both canonical names, filters by location)
 //  3. Canonical name (must match exactly 1 item)
 func resolveItemSelector(ctx context.Context, db *database.Database, selector string) (string, error) {

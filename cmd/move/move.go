@@ -9,7 +9,7 @@ import (
 const moveLongDescription = `Move one or more items to a different location.
 
 Selector types:
-  - UUID: 550e8400-e29b-41d4-a716-446655440001 (exact ID)
+  - ID: aB3xK9mPqR (exact ID)
   - LOCATION:ITEM: garage:socket (both canonical names, filters by location)
   - Canonical name: "10mm socket" (must match exactly 1 item)
 
@@ -29,10 +29,10 @@ Project association:
 
 Examples:
   wherehouse move garage:socket --to toolbox
-  wherehouse move 550e8400-e29b-41d4-a716-446655440001 --to desk
+  wherehouse move aB3xK9mPqR --to desk
   wherehouse move "10mm socket" --to garage --temp
   wherehouse move wrench screwdriver --to toolbox --keep-project
-  wherehouse move 550e8400-e29b-41d4-a716-446655440001 --to shed --project dinner-prep --note "need for project"`
+  wherehouse move aB3xK9mPqR --to shed --project dinner-prep --note "need for project"`
 
 // NewMoveCmd returns a move command that uses the provided db for all database
 // operations. The caller retains no reference to db after this call; the
