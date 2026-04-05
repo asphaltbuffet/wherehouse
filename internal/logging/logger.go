@@ -1,7 +1,5 @@
 package logging
 
-//go:generate go run github.com/vektra/mockery/v2@latest
-
 // Logger is the interface for structured, leveled logging.
 // All methods match the [slog.Logger] method signatures to allow
 // drop-in substitution. With returns a Logger (not [slog.Logger])
