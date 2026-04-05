@@ -7,11 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetFindCmd_Singleton(t *testing.T) {
-	cmd1 := GetFindCmd()
-	require.NotNil(t, cmd1)
+func TestGetFindCmd_ReturnsNonNil(t *testing.T) {
+	cmd := GetFindCmd()
+	require.NotNil(t, cmd)
+	assert.Equal(t, "find <name>", cmd.Use)
+}
 
-	cmd2 := GetFindCmd()
-
-	assert.Same(t, cmd1, cmd2)
+func TestNewDefaultFindCmd_ReturnsNonNil(t *testing.T) {
+	cmd := NewDefaultFindCmd()
+	require.NotNil(t, cmd)
+	assert.Equal(t, "find <name>", cmd.Use)
 }

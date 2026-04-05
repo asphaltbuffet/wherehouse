@@ -1,0 +1,1 @@
+PARTIAL: cli package and cmd/loan, cmd/lost compile and tests pass; 2 unused-func lint errors in cmd/add/helpers.go persist from task 1a (outside task 1c scope, to be deleted in step 2)

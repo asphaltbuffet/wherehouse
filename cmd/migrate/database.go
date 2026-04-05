@@ -20,7 +20,7 @@ func GetDatabaseCmd() *cobra.Command {
 
 	databaseCmd = &cobra.Command{
 		Use:   "database",
-		Short: "migrate database IDs from UUID to nanoid format",
+		Short: "Migrate database IDs from UUID to nanoid format",
 		Long: `Rewrites all entity IDs in the wherehouse database from UUID format
 to 10-character alphanumeric nanoid format.
 
@@ -40,8 +40,8 @@ WARNING: Back up your database before running this migration.
 After migration, any external references to old UUID-format IDs will be invalid.
 
 Examples:
-  wherehouse migrate database --dry-run   Preview migration without making changes
-  wherehouse migrate database             Run migration`,
+  wherehouse migrate database --dry-run   # Preview migration without making changes
+  wherehouse migrate database             # Run migration`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			db, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {

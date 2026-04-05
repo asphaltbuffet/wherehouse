@@ -7,11 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetAddCmd(t *testing.T) {
-	cmd1 := GetAddCmd()
-	require.NotNil(t, cmd1)
+func TestGetAddCmd_ReturnsNonNil(t *testing.T) {
+	cmd := GetAddCmd()
+	require.NotNil(t, cmd)
+	assert.Equal(t, "add", cmd.Use)
+}
 
-	cmd2 := GetAddCmd()
-
-	assert.Same(t, cmd1, cmd2)
+func TestNewDefaultAddCmd_ReturnsNonNil(t *testing.T) {
+	cmd := NewDefaultAddCmd()
+	require.NotNil(t, cmd)
+	assert.Equal(t, "add", cmd.Use)
 }

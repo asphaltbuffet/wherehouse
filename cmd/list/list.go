@@ -9,27 +9,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
-	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
-var (
-	listCmd *cobra.Command
-	//nolint: gochecknoglobals // Test hooks for dependency injection
-	testOpenDatabase  func(context.Context) (*database.Database, error)
-	testMustGetConfig func(context.Context) *config.Config
-)
-
-// GetListCmd returns the list command, initializing it if necessary.
-func GetListCmd() *cobra.Command {
-	if listCmd != nil {
-		return listCmd
-	}
-
-	listCmd = &cobra.Command{
-		Use:   "list [<location>...]",
-		Short: "List items in locations",
-		Long: `List items in one or more locations.
+const listLongDescription = `List items in one or more locations.
 
 Without arguments, shows all top-level locations and their direct items.
 Direct child locations are shown as hints with item and location counts.
@@ -41,38 +24,85 @@ If a location argument cannot be resolved, it is shown inline as
 Use --recurse (-r) to include sub-locations and all their contents.
 
 Examples:
-  wherehouse list
-  wherehouse list Garage
-  wherehouse list "Garage" "Office"
-  wherehouse list --recurse
-  wherehouse list -r Garage`,
-		Args: cobra.ArbitraryArgs,
-		RunE: runList,
+  wherehouse list                      # Show all top-level locations
+  wherehouse list Garage               # Show items in Garage
+  wherehouse list "Garage" "Office"    # Show items in multiple locations
+  wherehouse list --recurse            # Show all locations recursively
+  wherehouse list -r Garage            # Recurse into Garage`
+
+// NewListCmd returns a list command that uses the provided db for all database
+// operations. The caller retains no reference to db after this call; the
+// returned command's RunE closes it via defer before returning.
+func NewListCmd(db listDB) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list [<location>...]",
+		Short: "List items in locations",
+		Long:  listLongDescription,
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runListCore(cmd, args, db)
+		},
 	}
 
-	listCmd.Flags().BoolP("recurse", "r", false, "recursively list sub-locations and their items")
-
-	return listCmd
+	registerListFlags(cmd)
+	return cmd
 }
 
-// runList is the main entry point for the list command.
-func runList(cmd *cobra.Command, args []string) error {
+// NewDefaultListCmd returns a list command that opens the database from context
+// configuration at runtime. This is the production entry point registered with
+// the root command.
+func NewDefaultListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list [<location>...]",
+		Short: "List items in locations",
+		Long:  listLongDescription,
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			db, err := cli.OpenDatabase(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("failed to open database: %w", err)
+			}
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runListCore(cmd, args, db)
+		},
+	}
+
+	registerListFlags(cmd)
+	return cmd
+}
+
+// registerListFlags attaches all list-specific flags to cmd.
+// Called by both NewListCmd and NewDefaultListCmd to ensure identical flag sets.
+func registerListFlags(cmd *cobra.Command) {
+	cmd.Flags().BoolP("recurse", "r", false, "recursively list sub-locations and their items")
+}
+
+// GetListCmd returns the list command using the default database.
+//
+// Deprecated: Use NewDefaultListCmd instead.
+func GetListCmd() *cobra.Command {
+	return NewDefaultListCmd()
+}
+
+// ensure *database.Database satisfies listDB at compile time.
+var _ listDB = (*database.Database)(nil)
+
+// runListCore is the main entry point for the list command.
+func runListCore(cmd *cobra.Command, args []string, db listDB) error {
 	ctx := cmd.Context()
 
 	recurse, _ := cmd.Flags().GetBool("recurse")
 
-	db, err := openDatabase(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
-	var cfg *config.Config
-	if testMustGetConfig != nil {
-		cfg = testMustGetConfig(ctx)
-	} else {
-		cfg = cli.MustGetConfig(ctx)
-	}
+	cfg := cli.MustGetConfig(ctx)
 
 	if cfg == nil {
 		return errors.New("config not found in context")
@@ -100,7 +130,7 @@ func runList(cmd *cobra.Command, args []string) error {
 // buildNodes constructs the LocationNode slice for the given arguments.
 // If args is empty, root locations are used. Unresolvable args become
 // NotFound nodes (no error returned).
-func buildNodes(ctx context.Context, db *database.Database, args []string, recurse bool) ([]*LocationNode, error) {
+func buildNodes(ctx context.Context, db listDB, args []string, recurse bool) ([]*LocationNode, error) {
 	if len(args) == 0 {
 		return buildRootNodes(ctx, db, recurse)
 	}
@@ -131,7 +161,7 @@ func buildNodes(ctx context.Context, db *database.Database, args []string, recur
 }
 
 // buildRootNodes fetches all root locations and builds a node for each.
-func buildRootNodes(ctx context.Context, db *database.Database, recurse bool) ([]*LocationNode, error) {
+func buildRootNodes(ctx context.Context, db listDB, recurse bool) ([]*LocationNode, error) {
 	roots, err := db.GetRootLocations(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get root locations: %w", err)
@@ -151,7 +181,7 @@ func buildRootNodes(ctx context.Context, db *database.Database, recurse bool) ([
 // buildNode dispatches to the flat or recursive builder based on the recurse flag.
 func buildNode(
 	ctx context.Context,
-	db *database.Database,
+	db listDB,
 	loc *database.Location,
 	recurse bool,
 ) (*LocationNode, error) {
@@ -164,7 +194,7 @@ func buildNode(
 // buildLocationNodeFlat builds a LocationNode for non-recursive display.
 // Items are populated; children are hint-only nodes (Items/Children are nil,
 // ChildItemCount and ChildLocationCount are set from lightweight DB queries).
-func buildLocationNodeFlat(ctx context.Context, db *database.Database, loc *database.Location) (*LocationNode, error) {
+func buildLocationNodeFlat(ctx context.Context, db listDB, loc *database.Location) (*LocationNode, error) {
 	node := &LocationNode{Location: loc}
 
 	// Fetch direct items.
@@ -208,7 +238,7 @@ func buildLocationNodeFlat(ctx context.Context, db *database.Database, loc *data
 // ChildLocationCount are unused in recursive mode.
 func buildLocationNodeRecursive(
 	ctx context.Context,
-	db *database.Database,
+	db listDB,
 	loc *database.Location,
 ) (*LocationNode, error) {
 	node := &LocationNode{Location: loc}
@@ -237,4 +267,9 @@ func buildLocationNodeRecursive(
 	node.Children = childNodes
 
 	return node, nil
+}
+
+// resolveLocation resolves a location name or ID to the location ID string.
+func resolveLocation(ctx context.Context, db listDB, input string) (string, error) {
+	return cli.ResolveLocation(ctx, db, input)
 }

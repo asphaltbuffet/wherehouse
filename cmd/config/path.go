@@ -27,8 +27,8 @@ By default, shows active configuration file(s) that exist.
 Use --all to show all possible configuration file locations.
 
 Examples:
-  wherehouse config path          Show active config files
-  wherehouse config path --all    Show all possible locations`,
+  wherehouse config path          # Show active config files
+  wherehouse config path --all    # Show all possible locations`,
 		RunE: runPath,
 	}
 

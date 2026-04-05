@@ -152,7 +152,7 @@ func TestMarkItemLost_ItemNotFound_Error(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "item not found")
+	assert.Contains(t, err.Error(), "not found")
 }
 
 // Test: Mark item as lost - with note creates event with note payload.

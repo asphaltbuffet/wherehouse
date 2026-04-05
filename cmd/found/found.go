@@ -10,18 +10,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
-var foundCmd *cobra.Command
-
-// GetFoundCmd returns the found command, initializing it if necessary.
-func GetFoundCmd() *cobra.Command {
-	if foundCmd != nil {
-		return foundCmd
-	}
-
-	foundCmd = &cobra.Command{
-		Use:   "found <item-selector>... --in <location>",
-		Short: "Record that a lost or missing item has been found",
-		Long: `Record that one or more items have been found at a specific location.
+const foundLongDescription = `Record that one or more items have been found at a specific location.
 
 The item's home location is NOT changed by default. Use --return to also
 move the item back to its home location immediately.
@@ -34,19 +23,7 @@ Selector types:
 Examples:
   wherehouse found "10mm socket" --in garage
   wherehouse found "10mm socket" --in garage --return
-  wherehouse found garage:screwdriver --in shed --note "behind workbench"`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: runFoundItem,
-	}
-
-	foundCmd.Flags().StringP("in", "i", "", "location where item was found (required)")
-	_ = foundCmd.MarkFlagRequired("in")
-
-	foundCmd.Flags().BoolP("return", "r", false, "also return item to its home location")
-	foundCmd.Flags().StringP("note", "n", "", "optional note for event")
-
-	return foundCmd
-}
+  wherehouse found garage:screwdriver --in shed --note "behind workbench"`
 
 // Result represents the result of a single item found operation.
 type Result struct {
@@ -60,19 +37,73 @@ type Result struct {
 	Warnings      []string `json:"warnings,omitempty"`
 }
 
+// NewFoundCmd returns a found command that uses the provided db for all database
+// operations. The caller retains no reference to db after this call; the
+// returned command's RunE closes it via defer before returning.
+func NewFoundCmd(db foundDB) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "found <item-selector>... --in <location>",
+		Short: "Record that a lost or missing item has been found",
+		Long:  foundLongDescription,
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runFoundItem(cmd, args, db)
+		},
+	}
+
+	registerFoundFlags(cmd)
+	return cmd
+}
+
+// NewDefaultFoundCmd returns a found command that opens the database from context
+// configuration at runtime. This is the production entry point registered with
+// the root command.
+func NewDefaultFoundCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "found <item-selector>... --in <location>",
+		Short: "Record that a lost or missing item has been found",
+		Long:  foundLongDescription,
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			db, err := cli.OpenDatabase(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("failed to open database: %w", err)
+			}
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
+				}
+			}()
+			return runFoundItem(cmd, args, db)
+		},
+	}
+
+	registerFoundFlags(cmd)
+	return cmd
+}
+
+// registerFoundFlags attaches all found-specific flags to cmd.
+// Called by both NewFoundCmd and NewDefaultFoundCmd to ensure identical flag sets.
+func registerFoundFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP("in", "i", "", "location where item was found (required)")
+	_ = cmd.MarkFlagRequired("in")
+
+	cmd.Flags().BoolP("return", "r", false, "also return item to its home location")
+	cmd.Flags().StringP("note", "n", "", "optional note for event")
+}
+
 // runFoundItem is the main entry point for the found command.
-func runFoundItem(cmd *cobra.Command, args []string) error {
+func runFoundItem(cmd *cobra.Command, args []string, db foundDB) error {
 	ctx := cmd.Context()
 
 	foundLocationStr, _ := cmd.Flags().GetString("in")
 	returnToHome, _ := cmd.Flags().GetBool("return")
 	note, _ := cmd.Flags().GetString("note")
-
-	db, err := cli.OpenDatabase(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
 
 	actorUserID := cli.GetActorUserID(ctx)
 
@@ -124,125 +155,33 @@ func runFoundItem(cmd *cobra.Command, args []string) error {
 
 // foundItem performs a single item found operation, firing the item.found event
 // and optionally a follow-up item.moved event when --return is used.
+// It delegates all domain logic to cli.FoundItem.
 func foundItem(
 	ctx context.Context,
-	db *database.Database,
+	db foundDB,
 	itemID, foundLocationID string,
 	returnToHome bool,
 	actorUserID, note string,
 ) (*Result, error) {
-	// Get current item state
-	item, err := db.GetItem(ctx, itemID)
+	r, err := cli.FoundItem(ctx, db, itemID, foundLocationID, returnToHome, actorUserID, note)
 	if err != nil {
-		return nil, fmt.Errorf("item not found: %w", err)
+		return nil, err
 	}
 
-	// Get current item location for warning checks
-	currentLoc, err := db.GetLocation(ctx, item.LocationID)
-	if err != nil {
-		return nil, fmt.Errorf("current location not found: %w", err)
-	}
-
-	// Collect non-fatal warnings about the item's current state
-	var warnings []string
-
-	switch {
-	case currentLoc.IsSystem && currentLoc.CanonicalName == "missing":
-		// Normal case: item is at Missing - no warning needed
-	case currentLoc.IsSystem:
-		// Item is at a non-Missing system location (e.g. Borrowed)
-		warnings = append(warnings, fmt.Sprintf(
-			"item is currently at system location %q (not Missing)", currentLoc.DisplayName))
-	default:
-		// Item is at a normal (non-system) location
-		warnings = append(warnings, fmt.Sprintf(
-			"item is not currently missing (currently at %q)", currentLoc.DisplayName))
-	}
-
-	// Determine home location for the item.found event payload.
-	// If TempOriginLocationID is NULL, use foundLocationID as a safe fallback
-	// so the event handler always receives a valid home_location_id.
-	homeLocationID := foundLocationID
-	if item.TempOriginLocationID != nil {
-		homeLocationID = *item.TempOriginLocationID
-	}
-
-	// Get location display names for the result
-	foundLoc, err := db.GetLocation(ctx, foundLocationID)
-	if err != nil {
-		return nil, fmt.Errorf("found location details not found: %w", err)
-	}
-
-	homeLoc, err := db.GetLocation(ctx, homeLocationID)
-	if err != nil {
-		return nil, fmt.Errorf("home location details not found: %w", err)
-	}
-
-	// Fire item.found event
-	foundPayload := map[string]any{
-		"item_id":           itemID,
-		"found_location_id": foundLocationID,
-		"home_location_id":  homeLocationID,
-	}
-
-	foundEventID, err := db.AppendEvent(ctx, database.ItemFoundEvent, actorUserID, foundPayload, note)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create found event: %w", err)
-	}
-
-	result := &Result{
-		ItemID:       itemID,
-		DisplayName:  item.DisplayName,
-		FoundAt:      foundLoc.DisplayName,
-		HomeLocation: homeLoc.DisplayName,
-		Returned:     false,
-		FoundEventID: foundEventID,
-		Warnings:     warnings,
-	}
-
-	// Handle --return flag
-	if returnToHome {
-		switch {
-		case item.TempOriginLocationID == nil:
-			// Home is unknown - skip move, add warning
-			result.Warnings = append(result.Warnings,
-				"home location unknown - could not return item (use move command to return manually)")
-
-		case foundLocationID == homeLocationID:
-			// Already at home - skip move, add note
-			result.Warnings = append(result.Warnings,
-				"already at home location - return skipped")
-
-		default:
-			// Validate from_location matches projection (CRITICAL for event-sourcing)
-			if validateErr := db.ValidateFromLocation(ctx, itemID, foundLocationID); validateErr != nil {
-				return nil, fmt.Errorf("projection validation failed: %w", validateErr)
-			}
-
-			// Fire item.moved rehome event to return to home
-			movePayload := map[string]any{
-				"item_id":          itemID,
-				"from_location_id": foundLocationID,
-				"to_location_id":   homeLocationID,
-				"move_type":        "rehome",
-				"project_action":   "clear",
-			}
-
-			returnEventID, moveErr := db.AppendEvent(ctx, database.ItemMovedEvent, actorUserID, movePayload, note)
-			if moveErr != nil {
-				return nil, fmt.Errorf("failed to create return event: %w", moveErr)
-			}
-
-			result.Returned = true
-			result.ReturnEventID = &returnEventID
-		}
-	}
-
-	return result, nil
+	return &Result{
+		ItemID:        r.ItemID,
+		DisplayName:   r.DisplayName,
+		FoundAt:       r.FoundAt,
+		HomeLocation:  r.HomeLocation,
+		Returned:      r.Returned,
+		FoundEventID:  r.FoundEventID,
+		ReturnEventID: r.ReturnEventID,
+		Warnings:      r.Warnings,
+	}, nil
 }
 
 // validateNotSystemLocation returns an error if the given location is a system location.
-func validateNotSystemLocation(ctx context.Context, db *database.Database, locationID string) error {
+func validateNotSystemLocation(ctx context.Context, db foundDB, locationID string) error {
 	loc, err := db.GetLocation(ctx, locationID)
 	if err != nil {
 		return fmt.Errorf("failed to get location: %w", err)
@@ -266,3 +205,13 @@ func formatSuccessMessage(r *Result) string {
 
 	return fmt.Sprintf("Found %q at %s (home: %s)", r.DisplayName, r.FoundAt, r.HomeLocation)
 }
+
+// GetFoundCmd returns the found command using the default database.
+//
+// Deprecated: Use NewDefaultFoundCmd instead.
+func GetFoundCmd() *cobra.Command {
+	return NewDefaultFoundCmd()
+}
+
+// ensure *database.Database satisfies foundDB at compile time.
+var _ foundDB = (*database.Database)(nil)

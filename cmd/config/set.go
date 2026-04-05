@@ -30,9 +30,9 @@ Use --local to set in the local (project-specific) configuration file.
 The configuration file must already exist (use 'config init' to create it).
 
 Examples:
-  wherehouse config set database.path /custom/inventory.db
-  wherehouse config set --local output.default_format json
-  wherehouse config set user.default_identity alice`,
+  wherehouse config set database.path /custom/inventory.db          # Set database path
+  wherehouse config set --local output.default_format json          # Set in local config
+  wherehouse config set user.default_identity alice                 # Set identity`,
 		Args: cobra.ExactArgs(2), //nolint:mnd // 2 is the exact number of required args: key and value
 		RunE: runSet,
 	}

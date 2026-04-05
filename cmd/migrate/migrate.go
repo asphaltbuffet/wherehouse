@@ -12,11 +12,11 @@ func GetMigrateCmd() *cobra.Command {
 
 	migrateCmd = &cobra.Command{
 		Use:   "migrate",
-		Short: "run data migration operations",
+		Short: "Run data migration operations",
 		Long: `The migrate command provides subcommands for migrating wherehouse data.
 
 Examples:
-  wherehouse migrate database        Migrate IDs from UUID to nanoid format`,
+  wherehouse migrate database        # Migrate IDs from UUID to nanoid format`,
 	}
 
 	migrateCmd.AddCommand(GetDatabaseCmd())

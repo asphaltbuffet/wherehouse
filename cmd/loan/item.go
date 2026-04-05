@@ -1,7 +1,6 @@
 package loan
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
 // Result represents the result of a single item loan operation.
@@ -24,7 +22,7 @@ type Result struct {
 }
 
 // runLoanItem is the main entry point for the loan command.
-func runLoanItem(cmd *cobra.Command, args []string) error {
+func runLoanItem(cmd *cobra.Command, args []string, db loanDB) error {
 	ctx := cmd.Context()
 
 	// Parse flags
@@ -37,62 +35,42 @@ func runLoanItem(cmd *cobra.Command, args []string) error {
 		return errors.New("--to flag cannot be empty")
 	}
 
-	// Open database
-	db, err := openDatabase(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
-	// Get actor user ID
+	// Get actor user ID and set up output writer
 	actorUserID := cli.GetActorUserID(ctx)
-
-	// Set up output writer
 	cfg := cli.MustGetConfig(cmd.Context())
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
-	// PHASE 1: Resolve and validate ALL selectors (fail-fast)
-	type resolvedItem struct {
-		selector string
-		itemID   string
-	}
-	var resolved []resolvedItem
-
-	for _, selector := range args {
-		// Resolve item selector
-		itemID, itemErr := resolveItemSelector(ctx, db, selector)
-		if itemErr != nil {
-			return fmt.Errorf("failed to resolve %q: %w", selector, itemErr)
-		}
-
-		// Validate item can be loaned (basic validation)
-		if validateErr := validateItemForLoan(ctx, db, itemID, loanedTo); validateErr != nil {
-			return fmt.Errorf("failed to validate %q: %w", selector, validateErr)
-		}
-
-		resolved = append(resolved, resolvedItem{selector: selector, itemID: itemID})
+	opts := cli.LoanItemOptions{
+		Borrower: loanedTo,
+		Note:     note,
 	}
 
-	// PHASE 2: Create events for all validated items
 	var results []Result
 
-	for _, r := range resolved {
-		// Perform loan (creates event)
-		result, loanErr := loanItem(ctx, db, r.itemID, loanedTo, actorUserID, note)
+	for _, selector := range args {
+		loanResult, loanErr := cli.LoanItem(ctx, db, selector, actorUserID, opts)
 		if loanErr != nil {
-			return fmt.Errorf("failed to loan %q: %w", r.selector, loanErr)
+			return fmt.Errorf("failed to loan %q: %w", selector, loanErr)
 		}
 
-		results = append(results, *result)
+		results = append(results, Result{
+			ItemID:           loanResult.ItemID,
+			DisplayName:      loanResult.DisplayName,
+			LoanedTo:         loanResult.LoanedTo,
+			EventID:          loanResult.EventID,
+			WasReLoaned:      loanResult.WasReLoaned,
+			PreviousLoanedTo: loanResult.PreviousLoanedTo,
+			PreviousLocation: loanResult.PreviousLocation,
+		})
 
 		// Print success message (unless quiet or JSON mode)
 		if !cfg.IsJSON() {
-			if result.WasReLoaned {
+			if loanResult.WasReLoaned {
 				out.Success(fmt.Sprintf("Loaned item %q to %s (previously loaned to %s)",
-					result.DisplayName, result.LoanedTo, result.PreviousLoanedTo))
+					loanResult.DisplayName, loanResult.LoanedTo, loanResult.PreviousLoanedTo))
 			} else {
 				out.Success(fmt.Sprintf("Loaned item %q to %s",
-					result.DisplayName, result.LoanedTo))
+					loanResult.DisplayName, loanResult.LoanedTo))
 			}
 		}
 	}
@@ -109,86 +87,4 @@ func runLoanItem(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-// validateItemForLoan validates an item can be loaned without creating events.
-// This is used in Phase 1 of batch processing.
-func validateItemForLoan(ctx context.Context, db *database.Database, itemID, loanedTo string) error {
-	// Get current item state
-	item, err := db.GetItem(ctx, itemID)
-	if err != nil {
-		return fmt.Errorf("item not found: %w", err)
-	}
-
-	// Validate using database layer validation (defense-in-depth)
-	// This checks: item exists, from_location matches projection, loaned_to is non-empty
-	if validateErr := db.ValidateItemLoaned(ctx, itemID, item.LocationID, loanedTo); validateErr != nil {
-		return fmt.Errorf("validation failed: %w", validateErr)
-	}
-
-	return nil
-}
-
-// loanItem performs a single item loan operation.
-func loanItem(
-	ctx context.Context,
-	db *database.Database,
-	itemID, loanedTo, actorUserID, note string,
-) (*Result, error) {
-	// Get current item state
-	item, err := db.GetItem(ctx, itemID)
-	if err != nil {
-		return nil, fmt.Errorf("item not found: %w", err)
-	}
-
-	// Get current location
-	fromLocation, err := db.GetLocation(ctx, item.LocationID)
-	if err != nil {
-		return nil, fmt.Errorf("from location not found: %w", err)
-	}
-
-	// Check if already loaned (for informative output)
-	var previousLoanedTo string
-	wasReLoaned := false
-	if fromLocation.IsSystem && fromLocation.CanonicalName == "loaned" {
-		wasReLoaned = true
-		// Try to get previous loaned_to from event log
-		if loanedInfo, loanErr := db.GetItemLoanedInfo(ctx, itemID); loanErr == nil {
-			previousLoanedTo = loanedInfo.LoanedTo
-		}
-	}
-
-	// Validate using database layer validation (defense-in-depth)
-	// This checks: item exists, from_location matches projection, loaned_to is non-empty
-	if validateErr := db.ValidateItemLoaned(ctx, itemID, item.LocationID, loanedTo); validateErr != nil {
-		return nil, fmt.Errorf("projection validation failed: %w", validateErr)
-	}
-
-	// Build event payload
-	payload := map[string]any{
-		"item_id":          itemID,
-		"from_location_id": item.LocationID,
-		"loaned_to":        loanedTo,
-	}
-
-	// Insert event and update projection atomically
-	eventID, err := db.AppendEvent(ctx, database.ItemLoanedEvent, actorUserID, payload, note)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create loaned event: %w", err)
-	}
-
-	// Build result
-	result := &Result{
-		ItemID:           itemID,
-		DisplayName:      item.DisplayName,
-		LoanedTo:         loanedTo,
-		EventID:          eventID,
-		WasReLoaned:      wasReLoaned,
-		PreviousLocation: fromLocation.DisplayName,
-	}
-	if wasReLoaned {
-		result.PreviousLoanedTo = previousLoanedTo
-	}
-
-	return result, nil
 }

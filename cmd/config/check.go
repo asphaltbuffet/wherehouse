@@ -30,7 +30,7 @@ Checks both global and local configuration files for:
   - Missing required fields
 
 Examples:
-  wherehouse config check`,
+  wherehouse config check   # Validate all configuration files`,
 		RunE: runCheck,
 	}
 

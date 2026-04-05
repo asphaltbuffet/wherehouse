@@ -18,8 +18,8 @@ func GetInitializeCmd() *cobra.Command {
 		Long: `Initialize wherehouse resources for first-time setup.
 
 Examples:
-  wherehouse initialize database           Create the database
-  wherehouse initialize database --force   Reinitialize (backs up existing database)`,
+  wherehouse initialize database           # Create the database
+  wherehouse initialize database --force   # Reinitialize (backs up existing database)`,
 		// No RunE: displays help when called without a subcommand.
 	}
 

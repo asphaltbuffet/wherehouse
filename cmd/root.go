@@ -40,7 +40,7 @@ func GetRootCmd() *cobra.Command {
 
 	rootCmd = &cobra.Command{
 		Use:   "wherehouse",
-		Short: "a personal inventory tracker",
+		Short: "A personal inventory tracker",
 		Long: `Wherehouse helps you track where you put that thing.
 
 Examples:
@@ -62,17 +62,17 @@ Examples:
 	rootCmd.PersistentFlags().CountP("quiet", "q", "quiet mode (-q = minimal, -qq = silent)")
 
 	rootCmd.AddCommand(configpkg.GetConfigCmd())
-	rootCmd.AddCommand(add.GetAddCmd())
-	rootCmd.AddCommand(find.GetFindCmd())
-	rootCmd.AddCommand(found.GetFoundCmd())
-	rootCmd.AddCommand(history.GetHistoryCmd())
+	rootCmd.AddCommand(add.NewDefaultAddCmd())
+	rootCmd.AddCommand(find.NewDefaultFindCmd())
+	rootCmd.AddCommand(found.NewDefaultFoundCmd())
+	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
 	rootCmd.AddCommand(initialize.GetInitializeCmd())
-	rootCmd.AddCommand(listcmd.GetListCmd())
-	rootCmd.AddCommand(loan.GetLoanCmd())
-	rootCmd.AddCommand(lost.GetLostCmd())
+	rootCmd.AddCommand(listcmd.NewDefaultListCmd())
+	rootCmd.AddCommand(loan.NewDefaultLoanCmd())
+	rootCmd.AddCommand(lost.NewDefaultLostCmd())
 	rootCmd.AddCommand(migrate.GetMigrateCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
-	rootCmd.AddCommand(scry.GetScryCmd())
+	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 
 	return rootCmd
 }

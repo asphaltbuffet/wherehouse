@@ -33,8 +33,8 @@ Use --global to explicitly edit the global configuration file.
 The configuration is validated after editing.
 
 Examples:
-  wherehouse config edit           Edit global config
-  wherehouse config edit --local   Edit local config`,
+  wherehouse config edit           # Edit global config
+  wherehouse config edit --local   # Edit local config`,
 		RunE: runEdit,
 	}
 

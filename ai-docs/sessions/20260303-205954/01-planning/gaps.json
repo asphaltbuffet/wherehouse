@@ -1,0 +1,22 @@
+[
+  {
+    "question": "Should quiet mode (-q) suppress all output from `find` and `scry`, or only success/warning messages? The review notes that `-q` is silently ignored in these commands, but `OutputWriter.Println` bypasses quiet mode by design. Adopting OutputWriter fixes JSON encoding but does not automatically enable quiet suppression for tabular result output unless the product intent is that `find -q` produces no output.",
+    "rationale": "The `Println`/`Print` methods on OutputWriter explicitly bypass quiet mode (output.go:128-135). If `find -q` should produce no results, the commands need to use `out.Info(...)` instead of `out.Println(...)`, which changes the visual rendering. This is a product decision that affects the implementation of step 3."
+  },
+  {
+    "question": "Should `formatTimestamp` in `history/output.go` retain the 7-day threshold (relative for <7 days, absolute for >=7 days), or should it always use `cli.FormatRelativeTime` (go-humanize) which already transitions gracefully from relative to absolute without a hard threshold?",
+    "rationale": "The 7-day threshold is behavior not present in `cli.FormatRelativeTime`. Removing it would simplify the code and eliminate the `hoursPerDay`/`recentDaysThreshold` constants, but could change how old events are displayed (humanize renders `3 months ago` vs the current `2026-01-02 15:04`). Clarifying intent avoids a silent behavior change."
+  },
+  {
+    "question": "Should the business logic from `found`, `loan`, and `lost` be extracted to `internal/cli/` functions (analogous to `cli.AddLocations`) in step 2, or is adopting the interface+mockery pattern sufficient without moving the logic out of `cmd/`?",
+    "rationale": "The review's Priority 2 says to standardize the injection pattern, while Priority 5 says to extract domain logic. The requested refactoring order places these as step 2, but the distinction matters: extraction to `internal/cli/` makes logic reusable from TUI/API layers, whereas interface injection alone only improves testability within the command layer. If the TUI ever needs to trigger found/loan/lost operations, extraction is required. This plan defers extraction but flags it."
+  },
+  {
+    "question": "`initialize/database.go` imports `encoding/json` (standard library) at line 8 for the JSON encoder. All other commands in the codebase use `github.com/goccy/go-json`. After adopting `OutputWriter`, the `encoding/json` import is removed. Should `goccy/go-json` be used anywhere in `initialize/database.go` that may be introduced later, or is the standard library acceptable here?",
+    "rationale": "The project consistently uses `goccy/go-json` for performance. The `initResult` struct written in step 3 will flow through `OutputWriter.JSON` which already uses `goccy/go-json` internally. No action needed, but noting the inconsistency in case a reviewer flags it."
+  },
+  {
+    "question": "The `history` command's `formatEvent` function calls `styles.DefaultStyles()` on every event render (line 112 of output.go). Should a `Writer() io.Writer` accessor be added to `OutputWriter` to allow `formatEvent` to write styled timeline lines through the existing `out.out` field, or should `formatEvent` keep its own `io.Writer` parameter separate from the OutputWriter?",
+    "rationale": "Adding `Writer() io.Writer` is a small surface addition to `internal/cli/output.go` but enables history's timeline rendering (which uses event-type-specific lipgloss styles not available through OutputWriter's fixed methods) to still funnel through the same writer that OutputWriter controls. The alternative is passing both `*cli.OutputWriter` and `io.Writer` to format functions, which is awkward."
+  }
+]

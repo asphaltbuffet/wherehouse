@@ -7,34 +7,29 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 	"github.com/asphaltbuffet/wherehouse/internal/styles"
-)
-
-const (
-	hoursPerDay         = 24
-	recentDaysThreshold = 7
 )
 
 // formatOutput formats and writes the event history to the output.
 func formatOutput(
 	ctx context.Context,
-	cmd *cobra.Command,
-	db *database.Database,
+	out *cli.OutputWriter,
+	db historyDB,
 	events []*database.Event,
 	jsonMode bool,
 ) error {
 	if jsonMode {
-		return formatJSON(cmd.OutOrStdout(), events)
+		return formatJSON(out, events)
 	}
 
-	return formatHuman(ctx, cmd.OutOrStdout(), db, events)
+	return formatHuman(ctx, out.Writer(), db, events)
 }
 
 // formatJSON outputs events as JSON array.
-func formatJSON(w io.Writer, events []*database.Event) error {
+func formatJSON(out *cli.OutputWriter, events []*database.Event) error {
 	output := &JSONHistoryOutput{
 		Events: make([]*JSONEvent, len(events)),
 		Count:  len(events),
@@ -44,10 +39,7 @@ func formatJSON(w io.Writer, events []*database.Event) error {
 		output.Events[i] = convertToJSONEvent(event)
 	}
 
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(output)
+	return out.JSON(output)
 }
 
 // JSONHistoryOutput is the top-level JSON structure.
@@ -79,7 +71,7 @@ func convertToJSONEvent(event *database.Event) *JSONEvent {
 }
 
 // formatHuman outputs events in human-readable timeline format.
-func formatHuman(ctx context.Context, w io.Writer, db *database.Database, events []*database.Event) error {
+func formatHuman(ctx context.Context, w io.Writer, db historyDB, events []*database.Event) error {
 	// Build location cache for efficient lookups
 	locationCache := make(map[string]string)
 
@@ -96,7 +88,7 @@ func formatHuman(ctx context.Context, w io.Writer, db *database.Database, events
 func formatEvent(
 	ctx context.Context,
 	w io.Writer,
-	db *database.Database,
+	db historyDB,
 	event *database.Event,
 	isLast bool,
 	locationCache map[string]string,
@@ -129,7 +121,11 @@ func formatEvent(
 	}
 
 	// Parse timestamp for relative display
-	timestamp := formatTimestamp(event.TimestampUTC)
+	t, err := time.Parse(time.RFC3339, event.TimestampUTC)
+	if err != nil {
+		t = time.Time{}
+	}
+	timestamp := cli.FormatRelativeTime(t)
 
 	// Header line
 	eventTypeStr := event.EventType.String()
@@ -171,55 +167,10 @@ func formatEvent(
 	return nil
 }
 
-// formatTimestamp converts UTC timestamp to relative or absolute format.
-func formatTimestamp(timestampUTC string) string {
-	t, err := time.Parse(time.RFC3339, timestampUTC)
-	if err != nil {
-		return timestampUTC // Fallback to raw
-	}
-
-	now := time.Now()
-	diff := now.Sub(t)
-
-	// Relative for recent events
-	if diff < recentDaysThreshold*hoursPerDay*time.Hour && diff > 0 {
-		return formatRelativeTime(diff)
-	}
-
-	// Absolute for older events
-	return t.Format("2006-01-02 15:04")
-}
-
-// formatRelativeTime converts duration to human-readable relative time.
-func formatRelativeTime(d time.Duration) string {
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		m := int(d.Minutes())
-		if m == 1 {
-			return "1 minute ago"
-		}
-		return fmt.Sprintf("%d minutes ago", m)
-	case d < 24*time.Hour:
-		h := int(d.Hours())
-		if h == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", h)
-	default:
-		days := int(d.Hours() / hoursPerDay)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
-	}
-}
-
 // formatEventDetails extracts event-specific details from payload.
 func formatEventDetails(
 	ctx context.Context,
-	db *database.Database,
+	db historyDB,
 	event *database.Event,
 	locationCache map[string]string,
 ) ([]string, error) {
@@ -268,7 +219,7 @@ func formatEventDetails(
 
 func formatItemCreatedDetails(
 	ctx context.Context,
-	db *database.Database,
+	db historyDB,
 	payload map[string]any,
 	cache map[string]string,
 ) []string {
@@ -282,7 +233,7 @@ func formatItemCreatedDetails(
 
 func formatItemMovedDetails(
 	ctx context.Context,
-	db *database.Database,
+	db historyDB,
 	payload map[string]any,
 	cache map[string]string,
 ) []string {
@@ -314,7 +265,7 @@ func formatItemBorrowedDetails(payload map[string]any) []string {
 
 func formatItemMissingDetails(
 	ctx context.Context,
-	db *database.Database,
+	db historyDB,
 	payload map[string]any,
 	cache map[string]string,
 ) []string {
@@ -328,7 +279,7 @@ func formatItemMissingDetails(
 
 func formatItemFoundDetails(
 	ctx context.Context,
-	db *database.Database,
+	db historyDB,
 	payload map[string]any,
 	cache map[string]string,
 ) []string {
@@ -347,7 +298,7 @@ func formatItemFoundDetails(
 // resolveLocationPath gets a location path from cache or database, with fallback to ID.
 func resolveLocationPath(
 	ctx context.Context,
-	db *database.Database,
+	db historyDB,
 	locationID string,
 	cache map[string]string,
 ) string {
@@ -364,7 +315,7 @@ func resolveLocationPath(
 // getLocationPath retrieves full hierarchical path for a location with caching.
 func getLocationPath(
 	ctx context.Context,
-	db *database.Database,
+	db historyDB,
 	locationID string,
 	cache map[string]string,
 ) (string, error) {

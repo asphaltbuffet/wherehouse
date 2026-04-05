@@ -134,6 +134,12 @@ func (w *OutputWriter) Println(msg string) {
 	fmt.Fprintln(w.out, msg)
 }
 
+// Writer returns the underlying [io.Writer] used for standard output.
+// This allows callers to funnel output through the same writer that OutputWriter controls.
+func (w *OutputWriter) Writer() io.Writer {
+	return w.out
+}
+
 // printJSON encodes and writes JSON data to stdout with indentation.
 func (w *OutputWriter) printJSON(data any) error {
 	enc := json.NewEncoder(w.out)
