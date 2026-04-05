@@ -396,7 +396,7 @@ func TestSearchByName_MultipleSystemLocationItems_NoDeadlock(t *testing.T) {
 	const toolboxID = "toolbox-deadlock-regression-001"
 
 	// Insert all events before processing (batch pattern from SeedTestData)
-	_, err := db.insertEvent(ctx, "location.created", TestActorUser, map[string]any{
+	_, err := db.insertEvent(ctx, LocationCreatedEvent, TestActorUser, map[string]any{
 		"location_id":  toolboxID,
 		"display_name": "Toolbox",
 		"parent_id":    nil,
@@ -411,7 +411,7 @@ func TestSearchByName_MultipleSystemLocationItems_NoDeadlock(t *testing.T) {
 	}
 
 	for _, it := range socketItems {
-		_, err = db.insertEvent(ctx, "item.created", TestActorUser, map[string]any{
+		_, err = db.insertEvent(ctx, ItemCreatedEvent, TestActorUser, map[string]any{
 			"item_id":      it.id,
 			"display_name": it.name,
 			"location_id":  toolboxID,
@@ -432,7 +432,7 @@ func TestSearchByName_MultipleSystemLocationItems_NoDeadlock(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, it := range socketItems {
-		_, err = db.insertEvent(ctx, "item.moved", TestActorUser, map[string]any{
+		_, err = db.insertEvent(ctx, ItemMovedEvent, TestActorUser, map[string]any{
 			"item_id":          it.id,
 			"from_location_id": toolboxID,
 			"to_location_id":   missingLoc.LocationID,

@@ -105,7 +105,7 @@ func markItemLost(
 	}
 
 	// Insert event and update projection atomically
-	eventID, err := db.AppendEvent(ctx, "item.missing", actorUserID, payload, note)
+	eventID, err := db.AppendEvent(ctx, database.ItemMissingEvent, actorUserID, payload, note)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create marked_missing event: %w", err)
 	}

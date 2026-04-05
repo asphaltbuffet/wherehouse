@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
+	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
 // Result represents the result of a single item move operation.
@@ -166,7 +167,7 @@ func moveItem(
 	}
 
 	// Insert event and update projection atomically
-	eventID, err := db.AppendEvent(ctx, "item.moved", actorUserID, payload, note)
+	eventID, err := db.AppendEvent(ctx, database.ItemMovedEvent, actorUserID, payload, note)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create move event: %w", err)
 	}

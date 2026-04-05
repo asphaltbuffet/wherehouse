@@ -1,0 +1,57 @@
+{
+  "parallel_batches": [
+    {
+      "batch_id": 1,
+      "description": "Database layer: stringer, ParseEventType, Value/Scan, Event struct, signatures, eventHandler",
+      "tasks": [
+        {
+          "task_id": "A",
+          "description": "Add //go:generate stringer directive to eventTypes.go, run mise run generate, add eventTypeByName map and ParseEventType (map-based reverse lookup using .String()), add Value/Scan in new eventTypes_sql.go, change Event.EventType field from string to EventType, update AppendEvent/GetEventsByType signatures, update eventHandler.go switch to typed constants, update test helpers and integration tests",
+          "files": [
+            "internal/database/eventTypes.go",
+            "internal/database/eventtype_string.go",
+            "internal/database/eventTypes_sql.go",
+            "internal/database/event.go",
+            "internal/database/queries.go",
+            "internal/database/eventHandler.go",
+            "internal/database/helper_test.go",
+            "internal/database/integration_test.go"
+          ],
+          "agent": "db-developer"
+        }
+      ]
+    },
+    {
+      "batch_id": 2,
+      "depends_on": [1],
+      "description": "Call site updates: internal/cli and cmd in parallel",
+      "tasks": [
+        {
+          "task_id": "B1",
+          "description": "Update internal/cli/ call sites: replace string literals with typed EventType constants. Pass .String() where styles package boundary requires string.",
+          "files": [
+            "internal/cli/add.go",
+            "internal/cli/selectors_test.go"
+          ],
+          "agent": "golang-developer"
+        },
+        {
+          "task_id": "B2",
+          "description": "Update cmd/ call sites: replace string literals with typed EventType constants. Update mover.go interface to use EventType, hand-update cmd/move/mocks/ to match, fix history/output.go comparisons and EventStyle(.String()) calls. Add //go:generate mockery directive to mover.go.",
+          "files": [
+            "cmd/move/mover.go",
+            "cmd/move/mocks/",
+            "cmd/history/output.go",
+            "cmd/add/add.go",
+            "cmd/missing/missing.go",
+            "cmd/found/found.go",
+            "cmd/borrow/borrow.go",
+            "cmd/loan/loan.go",
+            "cmd/delete/delete.go"
+          ],
+          "agent": "golang-ui-developer"
+        }
+      ]
+    }
+  ]
+}

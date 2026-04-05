@@ -16,7 +16,6 @@ import (
 const (
 	hoursPerDay         = 24
 	recentDaysThreshold = 7
-	eventTypeMissing    = "item.missing"
 )
 
 // formatOutput formats and writes the event history to the output.
@@ -71,7 +70,7 @@ type JSONEvent struct {
 func convertToJSONEvent(event *database.Event) *JSONEvent {
 	return &JSONEvent{
 		EventID:      event.EventID,
-		EventType:    event.EventType,
+		EventType:    event.EventType.String(),
 		TimestampUTC: event.TimestampUTC,
 		ActorUserID:  event.ActorUserID,
 		Payload:      event.Payload,
@@ -113,7 +112,7 @@ func formatEvent(
 	appStyles := styles.DefaultStyles()
 
 	connector := "│"
-	if event.EventType == "item.found" || event.EventType == eventTypeMissing {
+	if event.EventType == database.ItemFoundEvent || event.EventType == database.ItemMissingEvent {
 		connector = "⸾"
 	}
 	if isLast {
@@ -122,10 +121,10 @@ func formatEvent(
 
 	// Event marker
 	marker := "○"
-	if event.EventType == "item.deleted" {
+	if event.EventType == database.ItemDeletedEvent {
 		marker = "●" // Terminal event
 	}
-	if event.EventType == eventTypeMissing {
+	if event.EventType == database.ItemMissingEvent {
 		marker = "◌"
 	}
 
@@ -133,9 +132,10 @@ func formatEvent(
 	timestamp := formatTimestamp(event.TimestampUTC)
 
 	// Header line
+	eventTypeStr := event.EventType.String()
 	fmt.Fprintf(w, "%s  %s  (%s)  %s\n",
-		appStyles.EventStyle(event.EventType).Render(marker),
-		appStyles.EventStyle(event.EventType).Render(event.EventType),
+		appStyles.EventStyle(eventTypeStr).Render(marker),
+		appStyles.EventStyle(eventTypeStr).Render(eventTypeStr),
 		event.ActorUserID,
 		timestamp,
 	)
@@ -147,15 +147,15 @@ func formatEvent(
 	}
 	for _, line := range details {
 		fmt.Fprintf(w, "%s  %s\n",
-			appStyles.EventStyle(event.EventType).Render(connector),
-			appStyles.EventStyle(event.EventType).Render(line),
+			appStyles.EventStyle(eventTypeStr).Render(connector),
+			appStyles.EventStyle(eventTypeStr).Render(line),
 		)
 	}
 
 	// Note (if present)
 	if event.Note != nil && *event.Note != "" {
 		fmt.Fprintf(w, "%s  Note: %s\n",
-			appStyles.EventStyle(event.EventType).Render(connector),
+			appStyles.EventStyle(eventTypeStr).Render(connector),
 			appStyles.ItalicDim().Render(*event.Note),
 		)
 	}
@@ -164,7 +164,7 @@ func formatEvent(
 	if !isLast {
 		fmt.Fprintf(w,
 			"%s\n",
-			appStyles.EventStyle(event.EventType).Render(connector),
+			appStyles.EventStyle(eventTypeStr).Render(connector),
 		)
 	}
 
@@ -231,21 +231,39 @@ func formatEventDetails(
 	}
 
 	switch event.EventType {
-	case "item.created":
+	case database.ItemCreatedEvent:
 		return formatItemCreatedDetails(ctx, db, payload, locationCache), nil
-	case "item.moved":
+	case database.ItemMovedEvent:
 		return formatItemMovedDetails(ctx, db, payload, locationCache), nil
-	case "item.borrowed":
+	case database.ItemBorrowedEvent:
 		return formatItemBorrowedDetails(payload), nil
-	case eventTypeMissing:
+	case database.ItemMissingEvent:
 		return formatItemMissingDetails(ctx, db, payload, locationCache), nil
-	case "item.found":
+	case database.ItemFoundEvent:
 		return formatItemFoundDetails(ctx, db, payload, locationCache), nil
-	case "item.deleted":
+	case database.ItemDeletedEvent:
 		return []string{"Item permanently deleted"}, nil
-	default:
+	case database.ItemLoanedEvent:
+		return nil, nil
+	case database.LocationCreatedEvent:
+		return nil, nil
+	case database.LocationRenamedEvent:
+		return nil, nil
+	case database.LocationMovedEvent:
+		return nil, nil
+	case database.LocationDeletedEvent:
+		return nil, nil
+	case database.ProjectCreatedEvent:
+		return nil, nil
+	case database.ProjectCompletedEvent:
+		return nil, nil
+	case database.ProjectReopenedEvent:
+		return nil, nil
+	case database.ProjectDeletedEvent:
 		return nil, nil
 	}
+
+	return nil, nil
 }
 
 func formatItemCreatedDetails(

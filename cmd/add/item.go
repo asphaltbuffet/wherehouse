@@ -6,8 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
-	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
 var itemCmd *cobra.Command
@@ -52,61 +50,9 @@ func runAddItem(cmd *cobra.Command, args []string) error {
 	// Get required --in flag
 	locationInput, _ := cmd.Flags().GetString("in")
 
-	// Get database connection
-	db, err := openDatabase(ctx)
+	err := cli.AddItems(ctx, args, locationInput)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
-	// Resolve location to ID
-	locationID, err := resolveLocation(ctx, db, locationInput)
-	if err != nil {
-		return fmt.Errorf("failed to resolve location %q: %w", locationInput, err)
-	}
-
-	// Validate location exists
-	if validateErr := db.ValidateLocationExists(ctx, locationID); validateErr != nil {
-		return fmt.Errorf("location not found: %w", validateErr)
-	}
-
-	// Get actor user ID
-	actorUserID := cli.GetActorUserID(ctx)
-
-	// Set up output writer
-	cfg := cli.MustGetConfig(ctx)
-	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-
-	// Process each item (FAIL-FAST: exit on first error)
-	for _, itemName := range args {
-		// Validate no colon in name (reserved for selector syntax)
-		if validateErr := database.ValidateNoColonInName(itemName); validateErr != nil {
-			return validateErr // FAIL-FAST: exit on first error
-		}
-
-		// Generate ID
-		itemID, idErr := nanoid.New()
-		if idErr != nil {
-			return fmt.Errorf("failed to generate ID: %w", idErr)
-		}
-
-		// Build event payload
-		payload := map[string]any{
-			"item_id":        itemID,
-			"display_name":   itemName,
-			"canonical_name": database.CanonicalizeString(itemName),
-			"location_id":    locationID,
-		}
-
-		// Insert event and update projection atomically
-		_, insertErr := db.AppendEvent(ctx, "item.created", actorUserID, payload, "")
-		if insertErr != nil {
-			return fmt.Errorf("failed to create item %q: %w", itemName, insertErr)
-		}
-
-		// Output success (respects quiet mode and JSON mode)
-		out.Success(fmt.Sprintf("Added item %q (id: %s) to location %s",
-			itemName, itemID, locationID))
+		return err
 	}
 
 	return nil

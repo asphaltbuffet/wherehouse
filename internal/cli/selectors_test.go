@@ -20,14 +20,14 @@ func TestResolveLocation(t *testing.T) {
 	garageID := nanoid.MustNew()
 	basementID := nanoid.MustNew()
 
-	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
+	_, err := db.AppendEvent(ctx, database.LocationCreatedEvent, "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
 		"parent_id":    nil,
 	}, "")
 	require.NoError(t, err)
 
-	_, err = db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.LocationCreatedEvent, "test-user", map[string]any{
 		"location_id":  basementID,
 		"display_name": "Base Ment",
 		"parent_id":    nil,
@@ -237,14 +237,14 @@ func TestResolveItemSelector(t *testing.T) {
 	garageID := nanoid.MustNew()
 	basementID := nanoid.MustNew()
 
-	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
+	_, err := db.AppendEvent(ctx, database.LocationCreatedEvent, "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
 		"parent_id":    nil,
 	}, "")
 	require.NoError(t, err)
 
-	_, err = db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.LocationCreatedEvent, "test-user", map[string]any{
 		"location_id":  basementID,
 		"display_name": "Basement",
 		"parent_id":    nil,
@@ -257,14 +257,14 @@ func TestResolveItemSelector(t *testing.T) {
 	hammerID := nanoid.MustNew()
 
 	// Two wrenches in different locations (to test ambiguity)
-	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.ItemCreatedEvent, "test-user", map[string]any{
 		"item_id":      wrench1ID,
 		"display_name": "Wrench",
 		"location_id":  garageID,
 	}, "")
 	require.NoError(t, err)
 
-	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.ItemCreatedEvent, "test-user", map[string]any{
 		"item_id":      wrench2ID,
 		"display_name": "Wrench",
 		"location_id":  basementID,
@@ -272,7 +272,7 @@ func TestResolveItemSelector(t *testing.T) {
 	require.NoError(t, err)
 
 	// One hammer (unique)
-	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.ItemCreatedEvent, "test-user", map[string]any{
 		"item_id":      hammerID,
 		"display_name": "Hammer",
 		"location_id":  garageID,
@@ -395,7 +395,7 @@ func TestResolveLocationItemSelector(t *testing.T) {
 
 	// Create test location
 	garageID := nanoid.MustNew()
-	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
+	_, err := db.AppendEvent(ctx, database.LocationCreatedEvent, "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
 		"parent_id":    nil,
@@ -404,7 +404,7 @@ func TestResolveLocationItemSelector(t *testing.T) {
 
 	// Create test items
 	wrenchID := nanoid.MustNew()
-	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.ItemCreatedEvent, "test-user", map[string]any{
 		"item_id":      wrenchID,
 		"display_name": "Wrench",
 		"location_id":  garageID,
@@ -479,7 +479,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 
 	// Create test location
 	garageID := nanoid.MustNew()
-	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
+	_, err := db.AppendEvent(ctx, database.LocationCreatedEvent, "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
 		"parent_id":    nil,
@@ -488,7 +488,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 
 	// Create unique item
 	hammerID := nanoid.MustNew()
-	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.ItemCreatedEvent, "test-user", map[string]any{
 		"item_id":      hammerID,
 		"display_name": "Hammer",
 		"location_id":  garageID,
@@ -497,7 +497,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 
 	// Create duplicate wrenches
 	wrench1ID := nanoid.MustNew()
-	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.ItemCreatedEvent, "test-user", map[string]any{
 		"item_id":      wrench1ID,
 		"display_name": "Wrench",
 		"location_id":  garageID,
@@ -505,7 +505,7 @@ func TestResolveItemByCanonicalName(t *testing.T) {
 	require.NoError(t, err)
 
 	wrench2ID := nanoid.MustNew()
-	_, err = db.AppendEvent(ctx, "item.created", "test-user", map[string]any{
+	_, err = db.AppendEvent(ctx, database.ItemCreatedEvent, "test-user", map[string]any{
 		"item_id":      wrench2ID,
 		"display_name": "Wrench",
 		"location_id":  garageID,
@@ -575,7 +575,7 @@ func TestBuildAmbiguousItemError(t *testing.T) {
 
 	// Create test location
 	garageID := nanoid.MustNew()
-	_, err := db.AppendEvent(ctx, "location.created", "test-user", map[string]any{
+	_, err := db.AppendEvent(ctx, database.LocationCreatedEvent, "test-user", map[string]any{
 		"location_id":  garageID,
 		"display_name": "Garage",
 		"parent_id":    nil,

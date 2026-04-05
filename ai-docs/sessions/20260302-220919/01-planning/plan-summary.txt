@@ -1,0 +1,6 @@
+- ParseEventType uses a map initialized via .String() calls on each constant — no string literals; stringer linecomments are the single source of truth.
+- mise run generate MUST run first in the db-developer batch (Step A2) to produce eventTypes_string.go before any code calling ParseEventType can compile.
+- db-developer owns all of internal/database/: stringer directive, eventTypeByName map, ParseEventType, Value/Scan, Event struct field change, AppendEvent/GetEventsByType signatures, eventHandler switch, test helpers.
+- golang-developer and golang-ui-developer work in parallel after db-developer batch completes, replacing string literals with typed constants at all call sites in internal/cli/ and cmd/.
+- EventStyle(key string) in internal/styles stays string-based; callers pass event.EventType.String() to preserve package boundary (styles must not import database).
+- No database migration needed; stored string values and column type are unchanged.
