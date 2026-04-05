@@ -15,9 +15,11 @@ import (
 // Sets the afero filesystem and config file path. Does not read the file.
 func newViperForFile(fs afero.Fs, path string) *viper.Viper {
 	v := viper.New()
+
 	v.SetFs(fs)
 	v.SetConfigFile(path)
 	v.SetConfigType("toml")
+
 	return v
 }
 
@@ -75,6 +77,7 @@ func Set(fs afero.Fs, path string, key string, value string) error {
 	}
 
 	v := newViperForFile(fs, path)
+
 	err := v.ReadInConfig()
 	if err != nil {
 		return fmt.Errorf("reading config file: %w", err)
@@ -84,11 +87,16 @@ func Set(fs afero.Fs, path string, key string, value string) error {
 
 	// Validate the full merged config before writing
 	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
+
+	err = v.Unmarshal(&cfg)
+	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
+
 	applyDefaults(&cfg)
-	if validateErr := validate(&cfg); validateErr != nil {
+
+	validateErr := validate(&cfg)
+	if validateErr != nil {
 		return fmt.Errorf("configuration validation failed: %w", validateErr)
 	}
 
@@ -105,64 +113,46 @@ func Check(fs afero.Fs, path string) error {
 	}
 
 	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
+
+	err = toml.Unmarshal(data, &cfg)
+	if err != nil {
 		return fmt.Errorf("parsing config file: %w", err)
 	}
 
 	applyDefaults(&cfg)
 
-	if validateErr := validate(&cfg); validateErr != nil {
-		return fmt.Errorf("validating config: %w", validateErr)
+	err = validate(&cfg)
+	if err != nil {
+		return fmt.Errorf("validating config: %w", err)
 	}
 
 	return nil
 }
 
 // GetValue returns the value of a dot-separated config key from cfg.
-// Supports all config keys including logging.* and user.os_username_map.
-// Returns (value, nil) on success or (nil, error) for unknown keys.
 func GetValue(cfg *Config, key string) (any, error) {
-	const keyParts = 2
-	parts := strings.SplitN(key, ".", keyParts)
-	if len(parts) != keyParts {
-		return nil, fmt.Errorf("invalid key format %q (expected section.key)", key)
+	switch key {
+	case "database.path":
+		return cfg.Database.Path, nil
+	case "logging.file_path":
+		return cfg.Logging.FilePath, nil
+	case "logging.level":
+		return cfg.Logging.Level, nil
+	case "logging.max_size_mb":
+		return cfg.Logging.MaxSizeMB, nil
+	case "logging.max_backups":
+		return cfg.Logging.MaxBackups, nil
+	case "user.default_identity":
+		return cfg.User.DefaultIdentity, nil
+	case "user.os_username_map":
+		return cfg.User.OSUsernameMap, nil
+	case "output.default_format":
+		return cfg.Output.DefaultFormat, nil
+	case "output.quiet":
+		return cfg.Output.Quiet, nil
+	default:
+		return nil, fmt.Errorf("unknown configuration key %q", key)
 	}
-
-	section, field := parts[0], parts[1]
-
-	switch section {
-	case "database":
-		if field == "path" {
-			return cfg.Database.Path, nil
-		}
-	case "logging":
-		switch field {
-		case "file_path":
-			return cfg.Logging.FilePath, nil
-		case "level":
-			return cfg.Logging.Level, nil
-		case "max_size_mb":
-			return cfg.Logging.MaxSizeMB, nil
-		case "max_backups":
-			return cfg.Logging.MaxBackups, nil
-		}
-	case "user":
-		switch field {
-		case "default_identity":
-			return cfg.User.DefaultIdentity, nil
-		case "os_username_map":
-			return cfg.User.OSUsernameMap, nil
-		}
-	case "output":
-		switch field {
-		case "default_format":
-			return cfg.Output.DefaultFormat, nil
-		case "quiet":
-			return cfg.Output.Quiet, nil
-		}
-	}
-
-	return nil, fmt.Errorf("unknown configuration key %q", key)
 }
 
 // parseConfigValue validates and parses a string value for the given config key.

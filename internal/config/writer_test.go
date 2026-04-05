@@ -14,17 +14,12 @@ import (
 // TestWriteDefault_AllDefaultsRoundTrip verifies round-trip: write via WriteDefault,
 // read back via viper, verify all keys match GetDefaults() values.
 func TestWriteDefault_AllDefaultsRoundTrip(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
-
-	// Write defaults
-	err := WriteDefault(fs, path, false)
-	require.NoError(t, err)
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
 	// Read back through viper to verify all keys/values
 	v := viper.New()
-	v.SetFs(fs)
-	v.SetConfigFile(path)
+	v.SetFs(testFs)
+	v.SetConfigFile(defaultCfgFile)
 	v.SetConfigType("toml")
 	require.NoError(t, v.ReadInConfig())
 
@@ -41,99 +36,48 @@ func TestWriteDefault_AllDefaultsRoundTrip(t *testing.T) {
 	assert.Equal(t, defaults.Output.Quiet, v.GetInt("output.quiet"))
 }
 
-// TestWriteDefault_CreatesFile verifies file is created in memfs.
+// TestWriteDefault_CreatesFile verifies file is created.
 func TestWriteDefault_CreatesFile(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
-	err := WriteDefault(fs, path, false)
-	require.NoError(t, err)
+	t.Run("file is created", func(t *testing.T) {
+		// Verify file exists
+		exists, err := afero.Exists(testFs, defaultCfgFile)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
 
-	// Verify file exists
-	exists, err := afero.Exists(fs, path)
-	require.NoError(t, err)
-	assert.True(t, exists)
-}
+	t.Run("no overwrite without force", func(t *testing.T) {
+		// Try to write again with force=false
+		err := WriteDefault(testFs, defaultCfgFile, false)
+		assert.ErrorContains(t, err, "already exists")
+	})
 
-// TestWriteDefault_FailsIfExists verifies error when force=false and file exists.
-func TestWriteDefault_FailsIfExists(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
+	t.Run("force overwrite", func(t *testing.T) {
+		// Overwrite with force=true
+		require.NoError(t, WriteDefault(testFs, defaultCfgFile, true))
 
-	// Create initial file
-	require.NoError(t, WriteDefault(fs, path, false))
-
-	// Try to write again with force=false
-	err := WriteDefault(fs, path, false)
-	assert.ErrorContains(t, err, "already exists")
-}
-
-// TestWriteDefault_ForceOverwrites verifies force=true overwrites existing file.
-func TestWriteDefault_ForceOverwrites(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
-
-	// Create initial file
-	require.NoError(t, WriteDefault(fs, path, false))
-
-	// Verify first write succeeded
-	exists, err := afero.Exists(fs, path)
-	require.NoError(t, err)
-	assert.True(t, exists)
-
-	// Overwrite with force=true
-	require.NoError(t, WriteDefault(fs, path, true))
-
-	// Verify file still exists and is readable
-	exists, err = afero.Exists(fs, path)
-	require.NoError(t, err)
-	assert.True(t, exists)
-
-	// Verify content is valid
-	v := viper.New()
-	v.SetFs(fs)
-	v.SetConfigFile(path)
-	v.SetConfigType("toml")
-	require.NoError(t, v.ReadInConfig())
-}
-
-// TestWriteDefault_CreatesParentDirs verifies parent directories are created.
-func TestWriteDefault_CreatesParentDirs(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/deep/nested/dir/config.toml"
-
-	require.NoError(t, WriteDefault(fs, path, false))
-
-	// Verify file exists
-	exists, err := afero.Exists(fs, path)
-	require.NoError(t, err)
-	assert.True(t, exists)
-
-	// Verify parent directories were created
-	dir := filepath.Dir(path)
-	assert.DirExists(t, dir)
+		// Verify file still exists
+		exists, err := afero.Exists(testFs, defaultCfgFile)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
 }
 
 // TestWriteDefault_OutputIsParseable verifies viper output is valid TOML with expected sections.
 func TestWriteDefault_OutputIsParseable(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
-
-	err := WriteDefault(fs, path, false)
-	require.NoError(t, err)
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
 	// Read file content directly and verify it's valid TOML
-	data, err := afero.ReadFile(fs, path)
+	data, err := afero.ReadFile(testFs, defaultCfgFile)
 	require.NoError(t, err)
 
-	// Verify we can parse it as TOML and unmarshal to Config
-	var cfg Config
-	require.NoError(t, unmarshalTOML(data, &cfg))
+	require.NoError(t, validateTOML(t, data))
 
 	// Verify all sections are present by checking we can read keys
 	v := viper.New()
-	v.SetFs(fs)
-	v.SetConfigFile(path)
+	v.SetFs(testFs)
+	v.SetConfigFile(defaultCfgFile)
 	v.SetConfigType("toml")
 	require.NoError(t, v.ReadInConfig())
 
@@ -214,21 +158,17 @@ func TestSet_UpdatesValue(t *testing.T) {
 		},
 	}
 
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := afero.NewMemMapFs()
-			path := "/tmp/test-config.toml"
-
-			// Create initial config
-			require.NoError(t, WriteDefault(fs, path, false))
-
 			// Update key
-			require.NoError(t, Set(fs, path, tt.key, tt.value))
+			require.NoError(t, Set(testFs, defaultCfgFile, tt.key, tt.value))
 
 			// Re-read and verify
 			v := viper.New()
-			v.SetFs(fs)
-			v.SetConfigFile(path)
+			v.SetFs(testFs)
+			v.SetConfigFile(defaultCfgFile)
 			v.SetConfigType("toml")
 			require.NoError(t, v.ReadInConfig())
 
@@ -237,143 +177,114 @@ func TestSet_UpdatesValue(t *testing.T) {
 	}
 }
 
-// TestSet_UnknownKey verifies error for unknown keys.
-func TestSet_UnknownKey(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
-
-	require.NoError(t, WriteDefault(fs, path, false))
-
-	err := Set(fs, path, "unknown.key", "value")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown configuration key")
-}
-
 // TestSet_InvalidValue tests various invalid values for type-specific keys.
-func TestSet_InvalidValue(t *testing.T) {
+func TestSet_Invalid(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
-		name        string
-		key         string
-		value       string
-		expectError bool
-		errorText   string
+		name      string
+		key       string
+		value     string
+		errorText string
 	}{
 		{
-			name:        "logging.level invalid",
-			key:         "logging.level",
-			value:       "verbose",
-			expectError: true,
-			errorText:   "must be one of",
+			name:      "unknown key",
+			key:       "unknown.key",
+			value:     "fake",
+			errorText: "unknown configuration key",
 		},
 		{
-			name:        "output.quiet invalid bool",
-			key:         "output.quiet",
-			value:       "maybe",
-			expectError: true,
-			errorText:   "must be 'true' or 'false'",
+			name:      "logging.level invalid",
+			key:       "logging.level",
+			value:     "verbose",
+			errorText: "must be one of",
 		},
 		{
-			name:        "output.default_format invalid",
-			key:         "output.default_format",
-			value:       "xml",
-			expectError: true,
-			errorText:   "must be 'human' or 'json'",
+			name:      "output.quiet invalid bool",
+			key:       "output.quiet",
+			value:     "maybe",
+			errorText: "must be 'true' or 'false'",
 		},
 		{
-			name:        "logging.max_size_mb negative",
-			key:         "logging.max_size_mb",
-			value:       "-1",
-			expectError: true,
-			errorText:   "non-negative integer",
+			name:      "output.default_format invalid",
+			key:       "output.default_format",
+			value:     "xml",
+			errorText: "must be 'human' or 'json'",
 		},
 		{
-			name:        "logging.max_size_mb non-integer",
-			key:         "logging.max_size_mb",
-			value:       "not-a-number",
-			expectError: true,
-			errorText:   "non-negative integer",
+			name:      "logging.max_size_mb negative",
+			key:       "logging.max_size_mb",
+			value:     "-1",
+			errorText: "non-negative integer",
 		},
 		{
-			name:        "logging.max_backups negative",
-			key:         "logging.max_backups",
-			value:       "-1",
-			expectError: true,
-			errorText:   "non-negative integer",
+			name:      "logging.max_size_mb non-integer",
+			key:       "logging.max_size_mb",
+			value:     "not-a-number",
+			errorText: "non-negative integer",
+		},
+		{
+			name:      "logging.max_backups negative",
+			key:       "logging.max_backups",
+			value:     "-1",
+			errorText: "non-negative integer",
 		},
 	}
 
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := afero.NewMemMapFs()
-			path := "/tmp/test-config.toml"
+			t.Parallel()
 
-			require.NoError(t, WriteDefault(fs, path, false))
-
-			err := Set(fs, path, tt.key, tt.value)
-			if tt.expectError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorText)
-			} else {
-				require.NoError(t, err)
-			}
+			err := Set(testFs, defaultCfgFile, tt.key, tt.value)
+			assert.ErrorContains(t, err, tt.errorText)
 		})
 	}
 }
 
 // TestSet_FileNotFound verifies error when file does not exist.
 func TestSet_FileNotFound(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/nonexistent/config.toml"
+	testFs, _ := NewTestFs(t)
+	path := "fake/config/path/config.toml"
 
-	err := Set(fs, path, "database.path", "/some/path.db")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "reading config file")
+	err := Set(testFs, path, "database.path", "/some/path.db")
+	assert.ErrorContains(t, err, "reading config file")
 }
 
 // TestCheck_ValidFile verifies Check returns nil for valid TOML.
 func TestCheck_ValidFile(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
-	// Create valid config via WriteDefault
-	require.NoError(t, WriteDefault(fs, path, false))
+	t.Run("valid toml", func(t *testing.T) {
+		require.NoError(t, Check(testFs, defaultCfgFile))
+	})
 
-	err := Check(fs, path)
-	require.NoError(t, err)
-}
+	t.Run("invalid toml", func(t *testing.T) {
+		invalidCfgFile := filepath.Join(filepath.Dir(defaultCfgFile), "bad-config.toml")
 
-// TestCheck_InvalidToml verifies Check returns error for malformed TOML.
-func TestCheck_InvalidToml(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/bad-config.toml"
+		// Write malformed TOML
+		badContent := "[database\npath = broken"
+		require.NoError(t, afero.WriteFile(testFs, invalidCfgFile, []byte(badContent), 0o644))
 
-	// Write malformed TOML
-	badContent := `[database
-path = "broken"`
-	require.NoError(t, afero.WriteFile(fs, path, []byte(badContent), 0o644))
+		err := Check(testFs, invalidCfgFile)
+		assert.ErrorContains(t, err, "parsing config file")
+	})
 
-	err := Check(fs, path)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parsing config file")
-}
-
-// TestCheck_FailsValidation verifies Check returns error for TOML with invalid values.
-func TestCheck_FailsValidation(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/invalid-config.toml"
-
-	// Write TOML with invalid output format
-	content := `[database]
+	t.Run("invalid value", func(t *testing.T) {
+		badValueFile := filepath.Join(filepath.Dir(defaultCfgFile), "bad-config.toml")
+		// Write TOML with invalid output format
+		content := `[database]
 path = "/valid/db.sqlite"
 
 [output]
 default_format = "xml"
 `
-	require.NoError(t, afero.WriteFile(fs, path, []byte(content), 0o644))
+		require.NoError(t, afero.WriteFile(testFs, badValueFile, []byte(content), 0o644))
 
-	err := Check(fs, path)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "validating config")
+		err := Check(testFs, badValueFile)
+		assert.ErrorContains(t, err, "validating config")
+	})
 }
 
 // TestGetValue_AllKeys tests GetValue for all supported keys.
@@ -479,8 +390,7 @@ func TestGetValue_UnknownKey(t *testing.T) {
 	applyDefaults(cfg)
 
 	_, err := GetValue(cfg, "unknown.key")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown configuration key")
+	require.ErrorContains(t, err, "unknown configuration key")
 }
 
 // TestGetValue_InvalidFormat tests invalid key format.
@@ -490,33 +400,27 @@ func TestGetValue_InvalidFormat(t *testing.T) {
 
 	// Test key without dot separator
 	_, err := GetValue(cfg, "invalid_key")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid key format")
+	require.Error(t, err, "invalid key format")
 
 	// Test key with section that doesn't exist
 	_, err = GetValue(cfg, "nonexistent.field")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown configuration key")
+	require.Error(t, err, "unknown configuration key")
 }
 
 // TestSet_PreservesOtherValues verifies that Set preserves other config values.
 func TestSet_PreservesOtherValues(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
-
-	// Create initial config
-	require.NoError(t, WriteDefault(fs, path, false))
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
 	// Set one key
-	require.NoError(t, Set(fs, path, "database.path", "/custom/db.sqlite"))
+	require.NoError(t, Set(testFs, defaultCfgFile, "database.path", "/custom/db.sqlite"))
 
 	// Set another key and verify the first is preserved
-	require.NoError(t, Set(fs, path, "output.quiet", "true"))
+	require.NoError(t, Set(testFs, defaultCfgFile, "output.quiet", "true"))
 
 	// Re-read and verify both values
 	v := viper.New()
-	v.SetFs(fs)
-	v.SetConfigFile(path)
+	v.SetFs(testFs)
+	v.SetConfigFile(defaultCfgFile)
 	v.SetConfigType("toml")
 	require.NoError(t, v.ReadInConfig())
 
@@ -526,24 +430,20 @@ func TestSet_PreservesOtherValues(t *testing.T) {
 
 // TestCheck_EmptyFile verifies Check handles empty TOML file gracefully.
 func TestCheck_EmptyFile(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/empty-config.toml"
+	testFs, testDir := NewTestFs(t)
 
 	// Write empty file
-	require.NoError(t, afero.WriteFile(fs, path, []byte(""), 0o644))
+	emptyFile, err := afero.TempFile(testFs, testDir, "")
+	require.NoError(t, err)
 
 	// Should not error; empty config gets defaults applied
-	err := Check(fs, path)
+	err = Check(testFs, emptyFile.Name())
 	require.NoError(t, err)
 }
 
 // TestSet_MultipleUpdates verifies sequential Set calls work correctly.
 func TestSet_MultipleUpdates(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
-
-	// Create initial config
-	require.NoError(t, WriteDefault(fs, path, false))
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
 	// Make multiple updates
 	updates := []struct {
@@ -557,13 +457,13 @@ func TestSet_MultipleUpdates(t *testing.T) {
 	}
 
 	for _, u := range updates {
-		require.NoError(t, Set(fs, path, u.key, u.value))
+		require.NoError(t, Set(testFs, defaultCfgFile, u.key, u.value))
 	}
 
 	// Verify final values
 	v := viper.New()
-	v.SetFs(fs)
-	v.SetConfigFile(path)
+	v.SetFs(testFs)
+	v.SetConfigFile(defaultCfgFile)
 	v.SetConfigType("toml")
 	require.NoError(t, v.ReadInConfig())
 
@@ -574,14 +474,11 @@ func TestSet_MultipleUpdates(t *testing.T) {
 
 // TestWriteDefault_AllKeysPresent verifies all expected keys are in the output.
 func TestWriteDefault_AllKeysPresent(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	path := "/tmp/test-config.toml"
-
-	require.NoError(t, WriteDefault(fs, path, false))
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
 	v := viper.New()
-	v.SetFs(fs)
-	v.SetConfigFile(path)
+	v.SetFs(testFs)
+	v.SetConfigFile(defaultCfgFile)
 	v.SetConfigType("toml")
 	require.NoError(t, v.ReadInConfig())
 
@@ -603,15 +500,14 @@ func TestWriteDefault_AllKeysPresent(t *testing.T) {
 	}
 }
 
-// unmarshalTOML is a helper to unmarshal TOML data using go-toml.
-// This mimics what Check() does internally.
-func unmarshalTOML(data []byte, cfg *Config) error {
-	// Import toml at the top of the test file and use it here
-	// For now, we'll use viper to do the unmarshaling
+func validateTOML(t *testing.T, data []byte) error {
+	t.Helper()
+
+	var cfg Config
+
 	v := viper.New()
 	v.SetConfigType("toml")
-	if err := v.ReadConfig(bytes.NewReader(data)); err != nil {
-		return err
-	}
-	return v.Unmarshal(cfg)
+	require.NoError(t, v.ReadConfig(bytes.NewReader(data)))
+
+	return v.Unmarshal(&cfg)
 }

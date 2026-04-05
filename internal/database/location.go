@@ -268,6 +268,34 @@ func (d *Database) DeleteLocation(ctx context.Context, locationID string) error 
 	return nil
 }
 
+// GetRootLocations retrieves all locations with no parent (top-level),
+// ordered by display_name. Includes system locations (Missing, Borrowed).
+func (d *Database) GetRootLocations(ctx context.Context) ([]*Location, error) {
+	const query = `
+		SELECT
+			location_id,
+			display_name,
+			canonical_name,
+			parent_id,
+			full_path_display,
+			full_path_canonical,
+			depth,
+			is_system,
+			updated_at
+		FROM locations_current
+		WHERE parent_id IS NULL
+		ORDER BY display_name
+	`
+
+	rows, err := d.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query root locations: %w", err)
+	}
+	defer rows.Close()
+
+	return scanLocations(rows)
+}
+
 // GetLocationChildren retrieves all child locations of a parent.
 func (d *Database) GetLocationChildren(ctx context.Context, parentID string) ([]*Location, error) {
 	const query = `

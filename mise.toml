@@ -67,6 +67,7 @@ run = "go generate ./..."
 [tasks.lint]
 description = "lint project files"
 depends = ["generate"]
+wait_for = ["test"]
 sources = ["**/*.go", ".golangci.yml"]
 outputs = ["bin/golangci-lint.html"]
 run = [
