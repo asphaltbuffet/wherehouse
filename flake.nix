@@ -2,13 +2,14 @@
   description = "wherehouse - Track your stuff";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     flake-utils.url = "github:numtide/flake-utils";
     gomod2nix = {
       url = "github:nix-community/gomod2nix";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.flake-utils.follows = "flake-utils";
     };
+    nur.url = "github:nix-community/NUR";
   };
 
   outputs = {
@@ -16,12 +17,15 @@
     nixpkgs,
     flake-utils,
     gomod2nix,
+    nur,
+    ...
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [gomod2nix.overlays.default];
+          overlays = [gomod2nix.overlays.default nur.overlays.default];
+          config.allowUnfreePredicate = pkg: builtins.elem (pkgs.lib.getName pkg) ["goreleaser-pro"];
         };
         lib = pkgs.lib;
         version =
@@ -40,6 +44,7 @@
               ./go.sum
               ./gomod2nix.toml
               (lib.fileset.fileFilter (file: lib.hasSuffix ".go" file.name) ./.)
+              (lib.fileset.fileFilter (file: lib.hasSuffix ".sql" file.name) ./.)
             ];
           };
 
@@ -81,15 +86,28 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
+          packages = with pkgs; [
             go
+            jujutsu
+            jjui
             mise
+            vhs
+            ripgrep
+            fd
+            sd
+            imagemagick
+            gopls
+            nixd
+            pkgs.nur.repos.goreleaser.goreleaser-pro
             gomod2nix.packages.${system}.default
+            self.packages.${system}.default
           ];
 
           shellHook = ''
             mise trust --all
           '';
+
+          CGO_ENABLED = "0";
         };
       }
     )
