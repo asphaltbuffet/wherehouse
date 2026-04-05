@@ -1,62 +1,111 @@
-// Package cmd contains all CLI commands used by the application.
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"os"
 
+	"github.com/charmbracelet/fang"
 	"github.com/spf13/cobra"
 
-	"github.com/asphaltbuffet/wherehouse/pkg/configurator"
+	"github.com/asphaltbuffet/wherehouse/cmd/add"
+	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
+	"github.com/asphaltbuffet/wherehouse/cmd/find"
+	"github.com/asphaltbuffet/wherehouse/cmd/history"
+	"github.com/asphaltbuffet/wherehouse/cmd/loan"
+	"github.com/asphaltbuffet/wherehouse/cmd/lost"
+	"github.com/asphaltbuffet/wherehouse/cmd/move"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
+	"github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
-const rootCommandLongDesc = "wherehouse is a tracking application for personal items.\n" +
-	"It stores a digital record of items with options to use, delete, loan, and borrow."
+// Global configuration instance accessible to all commands.
+var globalConfig *config.Config
 
-// application build information set by the linker.
-var (
-	Version string
-	Date    string
-)
-
+// rootCmd represents the base command when called without any subcommands.
 var rootCmd *cobra.Command
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	err := GetRootCommand().Execute()
-	if err != nil {
-		os.Exit(1)
-	}
-}
-
-// GetRootCommand returns the root command for the CLI.
-func GetRootCommand() *cobra.Command {
-	var cfgFile string
-	if rootCmd == nil {
-		rootCmd = &cobra.Command{
-			Use:     "wherehouse",
-			Version: fmt.Sprintf("%s\n%s", Version, Date),
-			Short:   "wherehouse is an inventory tracking application",
-			Long:    rootCommandLongDesc,
-			Run: func(cmd *cobra.Command, args []string) {
-				cfg, err := configurator.New(configurator.WithFile(cfgFile))
-				if err != nil {
-					cmd.PrintErr(err)
-				}
-
-				cmd.Println("config file:", cfg.GetConfigFileUsed())
-			},
-		}
+// GetRootCmd returns the root command, initializing it if necessary.
+func GetRootCmd() *cobra.Command {
+	if rootCmd != nil {
+		return rootCmd
 	}
 
-	rootCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "configuration file")
+	rootCmd = &cobra.Command{
+		Use:   "wherehouse",
+		Short: "a personal inventory tracker",
+		Long: `Wherehouse helps you track where you put that thing.
 
-	// rootCmd.AddCommand(GetAddCmd())
-	// rootCmd.AddCommand(GetInfoCmd())
-	// rootCmd.AddCommand(GetReportCmd())
-	// rootCmd.AddCommand(GetRemoveCmd())
-	// rootCmd.AddCommand(GetUpdateCmd())
+Examples:
+  wherehouse --version        Show version information
+  wherehouse --help           Show this help message`,
+		PersistentPreRunE: initConfig,
+		// RunE is nil - displays help by default when no subcommands exist
+	}
+
+	// Add persistent flags for configuration
+	rootCmd.PersistentFlags().StringP("config", "c", "", "config file path (default searches global and local configs)")
+	rootCmd.PersistentFlags().Bool("no-config", false, "skip all config files (use defaults only)")
+	rootCmd.MarkFlagsMutuallyExclusive("config", "no-config")
+
+	// Add other global flags (to be bound to config values)
+	rootCmd.PersistentFlags().String("db", "", "database file path")
+	rootCmd.PersistentFlags().String("as", "", "override acting user identity")
+	rootCmd.PersistentFlags().Bool("json", false, "machine-readable JSON output")
+	rootCmd.PersistentFlags().CountP("quiet", "q", "quiet mode (-q = minimal, -qq = silent)")
+
+	rootCmd.AddCommand(configpkg.GetConfigCmd())
+	rootCmd.AddCommand(add.GetAddCmd())
+	rootCmd.AddCommand(find.GetFindCmd())
+	rootCmd.AddCommand(history.GetHistoryCmd())
+	rootCmd.AddCommand(loan.GetLoanCmd())
+	rootCmd.AddCommand(lost.GetLostCmd())
+	rootCmd.AddCommand(move.GetMoveCmd())
 
 	return rootCmd
+}
+
+// initConfig initializes the configuration system.
+// Called before each command runs (PersistentPreRunE).
+func initConfig(cmd *cobra.Command, _ []string) error {
+	configPath, _ := cmd.Flags().GetString("config")
+	noConfig, _ := cmd.Flags().GetBool("no-config")
+
+	cfg, err := loadConfigOrDefaults(configPath, noConfig)
+	if err != nil {
+		return err
+	}
+
+	globalConfig = cfg
+	ctx := context.WithValue(cmd.Context(), config.ConfigKey, globalConfig)
+	cmd.SetContext(ctx)
+	return nil
+}
+
+// loadConfigOrDefaults loads configuration from file or returns defaults.
+// Returns an error only if an explicit config path was provided but failed to load.
+func loadConfigOrDefaults(configPath string, noConfig bool) (*config.Config, error) {
+	if noConfig {
+		return config.GetDefaults(), nil
+	}
+
+	cfg, err := config.New(configPath)
+	if err != nil {
+		if configPath != "" {
+			return nil, fmt.Errorf("failed to load config from %q: %w", configPath, err)
+		}
+		return config.GetDefaults(), nil
+	}
+
+	return cfg, nil
+}
+
+// Execute runs the root command using fang for enhanced styling and error handling.
+// This is called by main.main() and is the application entry point.
+func Execute(ctx context.Context) error {
+	return fang.Execute(
+		ctx,
+		GetRootCmd(),
+		fang.WithVersion(version.ShortVersion()),
+		fang.WithCommit(version.GitCommit),
+	)
 }

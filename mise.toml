@@ -1,0 +1,125 @@
+[tools]
+semver = "latest"
+"aqua:golangci/golangci-lint" = "prefix:2.8"
+"aqua:gotestyourself/gotestsum" = "latest"
+"go:github.com/nix-community/gomod2nix" = "latest"
+"go:golang.org/x/tools/cmd/stringer" = "latest"
+
+[tasks.build]
+description = "go build"
+hide = true
+run = "go build -o dist/ ./..."
+
+[tasks.ci]
+description = "CI build pipeline"
+depends = ["actionlint","generate", "mod-tidy", "test", "cover", "build", "diff"]
+hide = true
+
+[tasks.clean]
+description = "remove build artifacts"
+run = '''
+#!/usr/bin/env bash
+
+declare -a dirs=("dist" "bin" "completions" "manpages" "release_notes")
+
+for d in "${dirs[@]}"; do
+  rm -rf $d
+done
+
+go clean -i -cache -testcache -modcache -fuzzcache -x
+'''
+hide = true
+
+[tasks.cover]
+description="go test coverage"
+depends = ["test"]
+sources = ["bin/coverage.out"]
+outputs = ["bin/coverage.html"]
+run = [
+  "go tool cover -html=bin/coverage.out -o bin/coverage.html",
+  "go tool cover -func=bin/coverage.out"
+]
+
+[tasks.dev]
+description = "dev build pipeline"
+depends = ["generate", "lint", "test", "snapshot"]
+
+[tasks.diff]
+description = "git diff"
+run = '''
+#!/usr/bin/env bash
+
+git diff --exit-code
+
+RES=$(git status --porcelain)
+if [ -n "$RES" ]; then
+  echo "$RES" && exit 1
+fi
+'''
+hide = true
+
+[tasks.generate]
+description = "auto generate artifacts"
+alias = "gen"
+sources = ["./**/*.go"]
+run = "go generate ./..."
+
+[tasks.lint]
+description = "lint project files"
+depends = ["generate"]
+sources = ["**/*.go", ".golangci.yml"]
+outputs = ["bin/golangci-lint.html"]
+run = [
+  "mkdir -p bin",
+  "golangci-lint run --fix --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
+]
+
+[tasks.manpages]
+description = "generate man pages"
+sources = ["cmd/**/*.go"]
+outputs = ["manpages/*"]
+run = [
+  "rm -rf manpages",
+  "mkdir manpages",
+  "go run . man | gzip -c -9 >manpages/wherehouse.1.gz",
+]
+
+[tasks.mod-tidy]
+description = "go mod tidy"
+alias = "mod"
+sources = ["**/*.go", "**/go.mod", "**/go.sum"]
+outputs = ["**/go.mod", "**/go.sum"]
+run = "go mod tidy"
+depends_post = ["nix-hash"]
+
+[tasks.nix-hash]
+description = "Update gomod2nix.toml dependency lockfile"
+sources = ["go.sum"]
+outputs = ["gomod2nix.toml"]
+run = "gomod2nix generate"
+
+[tasks.snapshot]
+description = "goreleaser build snapshot"
+depends = ["generate", "mod-tidy"]
+wait_for = ["test", "lint"]
+alias = "ss"
+run = [
+  "goreleaser check -q",
+  "goreleaser build --clean --single-target --snapshot",
+]
+
+[tasks.update-deps]
+description = "update direct dependencies to latest versions"
+alias = "up"
+run = "go get -u"
+depends_post = ["mod-tidy"]
+
+[tasks.test]
+description = "run test suite"
+depends = ["generate"]
+sources = ["**/*.go", "**/testdata/**"]
+outputs = ["bin/coverage.out"]
+run = [
+  "mkdir -p bin",
+  "gotestsum -- -race -covermode=atomic -coverprofile=bin/coverage.out $(go list ./... | grep -v /mocks | grep -v /ai-docs)",
+]

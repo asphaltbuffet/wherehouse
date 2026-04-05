@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+#MISE description="Create and push a release tag"
+#USAGE arg "bump" help="Version bump type" {
+#USAGE   choices "major" "minor" "patch" "prerelease"
+#USAGE }
+
+set -euo pipefail
+
+bump="${usage_bump}"
+
+# --- Get latest tag ---
+current=$(git tag -l 'v*' --sort=-v:refname | head -1)
+if [ -z "$current" ]; then
+  echo "Error: no existing v* tags found"
+  exit 1
+fi
+
+# Strip leading 'v' for semver tool
+current_ver="${current#v}"
+
+# --- Compute next version ---
+if [ "$bump" = "prerelease" ]; then
+  pre=$(semver get prerelease "$current_ver")
+  if [ -z "$pre" ]; then
+    # No prerelease suffix — bump patch first, then add rc.1
+    patched=$(semver bump patch "$current_ver")
+    next_ver="${patched}-rc.1"
+  else
+    next_ver=$(semver bump prerelease "$current_ver")
+  fi
+else
+  next_ver=$(semver bump "$bump" "$current_ver")
+fi
+
+next_tag="v${next_ver}"
+
+echo "Current: ${current}"
+echo "Next:    ${next_tag}"
+echo ""
+
+# --- Safety checks ---
+echo "Running safety checks..."
+
+# 1. Clean working copy
+if [ -n "$(jj diff --stat)" ]; then
+  echo "Error: working copy has uncommitted changes"
+  echo "  Run 'jj diff --stat' to see what changed"
+  exit 1
+fi
+echo "  ✓ working copy is clean"
+
+# 2. Tag doesn't already exist
+if git tag -l | grep -qx "$next_tag"; then
+  echo "Error: tag ${next_tag} already exists"
+  exit 1
+fi
+echo "  ✓ tag ${next_tag} is available"
+
+# 3. Changelog entry exists (skip for prerelease)
+if [ "$bump" != "prerelease" ]; then
+  if ! grep -q "^## \[${next_ver}\]" CHANGELOG.md; then
+    echo "Error: no '## [${next_ver}]' section found in CHANGELOG.md"
+    echo "  Add a changelog entry before releasing"
+    exit 1
+  fi
+  echo "  ✓ CHANGELOG.md has entry for ${next_ver}"
+fi
+
+# 4. Current commit is pushed to remote
+commit=$(jj log -r @ --no-graph -T 'commit_id')
+if ! git branch -r --contains "$commit" 2>/dev/null | grep -q 'origin/'; then
+  echo "Error: current commit is not pushed to origin"
+  echo "  Run 'jj git push' first"
+  exit 1
+fi
+echo "  ✓ current commit exists on origin"
+
+echo ""
+
+# --- Confirm ---
+read -r -p "Create and push tag ${next_tag}? [y/N] " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+  echo "Aborted."
+  exit 0
+fi
+
+# --- Tag and push ---
+git tag -a "$next_tag" -m "Release ${next_tag}"
+git push origin "$next_tag"
+
+echo ""
+echo "Tag ${next_tag} pushed to origin."
+echo "Monitor the release workflow at:"
+echo "  https://github.com/asphaltbuffet/wherehouse/actions/workflows/release.yml"

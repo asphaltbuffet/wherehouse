@@ -1,19 +1,22 @@
 name: Lint GitHub Actions workflows
-on: 
+on:
   push:
     paths: ['.github/workflows/**']
   pull_request:
     paths: ['.github/workflows/**']
 
+permissions:
+  contents: read
+
 jobs:
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download actionlint
         id: get_actionlint
-        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.10
         shell: bash
 
       - name: Check workflow files

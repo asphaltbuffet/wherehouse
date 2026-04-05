@@ -1,0 +1,205 @@
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
+
+	"github.com/asphaltbuffet/wherehouse/internal/database"
+)
+
+// ResolveLocation resolves a location by UUID or canonical name.
+// UUIDs are verified against the database before being returned.
+// Supports both UUID string format and display/canonical names.
+//
+// Resolution order:
+//  1. If input looks like UUID, verify it exists in database
+//  2. If not found or not UUID-like, try canonical name lookup
+//
+// Returns the location UUID string or error if not found.
+func ResolveLocation(ctx context.Context, db *database.Database, input string) (string, error) {
+	// Try UUID resolution first
+	if LooksLikeUUID(input) {
+		// Valid UUID format, try to get location by ID
+		loc, err := db.GetLocation(ctx, input)
+		if err == nil {
+			return loc.LocationID, nil
+		}
+		// If UUID format but not found as ID, fall through to try as canonical name
+		// This handles cases where user might have a UUID-like name
+	}
+
+	// Try as canonical name
+	canonicalName := database.CanonicalizeString(input)
+	loc, err := db.GetLocationByCanonicalName(ctx, canonicalName)
+	if err != nil {
+		if errors.Is(err, database.ErrLocationNotFound) {
+			return "", fmt.Errorf("location %q not found", input)
+		}
+		return "", fmt.Errorf("failed to resolve location %q: %w", input, err)
+	}
+
+	return loc.LocationID, nil
+}
+
+// LooksLikeUUID checks if a string looks like a UUID.
+// Returns true if the string has the correct length and format.
+func LooksLikeUUID(s string) bool {
+	const uuidLength = 36
+	// UUIDs are 36 characters with 4 dashes
+	if len(s) != uuidLength {
+		return false
+	}
+	// Try parsing as UUID
+	_, err := uuid.Parse(s)
+	return err == nil
+}
+
+// ResolveItemSelector resolves an item selector to an item UUID.
+// Supports three selector types:
+//  1. UUID (exact ID, verified against database)
+//  2. LOCATION:ITEM (both canonical names, filters by location)
+//  3. Canonical name (must match exactly 1 item)
+//
+// The commandName parameter is used in error messages to provide context
+// (e.g., "wherehouse move", "wherehouse history").
+//
+// Returns the item UUID string or error if not found or ambiguous.
+func ResolveItemSelector(
+	ctx context.Context,
+	db *database.Database,
+	selector string,
+	commandName string,
+) (string, error) {
+	// Priority 1: UUID pattern match
+	if LooksLikeUUID(selector) {
+		item, err := db.GetItem(ctx, selector)
+		if err == nil {
+			return item.ItemID, nil
+		}
+		// If UUID format but not found, return error
+		if errors.Is(err, database.ErrItemNotFound) {
+			return "", fmt.Errorf("item with ID %q not found", selector)
+		}
+		return "", fmt.Errorf("failed to get item %q: %w", selector, err)
+	}
+
+	// Priority 2: LOCATION:ITEM selector
+	if locationPart, itemPart, ok := parseItemSelector(selector); ok {
+		return resolveLocationItemSelector(ctx, db, locationPart, itemPart, commandName)
+	}
+
+	// Priority 3: Canonical name (MUST be unique)
+	return resolveItemByCanonicalName(ctx, db, selector, commandName)
+}
+
+// parseItemSelector parses LOCATION:ITEM syntax.
+// Returns (locationPart, itemPart, true) if valid selector, ("", "", false) otherwise.
+func parseItemSelector(selector string) (string, string, bool) {
+	const expectedParts = 2
+	parts := strings.SplitN(selector, ":", expectedParts)
+	if len(parts) != expectedParts {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+}
+
+// resolveLocationItemSelector resolves a LOCATION:ITEM selector.
+// Uses commandName in error messages for context.
+func resolveLocationItemSelector(
+	ctx context.Context,
+	db *database.Database,
+	locationPart, itemPart string,
+	commandName string,
+) (string, error) {
+	// Resolve location by canonical name
+	canonicalLocation := database.CanonicalizeString(locationPart)
+	location, err := db.GetLocationByCanonicalName(ctx, canonicalLocation)
+	if err != nil {
+		if errors.Is(err, database.ErrLocationNotFound) {
+			return "", fmt.Errorf("location %q not found", locationPart)
+		}
+		return "", fmt.Errorf("failed to resolve location %q: %w", locationPart, err)
+	}
+
+	// Resolve item by canonical name + location filter
+	canonicalItem := database.CanonicalizeString(itemPart)
+	items, err := db.GetItemsByCanonicalName(ctx, canonicalItem)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve item %q: %w", itemPart, err)
+	}
+
+	// Filter by location
+	var matches []*database.Item
+	for _, item := range items {
+		if item.LocationID == location.LocationID {
+			matches = append(matches, item)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("item %q not found in location %q", itemPart, locationPart)
+	}
+	if len(matches) > 1 {
+		// Multiple items with same name in same location - should be rare but handle it
+		return "", buildAmbiguousItemError(ctx, db, canonicalItem, matches, commandName)
+	}
+
+	return matches[0].ItemID, nil
+}
+
+// resolveItemByCanonicalName resolves an item by canonical name only.
+// Returns error if 0 matches or 2+ matches (must be unique).
+// Uses commandName in error messages for context.
+func resolveItemByCanonicalName(
+	ctx context.Context,
+	db *database.Database,
+	input string,
+	commandName string,
+) (string, error) {
+	canonicalName := database.CanonicalizeString(input)
+	items, err := db.GetItemsByCanonicalName(ctx, canonicalName)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve item %q: %w", input, err)
+	}
+
+	switch len(items) {
+	case 0:
+		return "", fmt.Errorf("item %q not found", input)
+	case 1:
+		return items[0].ItemID, nil
+	default:
+		// Multiple matches - build error with IDs and locations
+		return "", buildAmbiguousItemError(ctx, db, canonicalName, items, commandName)
+	}
+}
+
+// buildAmbiguousItemError builds a detailed error message for multiple matches.
+// Uses commandName to provide contextual examples.
+func buildAmbiguousItemError(
+	ctx context.Context,
+	db *database.Database,
+	canonicalName string,
+	items []*database.Item,
+	commandName string,
+) error {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("multiple items named %q found:\n", canonicalName))
+
+	for _, item := range items {
+		location, _ := db.GetLocation(ctx, item.LocationID)
+		locationName := "unknown"
+		if location != nil {
+			locationName = location.DisplayName
+		}
+		sb.WriteString(fmt.Sprintf("  - %s (in %s)\n", item.ItemID, locationName))
+	}
+
+	sb.WriteString("Use --id to specify exact item:\n")
+	sb.WriteString(fmt.Sprintf("  %s --id %s", commandName, items[0].ItemID))
+
+	return errors.New(sb.String())
+}

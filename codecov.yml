@@ -1,0 +1,32 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 5%
+
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        branches:
+          - "!main"
+  individual_components:
+    - component_id: module_tui
+      name: tui
+      paths:
+        - internal/tui/**
+    - component_id: module_cli
+      name: cli
+      paths:
+        - cmd/**
+        - internal/cli/**
+    - component_id: module_database
+      name: database
+      paths:
+        - internal/database/**
+    - component_id: module_config
+      name: config
+      paths:
+        - internal/config

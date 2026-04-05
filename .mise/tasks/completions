@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="generate completions"
+#MISE hide=true
+#MISE sources=["**/*.go"]
+#MISE outputs=["completions/wherehouse.*"]
+set -euo pipefail
+
+rm -rf completions
+mkdir completions
+
+for sh in bash zsh fish; do
+	go run . completion "$sh" >"completions/wherehouse.$sh"
+done
