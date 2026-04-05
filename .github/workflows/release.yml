@@ -28,14 +28,14 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@v4
 
-      - uses: crazy-max/ghaction-upx@v3
+      - uses: crazy-max/ghaction-upx@v4
         with:
           install-only: true
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser-pro
           version: "~> v2"

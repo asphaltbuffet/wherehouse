@@ -33,19 +33,19 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@v4
 
       - name: Build
         run: mise run ci
 
       - name: Archive code coverage results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: code-coverage-report-${{ matrix.os }}
           path: bin
 
       - name: Upload code coverage results to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./bin/coverage.out
@@ -66,14 +66,14 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@v4
 
-      - uses: crazy-max/ghaction-upx@v3
+      - uses: crazy-max/ghaction-upx@v4
         with:
           install-only: true
 
       - name: Release Test
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser-pro
           version: "~> v2"
