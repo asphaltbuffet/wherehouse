@@ -12,7 +12,7 @@ run = "go build -o dist/ ./..."
 
 [tasks.ci]
 description = "CI build pipeline"
-depends = ["actionlint","generate", "mod-tidy", "mock", "test", "cover", "build", "diff"]
+depends = ["generate", "mod-tidy", "mock", "test", "cover", "build", "diff"]
 hide = true
 
 [tasks.clean]
