@@ -8,10 +8,26 @@ You are a coding agent running on a user's computer.
 
 ## ⚠️ Critical First Steps
 
-**Before ANY implementation work:**
+Read the knowledge docs relevant to your task — not all of them:
 
-1. **Read** `ai-docs/knowledge/business-rules.md` "Critical Invariants" section
-2. **Check** `ai-docs/knowledge/README.md` to find the right document for your task
+| Task type | Read first |
+|---|---|
+| New CLI command | `ai-docs/knowledge/cli-contract.md` |
+| Event or database work | `ai-docs/knowledge/business-rules.md` ("Critical Invariants" section) |
+| Domain model or projection work | `ai-docs/knowledge/domain-model.md` + `ai-docs/knowledge/projections.md` |
+| Event type definitions | `ai-docs/knowledge/events.md` |
+| Unsure what applies | `ai-docs/knowledge/README.md` |
+
+> `ai-docs/research/` contains design proposals, not necessarily implemented code. Always verify in `internal/` and `cmd/` directly.
+
+### What is not yet implemented
+
+Check here before spending tool calls confirming absence:
+
+- **Tags/tagging**: no `tags` concept exists anywhere — no `ItemTaggedEvent`, no `tags` column, no tag table, no `cmd/tag/`.
+- **TUI**: `internal/tui/` does not exist yet; `ai-docs/research/tui/` has design proposals only.
+- **Projects**: `internal/database/project.go` exists but project CLI commands are not wired into `cmd/`.
+- **`internal/events/` package**: does not exist — event types live in `internal/database/eventTypes.go`.
 
 ## Code Implementation
 
@@ -67,20 +83,6 @@ calls when one result determines the next query.
   findings first (ordered by severity with file/line references), follow with
   open questions, and offer a change-summary only as a secondary detail.
 
-## Frontend/UI/UX design tasks
-
-When doing frontend, UI, or UX design tasks -- including terminal UX/UI --
-avoid collapsing into "AI slop" or safe, average-looking layouts.
-
-Aim for interfaces that feel intentional, bold, and a bit surprising.
-- Typography: Use expressive, purposeful fonts and avoid default stacks (Inter,
-  Roboto, Arial, system).
-- Color & Look: Choose a clear visual direction; define CSS variables; avoid
-  purple-on-white defaults. No purple bias or dark mode bias.
-
-Exception: If working within an existing design system, preserve the
-established patterns, structure, and visual language.
-
 ## Project Overview
 
 Wherehouse is an **event-sourced** CLI/TUI inventory tracker that answers "Where did I put my 10mm socket?". Built with Go + SQLite, it uses events as source of truth with disposable projections for fast queries. Multi-user attribution only (no permissions).
@@ -95,83 +97,62 @@ The project implements event sourcing architecture where:
 
 ```
 wherehouse/
-├── cmd/                    # CLI commands (cobra)
+├── cmd/                    # CLI commands (cobra); one subdir per command
+│   ├── add/
+│   ├── config/
+│   ├── find/
+│   ├── found/
+│   ├── history/
+│   ├── initialize/
+│   ├── list/
+│   ├── loan/
+│   ├── lost/
+│   ├── migrate/
+│   ├── move/
+│   └── scry/
 ├── internal/
+│   ├── cli/               # Shared CLI helpers (selectors, output, flags)
 │   ├── config/            # Configuration management
-│   ├── database/          # SQLite operations (COMPLETE)
-│   │   ├── database.go    # Connection, initialization
-│   │   ├── events.go      # Event storage
-│   │   ├── projections.go # Projection CRUD
+│   ├── database/          # SQLite: events, projections, migrations, replay
+│   │   ├── eventTypes.go  # EventType iota + ParseEventType + stringer
+│   │   ├── eventHandler.go # processEventInTx routing switch
+│   │   ├── itemEventHandler.go
+│   │   ├── locationEventHandler.go
+│   │   ├── projectEventHandler.go
 │   │   ├── replay.go      # Event replay engine
 │   │   ├── validation.go  # Integrity checks
-│   │   └── migrations/    # SQL schema migrations
-│   ├── events/            # Event type definitions
+│   │   └── migrations/    # SQL schema migrations (golang-migrate)
 │   ├── logging/           # Logging + log rotation
-│   ├── models/            # Domain entities
-│   ├── projections/       # Projection builders
-│   ├── validation/        # Business rule enforcement
-│   └── cli/               # CLI command implementations
+│   ├── nanoid/            # NanoID generation
+│   ├── styles/            # lipgloss style definitions (appStyles singleton)
+│   └── version/           # Build version info
 ├── docs/
 │   └── DESIGN.md          # Full design specification
 └── ai-docs/
-    ├── knowledge/         # AI agent references
-    ├── research/          # Detailed information by topic
+    ├── knowledge/         # Authoritative AI agent references (read these)
+    ├── research/          # Design proposals — may not be implemented
     └── sessions/          # Session plans and status
 ```
 
-## Key Technologies
-
-- **Language**: Go 1.25+
-- **Database**: SQLite 3.x (modernc.org/sqlite driver)
-- **Migrations**: golang-migrate/migrate
-- **CLI Framework**: spf13/cobra
-- **Configuration**: spf13/viper (TOML format)
-- **Terminal Styling**: charmbracelet/lipgloss
-- **UUID Generation**: google/uuid (v7 preferred)
-
 ## Essential Commands
 
-### Building
 ```bash
-# Build the project to dist/wherehouse
-mise run build
-
-# Build with full pipeline (generate/mock/test/lint/snapshot)
-mise run dev
-```
-
-### Testing
-```bash
-# Run all tests
-mise run test
-```
-
-### Linting
-```bash
-# Using golangci-lint
-mise run lint
-```
-
-### Development Tasks
-```bash
-# Update dependencies
-mise run update-deps
-
-# Clean build artifacts
-mise run clean
+mise run build       # build to dist/wherehouse
+mise run dev         # full pipeline: generate/mock/test/lint/snapshot
+mise run test        # run all tests
+mise run lint        # golangci-lint
+mise run update-deps # update dependencies
+mise run clean       # clean build artifacts
 ```
 
 ## Code Organization & Patterns
 
 ### File Layout
-- Commands are in `cmd/` directory, organized by feature 
-- Core logic is in `internal/` directory
-- Database operations in `internal/database/`
-- Shared CLI-specific utilities in `internal/cli/`
+- Commands are in `cmd/`, one subdirectory per command
+- Shared CLI helpers (selectors, output formatting, flags) in `internal/cli/`
+- Database operations, event types, projections, and replay in `internal/database/`
 - Configuration management in `internal/config/`
-- Domain models in `internal/models/`
-- Event types and handlers in `internal/events/`
-- Business rule validations in `internal/validation/`
+- Event types and handlers are in `internal/database/` (no separate `internal/events/` package)
 
 ### Event Sourcing Design
 - Events are immutable (never modified or deleted)
@@ -209,7 +190,7 @@ details; do not duplicate that detail here.
 
 ### Shell and tools
 
-- **No `git` commands**: Use `jj` equivalents.
+- **No `git` commands**: Use `jj` equivalents. To find a historical refactor by keyword: `jj log --no-graph -r 'description(glob:"*keyword*")' -T 'change_id ++ " " ++ description.first_line() ++ "\n"'`. To inspect what a commit changed: `jj show <change_id>`.
 - **No `&&`**: Run shell commands as separate tool calls (parallel when
   independent, sequential when dependent).
 - **Use `jq`, not Python, for JSON**: Use `jq` directly.
@@ -271,7 +252,21 @@ details; do not duplicate that detail here.
 - **Use stdlib/codebase constants**: No magic numbers when `math.MaxInt64`
   or a codebase constant exists.
 - **Deterministic ordering requires tiebreakers**: Every `ORDER BY` that
-  could tie MUST include a tiebreaker (typically `event_id DESC`).
+  could tie MUST include a tiebreaker (typically `event_id ASC`). Timestamps
+  use RFC3339 (1-second resolution) and are not unique — never rely on
+  `timestamp_utc` alone for ordering.
+- **Command constructor pattern**: Every command package exposes
+  `NewXxxCmd(db xxxDB)` (for tests) and `NewDefaultXxxCmd()` (for
+  production wiring). Registered in `cmd/root.go` via `NewDefaultXxxCmd()`.
+- **Per-command DB interface**: Each command's `db.go` defines a minimal
+  `xxxDB` interface covering only the methods that command needs, with a
+  `//go:generate mockery` directive. Never pass `*database.DB` directly to
+  a command's run function.
+- **Event type registration**: New event types go in
+  `internal/database/eventTypes.go` (add to `EventType` iota + linecomment
+  string + `eventTypeByName` map), then regenerate `eventtype_string.go`
+  with `go generate`, then add a case to `processEventInTx` in
+  `eventHandler.go`.
 - **Styles live in `appStyles`**: Add new styles as private fields on the
   `Styles` struct in `styles.go` with public accessor methods, and reference
   them via the package-level `appStyles` singleton (e.g. `appStyles.Item()`).
@@ -300,22 +295,11 @@ If the user asks you to learn something, add behavioral constraints to this
 
 ## Development best practices
 
-- At each point where you have the next stage of the application, pause and let
-  the user play around with things.
-- Commit when you reach logical stopping points; use `/commit` for conventions.
-- Write the code as well factored and human readable as you possibly can.
-- Run long commands (`mise run dev`, `mise run snapshot`) in the
-  background so you can continue working while they execute.
-- "Refactoring" includes **all** code in the repo: Go, Nix expressions, CI workflows, etc. Don't skip improvements just because they're not `.go`.
-
-When you complete a task, pause and wait for the developer's input before
-continuing on. Be prepared for the user to veer off into other tasks. That's
-fine, go with the flow and soft nudges to get back to the original work stream
-are appreciated.
-
-Once allowed to move on, use `/commit` to commit the current change set.
-
-For big or core features and key design decisions, use the `/dev` command to before doing anything. These are committed to the repo as permanent design records -- not throwaway scratch. Be diligent about this.
+- Pause after each stage and wait for developer input before continuing.
+- Use `/commit` at logical stopping points.
+- Run long commands (`mise run dev`, `mise run snapshot`) in the background.
+- For big or core features, use `/dev` before writing code — session records are permanent design artifacts.
+- "Refactoring" includes Go, Nix, CI workflows — don't skip non-`.go` files.
 
 # Session log
 
