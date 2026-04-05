@@ -14,6 +14,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/loan"
 	"github.com/asphaltbuffet/wherehouse/cmd/lost"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
+	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
 )
@@ -60,6 +61,7 @@ Examples:
 	rootCmd.AddCommand(loan.GetLoanCmd())
 	rootCmd.AddCommand(lost.GetLostCmd())
 	rootCmd.AddCommand(move.GetMoveCmd())
+	rootCmd.AddCommand(scry.GetScryCmd())
 
 	return rootCmd
 }

@@ -40,6 +40,7 @@ Primary daily workflows:
     - Rehome
     - Borrowed
 - Mark missing and found
+- Locate missing items (`scry`)
 - Associate items with projects
 
 ## ARCHITECTURAL PHILOSOPHY
@@ -357,6 +358,47 @@ Basement:Toolbox:"10mm socket wrench"
 ```
 
 Multiple matches return all.
+
+### scry
+
+```
+wherehouse scry <item>
+```
+
+Suggests where to look for a **missing** item. Read-only — does not mutate state.
+
+Accepts the same selectors as other commands (canonical name, UUID, `LOCATION:ITEM`).
+Only operates on items currently in the `Missing` system location; items in `Borrowed` or
+`Loaned` locations are rejected with a specific error message.
+
+Result categories (shown in confidence order):
+
+| Category | Source | Ranking |
+|---|---|---|
+| Home location | `temp_origin_location_id` projection field; falls back to `item.created` event location | Always present, shown first |
+| Found here before | `item.found` event log (`found_location_id`) | By occurrence count desc |
+| Used here temporarily | `item.moved` events with `move_type=temporary_use` (`to_location_id`) | By occurrence count desc |
+| Where similar items are | `items_current` projection; Levenshtein distance ≤ 3 on canonical names | By distance asc |
+
+Each location appears in at most one category (cross-category deduplication). System locations
+are excluded from all categories except "home location".
+
+Occurrence counts are used internally for ranking. In human output, counts are shown only with
+`--verbose`. JSON output always includes occurrence counts.
+
+**Human output:**
+
+```
+Scrying for: 10mm Socket Wrench (MISSING)
+
+  Home location:           Garage >> Toolbox
+  Found here before:       Workshop >> Pegboard
+                           Garage >> Shelf A
+  Used here temporarily:   Deck >> Project Bin
+  Where similar items are: Garage >> Toolbox  [9mm Socket Wrench]
+```
+
+**Flags:** `--verbose` / `-v`, `--json`
 
 ## CONFIGURATION (TOML via spf13/viper)
 

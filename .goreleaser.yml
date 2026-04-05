@@ -1,0 +1,116 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+---
+version: 2
+
+before:
+  hooks:
+    - mise run generate
+    - mise run completions
+    - mise run manpages
+    # - mise run release_notes {{ .RawVersion }}
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - "386"
+      - amd64
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: "386"
+    ldflags:
+      - -s -w -X {{.ModulePath}}/cmd/version/version.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+upx:
+  - goos: [linux]
+    enabled: "{{ .IsRelease }}"
+    compress: best
+
+archives:
+  - formats: [ 'tgz' ]
+    name_template: >-
+      {{ .ProjectName }}-
+      {{- .Version }}-
+      {{- .Os }}-
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch}}{{ end }}
+      {{- if .Arm }}_v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+    files:
+      - info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: CHANGELOG*
+      - src: README*
+      - src: LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Version }}-snapshot"
+
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: asphaltbuffet
+    name: wherehouse
+  prerelease: auto
+
+announce:
+  skip: true
+
+nfpms:
+  - file_name_template: "{{ .ConventionalFileName }}"
+    id: packages
+    homepage: https://github.com/asphaltbuffet/wherehouse
+    description: Keep track of all your things
+    maintainer: Ben Lechlitner <otherland@gmail.com>
+    license: MIT
+    vendor: asphaltbuffet
+    bindir: /usr/bin
+    section: utils
+    contents:
+      - src: ./completions/wherehouse.bash
+        dst: /usr/share/bash-completion/completions/wherehouse
+        file_info:
+          mode: 0644
+      - src: ./completions/wherehouse.fish
+        dst: /usr/share/fish/vendor_completions.d/wherehouse.fish
+        file_info:
+          mode: 0644
+      - src: ./completions/wherehouse.zsh
+        dst: /usr/share/zsh/vendor-completions/_wherehouse
+        file_info:
+          mode: 0644
+      - src: ./manpages/
+        dst: /usr/share/man/man1/
+        file_info:
+          mode: 0644
+      - src: ./LICENSE
+        dst: /usr/share/doc/wherehouse/copyright
+        file_info:
+          mode: 0644
+    formats:
+      - apk
+      - deb
+      - rpm
+    dependencies:
+      - golang
+    recommends:
+      - python3

@@ -57,7 +57,7 @@ func (d *Database) SearchByName(
 	searchPattern := "%" + canonicalSearchTerm + "%"
 
 	// Get system location IDs for missing/borrowed/loaned detection
-	missingLocationID, borrowedLocationID, loanedLocationID, err := d.getSystemLocationIDs(ctx)
+	missingLocationID, borrowedLocationID, loanedLocationID, err := d.GetSystemLocationIDs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system location IDs: %w", err)
 	}
@@ -233,9 +233,9 @@ func (d *Database) enrichResultsWithLastNonSystemLocation(ctx context.Context, r
 	}
 }
 
-// getSystemLocationIDs retrieves the UUIDs of the Missing, Borrowed, and Loaned system locations.
+// GetSystemLocationIDs retrieves the UUIDs of the Missing, Borrowed, and Loaned system locations.
 // Returns (missingID, borrowedID, loanedID, error).
-func (d *Database) getSystemLocationIDs(ctx context.Context) (string, string, string, error) {
+func (d *Database) GetSystemLocationIDs(ctx context.Context) (string, string, string, error) {
 	// Check cache first
 	if d.missingLocationID != "" && d.borrowedLocationID != "" && d.loanedLocationID != "" {
 		return d.missingLocationID, d.borrowedLocationID, d.loanedLocationID, nil
