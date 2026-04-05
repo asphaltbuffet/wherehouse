@@ -1,0 +1,22 @@
+[
+  {
+    "question": "Should `config set` and `config unset` preserve comments and formatting in user-edited config files, or is silently stripping comments on write acceptable (matching current behavior)?",
+    "rationale": "The `go-toml/v2` library does not expose an AST mutation API, so surgical key edits that preserve comments require either the older `go-toml` v1 package or accepting comment loss. The current implementation already loses comments on every `set`/`unset`. If preservation is required, the architecture needs a different TOML library or a custom line-by-line editor."
+  },
+  {
+    "question": "Should the golden file for `config init` use `text/template` placeholder tokens for platform-specific values (e.g., the default database path), or should `config init` always write a static string like `~/.local/share/wherehouse/wherehouse.db` regardless of platform?",
+    "rationale": "The golden file serves as both the init template and a test fixture. If the database path is platform-specific, a static golden file cannot be used as-is without template rendering. If a fixed placeholder value is acceptable in the init output (users can edit it), we can use a fully static file."
+  },
+  {
+    "question": "Should `config get` (without a key argument) output via viper's `AllSettings()` map, or continue to output a marshaled `*Config` struct? The difference is: viper's map includes any unknown keys the user may have added, while the struct only shows known fields.",
+    "rationale": "Currently `config get` marshals `*Config` via `toml.Marshal`, which only outputs declared fields. If a user manually added a custom key to their TOML file, it would be silently dropped from `config get` output. Using viper's `AllSettings()` would show all keys including unknown ones, which is arguably more correct but could expose internal viper state."
+  },
+  {
+    "question": "Should `internal/config.Set` accept ALL known config keys (including `logging.*` fields that are not currently exposed in `config set`) or only the subset that the current `setValueInMap` supports (`database.path`, `user.default_identity`, `output.default_format`, `output.quiet`)?",
+    "rationale": "The current `setValueInMap` hard-codes only 4 keys and does NOT expose the `logging` section. The `internal/config/config.go` has a full `LoggingConfig` struct with 4 fields. Whether to expose logging settings via `config set` is a UX/scope question."
+  },
+  {
+    "question": "Should `atomicWrite` be moved entirely to `internal/config/writer.go` (making it available as a library function), or should it remain duplicated in `cmd/config/helpers.go` for the cmd layer's direct use?",
+    "rationale": "Moving `atomicWrite` to `internal/config` makes sense since all write operations will go through `writer.go`. However, it adds a dependency from the cmd layer onto the internal package for a filesystem utility that is conceptually simple. The alternative is to keep a copy in `cmd/config/helpers.go` (minor duplication of a ~15 line function)."
+  }
+]

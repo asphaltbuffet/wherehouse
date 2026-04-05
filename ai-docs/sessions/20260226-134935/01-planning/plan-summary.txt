@@ -1,0 +1,9 @@
+list command implementation plan — revised per user feedback 2026-02-26
+
+1. TWO SUBTASKS, TWO AGENTS: db-developer adds GetRootLocations to internal/database/location.go (one function + tests); golang-ui-developer builds all of cmd/list/ (4 new files + 2 test files) and registers command in cmd/root.go; `go get github.com/xlab/treeprint` required before building.
+
+2. TREE RENDERING VIA XLAB/TREEPRINT: External package replaces custom renderTree/renderNode. Pre-formatted location header strings (e.g. "Garage (3 items, 2 locations)") and item strings (e.g. "drill *") are passed as node values to treeprint.AddBranch/AddNode; treeprint handles all connector and indentation logic.
+
+3. CHILD HINTS SHOW BOTH COUNTS: Non-recursive child hints display "[Shelf A] (1 item, 3 locations)" — both item count and direct child location count fetched during flat build. LocationNode carries ChildItemCount and ChildLocationCount fields for hint-only nodes.
+
+4. KEY FEEDBACK CHANGES: No --quiet flag (removed entirely); no //nolint on cobra.ArbitraryArgs; english.PluralWord from go-humanize (already in go.mod) replaces custom pluralize; not-found location args render inline as "[arg] [not found]" with exit 0 (not an error).

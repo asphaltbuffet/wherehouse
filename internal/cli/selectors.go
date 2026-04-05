@@ -11,6 +11,15 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
+// LocationItemQuerier is the database query interface required by resolver functions.
+// *database.Database satisfies this interface.
+type LocationItemQuerier interface {
+	GetLocation(ctx context.Context, locationID string) (*database.Location, error)
+	GetLocationByCanonicalName(ctx context.Context, canonicalName string) (*database.Location, error)
+	GetItem(ctx context.Context, itemID string) (*database.Item, error)
+	GetItemsByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Item, error)
+}
+
 // ResolveLocation resolves a location by UUID or canonical name.
 // UUIDs are verified against the database before being returned.
 // Supports both UUID string format and display/canonical names.
@@ -20,7 +29,7 @@ import (
 //  2. If not found or not UUID-like, try canonical name lookup
 //
 // Returns the location UUID string or error if not found.
-func ResolveLocation(ctx context.Context, db *database.Database, input string) (string, error) {
+func ResolveLocation(ctx context.Context, db LocationItemQuerier, input string) (string, error) {
 	// Try UUID resolution first
 	if LooksLikeUUID(input) {
 		// Valid UUID format, try to get location by ID
@@ -70,7 +79,7 @@ func LooksLikeUUID(s string) bool {
 // Returns the item UUID string or error if not found or ambiguous.
 func ResolveItemSelector(
 	ctx context.Context,
-	db *database.Database,
+	db LocationItemQuerier,
 	selector string,
 	commandName string,
 ) (string, error) {
@@ -111,7 +120,7 @@ func parseItemSelector(selector string) (string, string, bool) {
 // Uses commandName in error messages for context.
 func resolveLocationItemSelector(
 	ctx context.Context,
-	db *database.Database,
+	db LocationItemQuerier,
 	locationPart, itemPart string,
 	commandName string,
 ) (string, error) {
@@ -156,7 +165,7 @@ func resolveLocationItemSelector(
 // Uses commandName in error messages for context.
 func resolveItemByCanonicalName(
 	ctx context.Context,
-	db *database.Database,
+	db LocationItemQuerier,
 	input string,
 	commandName string,
 ) (string, error) {
@@ -181,7 +190,7 @@ func resolveItemByCanonicalName(
 // Uses commandName to provide contextual examples.
 func buildAmbiguousItemError(
 	ctx context.Context,
-	db *database.Database,
+	db LocationItemQuerier,
 	canonicalName string,
 	items []*database.Item,
 	commandName string,

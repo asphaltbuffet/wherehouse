@@ -1,0 +1,24 @@
+Implementation Plan Summary - wherehouse initialize database
+
+- `wherehouse initialize` is a parent command (shows help only); `wherehouse initialize database`
+  is the action subcommand that creates the SQLite database, failing if the file already exists.
+
+- `--force` flag on `initialize database` renames the existing DB to `<path>.backup.<YYYYMMDD>`
+  (with `.1`, `.2`, ... counter suffix on collision) then creates a fresh database; backup
+  failure warns to stderr and falls back to remove + recreate.
+
+- Pre-flight check added to `cli.OpenDatabase` via `CheckDatabaseExists`: if the DB file is
+  absent, all commands return a clear error ("run `wherehouse initialize database` to create it")
+  before the SQLite driver is invoked, eliminating the opaque "not enough memory" failure.
+
+- `initialize database` calls `database.Open` directly (bypasses `cli.OpenDatabase`) because it
+  is the one command where the DB file legitimately does not exist yet.
+
+Files changed:
+  internal/cli/database.go              (add ErrDatabaseNotInitialized, CheckDatabaseExists, update OpenDatabase)
+  internal/cli/database_test.go         (add CheckDatabaseExists tests)
+  cmd/initialize/doc.go                 (new - package initialize)
+  cmd/initialize/initialize.go          (new - GetInitializeCmd parent command)
+  cmd/initialize/database.go            (new - GetDatabaseCmd, runInitializeDatabase, backupDatabase, printInitResult)
+  cmd/initialize/database_test.go       (new - table-driven tests)
+  cmd/root.go                           (import initialize, add AddCommand)

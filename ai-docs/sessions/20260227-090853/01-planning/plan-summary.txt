@@ -1,0 +1,25 @@
+FOUND COMMAND - IMPLEMENTATION PLAN SUMMARY
+==========================================
+
+- 4 new files in cmd/found/ (doc.go, found.go, helpers.go, item.go) plus 1 modification
+  to cmd/root.go for registration. No database layer changes needed - all required DB
+  methods (GetItem, GetLocation, AppendEvent) already exist.
+
+- Validation: --in location must not be system location (hard fail); item at non-Missing
+  location produces a warning but proceeds (user clarification Q1); item at Borrowed/Loaned
+  also warns and proceeds.
+
+- Event sequence for plain `found`: single item.found event sets location=foundLocation,
+  in_temporary_use=true, temp_origin=homeLocation. For `found --return`: item.found fires
+  first, then item.moved (rehome, clear project) fires if TempOriginLocationID is set and
+  differs from foundLocation. If TempOriginLocationID is NULL, or found==home, the return
+  move is skipped with a warning (user clarification Q2/Q3). No --home flag.
+
+- Output: human format prints "Found X at Y (home: Z)" or "Found X at Y, returned to Z";
+  JSON wraps results in {"found":[...]} with returned bool, found_event_id, optional
+  return_event_id, and warnings array. Quiet mode suppresses all stdout.
+
+- 28 test cases covering: happy path (found/found+return), warning cases (non-missing items,
+  NULL home, already-at-home), error cases (bad selectors, system --in location), event
+  state verification (in_temporary_use, temp_origin, event count), and output format
+  variants (human/JSON/quiet with and without warnings).

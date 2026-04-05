@@ -134,7 +134,7 @@ func filterSince(events []*database.Event, since time.Time) []*database.Event {
 func reverseSlice(events []*database.Event) {
 	for i := range len(events) / 2 {
 		j := len(events) - 1 - i
-		//nolint:gosec // i is guaranteed within bounds by loop range
+
 		events[i], events[j] = events[j], events[i]
 	}
 }

@@ -1,0 +1,22 @@
+PLAN SUMMARY: cmd/move Test Refactoring (mockery v3 approach)
+
+- Interface strategy: Define narrow `moveDB` interface in cmd/move package (8 methods); define
+  `LocationItemQuerier` interface in internal/cli so resolver functions accept the interface instead
+  of *database.Database — *database.Database satisfies both with zero changes to internal/database.
+
+- Constructor seam: NewMoveCmd(db moveDB) for tests (mock injected at construction, no openDatabase
+  call in RunE); NewDefaultMoveCmd() for production (opens DB from context config inside RunE,
+  identical to current behavior). Singleton GetMoveCmd() removed entirely.
+
+- Mock generation: Add cmd/move package to .mockery.yaml; run mockery to generate
+  cmd/move/mocks/mock_movedb.go; wiring_test.go uses MockMoveDB with EXPECT() chaining to verify
+  exact parameters at each layer (payload fields, note arg, project action).
+
+- Test split: moveItem() and validateDestinationNotSystem() keep real in-memory SQLite (database
+  behavior is relevant); 10 new wiring_test.go tests use MockMoveDB only (no DB open, no seeding).
+
+- Linting: Fix 6x assert.Contains(err.Error()) -> assert.ErrorContains; context.Background() ->
+  t.Context(); delete unconditional-skip TestIsQuietMode; add t.Helper() to all mock setup helpers.
+
+- Implementation order: internal/cli selectors first -> mover.go interface -> helpers/item/move.go
+  changes -> root.go update -> go build ./... -> generate mock -> write tests -> mise run lint + test.

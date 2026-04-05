@@ -628,11 +628,13 @@ func TestValidateFromParent(t *testing.T) {
 			name:         "root location with nil parent matches nil expectation",
 			args:         args{TestLocationWorkshop, ""},
 			errAssertion: require.NoError,
+			wantErrMsg:   "",
 		},
 		{
 			name:         "child location with matching parent ID passes",
 			args:         args{TestLocationToolbox, TestLocationWorkshop},
 			errAssertion: require.NoError,
+			wantErrMsg:   "",
 		},
 		{
 			name:         "root location with non-nil expectation fails",
@@ -656,6 +658,7 @@ func TestValidateFromParent(t *testing.T) {
 			name:         "deep hierarchy child location matches parent",
 			args:         args{TestLocationBinA, TestLocationShelves},
 			errAssertion: require.NoError,
+			wantErrMsg:   "",
 		},
 		{
 			name:         "non-existent location returns not found",

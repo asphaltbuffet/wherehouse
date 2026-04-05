@@ -241,6 +241,7 @@ func outputJSON(w io.Writer, result *database.ScryResult) error {
 		FoundLocations:       make([]*jsonScoredLoc, 0, len(result.FoundLocations)),
 		TempUseLocations:     make([]*jsonScoredLoc, 0, len(result.TempUseLocations)),
 		SimilarItemLocations: make([]*jsonSimilarLoc, 0, len(result.SimilarItemLocations)),
+		HomeLocation:         nil,
 	}
 
 	if result.HomeLocation != nil {

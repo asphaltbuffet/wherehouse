@@ -1,0 +1,21 @@
+{
+  "parallel_batches": [
+    {
+      "batch_id": 1,
+      "tasks": [
+        {
+          "task_id": "A",
+          "description": "Implement cmd/found/ package: doc.go, found.go, helpers.go, item.go. Register in cmd/root.go.",
+          "files": [
+            "/cmd/found/doc.go",
+            "/cmd/found/found.go",
+            "/cmd/found/helpers.go",
+            "/cmd/found/item.go",
+            "/cmd/root.go"
+          ],
+          "agent": "golang-ui-developer"
+        }
+      ]
+    }
+  ]
+}
