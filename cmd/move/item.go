@@ -67,9 +67,8 @@ func runMoveItem(cmd *cobra.Command, args []string) error {
 	projectAction := determineProjectAction(projectID, keepProject)
 
 	// Set up output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode := cli.IsQuietMode(cmd)
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(ctx)
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// Process each item selector in order (fail-fast)
 	var results []Result
@@ -93,14 +92,14 @@ func runMoveItem(cmd *cobra.Command, args []string) error {
 		results = append(results, *result)
 
 		// Print success message (unless quiet or JSON mode)
-		if !jsonMode {
+		if !cfg.IsJSON() {
 			out.Success(fmt.Sprintf("Moved item %q from %s to %s",
 				result.DisplayName, result.FromLocation, result.ToLocation))
 		}
 	}
 
 	// Output JSON if requested
-	if jsonMode {
+	if cfg.IsJSON() {
 		output := map[string]any{
 			"moved": results,
 		}

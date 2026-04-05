@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
 func TestNewOutputWriter(t *testing.T) {
@@ -332,4 +334,133 @@ func TestOutputWriter_StylesNotNil(t *testing.T) {
 	assert.NotNil(t, w.styles.Info)
 	assert.NotNil(t, w.styles.Key)
 	assert.NotNil(t, w.styles.Value)
+}
+
+// TestNewOutputWriterFromConfig_JSONTrue tests NewOutputWriterFromConfig with IsJSON() = true.
+func TestNewOutputWriterFromConfig_JSONTrue(t *testing.T) {
+	cfg := &config.Config{
+		Output: config.OutputConfig{
+			DefaultFormat: "json",
+			Quiet:         0,
+		},
+	}
+
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriterFromConfig(out, err, cfg)
+
+	require.NotNil(t, w)
+	// Verify JSON mode by calling Success() and checking output is JSON
+	w.Success("test message")
+
+	var data map[string]string
+	require.NoError(t, json.Unmarshal(out.Bytes(), &data))
+	assert.Equal(t, "success", data["status"])
+	assert.Equal(t, "test message", data["message"])
+}
+
+// TestNewOutputWriterFromConfig_JSONFalse tests NewOutputWriterFromConfig with IsJSON() = false.
+func TestNewOutputWriterFromConfig_JSONFalse(t *testing.T) {
+	cfg := &config.Config{
+		Output: config.OutputConfig{
+			DefaultFormat: "human",
+			Quiet:         0,
+		},
+	}
+
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriterFromConfig(out, err, cfg)
+
+	require.NotNil(t, w)
+	// Verify human mode by calling Success() and checking output is NOT JSON
+	w.Success("test message")
+
+	output := out.String()
+	assert.Contains(t, output, "test message")
+	assert.NotEmpty(t, output)
+	// Verify it's not JSON formatted (JSON would have braces and quotes)
+	assert.NotContains(t, output, "\"status\"")
+}
+
+// TestNewOutputWriterFromConfig_QuietTrue tests NewOutputWriterFromConfig with IsQuiet() = true.
+func TestNewOutputWriterFromConfig_QuietTrue(t *testing.T) {
+	cfg := &config.Config{
+		Output: config.OutputConfig{
+			DefaultFormat: "human",
+			Quiet:         1,
+		},
+	}
+
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriterFromConfig(out, err, cfg)
+
+	require.NotNil(t, w)
+	// Verify quiet mode by calling Success() and checking no output
+	w.Success("test message")
+
+	assert.Empty(t, out.String())
+}
+
+// TestNewOutputWriterFromConfig_QuietFalse tests NewOutputWriterFromConfig with IsQuiet() = false.
+func TestNewOutputWriterFromConfig_QuietFalse(t *testing.T) {
+	cfg := &config.Config{
+		Output: config.OutputConfig{
+			DefaultFormat: "human",
+			Quiet:         0,
+		},
+	}
+
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriterFromConfig(out, err, cfg)
+
+	require.NotNil(t, w)
+	// Verify normal mode by calling Success() and checking output exists
+	w.Success("test message")
+
+	output := out.String()
+	assert.Contains(t, output, "test message")
+	assert.NotEmpty(t, output)
+}
+
+// TestNewOutputWriterFromConfig_JSONAndQuiet tests combined JSON and quiet modes.
+func TestNewOutputWriterFromConfig_JSONAndQuiet(t *testing.T) {
+	cfg := &config.Config{
+		Output: config.OutputConfig{
+			DefaultFormat: "json",
+			Quiet:         1,
+		},
+	}
+
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriterFromConfig(out, err, cfg)
+
+	require.NotNil(t, w)
+	// Quiet mode suppresses Success output even in JSON mode
+	w.Success("test message")
+
+	assert.Empty(t, out.String())
+}
+
+// TestNewOutputWriterFromConfig_QuietLevel2 tests QuietLevel 2.
+func TestNewOutputWriterFromConfig_QuietLevel2(t *testing.T) {
+	cfg := &config.Config{
+		Output: config.OutputConfig{
+			DefaultFormat: "human",
+			Quiet:         2,
+		},
+	}
+
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriterFromConfig(out, err, cfg)
+
+	require.NotNil(t, w)
+	// Quiet at level 2 should still suppress output
+	w.Success("test message")
+
+	assert.Empty(t, out.String())
 }

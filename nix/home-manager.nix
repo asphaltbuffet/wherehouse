@@ -14,6 +14,14 @@
     path = cfg.settings.database.path;
   };
 
+  # Build the [logging] section, omitting null values.
+  loggingSettings = lib.filterAttrs (_: v: v != null) {
+    file_path = cfg.settings.logging.filePath;
+    level = cfg.settings.logging.level;
+    max_size_mb = cfg.settings.logging.maxSizeMB;
+    max_backups = cfg.settings.logging.maxBackups;
+  };
+
   # Build the [user] section, omitting null/empty values.
   userSettings =
     lib.filterAttrs (_: v: v != null) {
@@ -33,6 +41,7 @@
   # (XDG dirs, OS username, etc.) are not overridden when unset.
   settingsToml =
     lib.optionalAttrs (dbSettings != {}) {database = dbSettings;}
+    // lib.optionalAttrs (loggingSettings != {}) {logging = loggingSettings;}
     // lib.optionalAttrs (userSettings != {}) {user = userSettings;}
     // lib.optionalAttrs (outputSettings != {}) {output = outputSettings;};
 in {
@@ -54,6 +63,53 @@ in {
             (typically ~/.local/share/wherehouse/wherehouse.db).
           '';
           example = "~/.local/share/wherehouse/wherehouse.db";
+        };
+      };
+
+      logging = {
+        filePath = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = ''
+            Absolute path to the log file.
+            Supports ~ and environment variables.
+            When null, wherehouse uses the platform default:
+            $XDG_STATE_HOME/wherehouse/wherehouse.log on Linux
+            (typically ~/.local/state/wherehouse/wherehouse.log).
+            Can also be set via the WHEREHOUSE_LOG_PATH environment variable.
+          '';
+          example = "~/.local/state/wherehouse/wherehouse.log";
+        };
+
+        level = lib.mkOption {
+          type = lib.types.nullOr (lib.types.enum ["debug" "info" "warn" "error"]);
+          default = null;
+          description = ''
+            Minimum log level to record.
+            When null, defaults to "warn".
+          '';
+          example = "warn";
+        };
+
+        maxSizeMB = lib.mkOption {
+          type = lib.types.nullOr lib.types.int;
+          default = null;
+          description = ''
+            Maximum log file size in megabytes before rotation.
+            When null or 0, rotation is disabled and a plain append-mode file is used.
+          '';
+          example = 10;
+        };
+
+        maxBackups = lib.mkOption {
+          type = lib.types.nullOr lib.types.int;
+          default = null;
+          description = ''
+            Number of old rotated log files to retain.
+            Only meaningful when maxSizeMB > 0.
+            When null or 0 with rotation enabled, defaults to 3.
+          '';
+          example = 3;
         };
       };
 

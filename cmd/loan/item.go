@@ -48,9 +48,8 @@ func runLoanItem(cmd *cobra.Command, args []string) error {
 	actorUserID := cli.GetActorUserID(ctx)
 
 	// Set up output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode := cli.IsQuietMode(cmd)
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(cmd.Context())
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// PHASE 1: Resolve and validate ALL selectors (fail-fast)
 	type resolvedItem struct {
@@ -87,7 +86,7 @@ func runLoanItem(cmd *cobra.Command, args []string) error {
 		results = append(results, *result)
 
 		// Print success message (unless quiet or JSON mode)
-		if !jsonMode {
+		if !cfg.IsJSON() {
 			if result.WasReLoaned {
 				out.Success(fmt.Sprintf("Loaned item %q to %s (previously loaned to %s)",
 					result.DisplayName, result.LoanedTo, result.PreviousLoanedTo))
@@ -99,7 +98,7 @@ func runLoanItem(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output JSON if requested
-	if jsonMode {
+	if cfg.IsJSON() {
 		output := map[string]any{
 			"success":      true,
 			"items_loaned": results,

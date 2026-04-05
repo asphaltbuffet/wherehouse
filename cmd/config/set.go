@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/pelletier/go-toml/v2"
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
@@ -35,7 +33,7 @@ Examples:
   wherehouse config set database.path /custom/inventory.db
   wherehouse config set --local output.default_format json
   wherehouse config set user.default_identity alice`,
-		Args: cobra.ExactArgs(keyValueParts),
+		Args: cobra.ExactArgs(2), //nolint:mnd // 2 is the exact number of required args: key and value
 		RunE: runSet,
 	}
 
@@ -45,64 +43,13 @@ Examples:
 	return setCmd
 }
 
-// updateConfigValue reads a config file, updates a key-value pair, validates, and writes it back.
-func updateConfigValue(fs afero.Fs, path, key, value string) error {
-	// Load existing config
-	data, err := afero.ReadFile(fs, path)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	// Parse as map for flexible key setting
-	var configMap map[string]any
-	err = toml.Unmarshal(data, &configMap)
-	if err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	// Set the value in the map
-	err = setValueInMap(configMap, key, value)
-	if err != nil {
-		return err
-	}
-
-	// Marshal back to TOML
-	newData, err := toml.Marshal(configMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal configuration: %w", err)
-	}
-
-	// Validate by unmarshaling into Config struct
-	var testCfg config.Config
-	err = toml.Unmarshal(newData, &testCfg)
-	if err != nil {
-		return fmt.Errorf("invalid configuration: %w", err)
-	}
-
-	// Perform full validation of the configuration
-	err = config.Validate(&testCfg)
-	if err != nil {
-		return fmt.Errorf("configuration validation failed: %w", err)
-	}
-
-	// Write atomically
-	err = atomicWrite(fs, path, newData, configFilePerms)
-	if err != nil {
-		return fmt.Errorf("failed to write configuration: %w", err)
-	}
-
-	return nil
-}
-
 func runSet(cmd *cobra.Command, args []string) error {
 	key := args[0]
 	value := args[1]
 	local, _ := cmd.Flags().GetBool("local")
 
-	// Create output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode, _ := cmd.Flags().GetBool("quiet")
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(cmd.Context())
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// Determine target file
 	var targetPath string
@@ -139,7 +86,7 @@ func runSet(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update the configuration value
-	err = updateConfigValue(cmdFS, expandedPath, key, value)
+	err = config.Set(cmdFS, expandedPath, key, value)
 	if err != nil {
 		out.Error(err.Error())
 		return err

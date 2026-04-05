@@ -55,7 +55,6 @@ func runHistory(cmd *cobra.Command, args []string) error {
 	limit, _ := cmd.Flags().GetInt("limit")
 	sinceStr, _ := cmd.Flags().GetString("since")
 	oldestFirst, _ := cmd.Flags().GetBool("oldest-first")
-	jsonMode, _ := cmd.Flags().GetBool("json")
 
 	// Validate selector
 	if itemID == "" && len(args) == 0 {
@@ -106,7 +105,8 @@ func runHistory(cmd *cobra.Command, args []string) error {
 	}
 
 	// Format and output
-	return formatOutput(ctx, cmd, db, filtered, jsonMode)
+	cfg := cli.MustGetConfig(ctx)
+	return formatOutput(ctx, cmd, db, filtered, cfg.IsJSON())
 }
 
 // openDatabase opens the database connection using config settings.

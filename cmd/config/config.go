@@ -38,7 +38,6 @@ Examples:
 	configCmd.AddCommand(GetInitCmd())
 	configCmd.AddCommand(GetGetCmd())
 	configCmd.AddCommand(GetSetCmd())
-	configCmd.AddCommand(GetUnsetCmd())
 	configCmd.AddCommand(GetPathCmd())
 	configCmd.AddCommand(GetCheckCmd())
 	configCmd.AddCommand(GetEditCmd())
@@ -53,7 +52,6 @@ func ResetForTesting() {
 	initCmd = nil
 	getCmd = nil
 	setCmd = nil
-	unsetCmd = nil
 	pathCmd = nil
 	checkCmd = nil
 	editCmd = nil

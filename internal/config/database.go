@@ -6,6 +6,15 @@ import (
 	"runtime"
 )
 
+const (
+	goosLinux   = "linux"
+	goosFreeBSD = "freebsd"
+	goosOpenBSD = "openbsd"
+	goosNetBSD  = "netbsd"
+	goosDarwin  = "darwin"
+	goosWindows = "windows"
+)
+
 // DefaultDatabasePath returns the platform-specific default database path.
 // It follows OS conventions for application data storage:
 //
@@ -22,7 +31,7 @@ import (
 // Database creation will fail if parent directory does not exist (explicit user action required).
 func DefaultDatabasePath() string {
 	switch runtime.GOOS {
-	case "linux", "freebsd", "openbsd", "netbsd":
+	case goosLinux, goosFreeBSD, goosOpenBSD, goosNetBSD:
 		// XDG Base Directory Specification
 		dataHome := os.Getenv("XDG_DATA_HOME")
 		if dataHome == "" {
@@ -37,7 +46,7 @@ func DefaultDatabasePath() string {
 
 		return filepath.Join(dataHome, "wherehouse", "wherehouse.db")
 
-	case "darwin":
+	case goosDarwin:
 		// macOS Application Support
 		home := os.Getenv("HOME")
 		if home == "" {
@@ -47,7 +56,7 @@ func DefaultDatabasePath() string {
 
 		return filepath.Join(home, "Library", "Application Support", "wherehouse", "wherehouse.db")
 
-	case "windows":
+	case goosWindows:
 		// Windows APPDATA
 		appData := os.Getenv("APPDATA")
 		if appData == "" {

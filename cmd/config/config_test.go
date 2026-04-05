@@ -34,8 +34,8 @@ func TestGetConfigCmd_HasSubcommands(t *testing.T) {
 	subcommands := cmd.Commands()
 
 	require.NotEmpty(t, subcommands)
-	// Should have 7 subcommands
-	assert.Len(t, subcommands, 7)
+	// Should have 6 subcommands
+	assert.Len(t, subcommands, 6)
 }
 
 func TestGetConfigCmd_SubcommandNames(t *testing.T) {
@@ -52,7 +52,6 @@ func TestGetConfigCmd_SubcommandNames(t *testing.T) {
 	assert.True(t, names["init"])
 	assert.True(t, names["get"])
 	assert.True(t, names["set"])
-	assert.True(t, names["unset"])
 	assert.True(t, names["path"])
 	assert.True(t, names["check"])
 	assert.True(t, names["edit"])
@@ -126,25 +125,6 @@ func TestGetSetCmd_Singleton(t *testing.T) {
 	assert.Same(t, cmd1, cmd2)
 }
 
-func TestGetUnsetCmd_Returns(t *testing.T) {
-	defer ResetForTesting()
-
-	cmd := GetUnsetCmd()
-
-	require.NotNil(t, cmd)
-	assert.NotEmpty(t, cmd.Use)
-	assert.True(t, cmd.Use == "unset" || cmd.Use == "unset <key>")
-}
-
-func TestGetUnsetCmd_Singleton(t *testing.T) {
-	defer ResetForTesting()
-
-	cmd1 := GetUnsetCmd()
-	cmd2 := GetUnsetCmd()
-
-	assert.Same(t, cmd1, cmd2)
-}
-
 func TestGetPathCmd_Returns(t *testing.T) {
 	defer ResetForTesting()
 
@@ -205,7 +185,6 @@ func TestResetForTesting_ResetsAll(t *testing.T) {
 	GetInitCmd()
 	GetGetCmd()
 	GetSetCmd()
-	GetUnsetCmd()
 	GetPathCmd()
 	GetCheckCmd()
 	GetEditCmd()
@@ -215,7 +194,6 @@ func TestResetForTesting_ResetsAll(t *testing.T) {
 	assert.NotNil(t, initCmd)
 	assert.NotNil(t, getCmd)
 	assert.NotNil(t, setCmd)
-	assert.NotNil(t, unsetCmd)
 	assert.NotNil(t, pathCmd)
 	assert.NotNil(t, checkCmd)
 	assert.NotNil(t, editCmd)
@@ -228,7 +206,6 @@ func TestResetForTesting_ResetsAll(t *testing.T) {
 	assert.Nil(t, initCmd)
 	assert.Nil(t, getCmd)
 	assert.Nil(t, setCmd)
-	assert.Nil(t, unsetCmd)
 	assert.Nil(t, pathCmd)
 	assert.Nil(t, checkCmd)
 	assert.Nil(t, editCmd)
@@ -257,7 +234,6 @@ func TestAllSubcommands_HaveRunE(t *testing.T) {
 		GetInitCmd,
 		GetGetCmd,
 		GetSetCmd,
-		GetUnsetCmd,
 		GetPathCmd,
 		GetCheckCmd,
 		GetEditCmd,

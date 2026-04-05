@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -38,6 +39,7 @@ func TestConfigCheck_InvalidTOML(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	result := cmd.Execute()
 
@@ -56,6 +58,7 @@ func TestConfigCheck_MissingConfig(_ *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	result := cmd.Execute()
 

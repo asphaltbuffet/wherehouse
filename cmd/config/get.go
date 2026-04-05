@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/pelletier/go-toml/v2"
@@ -40,40 +39,28 @@ Examples:
 	}
 
 	// Add flags specific to this command
-	getCmd.Flags().Bool("json", false, "output in JSON format")
 	getCmd.Flags().Bool("sources", false, "show where each value comes from")
 
 	return getCmd
 }
 
 func runGet(cmd *cobra.Command, args []string) error {
-	jsonOutput, _ := cmd.Flags().GetBool("json")
 	showSources, _ := cmd.Flags().GetBool("sources")
-	quietMode, _ := cmd.Flags().GetBool("quiet")
+	globalConfig := cli.MustGetConfig(cmd.Context())
 
 	// Create output writer
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonOutput, quietMode)
-
-	// Get the global config from command context
-	cfg := cmd.Context().Value("config")
-	if cfg == nil {
-		return errors.New("configuration not loaded")
-	}
-	globalConfig, ok := cfg.(*config.Config)
-	if !ok {
-		return errors.New("invalid configuration type in context")
-	}
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), globalConfig)
 
 	// If specific key requested
 	if len(args) == 1 {
 		key := args[0]
-		value, err := getConfigValue(globalConfig, key)
+		value, err := config.GetValue(globalConfig, key)
 		if err != nil {
 			out.Error(err.Error())
 			return err
 		}
 
-		if jsonOutput {
+		if globalConfig.IsJSON() {
 			return out.JSON(map[string]any{key: value})
 		}
 
@@ -82,7 +69,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show all configuration
-	if jsonOutput {
+	if globalConfig.IsJSON() {
 		return out.JSON(globalConfig)
 	}
 

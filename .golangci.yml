@@ -464,3 +464,7 @@ linters:
           - noctx
           - unparam
           - wrapcheck
+      - path: 'internal/config/(database|log)\.go'
+        linters:
+          - dupl
+        text: 'lines are duplicate of'

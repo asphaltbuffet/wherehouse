@@ -15,28 +15,55 @@ type configKeyType int
 // ConfigKey provides a unique context key for config.
 const ConfigKey configKeyType = iota
 
+const (
+	outputFormatJSON  = "json"
+	outputFormatHuman = "human"
+)
+
 // Config represents the complete wherehouse configuration.
 type Config struct {
-	Database DatabaseConfig `mapstructure:"database"`
-	User     UserConfig     `mapstructure:"user"`
-	Output   OutputConfig   `mapstructure:"output"`
+	Database DatabaseConfig `mapstructure:"database" toml:"database"`
+	Logging  LoggingConfig  `mapstructure:"logging"  toml:"logging"`
+	User     UserConfig     `mapstructure:"user"     toml:"user"`
+	Output   OutputConfig   `mapstructure:"output"   toml:"output"`
+}
+
+// LoggingConfig holds logging-related configuration.
+type LoggingConfig struct {
+	// FilePath is the absolute path to the log file.
+	// Empty string causes logging.Init() to use DefaultLogPath().
+	FilePath string `mapstructure:"file_path" toml:"file_path"`
+
+	// Level is the minimum log level to record.
+	// Valid values (case-insensitive): "debug", "info", "warn", "warning", "error".
+	// Any unrecognized value defaults to slog.LevelWarn.
+	Level string `mapstructure:"level" toml:"level"`
+
+	// MaxSizeMB is the maximum log file size in megabytes before rotation.
+	// 0 (default) disables rotation and uses a plain append-mode file.
+	MaxSizeMB int `mapstructure:"max_size_mb" toml:"max_size_mb"`
+
+	// MaxBackups is the number of old rotated log files to retain.
+	// Only meaningful when MaxSizeMB > 0. If 0 when rotation is active,
+	// Init() defaults this to 3.
+	MaxBackups int `mapstructure:"max_backups" toml:"max_backups"`
 }
 
 // DatabaseConfig holds database-related configuration.
 type DatabaseConfig struct {
-	Path string `mapstructure:"path"`
+	Path string `mapstructure:"path" toml:"path"`
 }
 
 // UserConfig holds user identity configuration.
 type UserConfig struct {
-	DefaultIdentity string            `mapstructure:"default_identity"`
-	OSUsernameMap   map[string]string `mapstructure:"os_username_map"`
+	DefaultIdentity string            `mapstructure:"default_identity" toml:"default_identity"`
+	OSUsernameMap   map[string]string `mapstructure:"os_username_map"  toml:"os_username_map"`
 }
 
 // OutputConfig holds output formatting configuration.
 type OutputConfig struct {
-	DefaultFormat string `mapstructure:"default_format"`
-	Quiet         bool   `mapstructure:"quiet"`
+	DefaultFormat string `mapstructure:"default_format" toml:"default_format"`
+	Quiet         int    `mapstructure:"quiet"          toml:"quiet"`
 }
 
 // New creates a Config instance with the given optional filepath.
@@ -84,6 +111,24 @@ func NewWithFS(fs afero.Fs, filepath string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// IsQuiet returns true if quiet mode is enabled (at any level).
+// Corresponds to the user passing -q or setting output.quiet >= 1 in config.
+func (c *Config) IsQuiet() bool {
+	return c.Output.Quiet > 0
+}
+
+// QuietLevel returns the quiet suppression level.
+// 0 = normal output, 1 = minimal (-q), 2+ = silent (-qq).
+func (c *Config) QuietLevel() int {
+	return c.Output.Quiet
+}
+
+// IsJSON returns true if JSON output format is active.
+// Corresponds to the user passing --json or setting output.default_format = "json" in config.
+func (c *Config) IsJSON() bool {
+	return c.Output.DefaultFormat == outputFormatJSON
 }
 
 // GetCurrentUsername returns the current OS username.

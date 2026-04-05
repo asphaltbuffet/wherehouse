@@ -20,7 +20,7 @@ func TestDefaultDatabasePath(t *testing.T) {
 	}{
 		{
 			name:     "linux with XDG_DATA_HOME",
-			platform: "linux",
+			platform: goosLinux,
 			envSetup: func(t *testing.T) {
 				t.Setenv("XDG_DATA_HOME", "/home/testuser/.local/share")
 				t.Setenv("HOME", "/home/testuser")
@@ -30,7 +30,7 @@ func TestDefaultDatabasePath(t *testing.T) {
 		},
 		{
 			name:     "linux without XDG_DATA_HOME",
-			platform: "linux",
+			platform: goosLinux,
 			envSetup: func(t *testing.T) {
 				t.Setenv("XDG_DATA_HOME", "")
 				t.Setenv("HOME", "/home/testuser")
@@ -40,7 +40,7 @@ func TestDefaultDatabasePath(t *testing.T) {
 		},
 		{
 			name:     "linux without HOME falls back gracefully",
-			platform: "linux",
+			platform: goosLinux,
 			envSetup: func(t *testing.T) {
 				t.Setenv("XDG_DATA_HOME", "")
 				t.Setenv("HOME", "")
@@ -49,7 +49,7 @@ func TestDefaultDatabasePath(t *testing.T) {
 		},
 		{
 			name:     "darwin with HOME",
-			platform: "darwin",
+			platform: goosDarwin,
 			envSetup: func(t *testing.T) {
 				t.Setenv("HOME", "/Users/testuser")
 			},
@@ -58,7 +58,7 @@ func TestDefaultDatabasePath(t *testing.T) {
 		},
 		{
 			name:     "darwin without HOME falls back gracefully",
-			platform: "darwin",
+			platform: goosDarwin,
 			envSetup: func(t *testing.T) {
 				t.Setenv("HOME", "")
 			},
@@ -118,7 +118,7 @@ func TestDefaultDatabasePath_CurrentPlatform(t *testing.T) {
 
 	// Platform-specific checks
 	switch runtime.GOOS {
-	case "linux", "freebsd", "openbsd", "netbsd":
+	case goosLinux, goosFreeBSD, goosOpenBSD, goosNetBSD:
 		// Should use XDG or .local/share
 		if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
 			assert.Contains(t, path, xdgDataHome)
@@ -126,10 +126,10 @@ func TestDefaultDatabasePath_CurrentPlatform(t *testing.T) {
 			assert.Contains(t, path, ".local/share")
 		}
 
-	case "darwin":
+	case goosDarwin:
 		assert.Contains(t, path, "Library/Application Support")
 
-	case "windows":
+	case goosWindows:
 		// Should contain APPDATA or fallback
 		assert.True(t,
 			os.Getenv("APPDATA") != "" || os.Getenv("USERPROFILE") != "",

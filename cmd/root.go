@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/fang"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
@@ -16,6 +18,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
+	"github.com/asphaltbuffet/wherehouse/internal/logging"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
@@ -66,6 +69,30 @@ Examples:
 	return rootCmd
 }
 
+// bindFlagsToConfig applies persistent flag overrides onto cfg after loading.
+// Only flags explicitly provided by the user (Changed == true) are applied,
+// so flag zero-values do not silently clobber config file values.
+func bindFlagsToConfig(cmd *cobra.Command, cfg *config.Config) {
+	if cmd.Flags().Changed("db") {
+		if val, _ := cmd.Flags().GetString("db"); val != "" {
+			cfg.Database.Path = val
+		}
+	}
+	if cmd.Flags().Changed("as") {
+		if val, _ := cmd.Flags().GetString("as"); val != "" {
+			cfg.User.DefaultIdentity = val
+		}
+	}
+	if cmd.Flags().Changed("json") {
+		cfg.Output.DefaultFormat = "json"
+	}
+	if cmd.Flags().Changed("quiet") {
+		if count, err := cmd.Flags().GetCount("quiet"); err == nil {
+			cfg.Output.Quiet = count
+		}
+	}
+}
+
 // initConfig initializes the configuration system.
 // Called before each command runs (PersistentPreRunE).
 func initConfig(cmd *cobra.Command, _ []string) error {
@@ -77,7 +104,19 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	bindFlagsToConfig(cmd, cfg)
+
 	globalConfig = cfg
+
+	// Initialize logging. Non-fatal: a warning is written to stderr and
+	// execution continues with a no-op (discard) logger.
+	logPath, err := cfg.GetLogPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not resolve log path: %v\n", err)
+	} else if initErr := logging.Init(afero.NewOsFs(), logPath, cfg.Logging.Level, cfg.Logging.MaxSizeMB, cfg.Logging.MaxBackups); initErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: logging unavailable: %v\n", initErr)
+	}
+
 	ctx := context.WithValue(cmd.Context(), config.ConfigKey, globalConfig)
 	cmd.SetContext(ctx)
 	return nil
@@ -104,6 +143,8 @@ func loadConfigOrDefaults(configPath string, noConfig bool) (*config.Config, err
 // Execute runs the root command using fang for enhanced styling and error handling.
 // This is called by main.main() and is the application entry point.
 func Execute(ctx context.Context) error {
+	defer logging.Close()
+
 	return fang.Execute(
 		ctx,
 		GetRootCmd(),

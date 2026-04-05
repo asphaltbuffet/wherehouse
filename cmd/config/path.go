@@ -113,10 +113,8 @@ func runPath(cmd *cobra.Command, _ []string) error {
 	showAll, _ := cmd.Flags().GetBool("all")
 	noConfig, _ := cmd.Flags().GetBool("no-config")
 
-	// Create output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode, _ := cmd.Flags().GetBool("quiet")
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(cmd.Context())
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	if noConfig {
 		out.Info("No configuration files loaded (--no-config flag set)")

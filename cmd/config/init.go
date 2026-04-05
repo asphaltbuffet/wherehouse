@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -49,10 +49,8 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	// Access persistent flag from root command - cobra automatically inherits persistent flags
 	customPath, _ := cmd.Flags().GetString("config")
 
-	// Create output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode, _ := cmd.Flags().GetBool("quiet")
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(cmd.Context())
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// Determine target path
 	var targetPath string
@@ -72,38 +70,16 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid path %q: %w", targetPath, err)
 	}
 
-	// Check if file exists
-	exists, err := fileExists(cmdFS, expandedPath)
+	// Write default config (handles exists check, dir creation, and write atomically)
+	err = config.WriteDefault(cmdFS, expandedPath, force)
 	if err != nil {
-		out.Error(fmt.Sprintf("checking config file: %v", err))
-		return fmt.Errorf("checking config file: %w", err)
-	}
-
-	if exists && !force {
-		out.Error(fmt.Sprintf("configuration file already exists: %s", expandedPath))
-		out.Info("Use --force to overwrite")
-		return fmt.Errorf("configuration file already exists: %s", expandedPath)
-	}
-
-	// Create parent directory if needed
-	dir := filepath.Dir(expandedPath)
-	err = ensureDir(cmdFS, dir)
-	if err != nil {
-		out.Error(fmt.Sprintf("failed to create directory %q: %v", dir, err))
-		return fmt.Errorf("failed to create directory %q: %w", dir, err)
-	}
-
-	// Generate default config
-	cfg := config.GetDefaults()
-
-	// Marshal to TOML with comments
-	data := marshalConfigWithComments(cfg)
-
-	// Write atomically (write to temp file, then rename)
-	err = atomicWrite(cmdFS, expandedPath, data, configFilePerms)
-	if err != nil {
-		out.Error(fmt.Sprintf("failed to write configuration: %v", err))
-		return fmt.Errorf("failed to write configuration: %w", err)
+		if strings.Contains(err.Error(), "already exists") {
+			out.Error(err.Error())
+			out.Info("Use --force to overwrite")
+		} else {
+			out.Error(fmt.Sprintf("failed to write configuration: %v", err))
+		}
+		return err
 	}
 
 	// Report success

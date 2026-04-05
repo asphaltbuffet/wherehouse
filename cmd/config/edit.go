@@ -49,10 +49,8 @@ func runEdit(cmd *cobra.Command, _ []string) error {
 	local, _ := cmd.Flags().GetBool("local")
 	global, _ := cmd.Flags().GetBool("global")
 
-	// Create output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode, _ := cmd.Flags().GetBool("quiet")
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(cmd.Context())
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	if local && global {
 		out.Error("cannot use both --local and --global flags")
@@ -113,7 +111,7 @@ func runEdit(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Validate after editing
-	err = loadConfigFile(cmdFS, expandedPath)
+	err = config.Check(cmdFS, expandedPath)
 	if err != nil {
 		out.Warning(fmt.Sprintf("Configuration validation failed: %v", err))
 		out.Info("Please fix the errors and run 'wherehouse config check' to verify.")

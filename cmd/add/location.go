@@ -75,9 +75,8 @@ func runAddLocation(cmd *cobra.Command, args []string) error {
 	actorUserID := cli.GetActorUserID(ctx)
 
 	// 5. Set up output writer
-	jsonMode, _ := cmd.Flags().GetBool("json")
-	quietMode := cli.IsQuietMode(cmd)
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, quietMode)
+	cfg := cli.MustGetConfig(ctx)
+	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	// 6. Process each location (FAIL-FAST)
 	for _, locationName := range args {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -24,6 +25,7 @@ func TestConfigInit_CreatesGlobalConfig(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	// Execute init command
 	result := cmd.Execute()
@@ -55,6 +57,7 @@ func TestConfigInit_FailsWhenFileExists(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	result := cmd.Execute()
 
@@ -81,6 +84,7 @@ func TestConfigInit_OverwritesWithForce(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	result := cmd.Execute()
 
@@ -123,6 +127,7 @@ func TestConfigInit_OutputSuccess(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	result := cmd.Execute()
 	require.NoError(t, result)
@@ -144,6 +149,7 @@ func TestConfigInit_CreatesParentDirectories(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errBuf)
+	cmd.SetContext(context.WithValue(context.Background(), config.ConfigKey, config.GetDefaults()))
 
 	result := cmd.Execute()
 	require.NoError(t, result)

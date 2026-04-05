@@ -8,6 +8,14 @@ func applyDefaults(cfg *Config) {
 		cfg.Database.Path = DefaultDatabasePath()
 	}
 
+	// Logging defaults
+	if cfg.Logging.Level == "" {
+		cfg.Logging.Level = "warn"
+	}
+	// FilePath intentionally left empty: Init() resolves via DefaultLogPath()
+	// MaxSizeMB defaults to 0 (no rotation) - zero value is correct
+	// MaxBackups defaults to 0 (Init() will coerce to 3 when rotation is active)
+
 	// User defaults - empty string means use OS username
 	// OSUsernameMap defaults to empty map (no mappings)
 	if cfg.User.OSUsernameMap == nil {
@@ -18,7 +26,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Output.DefaultFormat == "" {
 		cfg.Output.DefaultFormat = "human"
 	}
-	// Quiet defaults to false (already zero value)
+	// Quiet defaults to 0 (already zero value for int)
 }
 
 // GetDefaults returns a Config struct populated with default values.
