@@ -20,6 +20,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/lost"
 	"github.com/asphaltbuffet/wherehouse/cmd/migrate"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
+	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
@@ -72,6 +73,7 @@ Examples:
 	rootCmd.AddCommand(lost.NewDefaultLostCmd())
 	rootCmd.AddCommand(migrate.GetMigrateCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
+	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 
 	return rootCmd

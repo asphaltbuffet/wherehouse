@@ -194,6 +194,8 @@ func formatEventDetails(
 		return formatItemFoundDetails(ctx, db, payload, locationCache), nil
 	case database.ItemDeletedEvent:
 		return []string{"Item permanently deleted"}, nil
+	case database.ItemRemovedEvent:
+		return []string{"Item moved to Removed"}, nil
 	case database.ItemLoanedEvent:
 		return nil, nil
 	case database.LocationCreatedEvent:
@@ -203,6 +205,8 @@ func formatEventDetails(
 	case database.LocationMovedEvent:
 		return nil, nil
 	case database.LocationDeletedEvent:
+		return nil, nil
+	case database.LocationRemovedEvent:
 		return nil, nil
 	case database.ProjectCreatedEvent:
 		return nil, nil
