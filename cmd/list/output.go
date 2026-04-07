@@ -29,11 +29,10 @@ type LocationNode struct {
 
 // ItemJSON is the JSON representation of a single item.
 type ItemJSON struct {
-	ItemID         string  `json:"item_id"`
-	DisplayName    string  `json:"display_name"`
-	CanonicalName  string  `json:"canonical_name"`
-	InTemporaryUse bool    `json:"in_temporary_use"`
-	ProjectID      *string `json:"project_id"`
+	ItemID         string `json:"item_id"`
+	DisplayName    string `json:"display_name"`
+	CanonicalName  string `json:"canonical_name"`
+	InTemporaryUse bool   `json:"in_temporary_use"`
 }
 
 // LocationJSON is the JSON representation of a location with its contents.
@@ -193,7 +192,6 @@ func nodeToJSON(node *LocationNode) LocationJSON {
 			DisplayName:    item.DisplayName,
 			CanonicalName:  item.CanonicalName,
 			InTemporaryUse: item.InTemporaryUse,
-			ProjectID:      item.ProjectID,
 		}
 		items = append(items, j)
 	}

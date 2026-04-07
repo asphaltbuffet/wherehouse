@@ -15,7 +15,7 @@ func TestEventTypeValuer(t *testing.T) {
 	}{
 		{ItemCreatedEvent, "item.created"},
 		{LocationMovedEvent, "location.reparented"},
-		{ProjectDeletedEvent, "project.deleted"},
+		{ItemRemovedEvent, "item.removed"},
 	}
 
 	for _, tt := range tests {

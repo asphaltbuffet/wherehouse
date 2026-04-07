@@ -17,7 +17,6 @@ type moveDB interface {
 	GetLocationByCanonicalName(ctx context.Context, canonicalName string) (*database.Location, error)
 	GetItemsByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Item, error)
 	ValidateFromLocation(ctx context.Context, itemID, expectedFromLocationID string) error
-	ValidateProjectExists(ctx context.Context, projectID string, requiredStatus *string) error
 	AppendEvent(
 		ctx context.Context,
 		eventType database.EventType,

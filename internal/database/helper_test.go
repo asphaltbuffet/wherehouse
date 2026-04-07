@@ -45,11 +45,6 @@ const (
 	// TestItemBorrowedSaw is a test item ID.
 	TestItemBorrowedSaw = "tst0itm007"
 
-	// TestProjectDeck is a test project ID.
-	TestProjectDeck = "test-project-deck"
-	// TestProjectShelving is a test project ID.
-	TestProjectShelving = "test-project-shelving"
-
 	// TestActorUser is the test user ID for event attribution.
 	TestActorUser = "test-user"
 
@@ -109,9 +104,8 @@ func NewTestDBWithSeed(t *testing.T) *Database {
 //   - 8 Locations: Workshop, Storage (roots), plus Toolbox, Workbench (Workshop children),
 //     Shelves, Bin A, Bin B (Storage hierarchy)
 //   - 7 Items: 10mm Socket, Screwdriver Set, Hammer, Drill Bits, Sandpaper, Missing Wrench, Borrowed Saw
-//   - 2 Projects: test-project-deck (active), test-project-shelving (completed).
 //
-//nolint:gocognit // Test data seeding is inherently sequential and complex
+
 func SeedTestData(ctx context.Context, db *Database) error {
 	// Insert all events first (without processing)
 
@@ -252,45 +246,6 @@ func SeedTestData(ctx context.Context, db *Database) error {
 		return err
 	}
 
-	// Create projects via events
-	if _, err = db.insertEvent(ctx, ProjectCreatedEvent, TestActorUser, map[string]any{
-		"project_id": TestProjectDeck,
-		"status":     "active",
-	}, ""); err != nil {
-		return err
-	}
-
-	if _, err = db.insertEvent(ctx, ProjectCreatedEvent, TestActorUser, map[string]any{
-		"project_id": TestProjectShelving,
-		"status":     "completed",
-	}, ""); err != nil {
-		return err
-	}
-
-	// Associate Drill Bits with test-project-deck (via item.moved event with project action)
-	if _, err = db.insertEvent(ctx, ItemMovedEvent, TestActorUser, map[string]any{
-		"item_id":          TestItemDrillBits,
-		"from_location_id": TestLocationBinA,
-		"to_location_id":   TestLocationBinA, // Same location, just setting project
-		"move_type":        "rehome",
-		"project_action":   "set",
-		"project_id":       TestProjectDeck,
-	}, ""); err != nil {
-		return err
-	}
-
-	// Associate Sandpaper with test-project-deck (via item.moved event with project action)
-	if _, err = db.insertEvent(ctx, ItemMovedEvent, TestActorUser, map[string]any{
-		"item_id":          TestItemSandpaper,
-		"from_location_id": TestLocationBinB,
-		"to_location_id":   TestLocationBinB, // Same location, just setting project
-		"move_type":        "rehome",
-		"project_action":   "set",
-		"project_id":       TestProjectDeck,
-	}, ""); err != nil {
-		return err
-	}
-
 	// Now process all events in order to populate projections
 	// We do this outside a transaction so that computeLocationPath can query parent locations
 	events, err := db.GetAllEvents(ctx)
@@ -329,15 +284,12 @@ func (d *Database) insertEvent(
 		return 0, fmt.Errorf("failed to unmarshal payload for ID extraction: %w", unmarshalErr)
 	}
 
-	var itemID, locationID, projectID *string
+	var itemID, locationID *string
 	if id, ok := payloadMap["item_id"].(string); ok && id != "" {
 		itemID = &id
 	}
 	if id, ok := payloadMap["location_id"].(string); ok && id != "" {
 		locationID = &id
-	}
-	if id, ok := payloadMap["project_id"].(string); ok && id != "" {
-		projectID = &id
 	}
 
 	// Generate timestamp in RFC3339 format with Z
@@ -358,9 +310,8 @@ func (d *Database) insertEvent(
 			payload,
 			note,
 			item_id,
-			location_id,
-			project_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			location_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := d.db.ExecContext(ctx, query,
@@ -371,7 +322,6 @@ func (d *Database) insertEvent(
 		notePtr,
 		itemID,
 		locationID,
-		projectID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert event: %w", err)
@@ -443,30 +393,6 @@ func AssertTestDataIntegrity(t *testing.T, db *Database) {
 	require.NoError(t, err)
 	require.NotNil(t, borrowedItem)
 	require.Equal(t, borrowedLoc.LocationID, borrowedItem.LocationID)
-
-	// Verify projects exist
-	deckProj, err := db.GetProject(ctx, TestProjectDeck)
-	require.NoError(t, err)
-	require.NotNil(t, deckProj)
-	require.Equal(t, "active", deckProj.Status)
-
-	shelvingProj, err := db.GetProject(ctx, TestProjectShelving)
-	require.NoError(t, err)
-	require.NotNil(t, shelvingProj)
-	require.Equal(t, "completed", shelvingProj.Status)
-
-	// Verify project associations
-	drillItem, err := db.GetItem(ctx, TestItemDrillBits)
-	require.NoError(t, err)
-	require.NotNil(t, drillItem)
-	require.NotNil(t, drillItem.ProjectID, "drill bits should have project association")
-	require.Equal(t, TestProjectDeck, *drillItem.ProjectID)
-
-	sandpaperItem, err := db.GetItem(ctx, TestItemSandpaper)
-	require.NoError(t, err)
-	require.NotNil(t, sandpaperItem)
-	require.NotNil(t, sandpaperItem.ProjectID, "sandpaper should have project association")
-	require.Equal(t, TestProjectDeck, *sandpaperItem.ProjectID)
 
 	// Verify location hierarchy
 	toolboxLoc, err := db.GetLocation(ctx, TestLocationToolbox)

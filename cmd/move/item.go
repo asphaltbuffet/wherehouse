@@ -12,14 +12,12 @@ import (
 
 // Result represents the result of a single item move operation.
 type Result struct {
-	ItemID        string `json:"item_id"`
-	DisplayName   string `json:"display_name"`
-	FromLocation  string `json:"from_location"`
-	ToLocation    string `json:"to_location"`
-	EventID       int64  `json:"event_id"`
-	MoveType      string `json:"move_type"`
-	ProjectAction string `json:"project_action,omitempty"`
-	ProjectID     string `json:"project_id,omitempty"`
+	ItemID       string `json:"item_id"`
+	DisplayName  string `json:"display_name"`
+	FromLocation string `json:"from_location"`
+	ToLocation   string `json:"to_location"`
+	EventID      int64  `json:"event_id"`
+	MoveType     string `json:"move_type"`
 }
 
 // runMoveItemCore contains the main business logic for the move command.
@@ -30,8 +28,6 @@ func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 	// Parse flags
 	toLocation, _ := cmd.Flags().GetString("to")
 	temp, _ := cmd.Flags().GetBool("temp")
-	projectID, _ := cmd.Flags().GetString("project")
-	keepProject, _ := cmd.Flags().GetBool("keep-project")
 	note, _ := cmd.Flags().GetString("note")
 
 	// Get actor user ID
@@ -48,17 +44,8 @@ func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 		return sysErr
 	}
 
-	// Validate project if specified
-	if projectID != "" {
-		activeStatus := "active"
-		if projErr := db.ValidateProjectExists(ctx, projectID, &activeStatus); projErr != nil {
-			return fmt.Errorf("project validation failed: %w", projErr)
-		}
-	}
-
-	// Determine move type and project action
+	// Determine move type
 	moveType := determineMoveType(temp)
-	projectAction := determineProjectAction(projectID, keepProject)
 
 	// Set up output writer
 	cfg := cli.MustGetConfig(ctx)
@@ -77,7 +64,7 @@ func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 		// Perform move
 		result, moveErr := moveItem(
 			ctx, db, itemID, toLocationID,
-			moveType, projectAction, projectID, actorUserID, note,
+			moveType, actorUserID, note,
 		)
 		if moveErr != nil {
 			return fmt.Errorf("failed to move %q: %w", selector, moveErr)
@@ -109,7 +96,7 @@ func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 func moveItem(
 	ctx context.Context,
 	db moveDB,
-	itemID, toLocationID, moveType, projectAction, projectID, actorUserID, note string,
+	itemID, toLocationID, moveType, actorUserID, note string,
 ) (*Result, error) {
 	// Get current item state
 	item, err := db.GetItem(ctx, itemID)
@@ -158,35 +145,20 @@ func moveItem(
 		"move_type":        moveType,
 	}
 
-	// Add project fields if applicable
-	if projectAction != "" {
-		payload["project_action"] = projectAction
-	}
-	if projectID != "" {
-		payload["project_id"] = projectID
-	}
-
 	// Insert event and update projection atomically
 	eventID, err := db.AppendEvent(ctx, database.ItemMovedEvent, actorUserID, payload, note)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create move event: %w", err)
 	}
 
-	// Build result
-	result := &Result{
-		ItemID:        itemID,
-		DisplayName:   item.DisplayName,
-		FromLocation:  fromLocation.DisplayName,
-		ToLocation:    toLocation.DisplayName,
-		EventID:       eventID,
-		MoveType:      moveType,
-		ProjectAction: projectAction,
-	}
-	if projectID != "" {
-		result.ProjectID = projectID
-	}
-
-	return result, nil
+	return &Result{
+		ItemID:       itemID,
+		DisplayName:  item.DisplayName,
+		FromLocation: fromLocation.DisplayName,
+		ToLocation:   toLocation.DisplayName,
+		EventID:      eventID,
+		MoveType:     moveType,
+	}, nil
 }
 
 // validateDestinationNotSystem checks that destination is not a system location.
@@ -212,15 +184,4 @@ func determineMoveType(temp bool) string {
 		return "temporary_use"
 	}
 	return "rehome"
-}
-
-// determineProjectAction determines the project action based on flags.
-func determineProjectAction(projectID string, keepProject bool) string {
-	if projectID != "" {
-		return "set"
-	}
-	if keepProject {
-		return "keep"
-	}
-	return "clear" // Default
 }

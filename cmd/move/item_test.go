@@ -89,10 +89,6 @@ func setupMoveTest(t *testing.T) (*database.Database, context.Context, testIDs) 
 	err = db.CreateItem(ctx, ids.itemID3, "hammer", ids.garageID, 3, "2025-01-01T00:00:07Z")
 	require.NoError(t, err)
 
-	// Create project used by project-association tests
-	err = db.CreateProject(ctx, "test-project", "active", "2025-01-01T00:00:08Z")
-	require.NoError(t, err)
-
 	return db, ctx, ids
 }
 
@@ -101,17 +97,14 @@ func TestMoveItem_EventCreated(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Move item
-	result, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "testuser", "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Verify result fields
 	assert.Equal(t, ids.itemID1, result.ItemID)
 	assert.Equal(t, "10mm socket", result.DisplayName)
 	assert.Positive(t, result.EventID)
 	assert.Equal(t, "rehome", result.MoveType)
-	assert.Equal(t, "clear", result.ProjectAction)
 }
 
 // Test: Move item with temporary flag.
@@ -119,55 +112,11 @@ func TestMoveItem_TemporaryMove_EventCreated(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Move with temporary flag
-	result, err := moveItem(ctx, db, ids.itemID2, ids.toolboxID, "temporary_use", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, ids.itemID2, ids.toolboxID, "temporary_use", "testuser", "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Verify move type in result
 	assert.Equal(t, "temporary_use", result.MoveType)
-}
-
-// Test: Move item with project association.
-func TestMoveItem_WithProject_EventCreated(t *testing.T) {
-	db, ctx, ids := setupMoveTest(t)
-	defer db.Close()
-
-	// Move with project
-	result, err := moveItem(ctx, db, ids.itemID3, ids.toolboxID, "rehome", "set", "test-project", "testuser", "")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	// Verify project action
-	assert.Equal(t, "set", result.ProjectAction)
-	assert.Equal(t, "test-project", result.ProjectID)
-}
-
-// Test: Move item and keep project association.
-func TestMoveItem_KeepProject_EventCreated(t *testing.T) {
-	db, ctx, ids := setupMoveTest(t)
-	defer db.Close()
-
-	// Move with keep-project
-	result, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "keep", "", "testuser", "")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	assert.Equal(t, "keep", result.ProjectAction)
-}
-
-// Test: Move item and clear project.
-func TestMoveItem_ClearProject_EventCreated(t *testing.T) {
-	db, ctx, ids := setupMoveTest(t)
-	defer db.Close()
-
-	// Move with clear project (default)
-	result, err := moveItem(ctx, db, ids.itemID2, ids.toolboxID, "rehome", "clear", "", "testuser", "")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	assert.Equal(t, "clear", result.ProjectAction)
-	assert.Empty(t, result.ProjectID)
 }
 
 // Test: Fail when moving FROM system location (Missing).
@@ -175,13 +124,11 @@ func TestMoveItem_FromSystemLocation_Missing_Fails(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Create item in missing location to test moving from it
 	itemInMissingID := nanoid.MustNew()
 	err := db.CreateItem(ctx, itemInMissingID, "lost item", ids.missingID, 4, "2025-01-01T00:00:08Z")
 	require.NoError(t, err)
 
-	// Attempt to move from missing location
-	result, err := moveItem(ctx, db, itemInMissingID, ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, itemInMissingID, ids.toolboxID, "rehome", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -193,13 +140,11 @@ func TestMoveItem_FromSystemLocation_Borrowed_Fails(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Create item in borrowed location
 	itemInBorrowedID := nanoid.MustNew()
 	err := db.CreateItem(ctx, itemInBorrowedID, "borrowed item", ids.borrowedID, 5, "2025-01-01T00:00:09Z")
 	require.NoError(t, err)
 
-	// Attempt to move from borrowed location
-	result, err := moveItem(ctx, db, itemInBorrowedID, ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, itemInBorrowedID, ids.toolboxID, "rehome", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -211,8 +156,7 @@ func TestMoveItem_ToSystemLocation_Missing_Fails(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Attempt to move to missing location
-	result, err := moveItem(ctx, db, ids.itemID1, ids.missingID, "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, ids.itemID1, ids.missingID, "rehome", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -224,8 +168,7 @@ func TestMoveItem_ToSystemLocation_Borrowed_Fails(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Attempt to move to borrowed location
-	result, err := moveItem(ctx, db, ids.itemID2, ids.borrowedID, "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, ids.itemID2, ids.borrowedID, "rehome", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -237,8 +180,7 @@ func TestMoveItem_ItemNotFound_Fails(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Attempt to move non-existent item
-	result, err := moveItem(ctx, db, nanoid.MustNew(), ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, nanoid.MustNew(), ids.toolboxID, "rehome", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -250,8 +192,7 @@ func TestMoveItem_DestinationNotFound_Fails(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Attempt to move to non-existent location
-	result, err := moveItem(ctx, db, ids.itemID3, nanoid.MustNew(), "rehome", "clear", "", "testuser", "")
+	result, err := moveItem(ctx, db, ids.itemID3, nanoid.MustNew(), "rehome", "testuser", "")
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -280,48 +221,6 @@ func TestDetermineMoveType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := determineMoveType(tt.temp)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// Test: DetermineProjectAction function.
-func TestDetermineProjectAction(t *testing.T) {
-	tests := []struct {
-		name        string
-		projectID   string
-		keepProject bool
-		want        string
-	}{
-		{
-			name:        "project ID set returns 'set'",
-			projectID:   "test-proj",
-			keepProject: false,
-			want:        "set",
-		},
-		{
-			name:        "keep project flag true returns 'keep'",
-			projectID:   "",
-			keepProject: true,
-			want:        "keep",
-		},
-		{
-			name:        "default returns 'clear'",
-			projectID:   "",
-			keepProject: false,
-			want:        "clear",
-		},
-		{
-			name:        "project ID takes precedence over keep-project",
-			projectID:   "test-proj",
-			keepProject: true,
-			want:        "set",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := determineProjectAction(tt.projectID, tt.keepProject)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -364,14 +263,12 @@ func TestValidateDestinationNotSystem(t *testing.T) {
 // Test: Result struct JSON marshaling.
 func TestResult_JSONMarshal(t *testing.T) {
 	result := &Result{
-		ItemID:        nanoid.MustNew(),
-		DisplayName:   "10mm socket",
-		FromLocation:  "Garage",
-		ToLocation:    "Tool Box",
-		EventID:       42,
-		MoveType:      "rehome",
-		ProjectAction: "clear",
-		ProjectID:     "",
+		ItemID:       nanoid.MustNew(),
+		DisplayName:  "10mm socket",
+		FromLocation: "Garage",
+		ToLocation:   "Tool Box",
+		EventID:      42,
+		MoveType:     "rehome",
 	}
 
 	data, err := json.Marshal(result)
@@ -401,8 +298,6 @@ func TestGetMoveCmd_Structure(t *testing.T) {
 
 	// Check optional flags
 	assert.NotNil(t, cmd.Flags().Lookup("temp"))
-	assert.NotNil(t, cmd.Flags().Lookup("project"))
-	assert.NotNil(t, cmd.Flags().Lookup("keep-project"))
 	assert.NotNil(t, cmd.Flags().Lookup("note"))
 }
 
@@ -412,7 +307,7 @@ func TestMoveItem_WithNote_EventCreated(t *testing.T) {
 	defer db.Close()
 
 	noteText := "organizing tools"
-	result, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "clear", "", "testuser", noteText)
+	result, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "testuser", noteText)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -425,15 +320,13 @@ func TestMoveItem_MultipleSequential(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Move first item
-	result1, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result1, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "testuser", "")
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 	assert.Equal(t, ids.itemID1, result1.ItemID)
 	assert.Positive(t, result1.EventID)
 
-	// Move second item
-	result2, err := moveItem(ctx, db, ids.itemID2, ids.deskID, "rehome", "clear", "", "testuser", "")
+	result2, err := moveItem(ctx, db, ids.itemID2, ids.deskID, "rehome", "testuser", "")
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 	assert.Equal(t, ids.itemID2, result2.ItemID)
@@ -445,16 +338,14 @@ func TestMoveItem_MultipleToSameDestination(t *testing.T) {
 	db, ctx, ids := setupMoveTest(t)
 	defer db.Close()
 
-	// Move multiple items to toolbox
-	result1, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result1, err := moveItem(ctx, db, ids.itemID1, ids.toolboxID, "rehome", "testuser", "")
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 
-	result2, err := moveItem(ctx, db, ids.itemID2, ids.toolboxID, "rehome", "clear", "", "testuser", "")
+	result2, err := moveItem(ctx, db, ids.itemID2, ids.toolboxID, "rehome", "testuser", "")
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 
-	// Verify both have events created
 	assert.Positive(t, result1.EventID)
 	assert.Positive(t, result2.EventID)
 	assert.NotEqual(t, result1.EventID, result2.EventID)

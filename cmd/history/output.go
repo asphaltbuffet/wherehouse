@@ -113,7 +113,7 @@ func formatEvent(
 
 	// Event marker
 	marker := "○"
-	if event.EventType == database.ItemDeletedEvent {
+	if event.EventType == database.ItemRemovedEvent {
 		marker = "●" // Terminal event
 	}
 	if event.EventType == database.ItemMissingEvent {
@@ -192,8 +192,8 @@ func formatEventDetails(
 		return formatItemMissingDetails(ctx, db, payload, locationCache), nil
 	case database.ItemFoundEvent:
 		return formatItemFoundDetails(ctx, db, payload, locationCache), nil
-	case database.ItemDeletedEvent:
-		return []string{"Item permanently deleted"}, nil
+	case database.ItemRemovedEvent:
+		return []string{"Item moved to Removed"}, nil
 	case database.ItemLoanedEvent:
 		return nil, nil
 	case database.LocationCreatedEvent:
@@ -202,15 +202,7 @@ func formatEventDetails(
 		return nil, nil
 	case database.LocationMovedEvent:
 		return nil, nil
-	case database.LocationDeletedEvent:
-		return nil, nil
-	case database.ProjectCreatedEvent:
-		return nil, nil
-	case database.ProjectCompletedEvent:
-		return nil, nil
-	case database.ProjectReopenedEvent:
-		return nil, nil
-	case database.ProjectDeletedEvent:
+	case database.LocationRemovedEvent:
 		return nil, nil
 	}
 
@@ -248,9 +240,6 @@ func formatItemMovedDetails(
 
 	if moveType, ok := payload["move_type"].(string); ok {
 		details = append(details, fmt.Sprintf("Type: %s", moveType))
-	}
-	if projectID, ok := payload["project_id"].(string); ok && projectID != "" {
-		details = append(details, fmt.Sprintf("Project: %s", projectID))
 	}
 	return details
 }

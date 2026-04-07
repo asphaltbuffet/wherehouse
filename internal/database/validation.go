@@ -170,27 +170,6 @@ func (d *Database) ValidateUniqueItemName(
 	return fmt.Errorf("failed to check unique item name: %w", err)
 }
 
-// ValidateProjectExists checks if a project exists and is in the specified status.
-// If requiredStatus is nil, only checks existence.
-// Returns ErrProjectNotFound if project doesn't exist.
-// Returns ErrProjectNotActive if project exists but is not active (when requiredStatus is "active").
-func (d *Database) ValidateProjectExists(ctx context.Context, projectID string, requiredStatus *string) error {
-	project, err := d.GetProject(ctx, projectID)
-	if err != nil {
-		return err
-	}
-
-	if requiredStatus != nil && project.Status != *requiredStatus {
-		return &ProjectNotActiveError{
-			ProjectID:      projectID,
-			CurrentStatus:  project.Status,
-			RequiredStatus: requiredStatus,
-		}
-	}
-
-	return nil
-}
-
 // ValidateLocationExists checks if a location exists.
 // Returns ErrLocationNotFound if location doesn't exist.
 func (d *Database) ValidateLocationExists(ctx context.Context, locationID string) error {
@@ -231,24 +210,6 @@ func (d *Database) ValidateLocationEmpty(ctx context.Context, locationID string)
 
 	if itemCount > 0 {
 		return fmt.Errorf("location has %d items (must be empty to delete)", itemCount)
-	}
-
-	return nil
-}
-
-// ValidateProjectUnused checks if a project has no item associations.
-// This is required before deleting a project.
-// Returns an error if any items are associated with the project.
-func (d *Database) ValidateProjectUnused(ctx context.Context, projectID string) error {
-	const query = `SELECT COUNT(*) FROM items_current WHERE project_id = ?`
-	var count int
-	err := d.db.QueryRowContext(ctx, query, projectID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to check for project associations: %w", err)
-	}
-
-	if count > 0 {
-		return fmt.Errorf("project has %d associated items (must have no associations to delete)", count)
 	}
 
 	return nil

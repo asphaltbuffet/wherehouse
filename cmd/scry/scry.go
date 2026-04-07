@@ -141,7 +141,7 @@ func runScryCore(cmd *cobra.Command, args []string, db scryDB) error {
 // validateItemIsMissing checks that the item is in the Missing system location.
 // Returns specific errors for Borrowed and Loaned items.
 func validateItemIsMissing(ctx context.Context, db scryDB, item *database.Item) error {
-	missingID, borrowedID, loanedID, err := db.GetSystemLocationIDs(ctx)
+	missingID, borrowedID, loanedID, _, err := db.GetSystemLocationIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get system locations: %w", err)
 	}

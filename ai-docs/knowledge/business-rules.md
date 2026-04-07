@@ -84,9 +84,9 @@ RULE: Location canonical_name MUST be globally unique
 **System Locations**:
 ```
 RULE: System locations cannot be modified
-  Locations: "Missing", "Borrowed"
+  Locations: "Missing", "Borrowed", "Removed"
   is_system = true
-  Cannot: rename, delete, reparent
+  Cannot: rename, remove, reparent
 ```
 
 **Tree Structure**:
@@ -99,36 +99,11 @@ RULE: Location tree has unlimited depth
   No artificial depth limit
 ```
 
-**Deletion**:
+**Removal**:
 ```
-RULE: Can only delete empty locations
+RULE: Can only remove empty locations
   Check: No items with location_id
   Check: No sub-locations with parent_id
-```
-
----
-
-### Project IDs
-
-**Format Constraints**:
-```
-RULE: Project ID cannot contain ':'
-  Reason: Reserved for future path syntax
-
-RULE: Project ID is user-provided slug
-  Not UUID
-  Globally unique
-  Case-sensitive (but recommend lowercase)
-```
-
-**Lifecycle**:
-```
-RULE: Projects can transition between any states
-  active → completed → reopened → ...
-  No restrictions on transitions
-
-RULE: Can only delete projects with no item associations
-  Check: No items in projection with project_id
 ```
 
 ---
@@ -157,17 +132,6 @@ VALIDATE:
   ✓ to_location_id must exist
   ✓ from_location_id ≠ to_location_id
   ✓ move_type in ['temporary_use', 'rehome']
-
-IF project_action = 'set':
-  ✓ project_id must not be null
-  ✓ project_id must exist in projects_current
-  ✓ project status must be 'active'
-
-IF project_action = 'keep':
-  ✓ item must have current project_id
-
-IF project_action = 'clear':
-  ✓ (no additional validation)
 ```
 
 **Projection Logic**:
@@ -184,7 +148,6 @@ IF move_type = 'rehome':
   SET temp_origin_location_id = NULL
 
 SET location_id = to_location_id
-APPLY project_action
 SET last_event_id = event.event_id
 ```
 
@@ -230,7 +193,6 @@ SET location_id = <MISSING_LOCATION_UUID>
 SET last_event_id = event.event_id
 PRESERVE in_temporary_use state
 PRESERVE temp_origin_location_id
-PRESERVE project_id
 ```
 
 ---
@@ -256,7 +218,7 @@ SET last_event_id = event.event_id
 
 ---
 
-### item.deleted
+### item.removed
 
 ```
 VALIDATE:
@@ -266,14 +228,9 @@ VALIDATE:
 
 **Projection Logic**:
 ```
-DELETE FROM items_current WHERE item_id = event.item_id
-```
-
-**Finality**:
-```
-RULE: Deletion is permanent
-  Cannot resurrect item
-  Event remains in log for history
+SET location_id = <REMOVED_LOCATION_UUID>
+SET last_event_id = event.event_id
+(Item remains in projection at Removed location)
 ```
 
 ---
@@ -318,7 +275,7 @@ SET last_event_id = event.event_id
 
 ---
 
-### location.deleted
+### location.removed
 
 ```
 VALIDATE:
@@ -334,80 +291,6 @@ VALIDATE:
 **Projection Logic**:
 ```
 DELETE FROM locations_current WHERE location_id = event.location_id
-```
-
----
-
-### project.created
-
-```
-VALIDATE:
-  ✓ project_id must not exist
-  ✓ project_id must not contain ':'
-  ✓ project_id must not be empty
-```
-
-**Projection Logic**:
-```
-INSERT INTO projects_current (project_id, status, updated_at)
-VALUES (event.project_id, 'active', event.timestamp_utc)
-```
-
----
-
-### project.completed
-
-```
-VALIDATE:
-  ✓ project_id must exist
-  (No restriction on current status)
-```
-
-**Projection Logic**:
-```
-UPDATE projects_current
-SET status = 'completed', updated_at = event.timestamp_utc
-WHERE project_id = event.project_id
-```
-
-**Command Layer Side Effect**:
-```
-Query items with project_id = this project
-Display "items to return" list
-Do NOT auto-move items
-```
-
----
-
-### project.reopened
-
-```
-VALIDATE:
-  ✓ project_id must exist
-  (No restriction on current status)
-```
-
-**Projection Logic**:
-```
-UPDATE projects_current
-SET status = 'active', updated_at = event.timestamp_utc
-WHERE project_id = event.project_id
-```
-
----
-
-### project.deleted
-
-```
-VALIDATE:
-  ✓ project_id must exist
-  ✓ MUST have no item associations:
-    - No items in projection with project_id = this project_id
-```
-
-**Projection Logic**:
-```
-DELETE FROM projects_current WHERE project_id = event.project_id
 ```
 
 ---
@@ -442,31 +325,6 @@ RULE: Duplicate canonical names across locations → OK
 
 ---
 
-## Project Association Rules
-
-### Default Clearing
-
-```
-RULE: Default movement clears project association
-  User must explicitly request preservation or new project
-
-FLAGS:
-  --project <id>       Set project (project_action='set')
-  --keep-project       Preserve current (project_action='keep')
-  --clear-project      Clear association (project_action='clear', default)
-```
-
-### Active Project Requirement
-
-```
-RULE: Can only associate items with active projects
-  VALIDATE: project.status = 'active'
-  Completed projects cannot accept new associations
-  (Existing associations preserved if project completed)
-```
-
----
-
 ## Temporary Use Semantics
 
 ### Origin Tracking
@@ -485,14 +343,6 @@ RULE: Rehome clears temporary state
   in_temporary_use = false
   temp_origin_location_id = NULL
   Item is now "at home" in new location
-```
-
-### Return Behavior
-
-```
-RULE: No automatic return on project completion
-  User must manually move items back
-  "Items to return" list shown as reminder
 ```
 
 ---
@@ -552,7 +402,7 @@ RULE: Sets temporary use state
 
 ```
 RULE: from_location_id MUST match projection
-  For: item.moved, item.borrowed, item.marked_missing, item.deleted
+  For: item.moved, item.borrowed, item.marked_missing, item.removed
   Purpose: Detect concurrent writes or projection corruption
   On mismatch: FAIL replay immediately
 
@@ -583,11 +433,6 @@ RULE: On validation failure, STOP immediately
 CREATE UNIQUE INDEX idx_locations_canonical
 ON locations_current(canonical_name);
 
--- Check constraints
-ALTER TABLE projects_current
-  ADD CONSTRAINT chk_status
-  CHECK (status IN ('active', 'completed'));
-
 -- Foreign key enforcement
 PRAGMA foreign_keys = ON;
 ```
@@ -598,15 +443,12 @@ PRAGMA foreign_keys = ON;
 REQUIRED INDEXES:
   - items_current(canonical_name)
   - items_current(location_id)
-  - items_current(project_id)
   - locations_current(canonical_name) UNIQUE
   - locations_current(parent_id)
   - locations_current(full_path_canonical)
-  - projects_current(status)
   - events(event_type)
   - events(item_id) partial
   - events(location_id) partial
-  - events(project_id) partial
 ```
 
 ---
@@ -647,9 +489,8 @@ RULE: --as flag overrides default
 ❌ **Never skip invalid events during replay** - fail fast
 ❌ **Never silently repair projections** - explicit diagnosis required
 ❌ **Never allow location cycles** - breaks tree structure
-❌ **Never auto-move items on project completion** - user decision
 ❌ **Never auto-create locations** - require explicit creation
-❌ **Never resurrect deleted entities** - deletions are final
+❌ **Never modify system locations** - Missing, Borrowed, Removed are immutable
 ❌ **Never use timestamps for ordering** - event_id is authoritative
 
 ---

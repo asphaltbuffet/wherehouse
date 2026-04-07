@@ -24,9 +24,9 @@ func (d *Database) handleItemCreated(ctx context.Context, tx *sql.Tx, event *Eve
 	const query = `
 		INSERT INTO items_current (
 			item_id, display_name, canonical_name, location_id,
-			in_temporary_use, temp_origin_location_id, project_id,
+			in_temporary_use, temp_origin_location_id,
 			last_event_id, updated_at
-		) VALUES (?, ?, ?, ?, 0, NULL, NULL, ?, ?)
+		) VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
 	`
 
 	_, err := tx.ExecContext(ctx, query,
@@ -42,12 +42,10 @@ func (d *Database) handleItemCreated(ctx context.Context, tx *sql.Tx, event *Eve
 
 func (d *Database) handleItemMoved(ctx context.Context, tx *sql.Tx, event *Event) error {
 	var payload struct {
-		ItemID         string  `json:"item_id"`
-		FromLocationID string  `json:"from_location_id"`
-		ToLocationID   string  `json:"to_location_id"`
-		MoveType       string  `json:"move_type"`
-		ProjectAction  *string `json:"project_action"`
-		ProjectID      *string `json:"project_id"`
+		ItemID         string `json:"item_id"`
+		FromLocationID string `json:"from_location_id"`
+		ToLocationID   string `json:"to_location_id"`
+		MoveType       string `json:"move_type"`
 	}
 
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
@@ -57,11 +55,10 @@ func (d *Database) handleItemMoved(ctx context.Context, tx *sql.Tx, event *Event
 	// Get current item state
 	var inTempUse bool
 	var tempOriginLocID *string
-	var currentProjectID *string
 	err := tx.QueryRowContext(ctx,
-		"SELECT in_temporary_use, temp_origin_location_id, project_id FROM items_current WHERE item_id = ?",
+		"SELECT in_temporary_use, temp_origin_location_id FROM items_current WHERE item_id = ?",
 		payload.ItemID,
-	).Scan(&inTempUse, &tempOriginLocID, &currentProjectID)
+	).Scan(&inTempUse, &tempOriginLocID)
 	if err != nil {
 		return fmt.Errorf("failed to get item for move: %w", err)
 	}
@@ -81,31 +78,16 @@ func (d *Database) handleItemMoved(ctx context.Context, tx *sql.Tx, event *Event
 		tempOriginLocID = nil
 	}
 
-	// Apply project action
-	projectAction := "clear"
-	if payload.ProjectAction != nil {
-		projectAction = *payload.ProjectAction
-	}
-
-	switch projectAction {
-	case "set":
-		currentProjectID = payload.ProjectID
-	case "keep":
-		// Keep current project_id unchanged
-	case "clear":
-		currentProjectID = nil
-	}
-
 	const query = `
 		UPDATE items_current
 		SET location_id = ?, in_temporary_use = ?, temp_origin_location_id = ?,
-		    project_id = ?, last_event_id = ?, updated_at = ?
+		    last_event_id = ?, updated_at = ?
 		WHERE item_id = ?
 	`
 
 	_, err = tx.ExecContext(ctx, query,
 		payload.ToLocationID, inTempUse, tempOriginLocID,
-		currentProjectID, event.EventID, event.TimestampUTC, payload.ItemID,
+		event.EventID, event.TimestampUTC, payload.ItemID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to move item: %w", err)
@@ -252,29 +234,36 @@ func (d *Database) handleItemLoaned(ctx context.Context, tx *sql.Tx, event *Even
 	return nil
 }
 
-func (d *Database) handleItemDeleted(ctx context.Context, tx *sql.Tx, event *Event) error {
+func (d *Database) handleItemRemoved(ctx context.Context, tx *sql.Tx, event *Event) error {
 	var payload struct {
-		ItemID string `json:"item_id"`
+		ItemID             string `json:"item_id"`
+		PreviousLocationID string `json:"previous_location_id"`
 	}
 
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
-	const query = `DELETE FROM items_current WHERE item_id = ?`
-
-	result, err := tx.ExecContext(ctx, query, payload.ItemID)
+	// Get system "Removed" location
+	var removedLocID string
+	err := tx.QueryRowContext(ctx,
+		"SELECT location_id FROM locations_current WHERE canonical_name = 'removed' AND is_system = 1",
+	).Scan(&removedLocID)
 	if err != nil {
-		return fmt.Errorf("failed to delete item: %w", err)
+		return fmt.Errorf("failed to get Removed location: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
+	const query = `
+		UPDATE items_current
+		SET location_id = ?, last_event_id = ?, updated_at = ?
+		WHERE item_id = ?
+	`
 
-	if rowsAffected == 0 {
-		return ErrItemNotFound
+	_, err = tx.ExecContext(ctx, query,
+		removedLocID, event.EventID, event.TimestampUTC, payload.ItemID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to mark item removed: %w", err)
 	}
 
 	return nil

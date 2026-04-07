@@ -243,7 +243,7 @@ wherehouse find "screw" -n 5
 wherehouse find "ladder" -v
 # → step ladder
 #   Location: Garage
-#   ID: 01HXXX...
+#   ID: V1StGXR8z5
 #   Match distance: 0 (exact match)
 
 # JSON output for scripting
@@ -286,8 +286,8 @@ wherehouse history "ladder" --oldest-first
 wherehouse history "socket" --json
 # → {"events":[...],"count":12}
 
-# Search by UUID instead of name
-wherehouse history --id "01HXXX-XXXX-..."
+# Search by ID instead of name
+wherehouse history --id "V1StGXR8z5"
 ```
 
 ### 7. Move Items
@@ -744,7 +744,7 @@ CREATE TABLE events (
 - **CLI Framework**: spf13/cobra
 - **Configuration**: spf13/viper (TOML format)
 - **Terminal Styling**: charmbracelet/lipgloss
-- **UUID Generation**: google/uuid (v7 preferred)
+- **ID Generation**: custom nanoid (alphanumeric, 10-char)
 - **Migrations**: golang-migrate/migrate
 
 ---

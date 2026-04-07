@@ -241,69 +241,6 @@ func TestValidateUniqueItemName(t *testing.T) {
 	}
 }
 
-// TestValidateProectExists tests the ValidateProjectExists function.
-func TestValidateProjectExists(t *testing.T) {
-	type args struct {
-		projectID      string
-		requiredStatus string
-	}
-
-	tests := []struct {
-		name         string
-		args         args
-		setupFunc    func(t *testing.T) (projectID string, requiredStatus *string)
-		errAssertion require.ErrorAssertionFunc
-		wantErrMsg   string
-	}{
-		{
-			name:         "existing active project passes without status requirement",
-			args:         args{TestProjectDeck, ""},
-			errAssertion: require.NoError,
-		},
-		{
-			name:         "existing project with matching status passes",
-			args:         args{TestProjectDeck, "active"},
-			errAssertion: require.NoError,
-		},
-		{
-			name:         "existing project with mismatched status fails",
-			args:         args{TestProjectDeck, "completed"},
-			errAssertion: require.Error,
-			wantErrMsg:   "project not active",
-		},
-		{
-			name:         "non-existent project fails",
-			args:         args{"nonexistent-project", ""},
-			errAssertion: require.Error,
-		},
-		{
-			name:         "project with different status fails",
-			args:         args{TestProjectDeck, "inactive"},
-			errAssertion: require.Error,
-			wantErrMsg:   "project not active",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db := NewTestDBWithSeed(t)
-			ctx := t.Context()
-
-			var requiredStatus *string
-			if tt.args.requiredStatus != "" {
-				requiredStatus = &tt.args.requiredStatus
-			}
-
-			err := db.ValidateProjectExists(ctx, tt.args.projectID, requiredStatus)
-
-			tt.errAssertion(t, err)
-			if tt.wantErrMsg != "" {
-				assert.ErrorContains(t, err, tt.wantErrMsg)
-			}
-		})
-	}
-}
-
 // TestValidateLocationExists tests the ValidateLocationExists function.
 func TestValidateLocationExists(t *testing.T) {
 	type args struct {
@@ -440,57 +377,6 @@ func TestValidateLocationEmpty(t *testing.T) {
 			require.NoError(t, db.CreateLocation(ctx, emptyID, "Empty", nil, false, 1, "2026-02-21T10:00:00Z"))
 
 			err := db.ValidateLocationEmpty(ctx, tt.args.locationID)
-
-			tt.errAssertion(t, err)
-			if tt.wantErrMsg != "" {
-				assert.ErrorContains(t, err, tt.wantErrMsg)
-			}
-		})
-	}
-}
-
-// TestValidateProjectUnused tests the ValidateProjectUnused function.
-// A project must have no item associations before deletion.
-func TestValidateProjectUnused(t *testing.T) {
-	unusedID := "unused-project"
-
-	type args struct {
-		projectID string
-	}
-
-	tests := []struct {
-		name         string
-		args         args
-		errAssertion require.ErrorAssertionFunc
-		wantErrMsg   string
-	}{
-		{
-			name:         "unused project (no associated items) passes",
-			args:         args{unusedID},
-			errAssertion: require.NoError,
-		},
-		{
-			name:         "project with associated items fails",
-			args:         args{TestProjectDeck},
-			errAssertion: require.Error,
-			wantErrMsg:   "associated items",
-		},
-		{
-			name:         "completed project with items fails",
-			args:         args{TestProjectShelving},
-			errAssertion: require.NoError,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db := NewTestDBWithSeed(t)
-			ctx := t.Context()
-
-			// Create an unused project
-			require.NoError(t, db.CreateProject(ctx, unusedID, "active", "2026-02-21T10:00:00Z"))
-
-			err := db.ValidateProjectUnused(ctx, tt.args.projectID)
 
 			tt.errAssertion(t, err)
 			if tt.wantErrMsg != "" {

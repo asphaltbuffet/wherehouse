@@ -184,56 +184,6 @@ func TestCreateLocationMoveItemWorkflow(t *testing.T) {
 	})
 }
 
-// TestProjectAssociationWorkflow tests project association workflow.
-func TestProjectAssociationWorkflow(t *testing.T) {
-	db := NewTestDB(t)
-	ctx := t.Context()
-
-	t.Run("create projects with different statuses", func(t *testing.T) {
-		// Create active project
-		require.NoError(t, db.CreateProject(ctx, "proj-active", "active", "2026-02-21T10:00:00Z"))
-
-		proj, err := db.GetProject(ctx, "proj-active")
-		require.NoError(t, err)
-		require.NotNil(t, proj)
-		assert.Equal(t, "active", proj.Status)
-
-		// Create completed project
-		require.NoError(t, db.CreateProject(ctx, "proj-complete", "completed", "2026-02-21T10:00:00Z"))
-
-		proj, err = db.GetProject(ctx, "proj-complete")
-		require.NoError(t, err)
-		require.NotNil(t, proj)
-		assert.Equal(t, "completed", proj.Status)
-	})
-
-	t.Run("items can have project association", func(t *testing.T) {
-		// Create location
-		locID := "proj-test-loc"
-		require.NoError(t, db.CreateLocation(ctx, locID, "Proj Test", nil, false, 1, "2026-02-21T10:00:00Z"))
-
-		// Create item
-		itemID := "proj-test-item"
-		require.NoError(t, db.CreateItem(ctx, itemID, "Test Item", locID, 2, "2026-02-21T10:00:00Z"))
-
-		// Create project
-		projID := "proj-test"
-		require.NoError(t, db.CreateProject(ctx, projID, "active", "2026-02-21T10:00:00Z"))
-
-		// Associate item with project
-		updates := map[string]any{
-			"project_id": projID,
-		}
-		require.NoError(t, db.UpdateItem(ctx, itemID, updates, 3, "2026-02-21T10:00:00Z"))
-
-		// Verify association
-		item, err := db.GetItem(ctx, itemID)
-		require.NoError(t, err)
-		require.NotNil(t, item.ProjectID)
-		assert.Equal(t, projID, *item.ProjectID)
-	})
-}
-
 // TestEventLog tests event logging and retrieval.
 func TestEventLog(t *testing.T) {
 	db := NewTestDB(t)
@@ -315,26 +265,9 @@ func TestValidationErrorScenarios(t *testing.T) {
 		)
 	})
 
-	t.Run("deleted item returns not found", func(t *testing.T) {
-		// Create location
-		locID := "delete-test-loc"
-		require.NoError(t, db.CreateLocation(ctx, locID, "Delete Test", nil, false, 1, "2026-02-21T10:00:00Z"))
-
-		// Create item
-		itemID := "delete-test-item"
-		require.NoError(t, db.CreateItem(ctx, itemID, "Delete Test Item", locID, 2, "2026-02-21T10:00:00Z"))
-
-		// Verify item exists
-		item, err := db.GetItem(ctx, itemID)
-		require.NoError(t, err)
-		require.NotNil(t, item)
-
-		// Delete item
-		require.NoError(t, db.DeleteItem(ctx, itemID))
-
-		// Verify item no longer exists
-		_, err = db.GetItem(ctx, itemID)
-		assert.Error(t, err, "deleted item should not be found")
+	t.Run("unknown item returns not found", func(t *testing.T) {
+		_, err := db.GetItem(ctx, "non-existent-item")
+		assert.ErrorIs(t, err, ErrItemNotFound)
 	})
 }
 
@@ -468,6 +401,45 @@ func TestCanonicalNameNormalization(t *testing.T) {
 	})
 }
 
+// TestGetItemsByCanonicalName tests that removed items are excluded from selector resolution.
+func TestGetItemsByCanonicalName(t *testing.T) {
+	db := NewTestDB(t)
+	ctx := t.Context()
+
+	// Create a location and two items with the same canonical name
+	locID := "canonical-name-loc"
+	require.NoError(t, db.CreateLocation(ctx, locID, "Workshop", nil, false, 1, "2026-01-01T00:00:00Z"))
+
+	activeID := "active-hammer"
+	removedID := "removed-hammer"
+	require.NoError(t, db.CreateItem(ctx, activeID, "Hammer", locID, 1, "2026-01-01T00:00:01Z"))
+	require.NoError(t, db.CreateItem(ctx, removedID, "Hammer", locID, 2, "2026-01-01T00:00:02Z"))
+
+	t.Run("returns both items when neither is removed", func(t *testing.T) {
+		items, err := db.GetItemsByCanonicalName(ctx, "hammer")
+		require.NoError(t, err)
+		assert.Len(t, items, 2)
+	})
+
+	t.Run("excludes item after it is moved to removed location", func(t *testing.T) {
+		// Move removedID to the Removed system location
+		removedLoc, err := db.GetLocationByCanonicalName(ctx, "removed")
+		require.NoError(t, err)
+
+		_, err = db.AppendEvent(ctx, ItemRemovedEvent, "test-user", map[string]any{
+			"item_id":              removedID,
+			"previous_location_id": locID,
+		}, "")
+		require.NoError(t, err)
+		_ = removedLoc // used by handler internally
+
+		items, err := db.GetItemsByCanonicalName(ctx, "hammer")
+		require.NoError(t, err)
+		require.Len(t, items, 1, "removed item should be excluded")
+		assert.Equal(t, activeID, items[0].ItemID)
+	})
+}
+
 // TestMigrationTracking tests that migrations are properly tracked.
 func TestMigrationTracking(t *testing.T) {
 	db := NewTestDB(t)
@@ -475,7 +447,7 @@ func TestMigrationTracking(t *testing.T) {
 	t.Run("migration version is tracked", func(t *testing.T) {
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.Equal(t, uint(3), version, "should be at version 3 after all migrations")
+		assert.Equal(t, uint(5), version, "should be at version 5 after all migrations")
 		assert.False(t, dirty, "should not be dirty")
 	})
 
