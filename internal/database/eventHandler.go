@@ -46,14 +46,6 @@ func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Even
 	case LocationRemovedEvent:
 		return d.handleLocationRemoved(ctx, tx, event)
 
-	// project event handling
-	case ProjectCreatedEvent:
-		return d.handleProjectCreated(ctx, tx, event)
-	case ProjectCompletedEvent:
-		return d.handleProjectCompleted(ctx, tx, event)
-	case ProjectReopenedEvent:
-		return d.handleProjectReopened(ctx, tx, event)
-
 	default:
 		return fmt.Errorf("unknown event type: %s", event.EventType)
 	}

@@ -22,17 +22,11 @@ Move types:
   - Default: Permanent move (rehome)
   - --temp: Temporary move (preserves origin for return)
 
-Project association:
-  - Default: Clear project association (--clear-project is implicit)
-  - --project <id>: Associate with project
-  - --keep-project: Preserve current project association
-
 Examples:
   wherehouse move garage:socket --to toolbox
   wherehouse move aB3xK9mPqR --to desk
   wherehouse move "10mm socket" --to garage --temp
-  wherehouse move wrench screwdriver --to toolbox --keep-project
-  wherehouse move aB3xK9mPqR --to shed --project dinner-prep --note "need for project"`
+  wherehouse move wrench screwdriver --to toolbox`
 
 // NewMoveCmd returns a move command that uses the provided db for all database
 // operations. The caller retains no reference to db after this call; the
@@ -93,14 +87,6 @@ func registerMoveFlags(cmd *cobra.Command) {
 
 	// Move type flags
 	cmd.Flags().Bool("temp", false, "temporary move (preserve origin for return)")
-
-	// Project association flags
-	cmd.Flags().String("project", "", "associate with project")
-	cmd.Flags().Bool("keep-project", false, "preserve current project association")
-	cmd.Flags().Bool("clear-project", false, "clear project association (default behavior)")
-	cmd.MarkFlagsMutuallyExclusive("project", "keep-project")
-	cmd.MarkFlagsMutuallyExclusive("project", "clear-project")
-	cmd.MarkFlagsMutuallyExclusive("keep-project", "clear-project")
 
 	// Event metadata
 	cmd.Flags().StringP("note", "n", "", "optional note for event")

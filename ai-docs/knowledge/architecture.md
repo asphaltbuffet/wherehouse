@@ -123,22 +123,6 @@ Must be: Garage:Toolbox1 AND Basement:Toolbox2
   OR: Garage:Red_Toolbox AND Basement:Green_Toolbox
 ```
 
-### Projects as Ephemeral Context
-
-```
-DECISION: Default movement clears project association
-REASON: Projects are temporary context, not permanent tags
-
-PRINCIPLE: Explicit carry-forward required
-FLAGS: --project, --keep-project, --clear-project
-```
-
-**Why?**:
-- Reduces clutter (items don't accumulate old projects)
-- Forces intentional project tracking
-- Completed projects don't auto-disassociate items
-- User controls when items "return" from projects
-
 ### Temporary Use Origin Tracking
 
 ```
@@ -165,9 +149,7 @@ BEHAVIOR:
 ```
 ✓ No auto-repair of projections
 ✓ No implicit retries on validation failure
-✓ No implicit project carry-over
 ✓ No auto-creation of locations
-✓ No auto-return of items on project completion
 ```
 
 **Philosophy**: User should always understand what happened and why.
@@ -390,15 +372,6 @@ REASON: Prevents accidental data loss
 VALIDATION:
   - No items in location
   - No sub-locations
-```
-
-### Projects Cannot Be Removed
-
-```
-DECISION: Projects cannot be removed
-REASON: Projects may have historical item associations
-
-USE: project.completed to close out a project
 ```
 
 ---

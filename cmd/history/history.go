@@ -131,7 +131,7 @@ func runHistoryCore(cmd *cobra.Command, args []string, db historyDB) error {
 	}
 
 	// Retrieve all events for item
-	events, err := db.GetEventsByEntity(ctx, &itemID, nil, nil)
+	events, err := db.GetEventsByEntity(ctx, &itemID, nil)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve events: %w", err)
 	}

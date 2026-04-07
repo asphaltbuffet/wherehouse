@@ -64,7 +64,6 @@ INSERT INTO items_current (
   location_id,
   in_temporary_use,
   temp_origin_location_id,
-  project_id,
   last_event_id,
   updated_at
 ) VALUES (
@@ -73,7 +72,6 @@ INSERT INTO items_current (
   event.canonical_name,
   event.location_id,
   false,
-  NULL,
   NULL,
   event.event_id,
   event.timestamp_utc
@@ -105,8 +103,6 @@ INSERT INTO items_current (
   "from_location_id": "uuid",
   "to_location_id": "uuid",
   "move_type": "temporary_use",  // or "rehome"
-  "project_action": "set",        // "clear" | "keep" | "set"
-  "project_id": "my-project",     // nullable
   "note": "optional reason"
 }
 ```
@@ -114,11 +110,6 @@ INSERT INTO items_current (
 **Move Types**:
 - `temporary_use` - temporary move, expected to return
 - `rehome` - permanent relocation
-
-**Project Actions**:
-- `clear` - remove project association (default)
-- `keep` - preserve current project_id
-- `set` - set to specified project_id (requires project_id field)
 
 **Projection Updates** (temporary_use):
 ```sql
@@ -130,7 +121,6 @@ END IF
 
 -- All temporary moves
 SET location_id = to_location_id
-SET project_id = (according to project_action)
 SET last_event_id = event.event_id
 SET updated_at = event.timestamp_utc
 ```
@@ -140,7 +130,6 @@ SET updated_at = event.timestamp_utc
 SET location_id = to_location_id
 SET in_temporary_use = false
 SET temp_origin_location_id = NULL
-SET project_id = (according to project_action)
 SET last_event_id = event.event_id
 SET updated_at = event.timestamp_utc
 ```
@@ -150,7 +139,6 @@ SET updated_at = event.timestamp_utc
 - `from_location_id` must match current projection location (integrity check)
 - `to_location_id` must exist
 - `from_location_id` ≠ `to_location_id`
-- If `project_action = "set"`, `project_id` must be active project
 - `move_type` must be enum value
 
 **Integrity Rule**:
@@ -459,106 +447,6 @@ DELETE FROM locations_current WHERE location_id = event.location_id
 
 ---
 
-## Project Events
-
-### project.created
-
-**Purpose**: Create new project
-
-**Fields**:
-```json
-{
-  "event_id": 10,
-  "event_type": "project.created",
-  "timestamp_utc": "2026-02-19T17:00:00Z",
-  "actor_user_id": "alice",
-  "project_id": "my-project"  // user-provided slug
-}
-```
-
-**Projection Updates**:
-```sql
-INSERT INTO projects_current (
-  project_id,
-  status,
-  updated_at
-) VALUES (
-  event.project_id,
-  'active',
-  event.timestamp_utc
-)
-```
-
-**Validation**:
-- `project_id` must not exist
-- `project_id` must not contain `:`
-
----
-
-### project.completed
-
-**Purpose**: Mark project as completed
-
-**Fields**:
-```json
-{
-  "event_id": 11,
-  "event_type": "project.completed",
-  "timestamp_utc": "2026-02-19T18:00:00Z",
-  "actor_user_id": "alice",
-  "project_id": "my-project"
-}
-```
-
-**Projection Updates**:
-```sql
-UPDATE projects_current
-SET status = 'completed',
-    updated_at = event.timestamp_utc
-WHERE project_id = event.project_id
-```
-
-**Side Effects** (command layer, not projection):
-- Display "items to return" list
-- Query: items where `project_id = this project`
-- Does NOT auto-move items
-
-**Validation**:
-- `project_id` must exist
-- No restriction on current status (can complete already completed)
-
----
-
-### project.reopened
-
-**Purpose**: Reactivate completed project
-
-**Fields**:
-```json
-{
-  "event_id": 12,
-  "event_type": "project.reopened",
-  "timestamp_utc": "2026-02-19T19:00:00Z",
-  "actor_user_id": "alice",
-  "project_id": "my-project"
-}
-```
-
-**Projection Updates**:
-```sql
-UPDATE projects_current
-SET status = 'active',
-    updated_at = event.timestamp_utc
-WHERE project_id = event.project_id
-```
-
-**Validation**:
-- `project_id` must exist
-- No restriction on current status
-
----
-
-
 ## Event Storage Schema
 
 ```sql
@@ -574,14 +462,12 @@ CREATE TABLE events (
   -- Optional: separate indexed columns for critical fields
   item_id          TEXT,           -- for item events
   location_id      TEXT,           -- for location events
-  project_id       TEXT,           -- for project events
 
   note             TEXT
 );
 
 CREATE INDEX idx_events_item_id ON events(item_id) WHERE item_id IS NOT NULL;
 CREATE INDEX idx_events_location_id ON events(location_id) WHERE location_id IS NOT NULL;
-CREATE INDEX idx_events_project_id ON events(project_id) WHERE project_id IS NOT NULL;
 CREATE INDEX idx_events_type ON events(event_type);
 ```
 
@@ -646,13 +532,11 @@ FOR each event ORDER BY event_id ASC:
 **Corrections**:
 - Wrong move? Create new move back
 - Removed by mistake? Create new item (different UUID)
-- Wrong project? Move with new project
 
 ### Event Naming
 
 **Pattern**: `entity.action_past_tense`
 - `item.moved` (not `item.move`)
-- `project.completed` (not `project.complete`)
 - `location.removed` (not `location.remove`)
 
 ---

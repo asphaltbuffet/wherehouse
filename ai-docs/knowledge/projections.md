@@ -75,18 +75,15 @@ CREATE TABLE items_current (
   location_id              TEXT NOT NULL,
   in_temporary_use         BOOLEAN NOT NULL DEFAULT 0,
   temp_origin_location_id  TEXT,  -- NULL if not in temporary use
-  project_id               TEXT,  -- NULL if no project association
   last_event_id            INTEGER NOT NULL,  -- replay checkpoint
   updated_at               TEXT NOT NULL,    -- last event timestamp
 
   FOREIGN KEY (location_id) REFERENCES locations_current(location_id),
-  FOREIGN KEY (temp_origin_location_id) REFERENCES locations_current(location_id),
-  FOREIGN KEY (project_id) REFERENCES projects_current(project_id)
+  FOREIGN KEY (temp_origin_location_id) REFERENCES locations_current(location_id)
 );
 
 CREATE INDEX idx_items_location ON items_current(location_id);
 CREATE INDEX idx_items_canonical ON items_current(canonical_name);
-CREATE INDEX idx_items_project ON items_current(project_id);
 CREATE INDEX idx_items_temp_use ON items_current(in_temporary_use) WHERE in_temporary_use = 1;
 CREATE INDEX idx_items_last_event ON items_current(last_event_id);
 CREATE INDEX idx_items_canonical_location ON items_current(canonical_name, location_id);
@@ -96,12 +93,11 @@ CREATE INDEX idx_items_location_covering ON items_current(location_id, display_n
 **State Fields**:
 - `in_temporary_use` - true if item in temporary location
 - `temp_origin_location_id` - original location before temporary use
-- `project_id` - current project association
 - `last_event_id` - last event that modified this item
 
 **Update Triggers**:
 - `item.created` → insert row
-- `item.moved` → update location, temp use state, project
+- `item.moved` → update location, temp use state
 - `item.borrowed` → update location to Borrowed
 - `item.marked_missing` → update location to Missing
 - `item.marked_found` → update location, set temp use state
@@ -124,34 +120,6 @@ On rehome move:
 
 ---
 
-### projects_current
-
-**Purpose**: Current state of projects
-
-```sql
-CREATE TABLE projects_current (
-  project_id     TEXT PRIMARY KEY,  -- user-provided slug
-  status         TEXT NOT NULL,     -- 'active' | 'completed'
-  updated_at     TEXT NOT NULL,
-
-  CHECK (status IN ('active', 'completed'))
-);
-
-CREATE INDEX idx_projects_status ON projects_current(status);
-```
-
-**Update Triggers**:
-- `project.created` → insert with status='active'
-- `project.completed` → update status='completed'
-- `project.reopened` → update status='active'
-
-**Simplicity**:
-- No additional metadata in v1
-- Could add `description`, `created_by` in future
-- Status transitions are unrestricted (can reopen completed)
-
----
-
 ## Replay Strategy
 
 ### Full Rebuild Process
@@ -160,7 +128,6 @@ CREATE INDEX idx_projects_status ON projects_current(status);
 -- 1. Clear all projections
 DELETE FROM items_current;
 DELETE FROM locations_current;
-DELETE FROM projects_current;
 
 -- 2. Replay events in order
 SELECT * FROM events ORDER BY event_id ASC;
@@ -184,7 +151,6 @@ FOR EACH event:
 SELECT MAX(last_event_id) FROM items_current;
 SELECT MAX(event_id) FROM (
   SELECT event_id FROM events WHERE location_id IS NOT NULL
-  -- similar for projects
 );
 
 -- 2. Replay events after checkpoint
@@ -301,7 +267,6 @@ WHERE i1.location_id != i2.location_id
 ```
 ✓ Locations: 45 consistent
 ✓ Items: 312 consistent
-✓ Projects: 8 consistent
 
 No inconsistencies found.
 ```
@@ -395,15 +360,6 @@ WHERE l.full_path_canonical LIKE 'garage%'
 ORDER BY l.full_path_canonical, i.display_name;
 ```
 
-**Items to return for project**:
-```sql
-SELECT i.*, l.full_path_display
-FROM items_current i
-JOIN locations_current l ON i.location_id = l.location_id
-WHERE i.project_id = 'my-project'
-ORDER BY l.full_path_display;
-```
-
 **Items in temporary use**:
 ```sql
 SELECT i.*,
@@ -421,7 +377,6 @@ ORDER BY l_current.full_path_display;
 **Critical Indexes**:
 - `items_current(canonical_name)` - name lookup
 - `items_current(location_id)` - location grouping
-- `items_current(project_id)` - project queries
 - `locations_current(canonical_name)` - unique constraint + lookup
 - `locations_current(parent_id)` - tree traversal
 - `locations_current(full_path_canonical)` - hierarchical queries

@@ -15,7 +15,6 @@ type Item struct {
 	LocationID           string
 	InTemporaryUse       bool
 	TempOriginLocationID *string
-	ProjectID            *string
 	LastEventID          int64
 	UpdatedAt            string
 }
@@ -37,10 +36,9 @@ func (d *Database) CreateItem(
 			location_id,
 			in_temporary_use,
 			temp_origin_location_id,
-			project_id,
 			last_event_id,
 			updated_at
-		) VALUES (?, ?, ?, ?, 0, NULL, NULL, ?, ?)
+		) VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
 	`
 
 	_, err := d.db.ExecContext(ctx, query,
@@ -68,7 +66,6 @@ func (d *Database) GetItem(ctx context.Context, itemID string) (*Item, error) {
 			location_id,
 			in_temporary_use,
 			temp_origin_location_id,
-			project_id,
 			last_event_id,
 			updated_at
 		FROM items_current
@@ -83,7 +80,6 @@ func (d *Database) GetItem(ctx context.Context, itemID string) (*Item, error) {
 		&item.LocationID,
 		&item.InTemporaryUse,
 		&item.TempOriginLocationID,
-		&item.ProjectID,
 		&item.LastEventID,
 		&item.UpdatedAt,
 	)
@@ -108,7 +104,6 @@ func (d *Database) GetItemsByLocation(ctx context.Context, locationID string) ([
 			i.location_id,
 			i.in_temporary_use,
 			i.temp_origin_location_id,
-			i.project_id,
 			i.last_event_id,
 			i.updated_at
 		FROM items_current i
@@ -127,33 +122,6 @@ func (d *Database) GetItemsByLocation(ctx context.Context, locationID string) ([
 	return scanItems(rows)
 }
 
-// GetItemsByProject retrieves all items associated with a project.
-func (d *Database) GetItemsByProject(ctx context.Context, projectID string) ([]*Item, error) {
-	const query = `
-		SELECT
-			item_id,
-			display_name,
-			canonical_name,
-			location_id,
-			in_temporary_use,
-			temp_origin_location_id,
-			project_id,
-			last_event_id,
-			updated_at
-		FROM items_current
-		WHERE project_id = ?
-		ORDER BY display_name
-	`
-
-	rows, err := d.db.QueryContext(ctx, query, projectID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query items by project: %w", err)
-	}
-	defer rows.Close()
-
-	return scanItems(rows)
-}
-
 // GetItemsByCanonicalName retrieves all items with a specific canonical name.
 // Returns a slice because canonical names are not unique across locations.
 func (d *Database) GetItemsByCanonicalName(ctx context.Context, canonicalName string) ([]*Item, error) {
@@ -165,7 +133,6 @@ func (d *Database) GetItemsByCanonicalName(ctx context.Context, canonicalName st
 			location_id,
 			in_temporary_use,
 			temp_origin_location_id,
-			project_id,
 			last_event_id,
 			updated_at
 		FROM items_current
@@ -219,11 +186,6 @@ func (d *Database) UpdateItem(
 		args = append(args, tempOriginLocID)
 	}
 
-	if projectID, ok := updates["project_id"]; ok {
-		setParts = append(setParts, "project_id = ?")
-		args = append(args, projectID)
-	}
-
 	// Always update last_event_id and timestamp
 	setParts = append(setParts, "last_event_id = ?", "updated_at = ?")
 	args = append(args, eventID, timestamp)
@@ -255,27 +217,6 @@ func (d *Database) UpdateItem(
 	return nil
 }
 
-// DeleteItem removes an item from the projection.
-func (d *Database) DeleteItem(ctx context.Context, itemID string) error {
-	const query = `DELETE FROM items_current WHERE item_id = ?`
-
-	result, err := d.db.ExecContext(ctx, query, itemID)
-	if err != nil {
-		return fmt.Errorf("failed to delete item: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return ErrItemNotFound
-	}
-
-	return nil
-}
-
 // GetAllItems retrieves all items from the projection table.
 // Used by migration operations that need to enumerate all entity IDs.
 func (d *Database) GetAllItems(ctx context.Context) ([]*Item, error) {
@@ -287,7 +228,6 @@ func (d *Database) GetAllItems(ctx context.Context) ([]*Item, error) {
 			location_id,
 			in_temporary_use,
 			temp_origin_location_id,
-			project_id,
 			last_event_id,
 			updated_at
 		FROM items_current
@@ -316,7 +256,6 @@ func scanItems(rows *sql.Rows) ([]*Item, error) {
 			&item.LocationID,
 			&item.InTemporaryUse,
 			&item.TempOriginLocationID,
-			&item.ProjectID,
 			&item.LastEventID,
 			&item.UpdatedAt,
 		)

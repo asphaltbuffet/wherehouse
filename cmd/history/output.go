@@ -204,12 +204,6 @@ func formatEventDetails(
 		return nil, nil
 	case database.LocationRemovedEvent:
 		return nil, nil
-	case database.ProjectCreatedEvent:
-		return nil, nil
-	case database.ProjectCompletedEvent:
-		return nil, nil
-	case database.ProjectReopenedEvent:
-		return nil, nil
 	}
 
 	return nil, nil

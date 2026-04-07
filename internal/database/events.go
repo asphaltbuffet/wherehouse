@@ -20,7 +20,6 @@ type Event struct {
 	Note         *string
 	ItemID       *string
 	LocationID   *string
-	ProjectID    *string
 }
 
 // AppendEvent creates a new event in the event log and immediately applies it to
@@ -48,15 +47,12 @@ func (d *Database) AppendEvent(
 		return 0, fmt.Errorf("failed to unmarshal payload for ID extraction: %w", unmarshalErr)
 	}
 
-	var itemID, locationID, projectID *string
+	var itemID, locationID *string
 	if id, ok := payloadMap["item_id"].(string); ok && id != "" {
 		itemID = &id
 	}
 	if id, ok := payloadMap["location_id"].(string); ok && id != "" {
 		locationID = &id
-	}
-	if id, ok := payloadMap["project_id"].(string); ok && id != "" {
-		projectID = &id
 	}
 
 	timestamp := time.Now().UTC().Format(time.RFC3339)
@@ -77,9 +73,8 @@ func (d *Database) AppendEvent(
 				payload,
 				note,
 				item_id,
-				location_id,
-				project_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				location_id
+			) VALUES (?, ?, ?, ?, ?, ?, ?)
 		`
 
 		result, txErr := tx.ExecContext(ctx, query,
@@ -90,7 +85,6 @@ func (d *Database) AppendEvent(
 			notePtr,
 			itemID,
 			locationID,
-			projectID,
 		)
 		if txErr != nil {
 			return fmt.Errorf("failed to insert event: %w", txErr)
@@ -112,7 +106,6 @@ func (d *Database) AppendEvent(
 			Note:         notePtr,
 			ItemID:       itemID,
 			LocationID:   locationID,
-			ProjectID:    projectID,
 		}
 
 		// Apply event to projections within the same transaction
@@ -136,8 +129,7 @@ func (d *Database) GetEventByID(ctx context.Context, eventID int64) (*Event, err
 			payload,
 			note,
 			item_id,
-			location_id,
-			project_id
+			location_id
 		FROM events
 		WHERE event_id = ?
 	`
@@ -154,7 +146,6 @@ func (d *Database) GetEventByID(ctx context.Context, eventID int64) (*Event, err
 		&event.Note,
 		&event.ItemID,
 		&event.LocationID,
-		&event.ProjectID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrEventNotFound
@@ -178,8 +169,7 @@ func (d *Database) GetEventsByType(ctx context.Context, eventType EventType) ([]
 			payload,
 			note,
 			item_id,
-			location_id,
-			project_id
+			location_id
 		FROM events
 		WHERE event_type = ?
 		ORDER BY event_id ASC
@@ -194,18 +184,14 @@ func (d *Database) GetEventsByType(ctx context.Context, eventType EventType) ([]
 	return scanEvents(rows)
 }
 
-// GetEventsByEntity retrieves all events for a specific entity (item, location, or project).
-// Exactly one of itemID, locationID, or projectID must be non-nil.
-func (d *Database) GetEventsByEntity(ctx context.Context, itemID, locationID, projectID *string) ([]*Event, error) {
-	// Validate exactly one ID is provided
+// GetEventsByEntity retrieves all events for a specific entity (item or location).
+// Exactly one of itemID or locationID must be non-nil.
+func (d *Database) GetEventsByEntity(ctx context.Context, itemID, locationID *string) ([]*Event, error) {
 	count := 0
 	if itemID != nil {
 		count++
 	}
 	if locationID != nil {
-		count++
-	}
-	if projectID != nil {
 		count++
 	}
 	if count != 1 {
@@ -215,7 +201,6 @@ func (d *Database) GetEventsByEntity(ctx context.Context, itemID, locationID, pr
 	var query string
 	var arg any
 
-	//nolint:gocritic // if-else is clearer than switch for checking different pointer variables
 	if itemID != nil {
 		query = `
 			SELECT
@@ -226,30 +211,12 @@ func (d *Database) GetEventsByEntity(ctx context.Context, itemID, locationID, pr
 				payload,
 				note,
 				item_id,
-				location_id,
-				project_id
+				location_id
 			FROM events
 			WHERE item_id = ?
 			ORDER BY event_id ASC
 		`
 		arg = *itemID
-	} else if locationID != nil {
-		query = `
-			SELECT
-				event_id,
-				event_type,
-				timestamp_utc,
-				actor_user_id,
-				payload,
-				note,
-				item_id,
-				location_id,
-				project_id
-			FROM events
-			WHERE location_id = ?
-			ORDER BY event_id ASC
-		`
-		arg = *locationID
 	} else {
 		query = `
 			SELECT
@@ -260,13 +227,12 @@ func (d *Database) GetEventsByEntity(ctx context.Context, itemID, locationID, pr
 				payload,
 				note,
 				item_id,
-				location_id,
-				project_id
+				location_id
 			FROM events
-			WHERE project_id = ?
+			WHERE location_id = ?
 			ORDER BY event_id ASC
 		`
-		arg = *projectID
+		arg = *locationID
 	}
 
 	rows, err := d.db.QueryContext(ctx, query, arg)
@@ -289,8 +255,7 @@ func (d *Database) GetAllEvents(ctx context.Context) ([]*Event, error) {
 			payload,
 			note,
 			item_id,
-			location_id,
-			project_id
+			location_id
 		FROM events
 		ORDER BY event_id ASC
 	`
@@ -315,8 +280,7 @@ func (d *Database) GetEventsAfter(ctx context.Context, afterEventID int64) ([]*E
 			payload,
 			note,
 			item_id,
-			location_id,
-			project_id
+			location_id
 		FROM events
 		WHERE event_id > ?
 		ORDER BY event_id ASC
@@ -348,7 +312,6 @@ func scanEvents(rows *sql.Rows) ([]*Event, error) {
 			&event.Note,
 			&event.ItemID,
 			&event.LocationID,
-			&event.ProjectID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan event: %w", err)

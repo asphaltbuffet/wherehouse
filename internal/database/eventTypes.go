@@ -34,32 +34,23 @@ const (
 	// LocationRemovedEvent records a location being moved to the Removed system location.
 	LocationRemovedEvent // location.removed
 
-	// ProjectCreatedEvent records a new project being opened to group related items.
-	ProjectCreatedEvent // project.created
-	// ProjectCompletedEvent records a project being marked as finished.
-	ProjectCompletedEvent // project.completed
-	// ProjectReopenedEvent records a completed project being re-activated.
-	ProjectReopenedEvent // project.reopened
 )
 
 // eventTypeByName maps string representations back to EventType constants.
 // Initialized using .String() on each constant so the stringer linecomments
 // remain the single source of truth — no separate string literals to maintain.
 var eventTypeByName = map[string]EventType{
-	ItemCreatedEvent.String():      ItemCreatedEvent,
-	ItemMovedEvent.String():        ItemMovedEvent,
-	ItemMissingEvent.String():      ItemMissingEvent,
-	ItemBorrowedEvent.String():     ItemBorrowedEvent,
-	ItemLoanedEvent.String():       ItemLoanedEvent,
-	ItemFoundEvent.String():        ItemFoundEvent,
-	ItemRemovedEvent.String():      ItemRemovedEvent,
-	LocationCreatedEvent.String():  LocationCreatedEvent,
-	LocationRenamedEvent.String():  LocationRenamedEvent,
-	LocationMovedEvent.String():    LocationMovedEvent,
-	LocationRemovedEvent.String():  LocationRemovedEvent,
-	ProjectCreatedEvent.String():   ProjectCreatedEvent,
-	ProjectCompletedEvent.String(): ProjectCompletedEvent,
-	ProjectReopenedEvent.String():  ProjectReopenedEvent,
+	ItemCreatedEvent.String():     ItemCreatedEvent,
+	ItemMovedEvent.String():       ItemMovedEvent,
+	ItemMissingEvent.String():     ItemMissingEvent,
+	ItemBorrowedEvent.String():    ItemBorrowedEvent,
+	ItemLoanedEvent.String():      ItemLoanedEvent,
+	ItemFoundEvent.String():       ItemFoundEvent,
+	ItemRemovedEvent.String():     ItemRemovedEvent,
+	LocationCreatedEvent.String(): LocationCreatedEvent,
+	LocationRenamedEvent.String(): LocationRenamedEvent,
+	LocationMovedEvent.String():   LocationMovedEvent,
+	LocationRemovedEvent.String(): LocationRemovedEvent,
 }
 
 // ParseEventType converts a string representation to an EventType constant.

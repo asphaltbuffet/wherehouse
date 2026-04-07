@@ -24,7 +24,7 @@ This knowledge base is optimized for AI agents working on Wherehouse. Each file 
 
 ### 📋 [domain-model.md](domain-model.md)
 **When to use**: Implementing entities, understanding relationships, canonicalization
-- Item, Location, Project, User entities
+- Item, Location, User entities
 - Naming rules (display vs canonical)
 - Selector syntax (LOCATION:ITEM)
 - Canonicalization algorithms

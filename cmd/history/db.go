@@ -16,5 +16,5 @@ type historyDB interface {
 	GetLocation(ctx context.Context, locationID string) (*database.Location, error)
 	GetLocationByCanonicalName(ctx context.Context, canonicalName string) (*database.Location, error)
 	GetItemsByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Item, error)
-	GetEventsByEntity(ctx context.Context, itemID, locationID, projectID *string) ([]*database.Event, error)
+	GetEventsByEntity(ctx context.Context, itemID, locationID *string) ([]*database.Event, error)
 }

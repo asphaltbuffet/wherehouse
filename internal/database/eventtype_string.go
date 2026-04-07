@@ -19,14 +19,11 @@ func _() {
 	_ = x[LocationRenamedEvent-9]
 	_ = x[LocationMovedEvent-10]
 	_ = x[LocationRemovedEvent-11]
-	_ = x[ProjectCreatedEvent-12]
-	_ = x[ProjectCompletedEvent-13]
-	_ = x[ProjectReopenedEvent-14]
 }
 
-const _EventType_name = "item.createditem.moveditem.missingitem.borroweditem.loaneditem.founditem.removedlocation.createdlocation.renamedlocation.reparentedlocation.removedproject.createdproject.completedproject.reopened"
+const _EventType_name = "item.createditem.moveditem.missingitem.borroweditem.loaneditem.founditem.removedlocation.createdlocation.renamedlocation.reparentedlocation.removed"
 
-var _EventType_index = [...]uint8{0, 12, 22, 34, 47, 58, 68, 80, 96, 112, 131, 147, 162, 179, 195}
+var _EventType_index = [...]uint8{0, 12, 22, 34, 47, 58, 68, 80, 96, 112, 131, 147}
 
 func (i EventType) String() string {
 	idx := int(i) - 1

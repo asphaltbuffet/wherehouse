@@ -23,7 +23,6 @@
 - `location_id` - current immediate location (not full path)
 - `in_temporary_use` - boolean
 - `temp_origin_location_id` - original location for temporary use
-- `project_id` - current project association (nullable)
 - `last_event_id` - replay checkpoint
 - `updated_at` - projection timestamp
 
@@ -87,42 +86,6 @@
 **Creation**:
 - Parent locations NOT auto-created
 - Use `--parents` flag for recursive creation
-
----
-
-### Project
-
-**Identity**:
-- `project_id` = user-provided slug (NOT UUID)
-- Globally unique
-- **Constraint**: Cannot contain `:`
-
-**State**:
-- `status`: `active` | `completed`
-- Can transition: `active → completed → reopened → ...`
-- No restrictions on transitions (can reopen completed projects)
-
-**Lifecycle Events**:
-- `project.created`
-- `project.completed`
-- `project.reopened`
-
-**Item Association**:
-- Items associated via `project_id` field in item projection
-- Association set during `item.moved` with `--project` flag
-- Default movement behavior: clears project
-- Explicit flags control association:
-  - `--project <id>` - set project
-  - `--keep-project` - preserve current project
-  - `--clear-project` - remove project (default)
-
-**Completion Behavior**:
-- Display "items to return" list (items with `project_id` = this project)
-- Does NOT automatically move items
-- User must manually return items
-
-**No Removal**:
-- Projects cannot be removed; use `project.completed` to close out a project
 
 ---
 
@@ -219,7 +182,6 @@
 Item
   - belongs_to Location (current_location_id)
   - has_many MovementEvents (via item_id)
-  - belongs_to Project (optional, via project_id)
   - has_one TemporaryOrigin (via temp_origin_location_id, when in_temporary_use)
 
 Location
@@ -228,14 +190,9 @@ Location
   - belongs_to Location (parent, via parent_id)
   - has_many MovementEvents (from/to)
 
-Project
-  - has_many Items (via items.project_id in projection)
-  - has_many MovementEvents (via movement.project_id in event log)
-
 Event
   - references Item (for item events)
   - references Location (for location events)
-  - references Project (optional, for item.moved)
   - has_actor User (via actor_user_id)
 ```
 
@@ -247,14 +204,11 @@ Event
 |------------|-------------|
 | `item.canonical_name` unique | No (warn only) |
 | `location.canonical_name` unique | Yes (global) |
-| `project.project_id` unique | Yes (global) |
 | `:` in item names | Forbidden |
-| `:` in project IDs | Forbidden |
 | Location tree acyclic | Yes (validated) |
 | System locations removable | No (forbidden) |
 | System locations renamable | No (forbidden) |
 | Item references valid location | Yes (FK-like) |
-| Project removal | No (forbidden) |
 | Location removal with children | No (forbidden) |
 | Location removal with items | No (forbidden) |
 
@@ -267,7 +221,6 @@ Event
 **First `temporary_use` move**:
 - Sets `in_temporary_use = true`
 - Sets `temp_origin_location_id` = previous location
-- Associates with project (optional)
 
 **Subsequent `temporary_use` moves**:
 - Preserves original `temp_origin_location_id`
@@ -303,18 +256,6 @@ Event
 - Moves item from `Missing` to `found_location_id`
 - Sets `in_temporary_use = true`
 - Sets `temp_origin_location_id = home_location_id` (specified)
-
-### Project Clearing Behavior
-
-**Default**: Movement clears project association
-**Override**:
-- `--project <id>` - set new project
-- `--keep-project` - preserve current project
-- `--clear-project` - explicit clear (default behavior)
-
-**Encoded in Event**:
-- `project_action` enum: `clear` | `keep` | `set`
-- `project_id` field (nullable)
 
 ---
 
