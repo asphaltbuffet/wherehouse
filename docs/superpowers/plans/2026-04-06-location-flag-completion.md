@@ -84,7 +84,7 @@ func TestLocationCompletions_ReturnsNonSystemLocations(t *testing.T) {
 
 	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 	assert.Contains(t, completions, "garage")
-	assert.Contains(t, completions, "garage/toolbox")
+	assert.Contains(t, completions, "garage:toolbox")
 	// System locations must not appear
 	assert.NotContains(t, completions, "missing")
 	assert.NotContains(t, completions, "borrowed")

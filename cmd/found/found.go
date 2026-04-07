@@ -92,6 +92,12 @@ func NewDefaultFoundCmd() *cobra.Command {
 func registerFoundFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("in", "i", "", "location where item was found (required)")
 	_ = cmd.MarkFlagRequired("in")
+	_ = cmd.RegisterFlagCompletionFunc(
+		"in",
+		func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			return cli.LocationCompletions(cmd.Context())
+		},
+	)
 
 	cmd.Flags().BoolP("return", "r", false, "also return item to its home location")
 	cmd.Flags().StringP("note", "n", "", "optional note for event")

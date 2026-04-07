@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -15,6 +16,8 @@ import (
 
 // makeCompletionCtx returns a context with config pointing at a freshly
 // initialised (auto-migrated) SQLite database in t.TempDir().
+// The returned *database.Database is for test seeding only;
+// LocationCompletions opens its own connection via OpenDatabase.
 func makeCompletionCtx(t *testing.T) (context.Context, *database.Database) {
 	t.Helper()
 
@@ -69,6 +72,35 @@ func TestLocationCompletions_EmptyDatabase(t *testing.T) {
 func TestLocationCompletions_ErrorOnMissingConfig(t *testing.T) {
 	// Context with no config causes OpenDatabase to fail
 	completions, directive := LocationCompletions(context.Background())
+
+	assert.Equal(t, cobra.ShellCompDirectiveError, directive)
+	assert.Nil(t, completions)
+}
+
+func TestLocationCompletions_ErrorOnClosedDatabase(t *testing.T) {
+	// Create a valid DB file, then remove it so OpenDatabase passes the
+	// CheckDatabaseExists preflight but the SQLite connection fails to query.
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "closed.db")
+
+	// Initialize the DB file so it exists on disk
+	initDB, err := database.Open(database.Config{
+		Path:        dbPath,
+		BusyTimeout: database.DefaultBusyTimeout,
+		AutoMigrate: true,
+	})
+	require.NoError(t, err)
+	require.NoError(t, initDB.Close())
+
+	// Corrupt the file so SQLite cannot open it
+	require.NoError(t, os.WriteFile(dbPath, []byte("not a sqlite file"), 0o600))
+
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{Path: dbPath},
+	}
+	ctx := context.WithValue(context.Background(), config.ConfigKey, cfg)
+
+	completions, directive := LocationCompletions(ctx)
 
 	assert.Equal(t, cobra.ShellCompDirectiveError, directive)
 	assert.Nil(t, completions)
