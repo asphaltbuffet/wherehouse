@@ -42,7 +42,7 @@ echo ""
 echo "Running safety checks..."
 
 # 1. Clean working copy
-if [ -n "$(jj diff --stat)" ]; then
+if [ -n "$(jj diff -T files)" ]; then
   echo "Error: working copy has uncommitted changes"
   echo "  Run 'jj diff --stat' to see what changed"
   exit 1
