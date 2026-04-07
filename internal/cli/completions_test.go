@@ -78,8 +78,8 @@ func TestLocationCompletions_ErrorOnMissingConfig(t *testing.T) {
 }
 
 func TestLocationCompletions_ErrorOnClosedDatabase(t *testing.T) {
-	// Create a valid DB file, then remove it so OpenDatabase passes the
-	// CheckDatabaseExists preflight but the SQLite connection fails to query.
+	// Create a valid DB file, then corrupt it so CheckDatabaseExists passes
+	// but database.Open fails on the invalid SQLite header.
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "closed.db")
 
