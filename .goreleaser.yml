@@ -7,7 +7,7 @@ before:
     - mise run generate
     - mise run completions
     - mise run manpages
-    # - mise run release_notes {{ .RawVersion }}
+    - mise run release_notes {{ .RawVersion }}
 
 builds:
   - env:
@@ -19,12 +19,8 @@ builds:
       - linux
       - windows
     goarch:
-      - "386"
       - amd64
       - arm64
-    ignore:
-      - goos: darwin
-        goarch: "386"
     ldflags:
       - -s -w -X {{.ModulePath}}/cmd/version/version.version={{.Version}}
     mod_timestamp: "{{ .CommitTimestamp }}"
@@ -41,7 +37,6 @@ archives:
       {{- .Version }}-
       {{- .Os }}-
       {{- if eq .Arch "amd64" }}x86_64
-      {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch}}{{ end }}
       {{- if .Arm }}_v{{ .Arm }}{{ end }}
     format_overrides:
@@ -112,5 +107,3 @@ nfpms:
       - rpm
     dependencies:
       - golang
-    recommends:
-      - python3
