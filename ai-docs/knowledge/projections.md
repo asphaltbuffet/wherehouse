@@ -50,7 +50,7 @@ CREATE INDEX idx_locations_system ON locations_current(is_system);
 **Update Triggers**:
 - `location.created` → insert row
 - `location.reparented` → update row + all descendants (recursive)
-- `location.deleted` → delete row
+- `location.removed` → delete row
 
 **Path Recomputation** (on reparent):
 ```
@@ -105,7 +105,7 @@ CREATE INDEX idx_items_location_covering ON items_current(location_id, display_n
 - `item.borrowed` → update location to Borrowed
 - `item.marked_missing` → update location to Missing
 - `item.marked_found` → update location, set temp use state
-- `item.deleted` → delete row
+- `item.removed` → update location to Removed
 
 **Temporary Use Logic**:
 ```
@@ -144,7 +144,6 @@ CREATE INDEX idx_projects_status ON projects_current(status);
 - `project.created` → insert with status='active'
 - `project.completed` → update status='completed'
 - `project.reopened` → update status='active'
-- `project.deleted` → delete row
 
 **Simplicity**:
 - No additional metadata in v1
@@ -230,13 +229,13 @@ ASSERT !creates_cycle(event.location_id, event.to_parent_id)
   "Reparenting would create cycle"
 ```
 
-**item.deleted**:
+**item.removed**:
 ```
 ASSERT item_exists(event.item_id)
   "Item {item_id} does not exist"
 
 ASSERT projection.location_id = event.previous_location_id
-  "Location mismatch during deletion"
+  "Location mismatch during removal"
 ```
 
 ### On Validation Failure

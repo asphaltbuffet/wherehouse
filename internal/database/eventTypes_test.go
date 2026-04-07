@@ -19,15 +19,14 @@ func TestEventTypeString(t *testing.T) {
 		{ItemBorrowedEvent, "item.borrowed"},
 		{ItemLoanedEvent, "item.loaned"},
 		{ItemFoundEvent, "item.found"},
-		{ItemDeletedEvent, "item.deleted"},
+		{ItemRemovedEvent, "item.removed"},
 		{LocationCreatedEvent, "location.created"},
 		{LocationRenamedEvent, "location.renamed"},
 		{LocationMovedEvent, "location.reparented"},
-		{LocationDeletedEvent, "location.deleted"},
+		{LocationRemovedEvent, "location.removed"},
 		{ProjectCreatedEvent, "project.created"},
 		{ProjectCompletedEvent, "project.completed"},
 		{ProjectReopenedEvent, "project.reopened"},
-		{ProjectDeletedEvent, "project.deleted"},
 	}
 
 	for _, tt := range tests {
@@ -44,15 +43,14 @@ func TestParseEventType(t *testing.T) {
 		ItemBorrowedEvent,
 		ItemLoanedEvent,
 		ItemFoundEvent,
-		ItemDeletedEvent,
+		ItemRemovedEvent,
 		LocationCreatedEvent,
 		LocationRenamedEvent,
 		LocationMovedEvent,
-		LocationDeletedEvent,
+		LocationRemovedEvent,
 		ProjectCreatedEvent,
 		ProjectCompletedEvent,
 		ProjectReopenedEvent,
-		ProjectDeletedEvent,
 	}
 
 	for _, et := range allTypes {

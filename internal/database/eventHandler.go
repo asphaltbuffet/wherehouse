@@ -25,8 +25,6 @@ func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Even
 		return d.handleLocationRenamed(ctx, tx, event)
 	case LocationMovedEvent:
 		return d.handleLocationReparented(ctx, tx, event)
-	case LocationDeletedEvent:
-		return d.handleLocationDeleted(ctx, tx, event)
 
 	// item event handling
 	case ItemCreatedEvent:
@@ -41,8 +39,6 @@ func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Even
 		return d.handleItemLoaned(ctx, tx, event)
 	case ItemFoundEvent:
 		return d.handleItemFound(ctx, tx, event)
-	case ItemDeletedEvent:
-		return d.handleItemDeleted(ctx, tx, event)
 	case ItemRemovedEvent:
 		return d.handleItemRemoved(ctx, tx, event)
 
@@ -57,8 +53,6 @@ func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Even
 		return d.handleProjectCompleted(ctx, tx, event)
 	case ProjectReopenedEvent:
 		return d.handleProjectReopened(ctx, tx, event)
-	case ProjectDeletedEvent:
-		return d.handleProjectDeleted(ctx, tx, event)
 
 	default:
 		return fmt.Errorf("unknown event type: %s", event.EventType)

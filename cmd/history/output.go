@@ -113,7 +113,7 @@ func formatEvent(
 
 	// Event marker
 	marker := "○"
-	if event.EventType == database.ItemDeletedEvent {
+	if event.EventType == database.ItemRemovedEvent {
 		marker = "●" // Terminal event
 	}
 	if event.EventType == database.ItemMissingEvent {
@@ -192,8 +192,6 @@ func formatEventDetails(
 		return formatItemMissingDetails(ctx, db, payload, locationCache), nil
 	case database.ItemFoundEvent:
 		return formatItemFoundDetails(ctx, db, payload, locationCache), nil
-	case database.ItemDeletedEvent:
-		return []string{"Item permanently deleted"}, nil
 	case database.ItemRemovedEvent:
 		return []string{"Item moved to Removed"}, nil
 	case database.ItemLoanedEvent:
@@ -204,8 +202,6 @@ func formatEventDetails(
 		return nil, nil
 	case database.LocationMovedEvent:
 		return nil, nil
-	case database.LocationDeletedEvent:
-		return nil, nil
 	case database.LocationRemovedEvent:
 		return nil, nil
 	case database.ProjectCreatedEvent:
@@ -213,8 +209,6 @@ func formatEventDetails(
 	case database.ProjectCompletedEvent:
 		return nil, nil
 	case database.ProjectReopenedEvent:
-		return nil, nil
-	case database.ProjectDeletedEvent:
 		return nil, nil
 	}
 

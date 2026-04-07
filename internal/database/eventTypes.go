@@ -22,8 +22,6 @@ const (
 	ItemLoanedEvent // item.loaned
 	// ItemFoundEvent records a previously missing item being located again.
 	ItemFoundEvent // item.found
-	// ItemDeletedEvent records an item being permanently removed from the inventory.
-	ItemDeletedEvent // item.deleted
 	// ItemRemovedEvent records an item being moved to the Removed system location.
 	ItemRemovedEvent // item.removed
 
@@ -33,8 +31,6 @@ const (
 	LocationRenamedEvent // location.renamed
 	// LocationMovedEvent records a location being reparented under a different location.
 	LocationMovedEvent // location.reparented
-	// LocationDeletedEvent records a storage location being permanently removed.
-	LocationDeletedEvent // location.deleted
 	// LocationRemovedEvent records a location being moved to the Removed system location.
 	LocationRemovedEvent // location.removed
 
@@ -44,8 +40,6 @@ const (
 	ProjectCompletedEvent // project.completed
 	// ProjectReopenedEvent records a completed project being re-activated.
 	ProjectReopenedEvent // project.reopened
-	// ProjectDeletedEvent records a project being permanently removed.
-	ProjectDeletedEvent // project.deleted
 )
 
 // eventTypeByName maps string representations back to EventType constants.
@@ -58,17 +52,14 @@ var eventTypeByName = map[string]EventType{
 	ItemBorrowedEvent.String():     ItemBorrowedEvent,
 	ItemLoanedEvent.String():       ItemLoanedEvent,
 	ItemFoundEvent.String():        ItemFoundEvent,
-	ItemDeletedEvent.String():      ItemDeletedEvent,
 	ItemRemovedEvent.String():      ItemRemovedEvent,
 	LocationCreatedEvent.String():  LocationCreatedEvent,
 	LocationRenamedEvent.String():  LocationRenamedEvent,
 	LocationMovedEvent.String():    LocationMovedEvent,
-	LocationDeletedEvent.String():  LocationDeletedEvent,
 	LocationRemovedEvent.String():  LocationRemovedEvent,
 	ProjectCreatedEvent.String():   ProjectCreatedEvent,
 	ProjectCompletedEvent.String(): ProjectCompletedEvent,
 	ProjectReopenedEvent.String():  ProjectReopenedEvent,
-	ProjectDeletedEvent.String():   ProjectDeletedEvent,
 }
 
 // ParseEventType converts a string representation to an EventType constant.

@@ -272,15 +272,15 @@ SET updated_at = event.timestamp_utc
 
 ---
 
-### item.deleted
+### item.removed
 
-**Purpose**: Permanently remove item from system
+**Purpose**: Remove item from active inventory by moving it to the "Removed" system location
 
 **Fields**:
 ```json
 {
   "event_id": 6,
-  "event_type": "item.deleted",
+  "event_type": "item.removed",
   "timestamp_utc": "2026-02-19T14:00:00Z",
   "actor_user_id": "alice",
   "item_id": "uuid",
@@ -291,17 +291,19 @@ SET updated_at = event.timestamp_utc
 
 **Projection Updates**:
 ```sql
-DELETE FROM items_current WHERE item_id = event.item_id
+SET location_id = <REMOVED_LOCATION_UUID>
+SET last_event_id = event.event_id
+SET updated_at = event.timestamp_utc
 ```
 
 **Validation**:
 - `item_id` must exist
 - `previous_location_id` must match current projection location
 
-**Finality**:
-- Deletion is permanent
-- Item cannot be resurrected
-- Event remains in log for history
+**History**:
+- Item moves to the "Removed" system location
+- History is preserved in the event log
+- Item remains in projection at the "Removed" location
 
 ---
 
@@ -372,7 +374,7 @@ INSERT INTO locations_current (
 - `canonical_name` must not contain `:` (reserved for path separator)
 - `display_name` must not be empty
 - `parent_id` must exist if not NULL
-- `is_system` should only be true for seed data (Missing, Borrowed)
+- `is_system` should only be true for seed data (Missing, Borrowed, Removed)
 - Must not create cycles (location cannot be its own ancestor)
 
 ---
@@ -422,15 +424,15 @@ SET updated_at = event.timestamp_utc
 
 ---
 
-### location.deleted
+### location.removed
 
-**Purpose**: Remove location from system
+**Purpose**: Remove an empty non-system location from the projection
 
 **Fields**:
 ```json
 {
   "event_id": 9,
-  "event_type": "location.deleted",
+  "event_type": "location.removed",
   "timestamp_utc": "2026-02-19T16:00:00Z",
   "actor_user_id": "alice",
   "location_id": "uuid",
@@ -448,12 +450,12 @@ DELETE FROM locations_current WHERE location_id = event.location_id
 - `location_id` must exist
 - `location_id` must not be system location
 - Location must have no children (no sub-locations)
-- Location must have no items
+- Location must have no items (items must be moved or removed first)
 - `previous_parent_id` must match current projection parent
 
-**Finality**:
-- Deletion is permanent
-- Location cannot be resurrected
+**History**:
+- Location is removed from the projection
+- Event remains in log for history
 
 ---
 
@@ -556,35 +558,6 @@ WHERE project_id = event.project_id
 
 ---
 
-### project.deleted
-
-**Purpose**: Remove project from system
-
-**Fields**:
-```json
-{
-  "event_id": 13,
-  "event_type": "project.deleted",
-  "timestamp_utc": "2026-02-19T20:00:00Z",
-  "actor_user_id": "alice",
-  "project_id": "my-project"
-}
-```
-
-**Projection Updates**:
-```sql
-DELETE FROM projects_current WHERE project_id = event.project_id
-```
-
-**Validation**:
-- `project_id` must exist
-- **Must have no item associations**: No items in projection with this project_id
-
-**Finality**:
-- Deletion is permanent
-- Project cannot be resurrected
-
----
 
 ## Event Storage Schema
 
@@ -672,7 +645,7 @@ FOR each event ORDER BY event_id ASC:
 
 **Corrections**:
 - Wrong move? Create new move back
-- Deleted by mistake? Create new item (different UUID)
+- Removed by mistake? Create new item (different UUID)
 - Wrong project? Move with new project
 
 ### Event Naming
@@ -680,7 +653,7 @@ FOR each event ORDER BY event_id ASC:
 **Pattern**: `entity.action_past_tense`
 - `item.moved` (not `item.move`)
 - `project.completed` (not `project.complete`)
-- `location.deleted` (not `location.delete`)
+- `location.removed` (not `location.remove`)
 
 ---
 

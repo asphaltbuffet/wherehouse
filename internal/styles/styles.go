@@ -248,7 +248,7 @@ func (s *Styles) LocationStyle(key string) lipgloss.Style {
 // EventStyle is a style based on event type.
 func (s *Styles) EventStyle(key string) lipgloss.Style {
 	switch strings.ToLower(key) {
-	case "item.deleted", "location.deleted":
+	case "item.removed", "location.removed":
 		return s.fgTextDimItalic
 	case "item.moved", "location.reparented":
 		return s.fgAccentBold

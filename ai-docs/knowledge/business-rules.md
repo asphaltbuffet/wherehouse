@@ -84,9 +84,9 @@ RULE: Location canonical_name MUST be globally unique
 **System Locations**:
 ```
 RULE: System locations cannot be modified
-  Locations: "Missing", "Borrowed"
+  Locations: "Missing", "Borrowed", "Removed"
   is_system = true
-  Cannot: rename, delete, reparent
+  Cannot: rename, remove, reparent
 ```
 
 **Tree Structure**:
@@ -99,9 +99,9 @@ RULE: Location tree has unlimited depth
   No artificial depth limit
 ```
 
-**Deletion**:
+**Removal**:
 ```
-RULE: Can only delete empty locations
+RULE: Can only remove empty locations
   Check: No items with location_id
   Check: No sub-locations with parent_id
 ```
@@ -127,8 +127,8 @@ RULE: Projects can transition between any states
   active → completed → reopened → ...
   No restrictions on transitions
 
-RULE: Can only delete projects with no item associations
-  Check: No items in projection with project_id
+RULE: Projects cannot be removed
+  Use project.completed to close out a project
 ```
 
 ---
@@ -256,7 +256,7 @@ SET last_event_id = event.event_id
 
 ---
 
-### item.deleted
+### item.removed
 
 ```
 VALIDATE:
@@ -266,14 +266,9 @@ VALIDATE:
 
 **Projection Logic**:
 ```
-DELETE FROM items_current WHERE item_id = event.item_id
-```
-
-**Finality**:
-```
-RULE: Deletion is permanent
-  Cannot resurrect item
-  Event remains in log for history
+SET location_id = <REMOVED_LOCATION_UUID>
+SET last_event_id = event.event_id
+(Item remains in projection at Removed location)
 ```
 
 ---
@@ -318,7 +313,7 @@ SET last_event_id = event.event_id
 
 ---
 
-### location.deleted
+### location.removed
 
 ```
 VALIDATE:
@@ -392,22 +387,6 @@ VALIDATE:
 UPDATE projects_current
 SET status = 'active', updated_at = event.timestamp_utc
 WHERE project_id = event.project_id
-```
-
----
-
-### project.deleted
-
-```
-VALIDATE:
-  ✓ project_id must exist
-  ✓ MUST have no item associations:
-    - No items in projection with project_id = this project_id
-```
-
-**Projection Logic**:
-```
-DELETE FROM projects_current WHERE project_id = event.project_id
 ```
 
 ---
@@ -552,7 +531,7 @@ RULE: Sets temporary use state
 
 ```
 RULE: from_location_id MUST match projection
-  For: item.moved, item.borrowed, item.marked_missing, item.deleted
+  For: item.moved, item.borrowed, item.marked_missing, item.removed
   Purpose: Detect concurrent writes or projection corruption
   On mismatch: FAIL replay immediately
 
@@ -649,7 +628,7 @@ RULE: --as flag overrides default
 ❌ **Never allow location cycles** - breaks tree structure
 ❌ **Never auto-move items on project completion** - user decision
 ❌ **Never auto-create locations** - require explicit creation
-❌ **Never resurrect deleted entities** - deletions are final
+❌ **Never modify system locations** - Missing, Borrowed, Removed are immutable
 ❌ **Never use timestamps for ordering** - event_id is authoritative
 
 ---

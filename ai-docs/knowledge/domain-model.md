@@ -33,7 +33,7 @@
 - Borrowed via `item.borrowed` event
 - Can be marked missing via `item.marked_missing`
 - Can be marked found via `item.marked_found`
-- Can be deleted via `item.deleted` (final, permanent)
+- Can be removed via `item.removed` (moves to "Removed" system location)
 
 **Duplicate Name Handling**:
 - Warn when `canonical_name` already exists (warning only, not error)
@@ -67,18 +67,19 @@
 **Special System Locations**:
 - `Missing` - for lost items
 - `Borrowed` - for borrowed items
-- Both are real rows in locations table
+- `Removed` - for removed items
+- All are real rows in locations table
 - `is_system = true`
-- Cannot be deleted, renamed, or reparented
+- Cannot be removed, renamed, or reparented
 - Root-level only (no parent)
 
 **Capabilities**:
 - Can contain items
 - Can contain sub-locations
 - Can be reparented via `location.reparented` event
-- Can be deleted via `location.deleted` (only if empty)
+- Can be removed via `location.removed` (only if empty)
 
-**Deletion Rules**:
+**Removal Rules**:
 - Only allowed if:
   - No items present
   - No sub-locations exist
@@ -105,7 +106,6 @@
 - `project.created`
 - `project.completed`
 - `project.reopened`
-- `project.deleted` (only if no items currently associated)
 
 **Item Association**:
 - Items associated via `project_id` field in item projection
@@ -121,8 +121,8 @@
 - Does NOT automatically move items
 - User must manually return items
 
-**Deletion Rules**:
-- Can only delete if no items currently associated (`project_id` references)
+**No Removal**:
+- Projects cannot be removed; use `project.completed` to close out a project
 
 ---
 
@@ -251,12 +251,12 @@ Event
 | `:` in item names | Forbidden |
 | `:` in project IDs | Forbidden |
 | Location tree acyclic | Yes (validated) |
-| System locations deletable | No (forbidden) |
+| System locations removable | No (forbidden) |
 | System locations renamable | No (forbidden) |
 | Item references valid location | Yes (FK-like) |
-| Project deletion with associations | No (forbidden) |
-| Location deletion with children | No (forbidden) |
-| Location deletion with items | No (forbidden) |
+| Project removal | No (forbidden) |
+| Location removal with children | No (forbidden) |
+| Location removal with items | No (forbidden) |
 
 ---
 

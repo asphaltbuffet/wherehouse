@@ -162,34 +162,6 @@ func (d *Database) handleLocationReparented(ctx context.Context, tx *sql.Tx, eve
 	return d.updateDescendantPaths(ctx, tx, payload.LocationID, event.TimestampUTC)
 }
 
-func (d *Database) handleLocationDeleted(ctx context.Context, tx *sql.Tx, event *Event) error {
-	var payload struct {
-		LocationID string `json:"location_id"`
-	}
-
-	if err := json.Unmarshal(event.Payload, &payload); err != nil {
-		return fmt.Errorf("failed to unmarshal payload: %w", err)
-	}
-
-	const query = `DELETE FROM locations_current WHERE location_id = ?`
-
-	result, err := tx.ExecContext(ctx, query, payload.LocationID)
-	if err != nil {
-		return fmt.Errorf("failed to delete location: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return ErrLocationNotFound
-	}
-
-	return nil
-}
-
 func (d *Database) handleLocationRemoved(ctx context.Context, tx *sql.Tx, event *Event) error {
 	var payload struct {
 		LocationID string `json:"location_id"`

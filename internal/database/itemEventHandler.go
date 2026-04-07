@@ -287,30 +287,3 @@ func (d *Database) handleItemRemoved(ctx context.Context, tx *sql.Tx, event *Eve
 	return nil
 }
 
-func (d *Database) handleItemDeleted(ctx context.Context, tx *sql.Tx, event *Event) error {
-	var payload struct {
-		ItemID string `json:"item_id"`
-	}
-
-	if err := json.Unmarshal(event.Payload, &payload); err != nil {
-		return fmt.Errorf("failed to unmarshal payload: %w", err)
-	}
-
-	const query = `DELETE FROM items_current WHERE item_id = ?`
-
-	result, err := tx.ExecContext(ctx, query, payload.ItemID)
-	if err != nil {
-		return fmt.Errorf("failed to delete item: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return ErrItemNotFound
-	}
-
-	return nil
-}

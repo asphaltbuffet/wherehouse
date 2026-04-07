@@ -78,30 +78,3 @@ func (d *Database) handleProjectReopened(ctx context.Context, tx *sql.Tx, event 
 	return nil
 }
 
-func (d *Database) handleProjectDeleted(ctx context.Context, tx *sql.Tx, event *Event) error {
-	var payload struct {
-		ProjectID string `json:"project_id"`
-	}
-
-	if err := json.Unmarshal(event.Payload, &payload); err != nil {
-		return fmt.Errorf("failed to unmarshal payload: %w", err)
-	}
-
-	const query = `DELETE FROM projects_current WHERE project_id = ?`
-
-	result, err := tx.ExecContext(ctx, query, payload.ProjectID)
-	if err != nil {
-		return fmt.Errorf("failed to delete project: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return ErrProjectNotFound
-	}
-
-	return nil
-}

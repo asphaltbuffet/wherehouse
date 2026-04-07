@@ -166,7 +166,6 @@ BEHAVIOR:
 ✓ No auto-repair of projections
 ✓ No implicit retries on validation failure
 ✓ No implicit project carry-over
-✓ No resurrection of deleted entities
 ✓ No auto-creation of locations
 ✓ No auto-return of items on project completion
 ```
@@ -369,23 +368,23 @@ wherehouse where garage:toolbox:screwdriver
 
 ---
 
-## Deletions Are Final
+## Removals Preserve History
 
-### Item Deletion
+### Item Removal
 
 ```
-DECISION: Items can be deleted permanently
-REASON: User may discard broken/lost items permanently
+DECISION: Items are removed by moving to "Removed" system location
+REASON: Preserves history; item may have been borrowed, moved, or lost
 
 ALTERNATIVE: Move to Missing
   - For temporarily lost items
   - Can be marked found later
 ```
 
-### Location Deletion
+### Location Removal
 
 ```
-DECISION: Can delete only empty locations
+DECISION: Can remove only empty locations
 REASON: Prevents accidental data loss
 
 VALIDATION:
@@ -393,14 +392,13 @@ VALIDATION:
   - No sub-locations
 ```
 
-### Project Deletion
+### Projects Cannot Be Removed
 
 ```
-DECISION: Can delete only projects with no associations
-REASON: Prevents orphaned item associations
+DECISION: Projects cannot be removed
+REASON: Projects may have historical item associations
 
-VALIDATION:
-  - No items with project_id = this project
+USE: project.completed to close out a project
 ```
 
 ---
