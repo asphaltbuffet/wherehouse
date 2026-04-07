@@ -39,14 +39,12 @@ Examples:
 	if err := itemCmd.MarkFlagRequired("in"); err != nil {
 		panic(fmt.Sprintf("failed to mark 'in' flag as required: %v", err))
 	}
-	if err := itemCmd.RegisterFlagCompletionFunc(
+	_ = itemCmd.RegisterFlagCompletionFunc(
 		"in",
 		func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return cli.LocationCompletions(cmd.Context())
 		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register 'in' flag completion: %v", err))
-	}
+	)
 
 	return itemCmd
 }
