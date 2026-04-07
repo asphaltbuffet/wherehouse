@@ -269,7 +269,8 @@ func (d *Database) DeleteLocation(ctx context.Context, locationID string) error 
 }
 
 // GetRootLocations retrieves all locations with no parent (top-level),
-// ordered by display_name. Includes system locations (Missing, Borrowed).
+// ordered by display_name. Includes system locations (Missing, Borrowed) but
+// excludes the Removed location, which is a tombstone not shown in listings.
 func (d *Database) GetRootLocations(ctx context.Context) ([]*Location, error) {
 	const query = `
 		SELECT
@@ -284,6 +285,7 @@ func (d *Database) GetRootLocations(ctx context.Context) ([]*Location, error) {
 			updated_at
 		FROM locations_current
 		WHERE parent_id IS NULL
+		  AND canonical_name != 'removed'
 		ORDER BY display_name
 	`
 
