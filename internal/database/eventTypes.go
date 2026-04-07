@@ -24,6 +24,8 @@ const (
 	ItemFoundEvent // item.found
 	// ItemDeletedEvent records an item being permanently removed from the inventory.
 	ItemDeletedEvent // item.deleted
+	// ItemRemovedEvent records an item being moved to the Removed system location.
+	ItemRemovedEvent // item.removed
 
 	// LocationCreatedEvent records a new storage location being added.
 	LocationCreatedEvent // location.created
@@ -33,6 +35,8 @@ const (
 	LocationMovedEvent // location.reparented
 	// LocationDeletedEvent records a storage location being permanently removed.
 	LocationDeletedEvent // location.deleted
+	// LocationRemovedEvent records a location being moved to the Removed system location.
+	LocationRemovedEvent // location.removed
 
 	// ProjectCreatedEvent records a new project being opened to group related items.
 	ProjectCreatedEvent // project.created
@@ -55,10 +59,12 @@ var eventTypeByName = map[string]EventType{
 	ItemLoanedEvent.String():       ItemLoanedEvent,
 	ItemFoundEvent.String():        ItemFoundEvent,
 	ItemDeletedEvent.String():      ItemDeletedEvent,
+	ItemRemovedEvent.String():      ItemRemovedEvent,
 	LocationCreatedEvent.String():  LocationCreatedEvent,
 	LocationRenamedEvent.String():  LocationRenamedEvent,
 	LocationMovedEvent.String():    LocationMovedEvent,
 	LocationDeletedEvent.String():  LocationDeletedEvent,
+	LocationRemovedEvent.String():  LocationRemovedEvent,
 	ProjectCreatedEvent.String():   ProjectCreatedEvent,
 	ProjectCompletedEvent.String(): ProjectCompletedEvent,
 	ProjectReopenedEvent.String():  ProjectReopenedEvent,

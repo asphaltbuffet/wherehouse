@@ -98,21 +98,24 @@ func (d *Database) GetItem(ctx context.Context, itemID string) (*Item, error) {
 }
 
 // GetItemsByLocation retrieves all items in a specific location.
+// Items in the Removed system location are excluded from all results.
 func (d *Database) GetItemsByLocation(ctx context.Context, locationID string) ([]*Item, error) {
 	const query = `
 		SELECT
-			item_id,
-			display_name,
-			canonical_name,
-			location_id,
-			in_temporary_use,
-			temp_origin_location_id,
-			project_id,
-			last_event_id,
-			updated_at
-		FROM items_current
-		WHERE location_id = ?
-		ORDER BY display_name
+			i.item_id,
+			i.display_name,
+			i.canonical_name,
+			i.location_id,
+			i.in_temporary_use,
+			i.temp_origin_location_id,
+			i.project_id,
+			i.last_event_id,
+			i.updated_at
+		FROM items_current i
+		INNER JOIN locations_current l ON i.location_id = l.location_id
+		WHERE i.location_id = ?
+		  AND l.canonical_name != 'removed'
+		ORDER BY i.display_name
 	`
 
 	rows, err := d.db.QueryContext(ctx, query, locationID)

@@ -43,6 +43,12 @@ func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Even
 		return d.handleItemFound(ctx, tx, event)
 	case ItemDeletedEvent:
 		return d.handleItemDeleted(ctx, tx, event)
+	case ItemRemovedEvent:
+		return d.handleItemRemoved(ctx, tx, event)
+
+	// location remove
+	case LocationRemovedEvent:
+		return d.handleLocationRemoved(ctx, tx, event)
 
 	// project event handling
 	case ProjectCreatedEvent:

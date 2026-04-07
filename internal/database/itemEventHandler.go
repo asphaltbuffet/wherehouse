@@ -252,6 +252,41 @@ func (d *Database) handleItemLoaned(ctx context.Context, tx *sql.Tx, event *Even
 	return nil
 }
 
+func (d *Database) handleItemRemoved(ctx context.Context, tx *sql.Tx, event *Event) error {
+	var payload struct {
+		ItemID             string `json:"item_id"`
+		PreviousLocationID string `json:"previous_location_id"`
+	}
+
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	// Get system "Removed" location
+	var removedLocID string
+	err := tx.QueryRowContext(ctx,
+		"SELECT location_id FROM locations_current WHERE canonical_name = 'removed' AND is_system = 1",
+	).Scan(&removedLocID)
+	if err != nil {
+		return fmt.Errorf("failed to get Removed location: %w", err)
+	}
+
+	const query = `
+		UPDATE items_current
+		SET location_id = ?, last_event_id = ?, updated_at = ?
+		WHERE item_id = ?
+	`
+
+	_, err = tx.ExecContext(ctx, query,
+		removedLocID, event.EventID, event.TimestampUTC, payload.ItemID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to mark item removed: %w", err)
+	}
+
+	return nil
+}
+
 func (d *Database) handleItemDeleted(ctx context.Context, tx *sql.Tx, event *Event) error {
 	var payload struct {
 		ItemID string `json:"item_id"`

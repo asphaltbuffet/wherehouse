@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// seedSystemLocations creates the system locations (Missing, Borrowed, Loaned) if they don't exist.
+// seedSystemLocations creates the system locations (Missing, Borrowed, Loaned, Removed) if they don't exist.
 // This is called after the initial migration runs.
 // It's idempotent - safe to call multiple times.
 // Uses INSERT OR IGNORE to handle upgrades where only some system locations exist.
@@ -20,6 +20,7 @@ func (d *Database) seedSystemLocations(ctx context.Context) error {
 			missingID  = "sys0000001"
 			borrowedID = "sys0000002"
 			loanedID   = "sys0000003"
+			removedID  = "sys0000004"
 		)
 
 		// Create Missing location (if not exists)
@@ -59,6 +60,19 @@ func (d *Database) seedSystemLocations(ctx context.Context) error {
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create Loaned location: %w", err)
+		}
+
+		// Create Removed location (if not exists)
+		_, err = tx.ExecContext(ctx, `
+			INSERT OR IGNORE INTO locations_current (
+				location_id, display_name, canonical_name,
+				parent_id, full_path_display, full_path_canonical,
+				depth, is_system, updated_at
+			) VALUES (?, ?, ?, NULL, ?, ?, 0, 1, ?)`,
+			removedID, "Removed", "removed", "Removed", "removed", now,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create Removed location: %w", err)
 		}
 
 		return nil

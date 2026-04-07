@@ -15,19 +15,21 @@ func _() {
 	_ = x[ItemLoanedEvent-5]
 	_ = x[ItemFoundEvent-6]
 	_ = x[ItemDeletedEvent-7]
-	_ = x[LocationCreatedEvent-8]
-	_ = x[LocationRenamedEvent-9]
-	_ = x[LocationMovedEvent-10]
-	_ = x[LocationDeletedEvent-11]
-	_ = x[ProjectCreatedEvent-12]
-	_ = x[ProjectCompletedEvent-13]
-	_ = x[ProjectReopenedEvent-14]
-	_ = x[ProjectDeletedEvent-15]
+	_ = x[ItemRemovedEvent-8]
+	_ = x[LocationCreatedEvent-9]
+	_ = x[LocationRenamedEvent-10]
+	_ = x[LocationMovedEvent-11]
+	_ = x[LocationDeletedEvent-12]
+	_ = x[LocationRemovedEvent-13]
+	_ = x[ProjectCreatedEvent-14]
+	_ = x[ProjectCompletedEvent-15]
+	_ = x[ProjectReopenedEvent-16]
+	_ = x[ProjectDeletedEvent-17]
 }
 
-const _EventType_name = "item.createditem.moveditem.missingitem.borroweditem.loaneditem.founditem.deletedlocation.createdlocation.renamedlocation.reparentedlocation.deletedproject.createdproject.completedproject.reopenedproject.deleted"
+const _EventType_name = "item.createditem.moveditem.missingitem.borroweditem.loaneditem.founditem.deleteditem.removedlocation.createdlocation.renamedlocation.reparentedlocation.deletedlocation.removedproject.createdproject.completedproject.reopenedproject.deleted"
 
-var _EventType_index = [...]uint8{0, 12, 22, 34, 47, 58, 68, 80, 96, 112, 131, 147, 162, 179, 195, 210}
+var _EventType_index = [...]uint8{0, 12, 22, 34, 47, 58, 68, 80, 92, 108, 124, 143, 159, 175, 190, 207, 223, 238}
 
 func (i EventType) String() string {
 	idx := int(i) - 1

@@ -36,6 +36,7 @@ type SearchResult struct {
 	IsMissing         bool // Derived from location_id
 	IsBorrowed        bool // Derived from location_id
 	IsLoaned          bool // Derived from location_id
+	IsRemoved         bool // Derived from location_id
 	// LastNonSystemLocation is populated for missing/borrowed items
 	LastNonSystemLocation *LocationInfo
 	LevenshteinDistance   int // For result sorting
@@ -53,13 +54,14 @@ func (d *Database) SearchByName(
 	canonicalSearchTerm := CanonicalizeString(searchTerm)
 	searchPattern := "%" + canonicalSearchTerm + "%"
 
-	// Get system location IDs for missing/borrowed/loaned detection
-	missingLocationID, borrowedLocationID, loanedLocationID, err := d.GetSystemLocationIDs(ctx)
+	// Get system location IDs for missing/borrowed/loaned/removed detection
+	missingLocationID, borrowedLocationID, loanedLocationID, removedLocationID, err := d.GetSystemLocationIDs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system location IDs: %w", err)
 	}
 
-	// Execute UNION query for items and locations
+	// Execute UNION query for items and locations.
+	// Items in the Removed system location are excluded from all results.
 	const query = `
 		SELECT
 			'item' as result_type,
@@ -77,6 +79,7 @@ func (d *Database) SearchByName(
 		FROM items_current i
 		INNER JOIN locations_current l ON i.location_id = l.location_id
 		WHERE i.canonical_name LIKE ?
+		  AND l.canonical_name != 'removed'
 
 		UNION ALL
 
@@ -110,6 +113,7 @@ func (d *Database) SearchByName(
 		missingLocationID,
 		borrowedLocationID,
 		loanedLocationID,
+		removedLocationID,
 	)
 	if err != nil {
 		return nil, err
@@ -141,6 +145,7 @@ func (d *Database) scanSearchResults(
 	missingLocationID string,
 	borrowedLocationID string,
 	loanedLocationID string,
+	removedLocationID string,
 ) ([]*SearchResult, error) {
 	var results []*SearchResult
 
@@ -195,6 +200,7 @@ func (d *Database) scanSearchResults(
 				result.IsMissing = currentLocationID.String == missingLocationID
 				result.IsBorrowed = currentLocationID.String == borrowedLocationID
 				result.IsLoaned = currentLocationID.String == loanedLocationID
+				result.IsRemoved = currentLocationID.String == removedLocationID
 			}
 		} else {
 			if locationID.Valid {
@@ -220,7 +226,8 @@ func (d *Database) scanSearchResults(
 // enrichResultsWithLastNonSystemLocation populates LastNonSystemLocation for items in system locations.
 func (d *Database) enrichResultsWithLastNonSystemLocation(ctx context.Context, results []*SearchResult) {
 	for _, result := range results {
-		if result.Type == resultTypeItem && (result.IsMissing || result.IsBorrowed || result.IsLoaned) &&
+		if result.Type == resultTypeItem &&
+			(result.IsMissing || result.IsBorrowed || result.IsLoaned || result.IsRemoved) &&
 			result.ItemID != nil {
 			lastLoc, locErr := d.findLastNonSystemLocation(ctx, *result.ItemID)
 			if locErr == nil && lastLoc != nil {
@@ -231,12 +238,13 @@ func (d *Database) enrichResultsWithLastNonSystemLocation(ctx context.Context, r
 	}
 }
 
-// GetSystemLocationIDs retrieves the UUIDs of the Missing, Borrowed, and Loaned system locations.
-// Returns (missingID, borrowedID, loanedID, error).
-func (d *Database) GetSystemLocationIDs(ctx context.Context) (string, string, string, error) {
+// GetSystemLocationIDs retrieves the UUIDs of the Missing, Borrowed, Loaned, and Removed system locations.
+// Returns (missingID, borrowedID, loanedID, removedID, error).
+func (d *Database) GetSystemLocationIDs(ctx context.Context) (string, string, string, string, error) {
 	// Check cache first
-	if d.missingLocationID != "" && d.borrowedLocationID != "" && d.loanedLocationID != "" {
-		return d.missingLocationID, d.borrowedLocationID, d.loanedLocationID, nil
+	if d.missingLocationID != "" && d.borrowedLocationID != "" && d.loanedLocationID != "" &&
+		d.removedLocationID != "" {
+		return d.missingLocationID, d.borrowedLocationID, d.loanedLocationID, d.removedLocationID, nil
 	}
 
 	// Query system locations
@@ -244,11 +252,12 @@ func (d *Database) GetSystemLocationIDs(ctx context.Context) (string, string, st
 		_ = d.initSystemLocations(ctx) // Error will be returned below if cache is still empty
 	})
 
-	if d.missingLocationID == "" || d.borrowedLocationID == "" || d.loanedLocationID == "" {
-		return "", "", "", errors.New("system locations not found in database")
+	if d.missingLocationID == "" || d.borrowedLocationID == "" || d.loanedLocationID == "" ||
+		d.removedLocationID == "" {
+		return "", "", "", "", errors.New("system locations not found in database")
 	}
 
-	return d.missingLocationID, d.borrowedLocationID, d.loanedLocationID, nil
+	return d.missingLocationID, d.borrowedLocationID, d.loanedLocationID, d.removedLocationID, nil
 }
 
 // findLastNonSystemLocation returns the most recent non-system location for an item
