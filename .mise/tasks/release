@@ -42,7 +42,7 @@ echo ""
 echo "Running safety checks..."
 
 # 1. Clean working copy
-if [ -n "$(jj diff -T files)" ]; then
+if [ -n "$(jj diff --name-only)" ]; then
   echo "Error: working copy has uncommitted changes"
   echo "  Run 'jj diff --stat' to see what changed"
   exit 1
@@ -67,7 +67,7 @@ if [ "$bump" != "prerelease" ]; then
 fi
 
 # 4. Current commit is pushed to remote
-commit=$(jj log -r @ --no-graph -T 'commit_id')
+commit=$(jj log -r @- --no-graph -T 'commit_id')
 if ! git branch -r --contains "$commit" 2>/dev/null | grep -q 'origin/'; then
   echo "Error: current commit is not pushed to origin"
   echo "  Run 'jj git push' first"
