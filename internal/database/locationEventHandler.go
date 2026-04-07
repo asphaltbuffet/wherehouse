@@ -164,11 +164,29 @@ func (d *Database) handleLocationReparented(ctx context.Context, tx *sql.Tx, eve
 
 func (d *Database) handleLocationRemoved(ctx context.Context, tx *sql.Tx, event *Event) error {
 	var payload struct {
-		LocationID string `json:"location_id"`
+		LocationID       string  `json:"location_id"`
+		PreviousParentID *string `json:"previous_parent_id"`
 	}
 
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	// Validate previous_parent_id matches current projection state
+	var currentParentID *string
+	err := tx.QueryRowContext(ctx,
+		"SELECT parent_id FROM locations_current WHERE location_id = ?",
+		payload.LocationID,
+	).Scan(&currentParentID)
+	if err != nil {
+		return fmt.Errorf("failed to get location for removal: %w", err)
+	}
+
+	parentMismatch := (payload.PreviousParentID == nil) != (currentParentID == nil) ||
+		(payload.PreviousParentID != nil && currentParentID != nil && *payload.PreviousParentID != *currentParentID)
+	if parentMismatch {
+		return fmt.Errorf("previous_parent_id mismatch: event has %v, projection has %v",
+			payload.PreviousParentID, currentParentID)
 	}
 
 	const query = `DELETE FROM locations_current WHERE location_id = ?`

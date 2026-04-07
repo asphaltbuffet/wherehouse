@@ -241,9 +241,6 @@ func formatItemMovedDetails(
 	if moveType, ok := payload["move_type"].(string); ok {
 		details = append(details, fmt.Sprintf("Type: %s", moveType))
 	}
-	if projectID, ok := payload["project_id"].(string); ok && projectID != "" {
-		details = append(details, fmt.Sprintf("Project: %s", projectID))
-	}
 	return details
 }
 

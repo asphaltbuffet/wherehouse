@@ -51,7 +51,8 @@ func removeLocation(
 	}
 
 	payload := map[string]any{
-		"location_id": locationID,
+		"location_id":        locationID,
+		"previous_parent_id": loc.ParentID,
 	}
 
 	eventID, err := db.AppendEvent(ctx, database.LocationRemovedEvent, actorUserID, payload, note)

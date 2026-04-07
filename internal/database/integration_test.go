@@ -401,6 +401,45 @@ func TestCanonicalNameNormalization(t *testing.T) {
 	})
 }
 
+// TestGetItemsByCanonicalName tests that removed items are excluded from selector resolution.
+func TestGetItemsByCanonicalName(t *testing.T) {
+	db := NewTestDB(t)
+	ctx := t.Context()
+
+	// Create a location and two items with the same canonical name
+	locID := "canonical-name-loc"
+	require.NoError(t, db.CreateLocation(ctx, locID, "Workshop", nil, false, 1, "2026-01-01T00:00:00Z"))
+
+	activeID := "active-hammer"
+	removedID := "removed-hammer"
+	require.NoError(t, db.CreateItem(ctx, activeID, "Hammer", locID, 1, "2026-01-01T00:00:01Z"))
+	require.NoError(t, db.CreateItem(ctx, removedID, "Hammer", locID, 2, "2026-01-01T00:00:02Z"))
+
+	t.Run("returns both items when neither is removed", func(t *testing.T) {
+		items, err := db.GetItemsByCanonicalName(ctx, "hammer")
+		require.NoError(t, err)
+		assert.Len(t, items, 2)
+	})
+
+	t.Run("excludes item after it is moved to removed location", func(t *testing.T) {
+		// Move removedID to the Removed system location
+		removedLoc, err := db.GetLocationByCanonicalName(ctx, "removed")
+		require.NoError(t, err)
+
+		_, err = db.AppendEvent(ctx, ItemRemovedEvent, "test-user", map[string]any{
+			"item_id":              removedID,
+			"previous_location_id": locID,
+		}, "")
+		require.NoError(t, err)
+		_ = removedLoc // used by handler internally
+
+		items, err := db.GetItemsByCanonicalName(ctx, "hammer")
+		require.NoError(t, err)
+		require.Len(t, items, 1, "removed item should be excluded")
+		assert.Equal(t, activeID, items[0].ItemID)
+	})
+}
+
 // TestMigrationTracking tests that migrations are properly tracked.
 func TestMigrationTracking(t *testing.T) {
 	db := NewTestDB(t)

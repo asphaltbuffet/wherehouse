@@ -52,16 +52,9 @@ func removeItem(
 		return nil, fmt.Errorf("projection validation failed: %w", validateErr)
 	}
 
-	// Get the Removed system location ID
-	removedLoc, err := db.GetLocationByCanonicalName(ctx, "removed")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Removed location: %w", err)
-	}
-
 	payload := map[string]any{
 		"item_id":              itemID,
 		"previous_location_id": item.LocationID,
-		"to_location_id":       removedLoc.LocationID,
 	}
 
 	eventID, err := db.AppendEvent(ctx, database.ItemRemovedEvent, actorUserID, payload, note)

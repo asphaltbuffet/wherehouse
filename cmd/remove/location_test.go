@@ -141,6 +141,51 @@ func TestRemoveLocation_LocationNotFound_Error(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
+// Test: Remove location event payload includes previous_parent_id.
+func TestRemoveLocation_PayloadIncludesPreviousParentID(t *testing.T) {
+	db, ctx, ids := setupRemoveLocationTest(t)
+	defer db.Close()
+
+	// ids.childID has ids.parentID as parent — verify payload captures that
+	result, err := removeLocation(ctx, db, ids.childID, "testuser", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Retrieve the event and inspect its payload
+	event, err := db.GetEventByID(ctx, result.EventID)
+	require.NoError(t, err)
+
+	var payload map[string]any
+	err = json.Unmarshal(event.Payload, &payload)
+	require.NoError(t, err)
+
+	// previous_parent_id must be present (can be null for root, but child has parent)
+	_, hasPreviousParentID := payload["previous_parent_id"]
+	assert.True(t, hasPreviousParentID, "location.removed event payload must include previous_parent_id")
+	assert.Equal(t, ids.parentID, payload["previous_parent_id"], "previous_parent_id must match actual parent")
+}
+
+// Test: Remove root location (no parent) — payload has null previous_parent_id.
+func TestRemoveLocation_RootLocation_PayloadHasNullPreviousParentID(t *testing.T) {
+	db, ctx, ids := setupRemoveLocationTest(t)
+	defer db.Close()
+
+	result, err := removeLocation(ctx, db, ids.emptyID, "testuser", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	event, err := db.GetEventByID(ctx, result.EventID)
+	require.NoError(t, err)
+
+	var payload map[string]any
+	err = json.Unmarshal(event.Payload, &payload)
+	require.NoError(t, err)
+
+	_, hasPreviousParentID := payload["previous_parent_id"]
+	assert.True(t, hasPreviousParentID, "previous_parent_id key must always be present in payload")
+	assert.Nil(t, payload["previous_parent_id"], "root location has no parent")
+}
+
 // Test: LocationResult marshals to JSON correctly.
 func TestLocationResult_JSONMarshal(t *testing.T) {
 	result := &LocationResult{
