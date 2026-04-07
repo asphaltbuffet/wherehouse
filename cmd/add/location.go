@@ -35,6 +35,12 @@ Examples:
 	}
 
 	locationCmd.Flags().StringP("in", "i", "", "Parent location name or ID (optional, omit for root)")
+	_ = locationCmd.RegisterFlagCompletionFunc(
+		"in",
+		func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			return cli.LocationCompletions(cmd.Context())
+		},
+	)
 
 	return locationCmd
 }

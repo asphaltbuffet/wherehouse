@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/asphaltbuffet/wherehouse/internal/cli"
 )
 
 const moveLongDescription = `Move one or more items to a different location.
@@ -84,6 +86,12 @@ func registerMoveFlags(cmd *cobra.Command) {
 	// Required flags
 	cmd.Flags().StringP("to", "t", "", "destination location (required)")
 	_ = cmd.MarkFlagRequired("to")
+	_ = cmd.RegisterFlagCompletionFunc(
+		"to",
+		func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			return cli.LocationCompletions(cmd.Context())
+		},
+	)
 
 	// Move type flags
 	cmd.Flags().Bool("temp", false, "temporary move (preserve origin for return)")
