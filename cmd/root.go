@@ -66,7 +66,7 @@ Examples:
 	rootCmd.AddCommand(add.NewAddCmd())
 	rootCmd.AddCommand(find.NewFindCmd())
 	rootCmd.AddCommand(found.NewFoundCmd())
-	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
+	rootCmd.AddCommand(history.NewHistoryCmd())
 	rootCmd.AddCommand(initialize.GetInitializeCmd())
 	rootCmd.AddCommand(listcmd.NewDefaultListCmd())
 	rootCmd.AddCommand(loan.NewLoanCmd())

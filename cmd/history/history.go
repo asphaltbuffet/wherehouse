@@ -1,7 +1,6 @@
 package history
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -24,33 +23,9 @@ Examples:
   wherehouse history --id abc-123-def --since "2 weeks ago"         # Filter by date
   wherehouse history socket --since 2026-01-15 --oldest-first       # Oldest first`
 
-// NewHistoryCmd returns a history command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewHistoryCmd(db historyDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "history <item-selector>",
-		Short: "Show event history for an item",
-		Long:  historyLongDescription,
-		Args:  cobra.MaximumNArgs(1), // 0 args if using --id
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runHistoryCore(cmd, args, db)
-		},
-	}
-
-	registerHistoryFlags(cmd)
-	return cmd
-}
-
-// NewDefaultHistoryCmd returns a history command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultHistoryCmd() *cobra.Command {
+// NewHistoryCmd returns a history command that opens the database from context
+// configuration at runtime.
+func NewHistoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "history <item-selector>",
 		Short: "Show event history for an item",
@@ -70,24 +45,12 @@ func NewDefaultHistoryCmd() *cobra.Command {
 		},
 	}
 
-	registerHistoryFlags(cmd)
-	return cmd
-}
-
-// registerHistoryFlags attaches all history-specific flags to cmd.
-// Called by both NewHistoryCmd and NewDefaultHistoryCmd to ensure identical flag sets.
-func registerHistoryFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("id", "i", "", "Item ID (alternative to name selector)")
 	cmd.Flags().IntP("limit", "n", 0, "Maximum number of events (0 = unlimited)")
 	cmd.Flags().String("since", "", "Show events since date/relative-time (e.g. '2 weeks ago')")
 	cmd.Flags().Bool("oldest-first", false, "Show oldest events first (default: newest first)")
-}
 
-// GetHistoryCmd returns the history command using the default database.
-//
-// Deprecated: Use NewDefaultHistoryCmd instead.
-func GetHistoryCmd() *cobra.Command {
-	return NewDefaultHistoryCmd()
+	return cmd
 }
 
 // ensure *database.Database satisfies historyDB at compile time.
@@ -115,7 +78,7 @@ func runHistoryCore(cmd *cobra.Command, args []string, db historyDB) error {
 
 	// Resolve item selector to ID
 	if itemID == "" {
-		itemID, err = resolveItemSelector(ctx, db, args[0])
+		itemID, err = cli.ResolveItemSelector(ctx, db, args[0], "wherehouse history")
 		if err != nil {
 			return err
 		}
@@ -127,6 +90,7 @@ func runHistoryCore(cmd *cobra.Command, args []string, db historyDB) error {
 		if errors.Is(err, database.ErrItemNotFound) {
 			return errors.New("item not found - check spelling or use --id flag")
 		}
+
 		return fmt.Errorf("failed to retrieve item: %w", err)
 	}
 
@@ -149,11 +113,6 @@ func runHistoryCore(cmd *cobra.Command, args []string, db historyDB) error {
 	// Format and output
 	cfg := cli.MustGetConfig(ctx)
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-	return formatOutput(ctx, out, db, filtered, cfg.IsJSON())
-}
 
-// resolveItemSelector converts a selector (name or location:name) to item ID.
-// Returns error if selector is ambiguous or not found.
-func resolveItemSelector(ctx context.Context, db historyDB, selector string) (string, error) {
-	return cli.ResolveItemSelector(ctx, db, selector, "wherehouse history")
+	return formatOutput(ctx, out, db, filtered, cfg.IsJSON())
 }
