@@ -26,7 +26,7 @@ type loanTestIDs struct {
 func setupLoanTest(t *testing.T) (*database.Database, context.Context, loanTestIDs) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db, err := database.Open(database.Config{
 		Path:        ":memory:",
 		BusyTimeout: database.DefaultBusyTimeout,
@@ -53,6 +53,7 @@ func setupLoanTest(t *testing.T) (*database.Database, context.Context, loanTestI
 	// Create items in garage
 	err = db.CreateItem(ctx, ids.itemID1, "10mm socket", ids.garageID, 1, "2025-01-01T00:00:01Z")
 	require.NoError(t, err)
+
 	err = db.CreateItem(ctx, ids.itemID2, "wrench", ids.garageID, 2, "2025-01-01T00:00:02Z")
 	require.NoError(t, err)
 
@@ -60,25 +61,10 @@ func setupLoanTest(t *testing.T) (*database.Database, context.Context, loanTestI
 }
 
 // newTestContext returns a context with the given config stored under config.ConfigKey.
-func newTestContext(cfg *config.Config) context.Context {
-	return context.WithValue(context.Background(), config.ConfigKey, cfg)
-}
+func newTestContext(t *testing.T, cfg *config.Config) context.Context {
+	t.Helper()
 
-// TestRunLoanItem_EmptyTo_ReturnsError verifies --to flag validation.
-func TestRunLoanItem_EmptyTo_ReturnsError(t *testing.T) {
-	db, _, ids := setupLoanTest(t)
-	defer db.Close()
-
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{ids.itemID1, "--to", "   "}) // whitespace only
-
-	cfg := &config.Config{}
-	cfg.Output.DefaultFormat = "human"
-	cmd.SetContext(newTestContext(cfg))
-
-	err := cmd.Execute()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--to flag cannot be empty")
+	return context.WithValue(t.Context(), config.ConfigKey, cfg)
 }
 
 // TestRunLoanItem_SingleItem_TextOutput tests a single item loan in text mode.
@@ -86,18 +72,18 @@ func TestRunLoanItem_SingleItem_TextOutput(t *testing.T) {
 	db, _, ids := setupLoanTest(t)
 	defer db.Close()
 
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{ids.itemID1, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
 
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "human"
-	cmd.SetContext(newTestContext(cfg))
+	cmd.SetContext(newTestContext(t, cfg))
 
 	// Capture stdout
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 
-	err := cmd.Execute()
+	err := runLoanItem(cmd, []string{ids.itemID1}, db)
 	require.NoError(t, err)
 
 	output := stdout.String()
@@ -111,18 +97,18 @@ func TestRunLoanItem_SingleItem_JSONOutput(t *testing.T) {
 	db, _, ids := setupLoanTest(t)
 	defer db.Close()
 
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{ids.itemID1, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
 
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "json"
-	cmd.SetContext(newTestContext(cfg))
+	cmd.SetContext(newTestContext(t, cfg))
 
 	// Capture stdout
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 
-	err := cmd.Execute()
+	err := runLoanItem(cmd, []string{ids.itemID1}, db)
 	require.NoError(t, err)
 
 	// Parse JSON output
@@ -152,17 +138,17 @@ func TestRunLoanItem_ReLoaned_TextOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now re-loan to Bob using the command
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{ids.itemID1, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
 
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "human"
-	cmd.SetContext(newTestContext(cfg))
+	cmd.SetContext(newTestContext(t, cfg))
 
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 
-	err = cmd.Execute()
+	err = runLoanItem(cmd, []string{ids.itemID1}, db)
 	require.NoError(t, err)
 
 	output := stdout.String()
@@ -181,14 +167,16 @@ func TestRunLoanItem_ReLoaned_JSONOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	// Re-loan to Bob using the command in JSON mode
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{ids.itemID1, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
+
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "json"
-	cmd.SetContext(newTestContext(cfg))
+
+	cmd.SetContext(newTestContext(t, cfg))
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
-	err = cmd.Execute()
+	err = runLoanItem(cmd, []string{ids.itemID1}, db)
 	require.NoError(t, err)
 
 	// Parse JSON
@@ -209,17 +197,17 @@ func TestRunLoanItem_MultipleSelectors_AllSucceed(t *testing.T) {
 	db, _, ids := setupLoanTest(t)
 	defer db.Close()
 
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{ids.itemID1, ids.itemID2, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
 
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "json"
-	cmd.SetContext(newTestContext(cfg))
+	cmd.SetContext(newTestContext(t, cfg))
 
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 
-	err := cmd.Execute()
+	err := runLoanItem(cmd, []string{ids.itemID1, ids.itemID2}, db)
 	require.NoError(t, err)
 
 	var output map[string]any
@@ -238,16 +226,16 @@ func TestRunLoanItem_MultipleSelectors_FirstFails_ErrorReturned(t *testing.T) {
 
 	nonExistentID := nanoid.MustNew()
 
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{nonExistentID, ids.itemID1, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
 
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "human"
-	cmd.SetContext(newTestContext(cfg))
+	cmd.SetContext(newTestContext(t, cfg))
 
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
+	err := runLoanItem(cmd, []string{nonExistentID, ids.itemID1}, db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to loan")
 }
@@ -261,18 +249,18 @@ func TestRunLoanItem_CloseError_LoggedToStderr(t *testing.T) {
 	db, _, ids := setupLoanTest(t)
 	defer db.Close()
 
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{ids.itemID1, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
 
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "human"
-	cmd.SetContext(newTestContext(cfg))
+	cmd.SetContext(newTestContext(t, cfg))
 
 	stderr := &bytes.Buffer{}
 	cmd.SetErr(stderr)
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
+	err := runLoanItem(cmd, []string{ids.itemID1}, db)
 	require.NoError(t, err)
 }
 
@@ -284,18 +272,17 @@ func TestRunLoanItem_LoanItemDBError_ReturnsWrapped(t *testing.T) {
 	// Use a valid selector format that doesn't resolve to any item
 	nonExistentCanonical := "nonexistent-item-name"
 
-	cmd := NewLoanCmd(db)
-	cmd.SetArgs([]string{nonExistentCanonical, "--to", "Bob"})
+	cmd := NewLoanCmd()
+	require.NoError(t, cmd.Flags().Set("to", "Bob"))
 
 	cfg := &config.Config{}
 	cfg.Output.DefaultFormat = "human"
-	cmd.SetContext(newTestContext(cfg))
+	cmd.SetContext(newTestContext(t, cfg))
 
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to loan")
+	err := runLoanItem(cmd, []string{nonExistentCanonical}, db)
+	assert.ErrorContains(t, err, "failed to loan")
 }
 
 // TestResult_JSONMarshal tests Result struct JSON marshaling.

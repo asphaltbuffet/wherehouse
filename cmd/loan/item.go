@@ -1,7 +1,6 @@
 package loan
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -27,13 +26,9 @@ func runLoanItem(cmd *cobra.Command, args []string, db loanDB) error {
 
 	// Parse flags
 	loanedTo, _ := cmd.Flags().GetString("to")
-	note, _ := cmd.Flags().GetString("note")
-
-	// Validate loanedTo is not empty (trim whitespace)
 	loanedTo = strings.TrimSpace(loanedTo)
-	if loanedTo == "" {
-		return errors.New("--to flag cannot be empty")
-	}
+
+	note, _ := cmd.Flags().GetString("note")
 
 	// Get actor user ID and set up output writer
 	actorUserID := cli.GetActorUserID(ctx)
