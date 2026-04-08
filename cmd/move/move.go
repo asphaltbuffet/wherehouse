@@ -30,40 +30,16 @@ Examples:
   wherehouse move "10mm socket" --to garage --temp
   wherehouse move wrench screwdriver --to toolbox`
 
-// NewMoveCmd returns a move command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewMoveCmd(db moveDB) *cobra.Command {
+// NewMoveCmd returns a move command that opens the database from context
+// configuration at runtime.
+func NewMoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "move <item-selector>... --to <location>",
+		Use:   "move <item-selector>...",
 		Short: "Move items to a different location",
 		Long:  moveLongDescription,
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runMoveItemCore(cmd, args, db)
-		},
-	}
-
-	registerMoveFlags(cmd)
-	return cmd
-}
-
-// NewDefaultMoveCmd returns a move command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultMoveCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "move <item-selector>... --to <location>",
-		Short: "Move items to a different location",
-		Long:  moveLongDescription,
-		Args:  cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, err := openDatabase(cmd.Context())
+			db, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("failed to open database: %w", err)
 			}
@@ -76,13 +52,6 @@ func NewDefaultMoveCmd() *cobra.Command {
 		},
 	}
 
-	registerMoveFlags(cmd)
-	return cmd
-}
-
-// registerMoveFlags attaches all move-specific flags to cmd.
-// Called by both NewMoveCmd and NewDefaultMoveCmd to ensure identical flag sets.
-func registerMoveFlags(cmd *cobra.Command) {
 	// Required flags
 	cmd.Flags().StringP("to", "t", "", "destination location (required)")
 	_ = cmd.MarkFlagRequired("to")
@@ -98,4 +67,6 @@ func registerMoveFlags(cmd *cobra.Command) {
 
 	// Event metadata
 	cmd.Flags().StringP("note", "n", "", "optional note for event")
+
+	return cmd
 }

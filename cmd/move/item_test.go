@@ -285,7 +285,7 @@ func TestResult_JSONMarshal(t *testing.T) {
 
 // Test: Command structure and flag parsing.
 func TestGetMoveCmd_Structure(t *testing.T) {
-	cmd := NewDefaultMoveCmd()
+	cmd := NewMoveCmd()
 
 	assert.NotNil(t, cmd)
 	assert.Equal(t, "move", cmd.Name())

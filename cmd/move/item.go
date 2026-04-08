@@ -21,7 +21,6 @@ type Result struct {
 }
 
 // runMoveItemCore contains the main business logic for the move command.
-// The db connection lifecycle (Close) is owned by the RunE closures in move.go.
 func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 	ctx := cmd.Context()
 
@@ -34,7 +33,7 @@ func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 	actorUserID := cli.GetActorUserID(ctx)
 
 	// Resolve destination location once (shared across all moves)
-	toLocationID, err := resolveLocation(ctx, db, toLocation)
+	toLocationID, err := cli.ResolveLocation(ctx, db, toLocation)
 	if err != nil {
 		return fmt.Errorf("destination location not found: %w", err)
 	}
@@ -56,7 +55,7 @@ func runMoveItemCore(cmd *cobra.Command, args []string, db moveDB) error {
 
 	for _, selector := range args {
 		// Resolve item selector
-		itemID, itemErr := resolveItemSelector(ctx, db, selector)
+		itemID, itemErr := cli.ResolveItemSelector(ctx, db, selector, "wherehouse move")
 		if itemErr != nil {
 			return fmt.Errorf("failed to resolve %q: %w", selector, itemErr)
 		}
