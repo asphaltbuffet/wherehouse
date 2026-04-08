@@ -1,23 +1,15 @@
 package add
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 )
 
-var itemCmd *cobra.Command
-
-// GetItemCmd returns the item subcommand, initializing it if necessary.
-func GetItemCmd() *cobra.Command {
-	if itemCmd != nil {
-		return itemCmd
-	}
-
-	itemCmd = &cobra.Command{
-		Use:   "item ITEM_NAME [ITEM_NAME...]",
+// NewAddItemCmd returns the item subcommand, initializing it if necessary.
+func NewAddItemCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "item <item-selector>...",
 		Short: "Add one or more items to a location",
 		Long: `Add one or more items to a specified location.
 
@@ -35,18 +27,16 @@ Examples:
 		RunE: runAddItem,
 	}
 
-	itemCmd.Flags().StringP("in", "i", "", "Location where items are stored (REQUIRED)")
-	if err := itemCmd.MarkFlagRequired("in"); err != nil {
-		panic(fmt.Sprintf("failed to mark 'in' flag as required: %v", err))
-	}
-	_ = itemCmd.RegisterFlagCompletionFunc(
+	cmd.Flags().StringP("in", "i", "", "Location where items are stored (REQUIRED)")
+	_ = cmd.MarkFlagRequired("in")
+	_ = cmd.RegisterFlagCompletionFunc(
 		"in",
 		func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return cli.LocationCompletions(cmd.Context())
 		},
 	)
 
-	return itemCmd
+	return cmd
 }
 
 // runAddItem implements the item addition logic.

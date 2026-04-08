@@ -63,7 +63,7 @@ Examples:
 	rootCmd.PersistentFlags().CountP("quiet", "q", "quiet mode (-q = minimal, -qq = silent)")
 
 	rootCmd.AddCommand(configpkg.GetConfigCmd())
-	rootCmd.AddCommand(add.NewDefaultAddCmd())
+	rootCmd.AddCommand(add.NewAddCmd())
 	rootCmd.AddCommand(find.NewFindCmd())
 	rootCmd.AddCommand(found.NewDefaultFoundCmd())
 	rootCmd.AddCommand(history.NewDefaultHistoryCmd())

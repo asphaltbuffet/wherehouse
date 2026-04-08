@@ -8,16 +8,10 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 )
 
-var locationCmd *cobra.Command
-
-// GetLocationCmd returns the location subcommand, initializing it if necessary.
-func GetLocationCmd() *cobra.Command {
-	if locationCmd != nil {
-		return locationCmd
-	}
-
-	locationCmd = &cobra.Command{
-		Use:   "location LOCATION_NAME [LOCATION_NAME...]",
+// NewAddLocationCmd subcommand.
+func NewAddLocationCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "location <name>...",
 		Short: "Add one or more locations",
 		Long: `Add one or more locations to the hierarchy.
 
@@ -34,15 +28,15 @@ Examples:
 		RunE: runAddLocation,
 	}
 
-	locationCmd.Flags().StringP("in", "i", "", "Parent location name or ID (optional, omit for root)")
-	_ = locationCmd.RegisterFlagCompletionFunc(
+	cmd.Flags().StringP("in", "i", "", "Parent location name or ID (optional, omit for root)")
+	_ = cmd.RegisterFlagCompletionFunc(
 		"in",
 		func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return cli.LocationCompletions(cmd.Context())
 		},
 	)
 
-	return locationCmd
+	return cmd
 }
 
 // runAddLocation implements the add location command logic.
