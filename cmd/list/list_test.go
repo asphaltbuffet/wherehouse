@@ -111,8 +111,10 @@ func setupListTest(t *testing.T) testFixture {
 }
 
 // newTestContext returns a context with the given config stored under config.ConfigKey.
-func newTestContext(cfg *config.Config) context.Context {
-	return context.WithValue(context.Background(), config.ConfigKey, cfg)
+func newTestContext(t *testing.T, cfg *config.Config) context.Context {
+	t.Helper()
+
+	return context.WithValue(t.Context(), config.ConfigKey, cfg)
 }
 
 // ---- buildLocationNodeFlat tests ----
@@ -568,15 +570,14 @@ func TestRunList_NoArgs_ShowsAllRootLocations(t *testing.T) {
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx := newTestContext(testCfg)
+	ctx := newTestContext(t, testCfg)
 
 	var buf bytes.Buffer
-	cmd := NewListCmd(f.db)
+	cmd := NewListCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{})
 	cmd.SetContext(ctx)
 
-	err := cmd.ExecuteContext(ctx)
+	err := runListCore(cmd, []string{}, f.db)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -597,15 +598,14 @@ func TestRunList_SingleArgFound_ShowsLocationItems(t *testing.T) {
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx := newTestContext(testCfg)
+	ctx := newTestContext(t, testCfg)
 
 	var buf bytes.Buffer
-	cmd := NewListCmd(f.db)
+	cmd := NewListCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{garageCanonicalName})
 	cmd.SetContext(ctx)
 
-	err := cmd.ExecuteContext(ctx)
+	err := runListCore(cmd, []string{garageCanonicalName}, f.db)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -620,15 +620,14 @@ func TestRunList_SingleArgNotFound_RendersNotFound(t *testing.T) {
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx := newTestContext(testCfg)
+	ctx := newTestContext(t, testCfg)
 
 	var buf bytes.Buffer
-	cmd := NewListCmd(f.db)
+	cmd := NewListCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{"does_not_exist"})
 	cmd.SetContext(ctx)
 
-	err := cmd.ExecuteContext(ctx)
+	err := runListCore(cmd, []string{"does_not_exist"}, f.db)
 	require.NoError(t, err) // no error on not-found
 
 	output := buf.String()
@@ -647,15 +646,14 @@ func TestRunList_MixedArgsBothRender(t *testing.T) {
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx := newTestContext(testCfg)
+	ctx := newTestContext(t, testCfg)
 
 	var buf bytes.Buffer
-	cmd := NewListCmd(f.db)
+	cmd := NewListCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{garageCanonicalName, "ghost_location"})
 	cmd.SetContext(ctx)
 
-	err := cmd.ExecuteContext(ctx)
+	err := runListCore(cmd, []string{garageCanonicalName, "ghost_location"}, f.db)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -675,15 +673,16 @@ func TestRunList_RecurseFlag_IncludesSublocationsRecursively(t *testing.T) {
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "text"},
 	}
-	ctx := newTestContext(testCfg)
+	ctx := newTestContext(t, testCfg)
 
 	var buf bytes.Buffer
-	cmd := NewListCmd(f.db)
+	cmd := NewListCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{"--recurse"})
+	// cmd.SetArgs([]string{"--recurse"})
+	cmd.Flags().Set("recurse", "true")
 	cmd.SetContext(ctx)
 
-	err := cmd.ExecuteContext(ctx)
+	err := runListCore(cmd, []string{}, f.db)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -707,15 +706,14 @@ func TestRunList_JSONFlag_OutputsValidJSON(t *testing.T) {
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "json"},
 	}
-	ctx := newTestContext(testCfg)
+	ctx := newTestContext(t, testCfg)
 
 	var buf bytes.Buffer
-	cmd := NewListCmd(f.db)
+	cmd := NewListCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{garageCanonicalName})
 	cmd.SetContext(ctx)
 
-	err := cmd.ExecuteContext(ctx)
+	err := runListCore(cmd, []string{garageCanonicalName}, f.db)
 	require.NoError(t, err)
 
 	// Verify output is valid JSON
@@ -740,15 +738,14 @@ func TestRunList_JSONWithNotFound_IncludesNotFoundMarker(t *testing.T) {
 	testCfg := &config.Config{
 		Output: config.OutputConfig{DefaultFormat: "json"},
 	}
-	ctx := newTestContext(testCfg)
+	ctx := newTestContext(t, testCfg)
 
 	var buf bytes.Buffer
-	cmd := NewListCmd(f.db)
+	cmd := NewListCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{garageCanonicalName, "nonexistent_location"})
 	cmd.SetContext(ctx)
 
-	err := cmd.ExecuteContext(ctx)
+	err := runListCore(cmd, []string{garageCanonicalName, "nonexistent_location"}, f.db)
 	require.NoError(t, err)
 
 	var result OutputJSON

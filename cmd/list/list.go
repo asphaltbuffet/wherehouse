@@ -30,33 +30,9 @@ Examples:
   wherehouse list --recurse            # Show all locations recursively
   wherehouse list -r Garage            # Recurse into Garage`
 
-// NewListCmd returns a list command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewListCmd(db listDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "list [<location>...]",
-		Short: "List items in locations",
-		Long:  listLongDescription,
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runListCore(cmd, args, db)
-		},
-	}
-
-	registerListFlags(cmd)
-	return cmd
-}
-
-// NewDefaultListCmd returns a list command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultListCmd() *cobra.Command {
+// NewListCmd returns a list command that opens the database from context
+// configuration at runtime.
+func NewListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list [<location>...]",
 		Short: "List items in locations",
@@ -76,21 +52,9 @@ func NewDefaultListCmd() *cobra.Command {
 		},
 	}
 
-	registerListFlags(cmd)
-	return cmd
-}
-
-// registerListFlags attaches all list-specific flags to cmd.
-// Called by both NewListCmd and NewDefaultListCmd to ensure identical flag sets.
-func registerListFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolP("recurse", "r", false, "recursively list sub-locations and their items")
-}
 
-// GetListCmd returns the list command using the default database.
-//
-// Deprecated: Use NewDefaultListCmd instead.
-func GetListCmd() *cobra.Command {
-	return NewDefaultListCmd()
+	return cmd
 }
 
 // ensure *database.Database satisfies listDB at compile time.
