@@ -64,7 +64,7 @@ Examples:
 
 	rootCmd.AddCommand(configpkg.GetConfigCmd())
 	rootCmd.AddCommand(add.NewDefaultAddCmd())
-	rootCmd.AddCommand(find.NewDefaultFindCmd())
+	rootCmd.AddCommand(find.NewFindCmd())
 	rootCmd.AddCommand(found.NewDefaultFoundCmd())
 	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
 	rootCmd.AddCommand(initialize.GetInitializeCmd())
