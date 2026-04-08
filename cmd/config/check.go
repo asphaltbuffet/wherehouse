@@ -10,16 +10,10 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
-var checkCmd *cobra.Command
-
-// GetCheckCmd returns the config check subcommand, which validates
+// NewCheckCmd returns the config check subcommand, which validates
 // configuration files for errors.
-func GetCheckCmd() *cobra.Command {
-	if checkCmd != nil {
-		return checkCmd
-	}
-
-	checkCmd = &cobra.Command{
+func NewCheckCmd() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Validate configuration files",
 		Long: `Validate configuration files for errors.
@@ -34,7 +28,7 @@ Examples:
 		RunE: runCheck,
 	}
 
-	return checkCmd
+	return cmd
 }
 
 func runCheck(cmd *cobra.Command, _ []string) error {

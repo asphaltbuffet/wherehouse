@@ -10,16 +10,10 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
-var initCmd *cobra.Command
-
-// GetInitCmd returns the config init subcommand, which creates
+// NewInitCmd returns the config init subcommand, which creates
 // a new configuration file with default values.
-func GetInitCmd() *cobra.Command {
-	if initCmd != nil {
-		return initCmd
-	}
-
-	initCmd = &cobra.Command{
+func NewInitCmd() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create a new configuration file",
 		Long: `Create a new configuration file with default values.
@@ -37,10 +31,10 @@ Examples:
 	}
 
 	// Add flags specific to this command
-	initCmd.Flags().Bool("local", false, "create local config (./wherehouse.toml)")
-	initCmd.Flags().BoolP("force", "f", false, "overwrite existing file")
+	cmd.Flags().Bool("local", false, "create local config (./wherehouse.toml)")
+	cmd.Flags().BoolP("force", "f", false, "overwrite existing file")
 
-	return initCmd
+	return cmd
 }
 
 func runInit(cmd *cobra.Command, _ []string) error {
