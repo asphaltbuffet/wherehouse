@@ -70,7 +70,7 @@ Examples:
 	rootCmd.AddCommand(initialize.GetInitializeCmd())
 	rootCmd.AddCommand(listcmd.NewListCmd())
 	rootCmd.AddCommand(loan.NewLoanCmd())
-	rootCmd.AddCommand(lost.NewDefaultLostCmd())
+	rootCmd.AddCommand(lost.NewLostCmd())
 	rootCmd.AddCommand(migrate.GetMigrateCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
 	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())

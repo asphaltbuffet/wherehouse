@@ -27,33 +27,9 @@ Examples:
   wherehouse lost "10mm socket" --note "checked toolbox"
   wherehouse lost aB3xK9mPqR`
 
-// NewLostCmd returns a lost command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewLostCmd(db lostDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "lost <item-selector>",
-		Short: "Mark an item as lost/missing",
-		Long:  lostLongDescription,
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runLostItem(cmd, args, db)
-		},
-	}
-
-	registerLostFlags(cmd)
-	return cmd
-}
-
-// NewDefaultLostCmd returns a lost command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultLostCmd() *cobra.Command {
+// NewLostCmd returns a lost command that opens the database from context
+// configuration at runtime.
+func NewLostCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lost <item-selector>",
 		Short: "Mark an item as lost/missing",
@@ -73,21 +49,9 @@ func NewDefaultLostCmd() *cobra.Command {
 		},
 	}
 
-	registerLostFlags(cmd)
-	return cmd
-}
-
-// registerLostFlags attaches all lost-specific flags to cmd.
-// Called by both NewLostCmd and NewDefaultLostCmd to ensure identical flag sets.
-func registerLostFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("note", "n", "", "optional note explaining circumstances")
-}
 
-// GetLostCmd returns the lost command using the default database.
-//
-// Deprecated: Use NewDefaultLostCmd instead.
-func GetLostCmd() *cobra.Command {
-	return NewDefaultLostCmd()
+	return cmd
 }
 
 // ensure *database.Database satisfies lostDB at compile time.
