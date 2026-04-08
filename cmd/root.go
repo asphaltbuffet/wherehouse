@@ -73,7 +73,7 @@ Examples:
 	rootCmd.AddCommand(lost.NewLostCmd())
 	rootCmd.AddCommand(migrate.NewMigrateCmd())
 	rootCmd.AddCommand(move.NewMoveCmd())
-	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
+	rootCmd.AddCommand(remove.NewRemoveCmd())
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 
 	return rootCmd
