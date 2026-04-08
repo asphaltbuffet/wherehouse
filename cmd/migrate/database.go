@@ -8,20 +8,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 )
 
-var databaseCmd *cobra.Command
-
-// GetDatabaseCmd returns the `migrate database` subcommand.
-func GetDatabaseCmd() *cobra.Command {
-	if databaseCmd != nil {
-		return databaseCmd
-	}
-
-	var dryRun bool
-
-	databaseCmd = &cobra.Command{
-		Use:   "database",
-		Short: "Migrate database IDs from UUID to nanoid format",
-		Long: `Rewrites all entity IDs in the wherehouse database from UUID format
+const longDesc = `Rewrites all entity IDs in the wherehouse database from UUID format
 to 10-character alphanumeric nanoid format.
 
 This command is opt-in and must be run explicitly. It operates as a single
@@ -41,7 +28,16 @@ After migration, any external references to old UUID-format IDs will be invalid.
 
 Examples:
   wherehouse migrate database --dry-run   # Preview migration without making changes
-  wherehouse migrate database             # Run migration`,
+  wherehouse migrate database             # Run migration`
+
+// NewDatabaseCmd returns the `migrate database` subcommand.
+func NewDatabaseCmd() *cobra.Command {
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "database",
+		Short: "Migrate database IDs from UUID to nanoid format",
+		Long:  longDesc,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			db, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {
@@ -53,7 +49,7 @@ Examples:
 		},
 	}
 
-	databaseCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview migration without making changes")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview migration without making changes")
 
-	return databaseCmd
+	return cmd
 }
