@@ -14,15 +14,9 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
-var databaseCmd *cobra.Command
-
-// GetDatabaseCmd returns the `initialize database` subcommand.
-func GetDatabaseCmd() *cobra.Command {
-	if databaseCmd != nil {
-		return databaseCmd
-	}
-
-	databaseCmd = &cobra.Command{
+// NewInitializeDatabaseCmd returns the `initialize database` subcommand.
+func NewInitializeDatabaseCmd() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "database",
 		Short: "Create the wherehouse database",
 		Long: `Create the SQLite database and apply all migrations.
@@ -40,9 +34,9 @@ Examples:
 		RunE: runInitializeDatabase,
 	}
 
-	databaseCmd.Flags().Bool("force", false, "reinitialize: back up existing DB then create fresh")
+	cmd.Flags().Bool("force", false, "reinitialize: back up existing DB then create fresh")
 
-	return databaseCmd
+	return cmd
 }
 
 // initResult is the structured output for JSON mode.

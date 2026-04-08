@@ -2,16 +2,10 @@ package initialize
 
 import "github.com/spf13/cobra"
 
-var initializeCmd *cobra.Command
-
-// GetInitializeCmd returns the initialize command group. The parent command shows help only;
+// NewInitializeCmd returns the initialize command group. The parent command shows help only;
 // action is delegated to subcommands (e.g., `initialize database`).
-func GetInitializeCmd() *cobra.Command {
-	if initializeCmd != nil {
-		return initializeCmd
-	}
-
-	initializeCmd = &cobra.Command{
+func NewInitializeCmd() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:     "initialize",
 		Aliases: []string{"init"},
 		Short:   "Initialize wherehouse resources",
@@ -23,7 +17,7 @@ Examples:
 		// No RunE: displays help when called without a subcommand.
 	}
 
-	initializeCmd.AddCommand(GetDatabaseCmd())
+	cmd.AddCommand(NewInitializeDatabaseCmd())
 
-	return initializeCmd
+	return cmd
 }
