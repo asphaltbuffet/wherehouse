@@ -37,35 +37,11 @@ type Result struct {
 	Warnings      []string `json:"warnings,omitempty"`
 }
 
-// NewFoundCmd returns a found command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewFoundCmd(db foundDB) *cobra.Command {
+// NewFoundCmd returns a found command that opens the database from context
+// configuration at runtime.
+func NewFoundCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "found <item-selector>... --in <location>",
-		Short: "Record that a lost or missing item has been found",
-		Long:  foundLongDescription,
-		Args:  cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runFoundItem(cmd, args, db)
-		},
-	}
-
-	registerFoundFlags(cmd)
-	return cmd
-}
-
-// NewDefaultFoundCmd returns a found command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultFoundCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "found <item-selector>... --in <location>",
+		Use:   "found <item-selector>...",
 		Short: "Record that a lost or missing item has been found",
 		Long:  foundLongDescription,
 		Args:  cobra.MinimumNArgs(1),
@@ -210,13 +186,6 @@ func formatSuccessMessage(r *Result) string {
 	}
 
 	return fmt.Sprintf("Found %q at %s (home: %s)", r.DisplayName, r.FoundAt, r.HomeLocation)
-}
-
-// GetFoundCmd returns the found command using the default database.
-//
-// Deprecated: Use NewDefaultFoundCmd instead.
-func GetFoundCmd() *cobra.Command {
-	return NewDefaultFoundCmd()
 }
 
 // ensure *database.Database satisfies foundDB at compile time.
