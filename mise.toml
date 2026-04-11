@@ -88,7 +88,6 @@ run = [
 [tasks.mock]
 description = "generate mocks"
 depends = ["generate"]
-wait_for = ["mod-tidy"]
 run = "mockery --log-level=warn"
 
 [tasks.mod-tidy]
@@ -97,6 +96,7 @@ alias = "mod"
 sources = ["**/*.go", "**/go.mod", "**/go.sum"]
 outputs = ["**/go.mod", "**/go.sum"]
 run = "go mod tidy"
+depends = ["mock"]
 depends_post = ["nix-hash"]
 
 [tasks.nix-hash]
@@ -124,6 +124,7 @@ depends_post = ["mod-tidy"]
 [tasks.test]
 description = "run test suite"
 depends = ["generate"]
+wait_for = ["mock"]
 sources = ["**/*.go", "**/testdata/**"]
 outputs = ["bin/coverage.out"]
 run = [
