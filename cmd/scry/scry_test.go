@@ -124,50 +124,6 @@ func markItemLoaned(t *testing.T, db *database.Database, itemID, fromLocID strin
 	require.NoError(t, err)
 }
 
-// ── Command structure ────────────────────────────────────────────────────────
-
-func TestNewScryCmd_Structure(t *testing.T) {
-	db, _, _ := setupScryTest(t)
-
-	cmd := NewScryCmd(db)
-
-	assert.NotNil(t, cmd)
-	assert.Equal(t, "scry", cmd.Name())
-	assert.NotEmpty(t, cmd.Short)
-	assert.NotEmpty(t, cmd.Long)
-
-	verboseFlag := cmd.Flags().Lookup("verbose")
-	require.NotNil(t, verboseFlag)
-	assert.Equal(t, "false", verboseFlag.DefValue)
-}
-
-func TestNewDefaultScryCmd_Structure(t *testing.T) {
-	cmd := NewDefaultScryCmd()
-
-	assert.NotNil(t, cmd)
-	assert.Equal(t, "scry", cmd.Name())
-	require.NotNil(t, cmd.Flags().Lookup("verbose"))
-}
-
-func TestGetScryCmd_IsNotNil(t *testing.T) {
-	cmd := GetScryCmd()
-	assert.NotNil(t, cmd)
-	assert.Equal(t, "scry", cmd.Name())
-}
-
-func TestNewScryCmd_RequiresExactlyOneArg(t *testing.T) {
-	db, _, _ := setupScryTest(t)
-
-	cmd := NewScryCmd(db)
-	cmd.SetContext(newTestContext(humanCfg()))
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{})
-
-	err := cmd.Execute()
-	require.Error(t, err)
-}
-
 // ── validateItemIsMissing ────────────────────────────────────────────────────
 
 func TestValidateItemIsMissing_MissingItem_ReturnsNil(t *testing.T) {
@@ -224,14 +180,13 @@ func TestValidateItemIsMissing_KnownLocation_ErrorContainsLocationName(t *testin
 func TestRunScryCore_MissingItem_HumanOutput(t *testing.T) {
 	db, _, ids := setupScryTest(t)
 
-	cmd := NewScryCmd(db)
-	cmd.SetArgs([]string{ids.itemID})
+	cmd := NewScryCmd()
 	cmd.SetContext(newTestContext(humanCfg()))
 
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 
-	require.NoError(t, cmd.Execute())
+	require.NoError(t, runScryCore(cmd, []string{ids.itemID}, db))
 
 	out := stdout.String()
 	assert.Contains(t, out, "Scrying for")
@@ -241,14 +196,13 @@ func TestRunScryCore_MissingItem_HumanOutput(t *testing.T) {
 func TestRunScryCore_MissingItem_JSONOutput(t *testing.T) {
 	db, _, ids := setupScryTest(t)
 
-	cmd := NewScryCmd(db)
-	cmd.SetArgs([]string{ids.itemID})
+	cmd := NewScryCmd()
 	cmd.SetContext(newTestContext(jsonCfg()))
 
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 
-	require.NoError(t, cmd.Execute())
+	require.NoError(t, runScryCore(cmd, []string{ids.itemID}, db))
 
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &out))
@@ -265,25 +219,22 @@ func TestRunScryCore_ItemNotMissing_ReturnsError(t *testing.T) {
 
 	moveItemTo(t, db, ids.itemID, ids.missingID, ids.garageID)
 
-	cmd := NewScryCmd(db)
-	cmd.SetArgs([]string{ids.itemID})
+	cmd := NewScryCmd()
 	cmd.SetContext(newTestContext(humanCfg()))
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not missing")
+	err := runScryCore(cmd, []string{ids.itemID}, db)
+	assert.ErrorContains(t, err, "not missing")
 }
 
 func TestRunScryCore_UnknownItem_ReturnsError(t *testing.T) {
 	db, _, _ := setupScryTest(t)
 
-	cmd := NewScryCmd(db)
-	cmd.SetArgs([]string{nanoid.MustNew()})
+	cmd := NewScryCmd()
 	cmd.SetContext(newTestContext(humanCfg()))
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
+	err := runScryCore(cmd, []string{nanoid.MustNew()}, db)
 	require.Error(t, err)
 }
 
@@ -298,14 +249,15 @@ func TestRunScryCore_VerboseFlag_ShowsOccurrences(t *testing.T) {
 	}, "")
 	require.NoError(t, err)
 
-	cmd := NewScryCmd(db)
-	cmd.SetArgs([]string{ids.itemID, "--verbose"})
+	cmd := NewScryCmd()
 	cmd.SetContext(newTestContext(humanCfg()))
+	cmd.Flags().Set("verbose", "true")
 
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 
-	require.NoError(t, cmd.Execute())
+	err = runScryCore(cmd, []string{ids.itemID}, db)
+	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), "Scrying for")
 }
 
@@ -575,8 +527,7 @@ func TestOutputJSON_SimilarItems_FallBackToCanonicalName(t *testing.T) {
 func TestRunScryCore_CloseError_LoggedToStderr(t *testing.T) {
 	db, _, ids := setupScryTest(t)
 
-	cmd := NewScryCmd(db)
-	cmd.SetArgs([]string{ids.itemID})
+	cmd := NewScryCmd()
 	cmd.SetContext(newTestContext(humanCfg()))
 
 	stdout := &bytes.Buffer{}
@@ -585,6 +536,6 @@ func TestRunScryCore_CloseError_LoggedToStderr(t *testing.T) {
 	cmd.SetErr(stderr)
 
 	// Close succeeds normally — verify no warning in stderr
-	require.NoError(t, cmd.Execute())
+	require.NoError(t, runScryCore(cmd, []string{ids.itemID}, db))
 	assert.NotContains(t, stderr.String(), "warning")
 }

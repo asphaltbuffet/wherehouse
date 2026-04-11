@@ -28,33 +28,9 @@ Examples:
   wherehouse scry "10mm socket"        # Suggest locations for a missing item
   wherehouse scry missing:screwdriver  # Same, with explicit Missing: prefix`
 
-// NewScryCmd returns a scry command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewScryCmd(db scryDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "scry <name>",
-		Short: "Suggest locations for a missing item based on history",
-		Long:  scryLongDescription,
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runScryCore(cmd, args, db)
-		},
-	}
-
-	registerScryFlags(cmd)
-	return cmd
-}
-
-// NewDefaultScryCmd returns a scry command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultScryCmd() *cobra.Command {
+// NewScryCmd returns a scry command that opens the database from context
+// configuration at runtime.
+func NewScryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scry <name>",
 		Short: "Suggest locations for a missing item based on history",
@@ -74,21 +50,9 @@ func NewDefaultScryCmd() *cobra.Command {
 		},
 	}
 
-	registerScryFlags(cmd)
-	return cmd
-}
-
-// registerScryFlags attaches all scry-specific flags to cmd.
-// Called by both NewScryCmd and NewDefaultScryCmd to ensure identical flag sets.
-func registerScryFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
-}
 
-// GetScryCmd returns the scry command using the default database.
-//
-// Deprecated: Use NewDefaultScryCmd instead.
-func GetScryCmd() *cobra.Command {
-	return NewDefaultScryCmd()
+	return cmd
 }
 
 // ensure *database.Database satisfies scryDB at compile time.
