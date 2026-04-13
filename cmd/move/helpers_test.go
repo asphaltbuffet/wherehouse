@@ -131,7 +131,7 @@ func TestResolveLocation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotID, gotErr := resolveLocation(ctx, db, tt.input)
+			gotID, gotErr := cli.ResolveLocation(ctx, db, tt.input)
 			if tt.wantError {
 				assert.Error(t, gotErr)
 			} else {
@@ -192,7 +192,7 @@ func TestResolveItemSelector(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotID, gotErr := resolveItemSelector(ctx, db, tt.selector)
+			gotID, gotErr := cli.ResolveItemSelector(ctx, db, tt.selector, "wherehouse move")
 			if tt.wantError {
 				assert.Error(t, gotErr)
 			} else {

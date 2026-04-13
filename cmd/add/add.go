@@ -21,21 +21,8 @@ func NewAddCmd() *cobra.Command {
 	}
 
 	// Register subcommands
-	cmd.AddCommand(GetItemCmd())
-	cmd.AddCommand(GetLocationCmd())
+	cmd.AddCommand(NewAddItemCmd())
+	cmd.AddCommand(NewAddLocationCmd())
 
 	return cmd
-}
-
-// NewDefaultAddCmd returns an add command ready for production use.
-// Alias for NewAddCmd — kept symmetric with the other command packages.
-func NewDefaultAddCmd() *cobra.Command {
-	return NewAddCmd()
-}
-
-// GetAddCmd returns the add command using the default configuration.
-//
-// Deprecated: Use NewDefaultAddCmd instead.
-func GetAddCmd() *cobra.Command {
-	return NewDefaultAddCmd()
 }

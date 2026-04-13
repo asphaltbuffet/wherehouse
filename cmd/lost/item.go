@@ -50,12 +50,6 @@ func runLostItem(cmd *cobra.Command, args []string, db lostDB) error {
 	return nil
 }
 
-// resolveItemSelector converts a selector (name or location:name) to item ID.
-// Returns error if selector is ambiguous or not found.
-func resolveItemSelector(ctx context.Context, db lostDB, selector string) (string, error) {
-	return cli.ResolveItemSelector(ctx, db, selector, "wherehouse lost")
-}
-
 // markItemLost marks an item as lost by delegating to cli.LostItem.
 // The itemIDOrSelector may be an item ID, LOCATION:ITEM selector, or canonical name.
 func markItemLost(

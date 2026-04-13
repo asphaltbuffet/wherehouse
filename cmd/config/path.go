@@ -9,16 +9,10 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
-var pathCmd *cobra.Command
-
-// GetPathCmd returns the config path subcommand, which shows
+// NewPathCmd returns the config path subcommand, which shows
 // the locations of configuration files.
-func GetPathCmd() *cobra.Command {
-	if pathCmd != nil {
-		return pathCmd
-	}
-
-	pathCmd = &cobra.Command{
+func NewPathCmd() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "path",
 		Short: "Show configuration file locations",
 		Long: `Show the locations of configuration files.
@@ -33,9 +27,9 @@ Examples:
 	}
 
 	// Add flags specific to this command
-	pathCmd.Flags().Bool("all", false, "show all possible locations")
+	cmd.Flags().Bool("all", false, "show all possible locations")
 
-	return pathCmd
+	return cmd
 }
 
 // showAllPaths displays all possible configuration file locations regardless of existence.

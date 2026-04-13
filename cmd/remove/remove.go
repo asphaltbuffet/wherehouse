@@ -31,35 +31,11 @@ Examples:
   wherehouse remove aB3xK9mPqR
   wherehouse remove --location "Old Shelf"`
 
-// NewRemoveCmd returns a remove command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewRemoveCmd(db removeDB) *cobra.Command {
+// NewRemoveCmd returns a remove command that opens the database from context
+// configuration at runtime.
+func NewRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "remove <selector>",
-		Short: "Remove an item or empty location",
-		Long:  removeLongDescription,
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runRemoveCore(cmd, args, db)
-		},
-	}
-
-	registerRemoveFlags(cmd)
-	return cmd
-}
-
-// NewDefaultRemoveCmd returns a remove command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultRemoveCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "remove <selector>",
+		Use:   "remove <item_selector>",
 		Short: "Remove an item or empty location",
 		Long:  removeLongDescription,
 		Args:  cobra.ExactArgs(1),
@@ -77,15 +53,10 @@ func NewDefaultRemoveCmd() *cobra.Command {
 		},
 	}
 
-	registerRemoveFlags(cmd)
-	return cmd
-}
-
-// registerRemoveFlags attaches all remove-specific flags to cmd.
-// Called by both NewRemoveCmd and NewDefaultRemoveCmd to ensure identical flag sets.
-func registerRemoveFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolP("location", "l", false, "remove a location instead of an item")
 	cmd.Flags().StringP("note", "n", "", "optional note for event")
+
+	return cmd
 }
 
 // ensure *database.Database satisfies removeDB at compile time.

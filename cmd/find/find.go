@@ -31,33 +31,9 @@ Examples:
   wherehouse find socket -n 5          # Limit to 5 closest matches
   wherehouse find "10mm" -v            # Verbose output with IDs`
 
-// NewFindCmd returns a find command that uses the provided db for all database
-// operations. The caller retains no reference to db after this call; the
-// returned command's RunE closes it via defer before returning.
-func NewFindCmd(db findDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "find <name>",
-		Short: "Find items or locations by name",
-		Long:  findLongDescription,
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runFindCore(cmd, args, db)
-		},
-	}
-
-	registerFindFlags(cmd)
-	return cmd
-}
-
-// NewDefaultFindCmd returns a find command that opens the database from context
-// configuration at runtime. This is the production entry point registered with
-// the root command.
-func NewDefaultFindCmd() *cobra.Command {
+// NewFindCmd returns a find command that opens the database from context
+// configuration at runtime.
+func NewFindCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "find <name>",
 		Short: "Find items or locations by name",
@@ -77,22 +53,17 @@ func NewDefaultFindCmd() *cobra.Command {
 		},
 	}
 
-	registerFindFlags(cmd)
-	return cmd
-}
-
-// registerFindFlags attaches all find-specific flags to cmd.
-// Called by both NewFindCmd and NewDefaultFindCmd to ensure identical flag sets.
-func registerFindFlags(cmd *cobra.Command) {
 	cmd.Flags().IntP("limit", "n", 0, "Limit number of results (0 = unlimited)")
 	cmd.Flags().BoolP("verbose", "v", false, "Show full details (IDs, match distance)")
+
+	return cmd
 }
 
 // GetFindCmd returns the find command using the default database.
 //
-// Deprecated: Use NewDefaultFindCmd instead.
+// Deprecated: Use NewFindCmd instead.
 func GetFindCmd() *cobra.Command {
-	return NewDefaultFindCmd()
+	return NewFindCmd()
 }
 
 // ensure *database.Database satisfies findDB at compile time.

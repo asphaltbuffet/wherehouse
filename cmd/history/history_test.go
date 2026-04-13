@@ -8,13 +8,7 @@ import (
 )
 
 func TestGetHistoryCmd_ReturnsNonNil(t *testing.T) {
-	cmd := GetHistoryCmd()
-	require.NotNil(t, cmd)
-	assert.Equal(t, "history <item-selector>", cmd.Use)
-}
-
-func TestNewDefaultHistoryCmd_ReturnsNonNil(t *testing.T) {
-	cmd := NewDefaultHistoryCmd()
+	cmd := NewHistoryCmd()
 	require.NotNil(t, cmd)
 	assert.Equal(t, "history <item-selector>", cmd.Use)
 }
