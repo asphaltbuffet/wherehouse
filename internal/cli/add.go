@@ -8,13 +8,33 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
 )
 
-// AddItems adds a items to the database.
+// addItemsDB is the database interface required by addItems.
+// *database.Database satisfies this interface.
+type addItemsDB interface {
+	LocationItemQuerier
+	ValidateLocationExists(ctx context.Context, locationID string) error
+	AppendEvent(
+		ctx context.Context,
+		eventType database.EventType,
+		actorUserID string,
+		payload any,
+		note string,
+	) (int64, error)
+}
+
+// AddItems adds items to the database.
 func AddItems(ctx context.Context, items []string, location string) error {
 	db, err := OpenDatabase(ctx)
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 
+	return addItems(ctx, db, items, location)
+}
+
+// addItems is the injectable implementation used by AddItems and loadCSV.
+func addItems(ctx context.Context, db addItemsDB, items []string, location string) error {
 	locationID, err := ResolveLocation(ctx, db, location)
 	if err != nil {
 		return fmt.Errorf("invalid location: %w", err)
