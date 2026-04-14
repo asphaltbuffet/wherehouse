@@ -13,7 +13,7 @@ Event-sourced CLI inventory tracker. Go + SQLite. "Where did I put my 10mm socke
 
 | Task | Read first | Key facts (verify before trusting) |
 |---|---|---|
-| New command/subcommand | `ai-docs/knowledge/cli-contract.md` | Pattern: `NewXxxCmd(db xxxDB)` + `NewDefaultXxxCmd()` wired in `cmd/root.go`. Per-command `db.go` defines minimal `xxxDB` interface + `//go:generate mockery`. Register in `cmd/root.go` via `NewDefaultXxxCmd()`. |
+| New command/subcommand | `ai-docs/knowledge/cli-contract.md` | Pattern: `NewXxxCmd() *cobra.Command` — no db arg. DB opened inside `RunE` via `cli.OpenDatabase(cmd.Context())`, then passed to `runXxxCore(cmd, args, db)`. Per-command `db.go` defines minimal `xxxDB` interface + `//go:generate mockery`. Register in `cmd/root.go` via `NewXxxCmd()`. |
 | Output format changes | `cmd/root.go`, `internal/cli/output.go` | Global `--json` flag already exists in `cmd/root.go` (`PersistentFlags()`). There is no per-command `--format` flag — `--json` is the global mechanism; adding `--format` would duplicate it. JSON output paths are implemented in most commands. All styles via `appStyles` singleton in `internal/styles/styles.go` — never inline `lipgloss.NewStyle()` in rendering functions. |
 | Data structures / events | `ai-docs/knowledge/events.md`, `ai-docs/knowledge/business-rules.md` | Event types live in `internal/database/eventTypes.go` (iota + `eventTypeByName` map). Adding a new type: add iota entry → regenerate `eventtype_string.go` (`go generate ./internal/database/`) → add case in `internal/database/eventHandler.go`. |
 | Troubleshooting | `ai-docs/knowledge/business-rules.md` | Events immutable, ordered by `event_id` only (timestamps are informational, not unique). Every `ORDER BY` that could tie must include `event_id ASC/DESC` as tiebreaker. System locations (`Missing`, `Borrowed`, `Loaned`) are predefined and immutable. |
@@ -37,7 +37,7 @@ When you search for something that doesn't exist and spend 3+ calls confirming i
 ```
 cmd/                    # CLI commands — one subdir per command
   <cmd>/
-    <cmd>.go            # cobra command: NewXxxCmd(db xxxDB) + NewDefaultXxxCmd()
+    <cmd>.go            # cobra command: NewXxxCmd() — opens DB via cli.OpenDatabase; delegates to runXxxCore(cmd, args, db)
     db.go               # minimal xxxDB interface + //go:generate mockery
     output.go           # rendering helpers (if needed)
     <cmd>_test.go
@@ -90,7 +90,7 @@ To pin a specific version: change to `pkgs.go_1_XX`.
 - `/audit-docs` — after features or fixes
 
 ### Code
-- **Constructor pattern**: every command exposes `NewXxxCmd(db xxxDB)` + `NewDefaultXxxCmd()`. Never pass `*database.DB` directly to a run function.
+- **Constructor pattern**: `NewXxxCmd() *cobra.Command` — no db parameter. Open DB inside `RunE` with `cli.OpenDatabase(cmd.Context())`, then call `runXxxCore(cmd, args, db)` for testability. Never pass `*database.DB` directly to a run function.
 - **Per-command DB interface**: each `cmd/<cmd>/db.go` defines a minimal interface; `//go:generate mockery` directive required.
 - **Enums**: typed `iota` constants only — never switch on bare integers (`exhaustive` linter enforces this).
 - **ORDER BY tiebreakers**: every query that could tie must include `event_id ASC/DESC`.

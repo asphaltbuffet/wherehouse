@@ -355,7 +355,8 @@ Project Management:
   project list         Show all projects (coming soon)
   project delete       Remove project (if no items) (coming soon)
 
-Database Operations:
+Data Operations:
+  load ✅              Bulk import locations and items from CSV file(s)
   initialize database ✅  Initialize new database (--force to overwrite with backup)
   doctor               Validate database consistency (partial)
   export               Export events and projections (coming soon)
@@ -415,6 +416,45 @@ wherehouse find --location Borrowed
 
 # Return borrowed item
 wherehouse move "ladder" Garage --rehome
+```
+
+#### Bulk Import from CSV
+
+Bootstrap your inventory from a spreadsheet or export. Create a CSV file with a
+header row and columns `type`, `name`, and `home`:
+
+```csv
+type,name,home
+L,Garage,
+L,Toolbox,Garage
+L,Socket Set,Toolbox
+I,10mm socket wrench,Socket Set
+I,step ladder,Garage
+I,cordless drill,Toolbox
+```
+
+- `type`: `L` = location, `I` = item
+- `name`: display name (required)
+- `home`: parent location for locations (optional), home location for items (required)
+- Locations must appear before items that reference them (single-pass)
+- Blank lines and lines starting with `#` are skipped
+
+```bash
+# Load a single file
+wherehouse load ~/garage.csv
+# → garage.csv: 3 location(s), 3 item(s)
+
+# Load multiple files — each is summarized
+wherehouse load ~/garage.csv ~/workshop.csv
+# → garage.csv: 3 location(s), 3 item(s)
+# → workshop.csv: 2 location(s), 8 item(s)
+
+# Invalid rows are reported but don't stop the import
+# → garage.csv: 2 location(s), 2 item(s), 1 invalid
+# →   Line 4: "cordless drill" — location not found: Toolbox
+
+# JSON output for scripting
+wherehouse load ~/garage.csv --json
 ```
 
 #### Debugging Inconsistencies
@@ -892,6 +932,7 @@ mise run ci
   - [x] Basic output formatting (human-readable, JSON, quiet modes)
   - [x] Flag overrides: `--db`, `--as` override config file values at runtime
   - [x] Clear error when database file is missing (guides user to `initialize database`)
+  - [x] `load` - Bulk import locations and items from CSV file(s)
 
 ### 🚧 In Progress (v0.2.0 - Alpha)
 
