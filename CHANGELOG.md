@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.0]
+
+### Added
+
+- Add `load` command to add items/locations in bulk
+
 ## [0.1.0] - 2026-02-25
 
 _First release._
@@ -26,4 +32,5 @@ _First release._
 - Use NanoID instead of UUID for item identifiers (shorter, more readable) ([`4772974`](https://github.com/asphaltbuffet/wherehouse/commit/4772974))
 - Unify output styling across all commands ([`0e24808`](https://github.com/asphaltbuffet/wherehouse/commit/0e24808))
 
+[0.2.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.0.0...v0.1.0
