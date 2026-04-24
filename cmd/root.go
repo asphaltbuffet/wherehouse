@@ -11,17 +11,14 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
-	"github.com/asphaltbuffet/wherehouse/cmd/find"
-	"github.com/asphaltbuffet/wherehouse/cmd/found"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
-	"github.com/asphaltbuffet/wherehouse/cmd/initialize"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
-	"github.com/asphaltbuffet/wherehouse/cmd/loan"
-	"github.com/asphaltbuffet/wherehouse/cmd/lost"
 	"github.com/asphaltbuffet/wherehouse/cmd/migrate"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
+	"github.com/asphaltbuffet/wherehouse/cmd/rename"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
+	"github.com/asphaltbuffet/wherehouse/cmd/status"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
@@ -63,18 +60,15 @@ Examples:
 	rootCmd.PersistentFlags().CountP("quiet", "q", "quiet mode (-q = minimal, -qq = silent)")
 
 	rootCmd.AddCommand(configpkg.NewConfigCmd())
-	rootCmd.AddCommand(add.NewAddCmd())
-	rootCmd.AddCommand(find.NewFindCmd())
-	rootCmd.AddCommand(found.NewFoundCmd())
-	rootCmd.AddCommand(history.NewHistoryCmd())
-	rootCmd.AddCommand(initialize.NewInitializeCmd())
-	rootCmd.AddCommand(listcmd.NewListCmd())
-	rootCmd.AddCommand(loan.NewLoanCmd())
-	rootCmd.AddCommand(lost.NewLostCmd())
+	rootCmd.AddCommand(add.NewDefaultAddCmd())
+	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
+	rootCmd.AddCommand(listcmd.NewDefaultListCmd())
 	rootCmd.AddCommand(migrate.NewMigrateCmd())
-	rootCmd.AddCommand(move.NewMoveCmd())
-	rootCmd.AddCommand(remove.NewRemoveCmd())
-	rootCmd.AddCommand(scry.NewScryCmd())
+	rootCmd.AddCommand(move.NewDefaultMoveCmd())
+	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
+	rootCmd.AddCommand(rename.NewDefaultRenameCmd())
+	rootCmd.AddCommand(scry.NewDefaultScryCmd())
+	rootCmd.AddCommand(status.NewDefaultStatusCmd())
 
 	return rootCmd
 }
