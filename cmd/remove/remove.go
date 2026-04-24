@@ -1,7 +1,6 @@
 package remove
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -11,123 +10,79 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
-const removeLongDescription = `Remove an item or empty location from the inventory.
-
-Items are moved to the Removed system location and hidden from all normal views.
-Their full history is preserved in the event log.
-
-Non-system locations can be removed only if they are empty (no items, no sub-locations).
-
-Selector types for items:
-  - ID: aB3xK9mPqR (exact ID)
-  - LOCATION:ITEM: garage:socket (both canonical names, filters by location)
-  - Canonical name: "10mm socket" (must match exactly 1 item)
-
-Use --location (-l) to remove a location instead of an item.
-
-Examples:
-  wherehouse remove garage:socket
-  wherehouse remove "10mm socket" --note "broken beyond repair"
-  wherehouse remove aB3xK9mPqR
-  wherehouse remove --location "Old Shelf"`
-
-// NewRemoveCmd returns a remove command that opens the database from context
-// configuration at runtime.
-func NewRemoveCmd() *cobra.Command {
+// NewDefaultRemoveCmd returns a remove command that opens the database from context configuration at runtime.
+func NewDefaultRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "remove <item_selector>",
-		Short: "Remove an item or empty location",
-		Long:  removeLongDescription,
-		Args:  cobra.ExactArgs(1),
+		Use:   "remove <entity-id>",
+		Short: "Remove an entity from the inventory",
+		Long: `Remove an entity from the inventory.
+
+Removed entities are hidden from all normal views.
+Their full history is preserved in the event log.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			db, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("failed to open database: %w", err)
 			}
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runRemoveCore(cmd, args, db)
+			defer db.Close()
+			return runRemove(cmd, args, db)
 		},
 	}
-
-	cmd.Flags().BoolP("location", "l", false, "remove a location instead of an item")
-	cmd.Flags().StringP("note", "n", "", "optional note for event")
-
+	cmd.Flags().StringP("note", "n", "", "Optional note for event")
 	return cmd
 }
 
-// ensure *database.Database satisfies removeDB at compile time.
-var _ removeDB = (*database.Database)(nil)
+// NewRemoveCmd returns a remove command using the provided database. Intended for testing.
+func NewRemoveCmd(db removeDB) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remove <entity-id>",
+		Short: "Remove an entity from the inventory",
+		Long: `Remove an entity from the inventory.
 
-// runRemoveCore dispatches to item or location removal based on flags.
-func runRemoveCore(cmd *cobra.Command, args []string, db removeDB) error {
+Removed entities are hidden from all normal views.
+Their full history is preserved in the event log.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRemove(cmd, args, db)
+		},
+	}
+	cmd.Flags().StringP("note", "n", "", "Optional note for event")
+	return cmd
+}
+
+func runRemove(cmd *cobra.Command, args []string, db removeDB) error {
 	ctx := cmd.Context()
-	selector := args[0]
+	entityID := args[0]
+	noteFlag, _ := cmd.Flags().GetString("note")
 
-	isLocation, _ := cmd.Flags().GetBool("location")
-	note, _ := cmd.Flags().GetString("note")
+	entity, err := db.GetEntity(ctx, entityID)
+	if err != nil {
+		return fmt.Errorf("entity %q not found: %w", entityID, err)
+	}
+
+	payload := map[string]any{
+		"entity_id": entityID,
+	}
 
 	actorUserID := cli.GetActorUserID(ctx)
-	cfg := cli.MustGetConfig(ctx)
+	if _, err = db.AppendEvent(ctx, database.EntityRemovedEvent, actorUserID, payload, noteFlag); err != nil {
+		return fmt.Errorf("failed to remove entity: %w", err)
+	}
+
+	cfg, ok := cli.GetConfig(ctx)
+	if !ok {
+		cfg = config.GetDefaults()
+	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
-	if isLocation {
-		return runRemoveLocation(ctx, db, selector, actorUserID, note, cfg, out)
-	}
-
-	return runRemoveItem(ctx, db, selector, actorUserID, note, cfg, out)
-}
-
-func runRemoveLocation(
-	ctx context.Context,
-	db removeDB,
-	selector, actorUserID, note string,
-	cfg *config.Config,
-	out *cli.OutputWriter,
-) error {
-	locationID, err := cli.ResolveLocation(ctx, db, selector)
-	if err != nil {
-		return fmt.Errorf("failed to resolve location %q: %w", selector, err)
-	}
-
-	result, err := removeLocation(ctx, db, locationID, actorUserID, note)
-	if err != nil {
-		return fmt.Errorf("failed to remove location: %w", err)
-	}
-
 	if cfg.IsJSON() {
-		if jsonErr := out.JSON(result); jsonErr != nil {
-			return fmt.Errorf("failed to encode JSON output: %w", jsonErr)
-		}
-		return nil
+		return out.JSON(map[string]string{
+			"entity_id":    entityID,
+			"display_name": entity.DisplayName,
+		})
 	}
 
-	out.Success(fmt.Sprintf("Removed location %q", result.DisplayName))
-	return nil
-}
-
-func runRemoveItem(
-	ctx context.Context,
-	db removeDB,
-	selector, actorUserID, note string,
-	cfg *config.Config,
-	out *cli.OutputWriter,
-) error {
-	result, err := removeItem(ctx, db, selector, actorUserID, note)
-	if err != nil {
-		return fmt.Errorf("failed to remove item: %w", err)
-	}
-
-	if cfg.IsJSON() {
-		if jsonErr := out.JSON(result); jsonErr != nil {
-			return fmt.Errorf("failed to encode JSON output: %w", jsonErr)
-		}
-		return nil
-	}
-
-	out.Success(fmt.Sprintf("Removed item %q (was in %s)", result.DisplayName, result.PreviousLocation))
+	out.Success(fmt.Sprintf("Removed %q", entity.DisplayName))
 	return nil
 }
