@@ -1,118 +1,82 @@
 package history
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
-const historyLongDescription = `Display event history for a specific item (newest first by default).
-
-Item selector can be:
-  - Canonical name: "10mm_socket"
-  - Location-scoped: "garage:10mm_socket"
-  - ID: --id <id>
-
-Examples:
-  wherehouse history 10mm_socket                                    # Show full history
-  wherehouse history toolbox:screwdriver -n 10                      # Last 10 events
-  wherehouse history --id abc-123-def --since "2 weeks ago"         # Filter by date
-  wherehouse history socket --since 2026-01-15 --oldest-first       # Oldest first`
-
-// NewHistoryCmd returns a history command that opens the database from context
-// configuration at runtime.
-func NewHistoryCmd() *cobra.Command {
+// NewDefaultHistoryCmd returns a history command that opens the database from context configuration at runtime.
+func NewDefaultHistoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "history <item-selector>",
-		Short: "Show event history for an item",
-		Long:  historyLongDescription,
-		Args:  cobra.MaximumNArgs(1), // 0 args if using --id
+		Use:   "history <entity-id>",
+		Short: "Show event history for an entity",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			db, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("failed to open database: %w", err)
 			}
-			defer func() {
-				if closeErr := db.Close(); closeErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to close database: %v\n", closeErr)
-				}
-			}()
-			return runHistoryCore(cmd, args, db)
+			defer db.Close()
+			return runHistory(cmd, args, db)
 		},
 	}
-
-	cmd.Flags().StringP("id", "i", "", "Item ID (alternative to name selector)")
-	cmd.Flags().IntP("limit", "n", 0, "Maximum number of events (0 = unlimited)")
-	cmd.Flags().String("since", "", "Show events since date/relative-time (e.g. '2 weeks ago')")
-	cmd.Flags().Bool("oldest-first", false, "Show oldest events first (default: newest first)")
-
 	return cmd
 }
 
-// ensure *database.Database satisfies historyDB at compile time.
-var _ historyDB = (*database.Database)(nil)
+// NewHistoryCmd returns a history command using the provided database. Intended for testing.
+func NewHistoryCmd(db historyDB) *cobra.Command {
+	return &cobra.Command{
+		Use:   "history <entity-id>",
+		Short: "Show event history for an entity",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runHistory(cmd, args, db)
+		},
+	}
+}
 
-// runHistoryCore executes the history command.
-func runHistoryCore(cmd *cobra.Command, args []string, db historyDB) error {
+type historyEntry struct {
+	EventID   int64  `json:"event_id"`
+	EventType string `json:"event_type"`
+	Timestamp string `json:"timestamp"`
+	ActorUser string `json:"actor_user"`
+}
+
+func runHistory(cmd *cobra.Command, args []string, db historyDB) error {
 	ctx := cmd.Context()
+	entityID := args[0]
 
-	// Parse flags
-	itemID, _ := cmd.Flags().GetString("id")
-	limit, _ := cmd.Flags().GetInt("limit")
-	sinceStr, _ := cmd.Flags().GetString("since")
-	oldestFirst, _ := cmd.Flags().GetBool("oldest-first")
-
-	// Validate selector
-	if itemID == "" && len(args) == 0 {
-		return errors.New("item selector or --id required")
-	}
-	if itemID != "" && len(args) > 0 {
-		return errors.New("cannot specify both selector argument and --id flag")
-	}
-
-	var err error
-
-	// Resolve item selector to ID
-	if itemID == "" {
-		itemID, err = cli.ResolveItemSelector(ctx, db, args[0], "wherehouse history")
-		if err != nil {
-			return err
-		}
-	}
-
-	// Validate item exists
-	_, err = db.GetItem(ctx, itemID)
+	events, err := db.GetEventsByEntity(ctx, entityID)
 	if err != nil {
-		if errors.Is(err, database.ErrItemNotFound) {
-			return errors.New("item not found - check spelling or use --id flag")
-		}
-
-		return fmt.Errorf("failed to retrieve item: %w", err)
+		return fmt.Errorf("failed to get history: %w", err)
 	}
 
-	// Retrieve all events for item
-	events, err := db.GetEventsByEntity(ctx, &itemID, nil)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve events: %w", err)
+	cfg, ok := cli.GetConfig(ctx)
+	if !ok {
+		cfg = config.GetDefaults()
 	}
-
-	if len(events) == 0 {
-		return errors.New("no history found for item")
-	}
-
-	// Apply filters (newest-first by default, unless --oldest-first)
-	filtered, err := filterEvents(events, limit, sinceStr, !oldestFirst)
-	if err != nil {
-		return fmt.Errorf("filter error: %w", err)
-	}
-
-	// Format and output
-	cfg := cli.MustGetConfig(ctx)
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
-	return formatOutput(ctx, out, db, filtered, cfg.IsJSON())
+	if cfg.IsJSON() {
+		entries := make([]historyEntry, len(events))
+		for i, e := range events {
+			entries[i] = historyEntry{
+				EventID:   e.EventID,
+				EventType: e.EventType.String(),
+				Timestamp: e.TimestampUTC,
+				ActorUser: e.ActorUserID,
+			}
+		}
+		return out.JSON(entries)
+	}
+
+	for _, e := range events {
+		fmt.Fprintf(cmd.OutOrStdout(), "%d  %s  %s  %s\n",
+			e.EventID, e.TimestampUTC, e.EventType, e.ActorUserID)
+	}
+	return nil
 }
