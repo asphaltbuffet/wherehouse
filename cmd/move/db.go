@@ -1,3 +1,4 @@
+// Package move implements the move command for relocating entities.
 package move
 
 import (
@@ -6,17 +7,11 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
-// moveDB is the database interface required by the move command.
-// *database.Database satisfies this interface implicitly.
-//
 //go:generate mockery
+
 type moveDB interface {
 	Close() error
-	GetItem(ctx context.Context, itemID string) (*database.Item, error)
-	GetLocation(ctx context.Context, locationID string) (*database.Location, error)
-	GetLocationByCanonicalName(ctx context.Context, canonicalName string) (*database.Location, error)
-	GetItemsByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Item, error)
-	ValidateFromLocation(ctx context.Context, itemID, expectedFromLocationID string) error
+	GetEntity(ctx context.Context, entityID string) (*database.Entity, error)
 	AppendEvent(
 		ctx context.Context,
 		eventType database.EventType,
@@ -25,3 +20,5 @@ type moveDB interface {
 		note string,
 	) (int64, error)
 }
+
+var _ moveDB = (*database.Database)(nil)
