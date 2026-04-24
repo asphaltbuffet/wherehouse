@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -18,8 +17,7 @@ type Event struct {
 	ActorUserID  string
 	Payload      json.RawMessage
 	Note         *string
-	ItemID       *string
-	LocationID   *string
+	EntityID     *string
 }
 
 // AppendEvent creates a new event in the event log and immediately applies it to
@@ -47,12 +45,9 @@ func (d *Database) AppendEvent(
 		return 0, fmt.Errorf("failed to unmarshal payload for ID extraction: %w", unmarshalErr)
 	}
 
-	var itemID, locationID *string
-	if id, ok := payloadMap["item_id"].(string); ok && id != "" {
-		itemID = &id
-	}
-	if id, ok := payloadMap["location_id"].(string); ok && id != "" {
-		locationID = &id
+	var entityID *string
+	if id, ok := payloadMap["entity_id"].(string); ok && id != "" {
+		entityID = &id
 	}
 
 	timestamp := time.Now().UTC().Format(time.RFC3339)
@@ -72,9 +67,8 @@ func (d *Database) AppendEvent(
 				actor_user_id,
 				payload,
 				note,
-				item_id,
-				location_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?)
+				entity_id
+			) VALUES (?, ?, ?, ?, ?, ?)
 		`
 
 		result, txErr := tx.ExecContext(ctx, query,
@@ -83,8 +77,7 @@ func (d *Database) AppendEvent(
 			actorUserID,
 			string(payloadJSON),
 			notePtr,
-			itemID,
-			locationID,
+			entityID,
 		)
 		if txErr != nil {
 			return fmt.Errorf("failed to insert event: %w", txErr)
@@ -104,8 +97,7 @@ func (d *Database) AppendEvent(
 			ActorUserID:  actorUserID,
 			Payload:      json.RawMessage(payloadJSON),
 			Note:         notePtr,
-			ItemID:       itemID,
-			LocationID:   locationID,
+			EntityID:     entityID,
 		}
 
 		// Apply event to projections within the same transaction
@@ -128,8 +120,7 @@ func (d *Database) GetEventByID(ctx context.Context, eventID int64) (*Event, err
 			actor_user_id,
 			payload,
 			note,
-			item_id,
-			location_id
+			entity_id
 		FROM events
 		WHERE event_id = ?
 	`
@@ -144,8 +135,7 @@ func (d *Database) GetEventByID(ctx context.Context, eventID int64) (*Event, err
 		&event.ActorUserID,
 		&payloadStr,
 		&event.Note,
-		&event.ItemID,
-		&event.LocationID,
+		&event.EntityID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrEventNotFound
@@ -168,8 +158,7 @@ func (d *Database) GetEventsByType(ctx context.Context, eventType EventType) ([]
 			actor_user_id,
 			payload,
 			note,
-			item_id,
-			location_id
+			entity_id
 		FROM events
 		WHERE event_type = ?
 		ORDER BY event_id ASC
@@ -184,58 +173,23 @@ func (d *Database) GetEventsByType(ctx context.Context, eventType EventType) ([]
 	return scanEvents(rows)
 }
 
-// GetEventsByEntity retrieves all events for a specific entity (item or location).
-// Exactly one of itemID or locationID must be non-nil.
-func (d *Database) GetEventsByEntity(ctx context.Context, itemID, locationID *string) ([]*Event, error) {
-	count := 0
-	if itemID != nil {
-		count++
-	}
-	if locationID != nil {
-		count++
-	}
-	if count != 1 {
-		return nil, errors.New("exactly one entity ID must be provided")
-	}
+// GetEventsByEntity retrieves all events for a specific entity by entity_id.
+func (d *Database) GetEventsByEntity(ctx context.Context, entityID string) ([]*Event, error) {
+	const query = `
+		SELECT
+			event_id,
+			event_type,
+			timestamp_utc,
+			actor_user_id,
+			payload,
+			note,
+			entity_id
+		FROM events
+		WHERE entity_id = ?
+		ORDER BY event_id ASC
+	`
 
-	var query string
-	var arg any
-
-	if itemID != nil {
-		query = `
-			SELECT
-				event_id,
-				event_type,
-				timestamp_utc,
-				actor_user_id,
-				payload,
-				note,
-				item_id,
-				location_id
-			FROM events
-			WHERE item_id = ?
-			ORDER BY event_id ASC
-		`
-		arg = *itemID
-	} else {
-		query = `
-			SELECT
-				event_id,
-				event_type,
-				timestamp_utc,
-				actor_user_id,
-				payload,
-				note,
-				item_id,
-				location_id
-			FROM events
-			WHERE location_id = ?
-			ORDER BY event_id ASC
-		`
-		arg = *locationID
-	}
-
-	rows, err := d.db.QueryContext(ctx, query, arg)
+	rows, err := d.db.QueryContext(ctx, query, entityID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query events by entity: %w", err)
 	}
@@ -254,8 +208,7 @@ func (d *Database) GetAllEvents(ctx context.Context) ([]*Event, error) {
 			actor_user_id,
 			payload,
 			note,
-			item_id,
-			location_id
+			entity_id
 		FROM events
 		ORDER BY event_id ASC
 	`
@@ -279,8 +232,7 @@ func (d *Database) GetEventsAfter(ctx context.Context, afterEventID int64) ([]*E
 			actor_user_id,
 			payload,
 			note,
-			item_id,
-			location_id
+			entity_id
 		FROM events
 		WHERE event_id > ?
 		ORDER BY event_id ASC
@@ -310,8 +262,7 @@ func scanEvents(rows *sql.Rows) ([]*Event, error) {
 			&event.ActorUserID,
 			&payloadStr,
 			&event.Note,
-			&event.ItemID,
-			&event.LocationID,
+			&event.EntityID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan event: %w", err)

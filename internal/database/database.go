@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sync"
 	"time"
 
 	_ "modernc.org/sqlite" // SQLite driver
@@ -14,12 +13,6 @@ import (
 // Database wraps the SQLite database connection and provides methods for database operations.
 type Database struct {
 	db *sql.DB
-	// System location caching for performance
-	missingLocationID   string
-	borrowedLocationID  string
-	loanedLocationID    string
-	removedLocationID   string
-	systemLocationsOnce sync.Once
 }
 
 // Config holds database configuration options.
@@ -97,13 +90,6 @@ func Open(cfg Config) (*Database, error) {
 			_ = db.Close()
 
 			return nil, fmt.Errorf("failed to run migrations: %w", migrateErr)
-		}
-
-		// Seed system locations after initial migration
-		if seedErr := database.seedSystemLocations(context.Background()); seedErr != nil {
-			_ = db.Close()
-
-			return nil, fmt.Errorf("failed to seed system locations: %w", seedErr)
 		}
 	}
 
@@ -189,44 +175,4 @@ func isRetryableError(err error) bool {
 // Use with caution - prefer using the Database methods when possible.
 func (d *Database) DB() *sql.DB {
 	return d.db
-}
-
-// initSystemLocations initializes the system location ID cache.
-// This is called once on first access via [sync.Once] pattern.
-func (d *Database) initSystemLocations(ctx context.Context) error {
-	const query = `
-		SELECT location_id, canonical_name
-		FROM locations_current
-		WHERE is_system = 1 AND canonical_name IN ('missing', 'borrowed', 'loaned', 'removed')
-	`
-
-	rows, err := d.db.QueryContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to query system locations: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var locID, canonName string
-		if scanErr := rows.Scan(&locID, &canonName); scanErr != nil {
-			return fmt.Errorf("failed to scan system location: %w", scanErr)
-		}
-
-		switch canonName {
-		case "missing":
-			d.missingLocationID = locID
-		case "borrowed":
-			d.borrowedLocationID = locID
-		case "loaned":
-			d.loanedLocationID = locID
-		case "removed":
-			d.removedLocationID = locID
-		}
-	}
-
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return fmt.Errorf("error iterating system locations: %w", rowsErr)
-	}
-
-	return nil
 }
