@@ -13,17 +13,12 @@ func TestEventTypeString(t *testing.T) {
 		et       EventType
 		expected string
 	}{
-		{ItemCreatedEvent, "item.created"},
-		{ItemMovedEvent, "item.moved"},
-		{ItemMissingEvent, "item.missing"},
-		{ItemBorrowedEvent, "item.borrowed"},
-		{ItemLoanedEvent, "item.loaned"},
-		{ItemFoundEvent, "item.found"},
-		{ItemRemovedEvent, "item.removed"},
-		{LocationCreatedEvent, "location.created"},
-		{LocationRenamedEvent, "location.renamed"},
-		{LocationMovedEvent, "location.reparented"},
-		{LocationRemovedEvent, "location.removed"},
+		{EntityCreatedEvent, "entity.created"},
+		{EntityRenamedEvent, "entity.renamed"},
+		{EntityReparentedEvent, "entity.reparented"},
+		{EntityPathChangedEvent, "entity.path_changed"},
+		{EntityStatusChangedEvent, "entity.status_changed"},
+		{EntityRemovedEvent, "entity.removed"},
 	}
 
 	for _, tt := range tests {
@@ -34,17 +29,12 @@ func TestEventTypeString(t *testing.T) {
 // TestParseEventType tests that ParseEventType correctly round-trips each constant.
 func TestParseEventType(t *testing.T) {
 	allTypes := []EventType{
-		ItemCreatedEvent,
-		ItemMovedEvent,
-		ItemMissingEvent,
-		ItemBorrowedEvent,
-		ItemLoanedEvent,
-		ItemFoundEvent,
-		ItemRemovedEvent,
-		LocationCreatedEvent,
-		LocationRenamedEvent,
-		LocationMovedEvent,
-		LocationRemovedEvent,
+		EntityCreatedEvent,
+		EntityRenamedEvent,
+		EntityReparentedEvent,
+		EntityPathChangedEvent,
+		EntityStatusChangedEvent,
+		EntityRemovedEvent,
 	}
 
 	for _, et := range allTypes {
@@ -61,9 +51,11 @@ func TestParseEventTypeUnknown(t *testing.T) {
 	unknowns := []string{
 		"",
 		"unknown",
-		"ItemCreatedEvent",
-		"item_created",
-		"ITEM.CREATED",
+		"EntityCreatedEvent",
+		"entity_created",
+		"ENTITY.CREATED",
+		"item.created",
+		"location.created",
 	}
 
 	for _, s := range unknowns {

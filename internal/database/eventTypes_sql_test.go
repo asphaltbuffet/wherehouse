@@ -13,9 +13,9 @@ func TestEventTypeValuer(t *testing.T) {
 		et       EventType
 		expected string
 	}{
-		{ItemCreatedEvent, "item.created"},
-		{LocationMovedEvent, "location.reparented"},
-		{ItemRemovedEvent, "item.removed"},
+		{EntityCreatedEvent, "entity.created"},
+		{EntityReparentedEvent, "entity.reparented"},
+		{EntityRemovedEvent, "entity.removed"},
 	}
 
 	for _, tt := range tests {
@@ -31,14 +31,14 @@ func TestEventTypeValuer(t *testing.T) {
 func TestEventTypeScanner(t *testing.T) {
 	t.Run("scan valid string", func(t *testing.T) {
 		var et EventType
-		require.NoError(t, et.Scan("item.created"))
-		assert.Equal(t, ItemCreatedEvent, et)
+		require.NoError(t, et.Scan("entity.created"))
+		assert.Equal(t, EntityCreatedEvent, et)
 	})
 
-	t.Run("scan location.reparented", func(t *testing.T) {
+	t.Run("scan entity.reparented", func(t *testing.T) {
 		var et EventType
-		require.NoError(t, et.Scan("location.reparented"))
-		assert.Equal(t, LocationMovedEvent, et)
+		require.NoError(t, et.Scan("entity.reparented"))
+		assert.Equal(t, EntityReparentedEvent, et)
 	})
 
 	t.Run("scan unknown string returns error", func(t *testing.T) {

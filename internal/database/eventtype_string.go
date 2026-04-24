@@ -8,22 +8,17 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[ItemCreatedEvent-1]
-	_ = x[ItemMovedEvent-2]
-	_ = x[ItemMissingEvent-3]
-	_ = x[ItemBorrowedEvent-4]
-	_ = x[ItemLoanedEvent-5]
-	_ = x[ItemFoundEvent-6]
-	_ = x[ItemRemovedEvent-7]
-	_ = x[LocationCreatedEvent-8]
-	_ = x[LocationRenamedEvent-9]
-	_ = x[LocationMovedEvent-10]
-	_ = x[LocationRemovedEvent-11]
+	_ = x[EntityCreatedEvent-1]
+	_ = x[EntityRenamedEvent-2]
+	_ = x[EntityReparentedEvent-3]
+	_ = x[EntityPathChangedEvent-4]
+	_ = x[EntityStatusChangedEvent-5]
+	_ = x[EntityRemovedEvent-6]
 }
 
-const _EventType_name = "item.createditem.moveditem.missingitem.borroweditem.loaneditem.founditem.removedlocation.createdlocation.renamedlocation.reparentedlocation.removed"
+const _EventType_name = "entity.createdentity.renamedentity.reparentedentity.path_changedentity.status_changedentity.removed"
 
-var _EventType_index = [...]uint8{0, 12, 22, 34, 47, 58, 68, 80, 96, 112, 131, 147}
+var _EventType_index = [...]uint8{0, 14, 28, 45, 64, 85, 99}
 
 func (i EventType) String() string {
 	idx := int(i) - 1
