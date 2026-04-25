@@ -1,4 +1,5 @@
-package remove
+// Package rename implements the rename command for updating entity display names.
+package rename
 
 import (
 	"context"
@@ -8,7 +9,7 @@ import (
 
 //go:generate mockery
 
-type removeDB interface {
+type renameDB interface {
 	Close() error
 	GetEntity(ctx context.Context, entityID string) (*database.Entity, error)
 	AppendEvent(
@@ -20,4 +21,4 @@ type removeDB interface {
 	) (int64, error)
 }
 
-var _ removeDB = (*database.Database)(nil)
+var _ renameDB = (*database.Database)(nil)

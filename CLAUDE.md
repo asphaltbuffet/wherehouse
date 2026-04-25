@@ -15,8 +15,8 @@ Event-sourced CLI inventory tracker. Go + SQLite. "Where did I put my 10mm socke
 |---|---|---|
 | New command/subcommand | `ai-docs/knowledge/cli-contract.md` | Pattern: `NewXxxCmd(db xxxDB)` + `NewDefaultXxxCmd()` wired in `cmd/root.go`. Per-command `db.go` defines minimal `xxxDB` interface + `//go:generate mockery`. Register in `cmd/root.go` via `NewDefaultXxxCmd()`. |
 | Output format changes | `cmd/root.go`, `internal/cli/output.go` | Global `--json` flag already exists in `cmd/root.go` (`PersistentFlags()`). There is no per-command `--format` flag — `--json` is the global mechanism; adding `--format` would duplicate it. JSON output paths are implemented in most commands. All styles via `appStyles` singleton in `internal/styles/styles.go` — never inline `lipgloss.NewStyle()` in rendering functions. |
-| Data structures / events | `ai-docs/knowledge/events.md`, `ai-docs/knowledge/business-rules.md` | Event types live in `internal/database/eventTypes.go` (iota + `eventTypeByName` map). Adding a new type: add iota entry → regenerate `eventtype_string.go` (`go generate ./internal/database/`) → add case in `internal/database/eventHandler.go`. |
-| Troubleshooting | `ai-docs/knowledge/business-rules.md` | Events immutable, ordered by `event_id` only (timestamps are informational, not unique). Every `ORDER BY` that could tie must include `event_id ASC/DESC` as tiebreaker. System locations (`Missing`, `Borrowed`, `Loaned`) are predefined and immutable. |
+| Data structures / events | `ai-docs/knowledge/events.md`, `ai-docs/knowledge/business-rules.md` | Event types live in `internal/database/eventTypes.go` (iota + `eventTypeByName` map). 6 entity.* types: `entity.created`, `entity.renamed`, `entity.reparented`, `entity.path_changed`, `entity.status_changed`, `entity.removed`. Adding a new type: add iota entry → regenerate `eventtype_string.go` (`go generate ./internal/database/`) → add case in `internal/database/eventHandler.go`. |
+| Troubleshooting | `ai-docs/knowledge/business-rules.md` | Events immutable, ordered by `event_id` only (timestamps are informational, not unique). Every `ORDER BY` that could tie must include `event_id ASC/DESC` as tiebreaker. No system locations — status is a first-class field (`ok`, `borrowed`, `missing`, `loaned`, `removed`) on `entities_current`. |
 | CI / dev tooling | See **CI / Dev Tooling** section below | `go.mod` is the single Go version source of truth; all CI workflows use `go-version-file: 'go.mod'`. **No CI workflow changes are needed when updating Go version — only edit `go.mod`.** |
 
 ### What doesn't exist yet (don't search for these)
@@ -25,6 +25,10 @@ Event-sourced CLI inventory tracker. Go + SQLite. "Where did I put my 10mm socke
 - **TUI** — `internal/tui/` does not exist; `ai-docs/research/tui/` has proposals only
 - **Projects CLI** — `internal/database/project.go` exists but no `cmd/project/` commands
 - **`internal/events/` package** — event types live in `internal/database/eventTypes.go`
+- **`cmd/initialize/`** — removed; DB bootstraps automatically on first write
+- **`cmd/loan/`, `cmd/lost/`, `cmd/found/`** — removed; replaced by `cmd/status/` with `--set` flag
+- **`cmd/find/`** — removed; use `cmd/scry/` instead
+- **`item.*` / `location.*` events** — replaced by `entity.*` events; `items_current` / `locations_current` tables are gone
 
 When you search for something that doesn't exist and spend 3+ calls confirming it, add it here.
 
@@ -91,7 +95,7 @@ To pin a specific version: change to `pkgs.go_1_XX`.
 
 ### Code
 - **Constructor pattern**: every command exposes `NewXxxCmd(db xxxDB)` + `NewDefaultXxxCmd()`. Never pass `*database.DB` directly to a run function.
-- **Per-command DB interface**: each `cmd/<cmd>/db.go` defines a minimal interface; `//go:generate mockery` directive required.
+- **Per-command DB interface**: each `cmd/<cmd>/db.go` defines a minimal interface; `//go:generate mockery` directive required. Add `var _ xxxDB = (*database.Database)(nil)` compile-time check.
 - **Enums**: typed `iota` constants only — never switch on bare integers (`exhaustive` linter enforces this).
 - **ORDER BY tiebreakers**: every query that could tie must include `event_id ASC/DESC`.
 - **Styles singleton**: add new styles to `appStyles` struct in `internal/styles/styles.go`; never inline `lipgloss.NewStyle()`.

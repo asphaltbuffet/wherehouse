@@ -18,34 +18,18 @@ func (d *Database) ProcessEvent(ctx context.Context, event *Event) error {
 // This is the core event handler that routes to specific handlers based on event type.
 func (d *Database) processEventInTx(ctx context.Context, tx *sql.Tx, event *Event) error {
 	switch event.EventType {
-	// location event handling
-	case LocationCreatedEvent:
-		return d.handleLocationCreated(ctx, tx, event)
-	case LocationRenamedEvent:
-		return d.handleLocationRenamed(ctx, tx, event)
-	case LocationMovedEvent:
-		return d.handleLocationReparented(ctx, tx, event)
-
-	// item event handling
-	case ItemCreatedEvent:
-		return d.handleItemCreated(ctx, tx, event)
-	case ItemMovedEvent:
-		return d.handleItemMoved(ctx, tx, event)
-	case ItemMissingEvent:
-		return d.handleItemMissing(ctx, tx, event)
-	case ItemBorrowedEvent:
-		return d.handleItemBorrowed(ctx, tx, event)
-	case ItemLoanedEvent:
-		return d.handleItemLoaned(ctx, tx, event)
-	case ItemFoundEvent:
-		return d.handleItemFound(ctx, tx, event)
-	case ItemRemovedEvent:
-		return d.handleItemRemoved(ctx, tx, event)
-
-	// location remove
-	case LocationRemovedEvent:
-		return d.handleLocationRemoved(ctx, tx, event)
-
+	case EntityCreatedEvent:
+		return d.handleEntityCreated(ctx, tx, event)
+	case EntityRenamedEvent:
+		return d.handleEntityRenamed(ctx, tx, event)
+	case EntityReparentedEvent:
+		return d.handleEntityReparented(ctx, tx, event)
+	case EntityPathChangedEvent:
+		return d.handleEntityPathChanged(ctx, tx, event)
+	case EntityStatusChangedEvent:
+		return d.handleEntityStatusChanged(ctx, tx, event)
+	case EntityRemovedEvent:
+		return d.handleEntityRemoved(ctx, tx, event)
 	default:
 		return fmt.Errorf("unknown event type: %s", event.EventType)
 	}

@@ -14,11 +14,10 @@ func TestMigrations(t *testing.T) {
 		db := openTestDB(t)
 		defer db.Close()
 
-		// Verify all tables exist (projects_current removed in migration 5)
+		// Verify all tables exist after migration 6 (entity consolidation)
 		tables := []string{
 			"events",
-			"locations_current",
-			"items_current",
+			"entities_current",
 			"schema_metadata",
 			"schema_migrations",
 		}
@@ -33,40 +32,15 @@ func TestMigrations(t *testing.T) {
 			assert.Equal(t, table, name)
 		}
 
-		// Verify system locations were seeded
-		var count int
-		require.NoError(t, db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE is_system = 1").Scan(&count))
-		assert.Equal(t, 4, count, "should have 4 system locations (Missing, Borrowed, Loaned, and Removed)")
-
-		// Verify system locations have correct canonical names
-		var missing, borrowed, loaned, removed int
-		require.NoError(
-			t,
-			db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE canonical_name = 'missing' AND is_system = 1").
-				Scan(&missing),
-		)
-		assert.Equal(t, 1, missing, "should have Missing location")
-
-		require.NoError(
-			t,
-			db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE canonical_name = 'borrowed' AND is_system = 1").
-				Scan(&borrowed),
-		)
-		assert.Equal(t, 1, borrowed, "should have Borrowed location")
-
-		require.NoError(
-			t,
-			db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE canonical_name = 'loaned' AND is_system = 1").
-				Scan(&loaned),
-		)
-		assert.Equal(t, 1, loaned, "should have Loaned location")
-
-		require.NoError(
-			t,
-			db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE canonical_name = 'removed' AND is_system = 1").
-				Scan(&removed),
-		)
-		assert.Equal(t, 1, removed, "should have Removed location")
+		// Verify old tables were removed by migration 6
+		oldTables := []string{"items_current", "locations_current"}
+		for _, table := range oldTables {
+			var count int
+			require.NoError(t, db.db.QueryRow(
+				"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table,
+			).Scan(&count))
+			assert.Zero(t, count, "table %s should not exist after migration 6", table)
+		}
 	})
 
 	t.Run("version tracking", func(t *testing.T) {
@@ -85,7 +59,7 @@ func TestMigrations(t *testing.T) {
 		// Verify migration version
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 5, version, "should be at version 5 after all migrations")
+		assert.EqualValues(t, 6, version, "should be at version 6 after all migrations")
 		assert.False(t, dirty, "migration should not be dirty")
 	})
 
@@ -106,11 +80,6 @@ func TestMigrations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, version1, version2, "version should be unchanged")
 		assert.False(t, dirty2)
-
-		// Verify system locations weren't duplicated
-		var count int
-		require.NoError(t, db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE is_system = 1").Scan(&count))
-		assert.Equal(t, 4, count, "should still have only 4 system locations")
 	})
 
 	t.Run("dirty state detection", func(t *testing.T) {
@@ -120,12 +89,12 @@ func TestMigrations(t *testing.T) {
 		ctx := t.Context()
 
 		// Manually set dirty state at current version
-		require.NoError(t, db.SetMigrationVersion(ctx, 5, true))
+		require.NoError(t, db.SetMigrationVersion(ctx, 6, true))
 
 		// Verify dirty state is detected
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 5, version)
+		assert.EqualValues(t, 6, version)
 		assert.True(t, dirty, "dirty flag should be set")
 	})
 }
@@ -135,17 +104,18 @@ func TestMigrationRollback(t *testing.T) {
 		db := openTestDB(t)
 		defer db.Close()
 
-		// Verify tables exist before rollback (projects_current removed in migration 5)
+		// Verify entities_current exists before rollback
 		var tableCount int
 		require.NoError(t, db.db.QueryRow(`
 			SELECT COUNT(*) FROM sqlite_master
 			WHERE type='table' AND name IN (
-				'events', 'locations_current', 'items_current', 'schema_metadata'
+				'events', 'entities_current', 'schema_metadata'
 			)
 		`).Scan(&tableCount))
-		assert.Equal(t, 4, tableCount, "all tables should exist before rollback")
+		assert.Equal(t, 3, tableCount, "core tables should exist before rollback")
 
-		// Run rollback five times (we have 5 migrations now)
+		// Run rollback six times (we have 6 migrations now)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 6 (entity consolidation)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 5 (remove project tables)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 4 (Removed location)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 3 (nanoid marker)
@@ -156,7 +126,7 @@ func TestMigrationRollback(t *testing.T) {
 		require.NoError(t, db.db.QueryRow(`
 			SELECT COUNT(*) FROM sqlite_master
 			WHERE type='table' AND name IN (
-				'events', 'locations_current', 'items_current',
+				'events', 'entities_current', 'locations_current', 'items_current',
 				'projects_current', 'schema_metadata'
 			)
 		`).Scan(&tableCount))
@@ -167,7 +137,8 @@ func TestMigrationRollback(t *testing.T) {
 		db := openTestDB(t)
 		defer db.Close()
 
-		// Rollback five times (we have 5 migrations now)
+		// Rollback six times (we have 6 migrations now)
+		require.NoError(t, db.RollbackMigration()) // Rollback migration 6 (entity consolidation)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 5 (remove project tables)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 4 (Removed location)
 		require.NoError(t, db.RollbackMigration()) // Rollback migration 3 (nanoid marker)
@@ -178,18 +149,15 @@ func TestMigrationRollback(t *testing.T) {
 		var tableCount int
 		require.NoError(t, db.db.QueryRow(`
 			SELECT COUNT(*) FROM sqlite_master
-			WHERE type='table' AND name IN ('events', 'locations_current', 'items_current', 'schema_metadata')
+			WHERE type='table' AND name IN ('events', 'entities_current', 'schema_metadata')
 		`).Scan(&tableCount))
 		assert.Zero(t, tableCount)
 
 		// Re-run migrations
 		require.NoError(t, db.RunMigrations())
 
-		// Re-seed system locations
-		require.NoError(t, db.seedSystemLocations(t.Context()))
-
-		// Verify schema restored (projects_current is not restored after migration 5)
-		tables := []string{"events", "locations_current", "items_current", "schema_metadata"}
+		// Verify schema restored
+		tables := []string{"events", "entities_current", "schema_metadata"}
 		for _, table := range tables {
 			var name string
 			require.NoError(t, db.db.QueryRow(
@@ -198,11 +166,6 @@ func TestMigrationRollback(t *testing.T) {
 			).Scan(&name),
 				"table %s should exist", table)
 		}
-
-		// Verify system locations re-seeded
-		var count int
-		require.NoError(t, db.db.QueryRow("SELECT COUNT(*) FROM locations_current WHERE is_system = 1").Scan(&count))
-		assert.Equal(t, 4, count, "system locations should be re-seeded")
 	})
 }
 
@@ -213,34 +176,38 @@ func TestMigrationWithData(t *testing.T) {
 
 		ctx := t.Context()
 
-		// Test foreign key constraint (item requires valid location)
+		// Test foreign key constraint (child entity requires valid parent)
 		_, err := db.db.ExecContext(ctx, `
-			INSERT INTO items_current (
-				item_id, display_name, canonical_name, location_id,
-				in_temporary_use, last_event_id, updated_at
-			) VALUES (?, ?, ?, ?, 0, 1, ?)
-		`, "test-item", "Test Item", "test_item", "non-existent-location", "2026-02-21T10:00:00Z")
+			INSERT INTO entities_current (
+				entity_id, display_name, canonical_name, entity_type,
+				parent_id, full_path_display, full_path_canonical,
+				depth, status, last_event_id, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'ok', 1, ?)
+		`, "child-entity", "Child", "child", "leaf", "non-existent-parent",
+			"Parent >> Child", "parent:child", "2026-02-21T10:00:00Z")
 		require.Error(t, err, "should fail due to foreign key constraint")
 
-		// Test CHECK constraint (in_temporary_use must be 0 or 1)
-		// First create a valid location
+		// Test CHECK constraint (entity_type must be valid)
 		_, err = db.db.ExecContext(ctx, `
-			INSERT INTO locations_current (
-				location_id, display_name, canonical_name,
+			INSERT INTO entities_current (
+				entity_id, display_name, canonical_name, entity_type,
 				parent_id, full_path_display, full_path_canonical,
-				depth, is_system, updated_at
-			) VALUES (?, ?, ?, NULL, ?, ?, 0, 0, ?)
-		`, "test-loc", "Test Location", "test_location", "Test Location", "test_location", "2026-02-21T10:00:00Z")
-		require.NoError(t, err)
+				depth, status, last_event_id, updated_at
+			) VALUES (?, ?, ?, ?, NULL, ?, ?, 0, 'ok', 1, ?)
+		`, "bad-entity", "Bad", "bad", "invalid_type",
+			"Bad", "bad", "2026-02-21T10:00:00Z")
+		require.Error(t, err, "should fail due to CHECK constraint on entity_type")
 
-		// Now test invalid in_temporary_use value
+		// Test CHECK constraint (status must be valid)
 		_, err = db.db.ExecContext(ctx, `
-			INSERT INTO items_current (
-				item_id, display_name, canonical_name, location_id,
-				in_temporary_use, last_event_id, updated_at
-			) VALUES (?, ?, ?, ?, 2, 1, ?)
-		`, "test-item", "Test Item", "test_item", "test-loc", "2026-02-21T10:00:00Z")
-		require.Error(t, err, "should fail due to CHECK constraint on in_temporary_use")
+			INSERT INTO entities_current (
+				entity_id, display_name, canonical_name, entity_type,
+				parent_id, full_path_display, full_path_canonical,
+				depth, status, last_event_id, updated_at
+			) VALUES (?, ?, ?, ?, NULL, ?, ?, 0, 'invalid_status', 1, ?)
+		`, "bad-status-entity", "Bad Status", "bad_status", "leaf",
+			"Bad Status", "bad_status", "2026-02-21T10:00:00Z")
+		require.Error(t, err, "should fail due to CHECK constraint on status")
 	})
 
 	t.Run("indexes created", func(t *testing.T) {
@@ -251,9 +218,11 @@ func TestMigrationWithData(t *testing.T) {
 		indexes := []string{
 			"idx_events_type",
 			"idx_events_timestamp",
-			"idx_items_canonical_name",
-			"idx_items_location_id",
-			"idx_locations_canonical_parent",
+			"idx_events_entity_id",
+			"idx_entities_canonical_name",
+			"idx_entities_parent_id",
+			"idx_entities_status",
+			"idx_entities_entity_type",
 		}
 
 		for _, index := range indexes {
@@ -303,15 +272,16 @@ func TestTransactionHelpers(t *testing.T) {
 
 		ctx := t.Context()
 
-		// Create a test location in transaction
+		// Create a test entity in transaction
 		require.NoError(t, db.ExecInTransaction(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `
-				INSERT INTO locations_current (
-					location_id, display_name, canonical_name,
+				INSERT INTO entities_current (
+					entity_id, display_name, canonical_name, entity_type,
 					parent_id, full_path_display, full_path_canonical,
-					depth, is_system, updated_at
-				) VALUES (?, ?, ?, NULL, ?, ?, 0, 0, ?)
-			`, "tx-test-loc", "TX Test", "tx_test", "TX Test", "tx_test", "2026-02-21T10:00:00Z")
+					depth, status, last_event_id, updated_at
+				) VALUES (?, ?, ?, ?, NULL, ?, ?, 0, 'ok', 1, ?)
+			`, "tx-test-entity", "TX Test", "tx_test", "leaf",
+				"TX Test", "tx_test", "2026-02-21T10:00:00Z")
 			return err
 		}))
 
@@ -319,7 +289,7 @@ func TestTransactionHelpers(t *testing.T) {
 		var count int
 		require.NoError(t, db.db.QueryRowContext(
 			ctx,
-			"SELECT COUNT(*) FROM locations_current WHERE location_id = 'tx-test-loc'",
+			"SELECT COUNT(*) FROM entities_current WHERE entity_id = 'tx-test-entity'",
 		).Scan(&count))
 		assert.Equal(t, 1, count, "transaction should have committed")
 	})
@@ -333,12 +303,13 @@ func TestTransactionHelpers(t *testing.T) {
 		// Transaction that fails
 		require.Error(t, db.ExecInTransaction(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `
-				INSERT INTO locations_current (
-					location_id, display_name, canonical_name,
+				INSERT INTO entities_current (
+					entity_id, display_name, canonical_name, entity_type,
 					parent_id, full_path_display, full_path_canonical,
-					depth, is_system, updated_at
-				) VALUES (?, ?, ?, NULL, ?, ?, 0, 0, ?)
-			`, "rollback-test", "Rollback Test", "rollback_test", "Rollback Test", "rollback_test", "2026-02-21T10:00:00Z")
+					depth, status, last_event_id, updated_at
+				) VALUES (?, ?, ?, ?, NULL, ?, ?, 0, 'ok', 1, ?)
+			`, "rollback-test", "Rollback Test", "rollback_test", "leaf",
+				"Rollback Test", "rollback_test", "2026-02-21T10:00:00Z")
 			if err != nil {
 				return err
 			}
@@ -351,7 +322,7 @@ func TestTransactionHelpers(t *testing.T) {
 		var count int
 		require.NoError(t, db.db.QueryRowContext(
 			ctx,
-			"SELECT COUNT(*) FROM locations_current WHERE location_id = 'rollback-test'",
+			"SELECT COUNT(*) FROM entities_current WHERE entity_id = 'rollback-test'",
 		).Scan(&count))
 		assert.Zero(t, count, "transaction should have rolled back")
 	})

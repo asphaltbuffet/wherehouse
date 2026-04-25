@@ -61,7 +61,10 @@ func TestGetRootCmd_HasSubcommands(t *testing.T) {
 
 	assert.True(t, subcommandNames["config"], "config subcommand should be registered")
 	assert.True(t, subcommandNames["add"], "add subcommand should be registered")
-	assert.True(t, subcommandNames["find"], "find subcommand should be registered")
+	assert.True(t, subcommandNames["history"], "history subcommand should be registered")
+	assert.True(t, subcommandNames["list"], "list subcommand should be registered")
+	assert.True(t, subcommandNames["move"], "move subcommand should be registered")
+	assert.True(t, subcommandNames["remove"], "remove subcommand should be registered")
 }
 
 // TestGetRootCmd_HasPersistentFlags verifies root command has expected flags.

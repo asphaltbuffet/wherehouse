@@ -1,4 +1,5 @@
-package remove
+// Package status implements the status command for changing entity status.
+package status
 
 import (
 	"context"
@@ -8,7 +9,7 @@ import (
 
 //go:generate mockery
 
-type removeDB interface {
+type statusDB interface {
 	Close() error
 	GetEntity(ctx context.Context, entityID string) (*database.Entity, error)
 	AppendEvent(
@@ -20,4 +21,4 @@ type removeDB interface {
 	) (int64, error)
 }
 
-var _ removeDB = (*database.Database)(nil)
+var _ statusDB = (*database.Database)(nil)

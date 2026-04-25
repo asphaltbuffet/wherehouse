@@ -6,9 +6,9 @@ template: testify
 template-data:
   unroll-variadic: true
 packages:
+  github.com/asphaltbuffet/wherehouse/cmd/add:
+    interfaces:
+      addDB: {}
   github.com/asphaltbuffet/wherehouse/internal/logging:
     interfaces:
       Logger: {}
-  github.com/asphaltbuffet/wherehouse/cmd/move:
-    interfaces:
-      moveDB: {}

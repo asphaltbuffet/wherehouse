@@ -1,4 +1,4 @@
-package remove
+package add
 
 import (
 	"context"
@@ -8,9 +8,10 @@ import (
 
 //go:generate mockery
 
-type removeDB interface {
+type addDB interface {
 	Close() error
 	GetEntity(ctx context.Context, entityID string) (*database.Entity, error)
+	GetEntitiesByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Entity, error)
 	AppendEvent(
 		ctx context.Context,
 		eventType database.EventType,
@@ -20,4 +21,4 @@ type removeDB interface {
 	) (int64, error)
 }
 
-var _ removeDB = (*database.Database)(nil)
+var _ addDB = (*database.Database)(nil)
