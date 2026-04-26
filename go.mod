@@ -4,8 +4,6 @@ go 1.25.6
 
 require (
 	charm.land/lipgloss/v2 v2.0.2
-	github.com/agnivade/levenshtein v1.2.1
-	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/charmbracelet/fang v1.0.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/goccy/go-json v0.10.6
@@ -16,9 +14,8 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	github.com/xlab/treeprint v1.2.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	modernc.org/sqlite v1.48.1
+	modernc.org/sqlite v1.50.0
 )
 
 require (
@@ -51,7 +48,6 @@ require (
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
@@ -61,7 +57,7 @@ require (
 	golang.org/x/text v0.35.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.70.0 // indirect
+	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
