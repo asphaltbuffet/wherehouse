@@ -14,7 +14,7 @@ func TestMigrations(t *testing.T) {
 		db := openTestDB(t)
 		defer db.Close()
 
-		// Verify all tables exist after migration 6 (entity consolidation)
+		// Verify all tables exist after migration
 		tables := []string{
 			"events",
 			"entities_current",
@@ -32,14 +32,14 @@ func TestMigrations(t *testing.T) {
 			assert.Equal(t, table, name)
 		}
 
-		// Verify old tables were removed by migration 6
+		// Verify legacy tables do not exist
 		oldTables := []string{"items_current", "locations_current"}
 		for _, table := range oldTables {
 			var count int
 			require.NoError(t, db.db.QueryRow(
 				"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table,
 			).Scan(&count))
-			assert.Zero(t, count, "table %s should not exist after migration 6", table)
+			assert.Zero(t, count, "table %s should not exist", table)
 		}
 	})
 
@@ -59,7 +59,7 @@ func TestMigrations(t *testing.T) {
 		// Verify migration version
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 6, version, "should be at version 6 after all migrations")
+		assert.EqualValues(t, 1, version, "should be at version 1 after all migrations")
 		assert.False(t, dirty, "migration should not be dirty")
 	})
 
@@ -89,12 +89,12 @@ func TestMigrations(t *testing.T) {
 		ctx := t.Context()
 
 		// Manually set dirty state at current version
-		require.NoError(t, db.SetMigrationVersion(ctx, 6, true))
+		require.NoError(t, db.SetMigrationVersion(ctx, 1, true))
 
 		// Verify dirty state is detected
 		version, dirty, err := db.GetMigrationVersion()
 		require.NoError(t, err)
-		assert.EqualValues(t, 6, version)
+		assert.EqualValues(t, 1, version)
 		assert.True(t, dirty, "dirty flag should be set")
 	})
 }
@@ -114,20 +114,13 @@ func TestMigrationRollback(t *testing.T) {
 		`).Scan(&tableCount))
 		assert.Equal(t, 3, tableCount, "core tables should exist before rollback")
 
-		// Run rollback six times (we have 6 migrations now)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 6 (entity consolidation)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 5 (remove project tables)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 4 (Removed location)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 3 (nanoid marker)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 2 (Loaned location)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 1 (initial schema)
+		require.NoError(t, db.RollbackMigration())
 
 		// Verify tables removed
 		require.NoError(t, db.db.QueryRow(`
 			SELECT COUNT(*) FROM sqlite_master
 			WHERE type='table' AND name IN (
-				'events', 'entities_current', 'locations_current', 'items_current',
-				'projects_current', 'schema_metadata'
+				'events', 'entities_current', 'schema_metadata'
 			)
 		`).Scan(&tableCount))
 		assert.Zero(t, tableCount, "application tables should be removed after rollback")
@@ -137,13 +130,7 @@ func TestMigrationRollback(t *testing.T) {
 		db := openTestDB(t)
 		defer db.Close()
 
-		// Rollback six times (we have 6 migrations now)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 6 (entity consolidation)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 5 (remove project tables)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 4 (Removed location)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 3 (nanoid marker)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 2 (Loaned location)
-		require.NoError(t, db.RollbackMigration()) // Rollback migration 1 (initial schema)
+		require.NoError(t, db.RollbackMigration())
 
 		// Verify tables removed
 		var tableCount int
