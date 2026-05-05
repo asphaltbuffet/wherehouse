@@ -4,12 +4,6 @@ schema = 3
   [mod."charm.land/lipgloss/v2"]
     version = "v2.0.2"
     hash = "sha256-b9t+NjParxoubrUwHUqiFUrebsq4H7NDUptJ3Jmx+m0="
-  [mod."github.com/agnivade/levenshtein"]
-    version = "v1.2.1"
-    hash = "sha256-3XnCzf7tFgEE0MmjxvjfWaw6qK6mKLabFZ3c23JIH9Y="
-  [mod."github.com/araddon/dateparse"]
-    version = "v0.0.0-20210429162001-6b43995a97de"
-    hash = "sha256-UuX84naeRGMsFOgIgRoBHG5sNy1CzBkWPKmd6VbLwFw="
   [mod."github.com/charmbracelet/colorprofile"]
     version = "v0.4.3"
     hash = "sha256-y+QDUxGOKhugEMQLRUTZYT2C+wKqYHnMLJ44jbh7+JA="
@@ -133,9 +127,6 @@ schema = 3
   [mod."github.com/subosito/gotenv"]
     version = "v1.6.0"
     hash = "sha256-LspbjTniiq2xAICSXmgqP7carwlNaLqnCTQfw2pa80A="
-  [mod."github.com/xlab/treeprint"]
-    version = "v1.2.0"
-    hash = "sha256-g85HyWGLZuD/TFXZzmXT+u9TA1xIT5escUVhnofsYQI="
   [mod."github.com/xo/terminfo"]
     version = "v0.0.0-20220910002029-abceb7e1c41e"
     hash = "sha256-GyCDxxMQhXA3Pi/TsWXpA8cX5akEoZV7CFx4RO3rARU="

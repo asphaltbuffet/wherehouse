@@ -4,8 +4,6 @@ go 1.25.6
 
 require (
 	charm.land/lipgloss/v2 v2.0.2
-	github.com/agnivade/levenshtein v1.2.1
-	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/charmbracelet/fang v1.0.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/goccy/go-json v0.10.6
@@ -16,7 +14,6 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	github.com/xlab/treeprint v1.2.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.48.1
 )

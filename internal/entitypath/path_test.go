@@ -118,8 +118,7 @@ func TestNew(t *testing.T) {
 			got, err := entitypath.New(tt.segments...)
 
 			if tt.wantErr != nil {
-				require.Error(t, err)
-				assert.ErrorIs(t, err, tt.wantErr)
+				require.ErrorIs(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
 			}
