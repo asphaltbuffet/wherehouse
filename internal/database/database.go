@@ -117,12 +117,14 @@ func (d *Database) ExecInTransaction(ctx context.Context, fn func(*sql.Tx) error
 		_ = tx.Rollback() // Rollback if not committed (errors ignored as commit may have succeeded)
 	}()
 
-	if fnErr := fn(tx); fnErr != nil {
-		return fnErr
+	err = fn(tx)
+	if err != nil {
+		return err
 	}
 
-	if commitErr := tx.Commit(); commitErr != nil {
-		return fmt.Errorf("failed to commit transaction: %w", commitErr)
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -134,7 +136,7 @@ func (d *Database) WithRetry(ctx context.Context, fn func() error) error {
 	const maxRetries = 5
 	var lastErr error
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		if fnErr := fn(); fnErr != nil {
 			lastErr = fnErr
 			// Check if error is retryable (SQLITE_BUSY or SQLITE_LOCKED)

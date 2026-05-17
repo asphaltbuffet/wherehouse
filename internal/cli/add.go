@@ -18,9 +18,13 @@ func (wh *App) AddItem(e entitypath.Path, t database.EntityType) (*database.Enti
 		return nil, fmt.Errorf("cannot determine item name from %q", e)
 	}
 
-	parentID, err := wh.GetID(loc)
-	if err != nil {
-		return nil, fmt.Errorf("cannot resolve parent %q: %w", loc, err)
+	var parentID any
+	if loc.String() != "" {
+		id, err := wh.GetID(loc)
+		if err != nil {
+			return nil, fmt.Errorf("cannot resolve parent %q: %w", loc, err)
+		}
+		parentID = id
 	}
 
 	entityID, err := nanoid.New()
