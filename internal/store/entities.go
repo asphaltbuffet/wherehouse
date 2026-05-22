@@ -118,15 +118,14 @@ func (s *Store) GetDescendants(ctx context.Context, entityID string) ([]*invento
 		return nil, err
 	}
 
-	prefix := parent.FullPathCanonical + ":"
 	const query = `
 		SELECT entity_id, display_name, canonical_name, entity_type,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at
-		FROM entities_current WHERE full_path_canonical LIKE ?
+		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\'
 		ORDER BY depth ASC, display_name ASC, entity_id ASC`
 
-	rows, err := s.db.QueryContext(ctx, query, prefix+"%")
+	rows, err := s.db.QueryContext(ctx, query, escapeLIKE(parent.FullPathCanonical)+":%")
 	if err != nil {
 		return nil, fmt.Errorf("get descendants of %s: %w", entityID, err)
 	}
@@ -253,13 +252,20 @@ func (s *Store) GetDescendantsTx(ctx context.Context, tx Tx, entityID string) ([
 		SELECT entity_id, display_name, canonical_name, entity_type,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at
-		FROM entities_current WHERE full_path_canonical LIKE ?
+		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\'
 		ORDER BY depth ASC, display_name ASC, entity_id ASC`
 
-	rows, err := tx.QueryContext(ctx, query, prefix+":%")
+	rows, err := tx.QueryContext(ctx, query, escapeLIKE(prefix)+":%")
 	if err != nil {
 		return nil, fmt.Errorf("get descendants of %s: %w", entityID, err)
 	}
 	defer rows.Close()
 	return scanEntities(rows)
+}
+
+func escapeLIKE(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }

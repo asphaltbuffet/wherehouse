@@ -134,7 +134,10 @@ func (b *Bus) handleEntityReparented(ctx context.Context, tx store.Tx, ev *inven
 		return fmt.Errorf("handleEntityReparented: %w", err)
 	}
 
-	return b.propagatePathChangesTx(ctx, tx, ev, entity, descendants)
+	if err = b.propagatePathChangesTx(ctx, tx, ev, entity, descendants); err != nil {
+		return fmt.Errorf("handleEntityReparented: propagate: %w", err)
+	}
+	return nil
 }
 
 func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
@@ -202,15 +205,11 @@ func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventor
 // propagatePathChangesTx emits entity.path_changed derived events for all descendants
 // and updates each projection within the same transaction.
 //
-// Descendants are returned depth-ordered (shallow first), and an `updated` map
-// tracks each entity's new path so grandchildren compute from the already-updated
-// parent — not the stale root path.
-// propagatePathChangesTx emits entity.path_changed derived events for all descendants
-// and updates each projection within the same transaction.
-//
 // descendants must be fetched BEFORE the parent entity is updated in the DB, so that
 // path-prefix queries still match the old canonical path. They must be ordered depth ASC
-// so grandchildren compute their paths from already-updated parents.
+// so grandchildren compute their paths from already-updated parents. An `updated` map
+// tracks each entity's new path so grandchildren compute from the already-updated
+// parent — not the stale root path.
 func (b *Bus) propagatePathChangesTx(
 	ctx context.Context,
 	tx store.Tx,
@@ -224,11 +223,13 @@ func (b *Bus) propagatePathChangesTx(
 		var parentDisplay, parentCanonical string
 		var parentDepth int
 		if d.ParentID != nil {
-			if p, ok := updated[*d.ParentID]; ok {
-				parentDisplay = p.FullPathDisplay
-				parentCanonical = p.FullPathCanonical
-				parentDepth = p.Depth
+			p, ok := updated[*d.ParentID]
+			if !ok {
+				return fmt.Errorf("propagatePathChangesTx: parent %s of %s not in updated set", *d.ParentID, d.EntityID)
 			}
+			parentDisplay = p.FullPathDisplay
+			parentCanonical = p.FullPathCanonical
+			parentDepth = p.Depth
 		}
 
 		d.FullPathDisplay = parentDisplay + ":" + d.DisplayName

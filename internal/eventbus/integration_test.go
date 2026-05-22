@@ -61,6 +61,44 @@ func TestEntityLifecycle_PathPropagation(t *testing.T) {
 	assert.Equal(t, "Workshop:Toolbox:Socket Set", socketSet.FullPathDisplay)
 }
 
+func TestEntityLifecycle_Reparent(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	ctx := context.Background()
+
+	// Garage > Toolbox > Wrench
+	createPlace(t, b, "p1", "Garage", nil)
+	p1ID := "p1"
+	createPlace(t, b, "p2", "Toolbox", &p1ID)
+	p2ID := "p2"
+	createLeaf(t, b, "l1", "Wrench", &p2ID)
+
+	// Create a second top-level place to reparent into.
+	createPlace(t, b, "p3", "Workshop", nil)
+
+	// Reparent Toolbox from Garage to Workshop.
+	p3ID := "p3"
+	reparentPayload, err := json.Marshal(eventbus.EntityReparentedPayload{
+		EntityID:    "p2",
+		NewParentID: &p3ID,
+	})
+	require.NoError(t, err)
+	_, err = b.Dispatch(ctx, inventory.EntityReparentedEvent, "alice", reparentPayload, nil)
+	require.NoError(t, err)
+
+	toolbox, err := s.GetEntity(ctx, "p2")
+	require.NoError(t, err)
+	assert.Equal(t, "Workshop:Toolbox", toolbox.FullPathDisplay)
+	assert.Equal(t, "workshop:toolbox", toolbox.FullPathCanonical)
+	assert.Equal(t, 1, toolbox.Depth)
+
+	wrench, err := s.GetEntity(ctx, "l1")
+	require.NoError(t, err)
+	assert.Equal(t, "Workshop:Toolbox:Wrench", wrench.FullPathDisplay)
+	assert.Equal(t, "workshop:toolbox:wrench", wrench.FullPathCanonical)
+	assert.Equal(t, 2, wrench.Depth)
+}
+
 func TestEntityLifecycle_StatusChange(t *testing.T) {
 	s := openTestStore(t)
 	b := eventbus.New(s)
