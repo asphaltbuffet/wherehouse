@@ -145,7 +145,9 @@ func (d *Database) WithRetry(ctx context.Context, fn func() error) error {
 			}
 
 			if attempt < maxRetries {
-				delay := DefaultBaseRetryDelay * time.Duration(1<<uint(attempt))
+				delay := DefaultBaseRetryDelay * time.Duration(
+					1<<uint(attempt), //nolint:gosec // attempt is bounded by maxRetries (5), no overflow possible
+				)
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
