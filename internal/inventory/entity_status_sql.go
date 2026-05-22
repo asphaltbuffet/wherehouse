@@ -5,10 +5,12 @@ import (
 	"fmt"
 )
 
+// Value implements the [driver.Valuer] interface for SQL persistence.
 func (e EntityStatus) Value() (driver.Value, error) {
 	return e.String(), nil
 }
 
+// Scan implements the sql.Scanner interface for SQL retrieval.
 func (e *EntityStatus) Scan(src any) error {
 	s, ok := src.(string)
 	if !ok {

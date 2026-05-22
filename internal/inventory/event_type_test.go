@@ -2,9 +2,11 @@ package inventory_test
 
 import (
 	"testing"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func TestEventType_String(t *testing.T) {

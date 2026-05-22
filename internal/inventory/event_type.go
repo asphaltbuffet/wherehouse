@@ -4,9 +4,12 @@ import "fmt"
 
 //go:generate stringer -type=EventType -linecomment
 
-//nolint:recvcheck
+// EventType identifies the kind of domain event recorded in the event log.
+//
+//nolint:recvcheck // Value() requires value receiver; Scan() requires pointer receiver.
 type EventType int
 
+// EventType values enumerate all entity lifecycle events.
 const (
 	EntityCreatedEvent       EventType = iota + 1 // entity.created
 	EntityRenamedEvent                            // entity.renamed
@@ -25,6 +28,7 @@ var eventTypeByName = map[string]EventType{
 	EntityRemovedEvent.String():       EntityRemovedEvent,
 }
 
+// ParseEventType converts a string to an EventType, returning an error for unknown values.
 func ParseEventType(s string) (EventType, error) {
 	if et, ok := eventTypeByName[s]; ok {
 		return et, nil

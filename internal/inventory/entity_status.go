@@ -4,15 +4,18 @@ import "fmt"
 
 //go:generate stringer -type=EntityStatus -linecomment
 
-//nolint:recvcheck
+// EntityStatus represents the lifecycle/availability state of an inventory entity.
+//
+//nolint:recvcheck // Value() requires value receiver; Scan() requires pointer receiver.
 type EntityStatus int
 
+// EntityStatus values represent the canonical set of lifecycle states.
 const (
 	EntityStatusOk       EntityStatus = iota + 1 // ok
-	EntityStatusBorrowed                          // borrowed
-	EntityStatusMissing                           // missing
-	EntityStatusLoaned                            // loaned
-	EntityStatusRemoved                           // removed
+	EntityStatusBorrowed                         // borrowed
+	EntityStatusMissing                          // missing
+	EntityStatusLoaned                           // loaned
+	EntityStatusRemoved                          // removed
 )
 
 var entityStatusByName = map[string]EntityStatus{
@@ -23,6 +26,7 @@ var entityStatusByName = map[string]EntityStatus{
 	EntityStatusRemoved.String():  EntityStatusRemoved,
 }
 
+// ParseEntityStatus converts a string to an EntityStatus, returning an error for unknown values.
 func ParseEntityStatus(s string) (EntityStatus, error) {
 	if es, ok := entityStatusByName[s]; ok {
 		return es, nil
