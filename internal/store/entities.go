@@ -175,7 +175,7 @@ func (s *Store) ComputeEntityPathTx(
 		Scan(&parentDisplay, &parentCanonical, &parentDepth)
 	if scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
-			return "", "", 0, fmt.Errorf("parent entity %q not found", *parentID)
+			return "", "", 0, fmt.Errorf("parent entity %q: %w", *parentID, ErrNotFound)
 		}
 		return "", "", 0, fmt.Errorf("query parent %s: %w", *parentID, scanErr)
 	}
@@ -216,4 +216,50 @@ func scanEntities(rows *sql.Rows) ([]*inventory.Entity, error) {
 		entities = append(entities, e)
 	}
 	return entities, rows.Err()
+}
+
+// GetEntityTx retrieves a single entity by ID inside an existing transaction.
+func (s *Store) GetEntityTx(ctx context.Context, tx Tx, entityID string) (*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, entity_type,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE entity_id = ?`
+
+	row := tx.QueryRowContext(ctx, query, entityID)
+	e, err := scanEntity(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get entity tx %s: %w", entityID, err)
+	}
+	return e, nil
+}
+
+// GetDescendantsTx retrieves all descendants of a given entity inside an existing transaction,
+// using path prefix matching. Ordered by depth ASC, display_name ASC, entity_id ASC.
+func (s *Store) GetDescendantsTx(ctx context.Context, tx Tx, entityID string) ([]*inventory.Entity, error) {
+	const pathQuery = `SELECT full_path_canonical FROM entities_current WHERE entity_id = ?`
+	var prefix string
+	if err := tx.QueryRowContext(ctx, pathQuery, entityID).Scan(&prefix); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get path for %s: %w", entityID, err)
+	}
+
+	const query = `
+		SELECT entity_id, display_name, canonical_name, entity_type,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE full_path_canonical LIKE ?
+		ORDER BY depth ASC, display_name ASC, entity_id ASC`
+
+	rows, err := tx.QueryContext(ctx, query, prefix+":%")
+	if err != nil {
+		return nil, fmt.Errorf("get descendants of %s: %w", entityID, err)
+	}
+	defer rows.Close()
+	return scanEntities(rows)
 }

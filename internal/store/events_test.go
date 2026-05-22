@@ -3,24 +3,13 @@ package store_test
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
-	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
-
-func openTestStore(t *testing.T) *store.Store {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := store.Open(store.Config{Path: path, AutoMigrate: true})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
-	return s
-}
 
 func TestAppendRawEvent(t *testing.T) {
 	s := openTestStore(t)

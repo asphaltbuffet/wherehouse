@@ -26,25 +26,19 @@ func TestOpen_ValidPath(t *testing.T) {
 }
 
 func TestExecInTransaction_Commit(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := store.Open(store.Config{Path: path, AutoMigrate: true})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
+	s := openTestStore(t)
 
-	err = s.ExecInTransaction(context.Background(), func(_ store.Tx) error {
+	err := s.ExecInTransaction(context.Background(), func(_ store.Tx) error {
 		return nil
 	})
 	assert.NoError(t, err)
 }
 
 func TestExecInTransaction_Rollback(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := store.Open(store.Config{Path: path, AutoMigrate: true})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
+	s := openTestStore(t)
 
 	sentinelErr := errors.New("rollback me")
-	err = s.ExecInTransaction(context.Background(), func(_ store.Tx) error {
+	err := s.ExecInTransaction(context.Background(), func(_ store.Tx) error {
 		return sentinelErr
 	})
 	assert.ErrorIs(t, err, sentinelErr)

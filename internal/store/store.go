@@ -18,8 +18,13 @@ const (
 	DefaultBaseRetryDelay = 50 * time.Millisecond
 )
 
-// Tx is a handle to an active database transaction.
-type Tx = *sql.Tx
+// Tx is the interface passed to functions running inside ExecInTransaction.
+// It exposes only the query methods needed by store operations.
+type Tx interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
 
 // Config holds connection parameters for opening a Store.
 type Config struct {

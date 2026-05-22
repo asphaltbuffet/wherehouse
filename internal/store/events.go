@@ -55,7 +55,10 @@ func (s *Store) GetEventByID(ctx context.Context, eventID int64) (*inventory.Eve
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
-	return ev, err
+	if err != nil {
+		return nil, fmt.Errorf("get event %d: %w", eventID, err)
+	}
+	return ev, nil
 }
 
 // GetEventsByEntity retrieves all events for a given entity ID, ordered by event_id ASC.
