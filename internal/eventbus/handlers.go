@@ -22,13 +22,19 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 	}
 
 	if entityType == inventory.EntityTypePlace && p.ParentID != nil {
-		if err := validatePlaceParentTx(ctx, tx, *p.ParentID); err != nil {
+		if err = validatePlaceParentTx(ctx, tx, *p.ParentID); err != nil {
 			return fmt.Errorf("handleEntityCreated: %w", err)
 		}
 	}
 
 	canonicalName := inventory.CanonicalizeString(p.DisplayName)
-	fullPathDisplay, fullPathCanonical, depth, err := b.store.ComputeEntityPathTx(ctx, tx, p.DisplayName, canonicalName, p.ParentID)
+	fullPathDisplay, fullPathCanonical, depth, err := b.store.ComputeEntityPathTx(
+		ctx,
+		tx,
+		p.DisplayName,
+		canonicalName,
+		p.ParentID,
+	)
 	if err != nil {
 		return fmt.Errorf("handleEntityCreated: %w", err)
 	}
@@ -62,6 +68,14 @@ func (b *Bus) handleEntityRenamed(ctx context.Context, tx store.Tx, ev *inventor
 	}
 
 	oldCanonical := entity.CanonicalName
+
+	// Fetch descendants before updating the parent so the path-prefix query still
+	// matches the old canonical path stored in the DB.
+	descendants, err := b.store.GetDescendantsTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return fmt.Errorf("handleEntityRenamed: get descendants: %w", err)
+	}
+
 	entity.DisplayName = p.DisplayName
 	entity.CanonicalName = inventory.CanonicalizeString(p.DisplayName)
 	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
@@ -74,12 +88,12 @@ func (b *Bus) handleEntityRenamed(ctx context.Context, tx store.Tx, ev *inventor
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 
-	if err := b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
+	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
 		return fmt.Errorf("handleEntityRenamed: %w", err)
 	}
 
 	if entity.CanonicalName != oldCanonical {
-		if err := b.propagatePathChangesTx(ctx, tx, ev, entity); err != nil {
+		if err = b.propagatePathChangesTx(ctx, tx, ev, entity, descendants); err != nil {
 			return fmt.Errorf("handleEntityRenamed: propagate: %w", err)
 		}
 	}
@@ -98,6 +112,13 @@ func (b *Bus) handleEntityReparented(ctx context.Context, tx store.Tx, ev *inven
 		return fmt.Errorf("handleEntityReparented: get entity: %w", err)
 	}
 
+	// Fetch descendants before updating the parent so the path-prefix query still
+	// matches the old canonical path stored in the DB.
+	descendants, err := b.store.GetDescendantsTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return fmt.Errorf("handleEntityReparented: get descendants: %w", err)
+	}
+
 	entity.ParentID = p.NewParentID
 	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
 		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
@@ -109,11 +130,11 @@ func (b *Bus) handleEntityReparented(ctx context.Context, tx store.Tx, ev *inven
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 
-	if err := b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
+	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
 		return fmt.Errorf("handleEntityReparented: %w", err)
 	}
 
-	return b.propagatePathChangesTx(ctx, tx, ev, entity)
+	return b.propagatePathChangesTx(ctx, tx, ev, entity, descendants)
 }
 
 func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
@@ -184,12 +205,19 @@ func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventor
 // Descendants are returned depth-ordered (shallow first), and an `updated` map
 // tracks each entity's new path so grandchildren compute from the already-updated
 // parent — not the stale root path.
-func (b *Bus) propagatePathChangesTx(ctx context.Context, tx store.Tx, triggeringEv *inventory.Event, parent *inventory.Entity) error {
-	descendants, err := b.store.GetDescendantsTx(ctx, tx, parent.EntityID)
-	if err != nil {
-		return fmt.Errorf("get descendants: %w", err)
-	}
-
+// propagatePathChangesTx emits entity.path_changed derived events for all descendants
+// and updates each projection within the same transaction.
+//
+// descendants must be fetched BEFORE the parent entity is updated in the DB, so that
+// path-prefix queries still match the old canonical path. They must be ordered depth ASC
+// so grandchildren compute their paths from already-updated parents.
+func (b *Bus) propagatePathChangesTx(
+	ctx context.Context,
+	tx store.Tx,
+	triggeringEv *inventory.Event,
+	parent *inventory.Entity,
+	descendants []*inventory.Entity,
+) error {
 	updated := map[string]*inventory.Entity{parent.EntityID: parent}
 
 	for _, d := range descendants {
@@ -234,7 +262,7 @@ func (b *Bus) propagatePathChangesTx(ctx context.Context, tx store.Tx, triggerin
 			return fmt.Errorf("insert path_changed event for %s: %w", d.EntityID, err)
 		}
 
-		if err := b.store.UpdateEntityTx(ctx, tx, d); err != nil {
+		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
 			return fmt.Errorf("update descendant %s: %w", d.EntityID, err)
 		}
 
