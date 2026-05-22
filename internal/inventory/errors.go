@@ -2,7 +2,7 @@ package inventory
 
 import "errors"
 
-// Sentinel errors returned by inventory operations.
+//nolint:revive // sentinel errors; names are self-documenting
 var (
 	ErrEntityNotFound = errors.New("entity not found")
 	ErrEventNotFound  = errors.New("event not found")

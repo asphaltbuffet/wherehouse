@@ -9,7 +9,7 @@ import "fmt"
 //nolint:recvcheck // Value() requires value receiver; Scan() requires pointer receiver.
 type EntityStatus int
 
-// EntityStatus values represent the canonical set of lifecycle states.
+//nolint:revive // linecomment strings serve as the stringer output; no separate doc needed
 const (
 	EntityStatusOk       EntityStatus = iota + 1 // ok
 	EntityStatusBorrowed                         // borrowed

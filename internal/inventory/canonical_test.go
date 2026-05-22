@@ -15,6 +15,7 @@ func TestCanonicalizeString(t *testing.T) {
 		{"Drawer-3", "drawer_3"},
 		{"multiple   spaces", "multiple_spaces"},
 		{"trailing_", "trailing"},
+		{"  leading", "leading"},
 		{"", ""},
 	}
 	for _, tt := range tests {

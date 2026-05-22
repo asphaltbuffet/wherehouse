@@ -9,7 +9,7 @@ import "fmt"
 //nolint:recvcheck // Value() requires value receiver; Scan() requires pointer receiver.
 type EntityType int
 
-// EntityType values represent the structural roles an entity may play.
+//nolint:revive // linecomment strings serve as the stringer output; no separate doc needed
 const (
 	EntityTypePlace     EntityType = iota + 1 // place
 	EntityTypeContainer                       // container
@@ -27,5 +27,5 @@ func ParseEntityType(s string) (EntityType, error) {
 	if et, ok := entityTypeByName[s]; ok {
 		return et, nil
 	}
-	return 0, fmt.Errorf("unknown entity type %q: must be place, container, or leaf", s)
+	return 0, fmt.Errorf("unknown entity type: %q", s)
 }

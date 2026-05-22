@@ -9,7 +9,7 @@ import "fmt"
 //nolint:recvcheck // Value() requires value receiver; Scan() requires pointer receiver.
 type EventType int
 
-// EventType values enumerate all entity lifecycle events.
+//nolint:revive // linecomment strings serve as the stringer output; no separate doc needed
 const (
 	EntityCreatedEvent       EventType = iota + 1 // entity.created
 	EntityRenamedEvent                            // entity.renamed

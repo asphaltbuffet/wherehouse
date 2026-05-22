@@ -22,5 +22,5 @@ func CanonicalizeString(s string) string {
 			prevWasUnderscore = false
 		}
 	}
-	return strings.TrimRight(result.String(), "_")
+	return strings.Trim(result.String(), "_")
 }
