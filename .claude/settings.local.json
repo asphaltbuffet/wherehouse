@@ -26,7 +26,9 @@
       "mcp__serena__get_symbols_overview",
       "mcp__serena__search_for_pattern",
       "mcp__serena__initial_instructions",
-      "mcp__serena__read_memory"
+      "mcp__serena__read_memory",
+      "Bash(go generate *)",
+      "Bash(gotestsum -- ./internal/inventory/...)"
     ]
   },
   "enableAllProjectMcpServers": true,
