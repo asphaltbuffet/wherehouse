@@ -3,97 +3,90 @@ package list_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/list"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
-	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-func openTestDB(t *testing.T) (*database.Database, context.Context) {
-	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(database.Config{
-		Path:        ":memory:",
-		BusyTimeout: database.DefaultBusyTimeout,
-		AutoMigrate: true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, ctx
+type fakeListApp struct {
+	resp []app.EntityResult
+	err  error
 }
 
-func appendEntity(t *testing.T, db *database.Database, id, name, entityType string) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := db.AppendEvent(ctx, database.EntityCreatedEvent, "testuser", map[string]any{
-		"entity_id":    id,
-		"display_name": name,
-		"entity_type":  entityType,
-		"parent_id":    nil,
-	}, "")
-	require.NoError(t, err)
+func (f *fakeListApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
+	return f.resp, f.err
 }
 
-func TestList_All(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	appendEntity(t, db, nanoid.MustNew(), "Garage", "place")
-	appendEntity(t, db, nanoid.MustNew(), "Toolbox", "container")
-
-	cmd := list.NewListCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-
+func TestRunList_ReturnsAll(t *testing.T) {
+	t.Parallel()
+	fake := &fakeListApp{
+		resp: []app.EntityResult{
+			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk},
+		},
+	}
+	cmd := list.NewListCmd(fake)
+	cmd.SetArgs([]string{})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "Garage")
-	assert.Contains(t, out.String(), "Toolbox")
+	assert.Contains(t, stdout.String(), "Garage")
+	assert.Contains(t, stdout.String(), "Garage:Toolbox")
 }
 
-func TestList_FilterByType(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	appendEntity(t, db, nanoid.MustNew(), "Garage", "place")
-	appendEntity(t, db, nanoid.MustNew(), "Toolbox", "container")
-
-	cmd := list.NewListCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"--type", "place"})
-
+func TestRunList_FilterByType(t *testing.T) {
+	t.Parallel()
+	fake := &fakeListApp{
+		resp: []app.EntityResult{
+			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk},
+		},
+	}
+	cmd := list.NewListCmd(fake)
+	cmd.SetArgs([]string{"--type", "container"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "Garage")
-	assert.NotContains(t, out.String(), "Toolbox")
+	assert.NotContains(t, stdout.String(), "Garage\n")
+	assert.Contains(t, stdout.String(), "Garage:Toolbox")
 }
 
-func TestList_FilterByStatus(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	hammerID := nanoid.MustNew()
-	appendEntity(t, db, hammerID, "hammer", "leaf")
-
-	// Mark hammer as borrowed.
-	_, err := db.AppendEvent(ctx, database.EntityStatusChangedEvent, "testuser", map[string]any{
-		"entity_id":      hammerID,
-		"status":         "borrowed",
-		"status_context": nil,
-	}, "")
-	require.NoError(t, err)
-
-	appendEntity(t, db, nanoid.MustNew(), "wrench", "leaf")
-
-	cmd := list.NewListCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"--status", "borrowed"})
-
+func TestRunList_FilterByUnderPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeListApp{
+		resp: []app.EntityResult{
+			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk},
+			{EntityID: "c", FullPathDisplay: "Garage:Toolbox:Wrench", EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+		},
+	}
+	cmd := list.NewListCmd(fake)
+	cmd.SetArgs([]string{"--under", "Garage:Toolbox"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "hammer")
-	assert.NotContains(t, out.String(), "wrench")
+	assert.NotContains(t, stdout.String(), "Garage\n")
+	assert.NotContains(t, stdout.String(), "Garage:Toolbox\n")
+	assert.Contains(t, stdout.String(), "Garage:Toolbox:Wrench")
+}
+
+func TestRunList_PropagatesError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeListApp{err: errors.New("db error")}
+	cmd := list.NewListCmd(fake)
+	cmd.SetArgs([]string{})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
 }
