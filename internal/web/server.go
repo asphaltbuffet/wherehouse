@@ -6,7 +6,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
+
+const shutdownTimeout = 5 * time.Second
 
 // Config holds all configuration for the web server.
 type Config struct {
@@ -45,8 +48,11 @@ func New(cfg Config) (*Server, error) {
 		cfg:       cfg,
 		templates: tmpl,
 		httpSrv: &http.Server{
-			Addr:    fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port),
-			Handler: mux,
+			Addr:              fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port),
+			Handler:           mux,
+			ReadHeaderTimeout: 30 * time.Second,
+			ReadTimeout:       60 * time.Second,
+			WriteTimeout:      60 * time.Second,
 		},
 	}
 	srv.registerRoutes(mux)
