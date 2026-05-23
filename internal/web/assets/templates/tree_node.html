@@ -11,7 +11,7 @@
                 htmx.ajax('GET','/entities/{{.EntityID}}',{target:'#detail-panel',swap:'innerHTML'})">
     <span>{{entityTypeIcon .EntityType}}</span>
     <span>{{.DisplayName}}</span>
-    {{if ne .Status 0}}<span class="badge {{statusClass .Status}}">{{.Status}}</span>{{end}}
+    {{$cls := statusClass .Status}}{{if $cls}}<span class="badge {{$cls}}">{{.Status}}</span>{{end}}
   </div>
   <ul class="tree-children tree-node"></ul>
 </li>
