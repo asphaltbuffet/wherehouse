@@ -21,7 +21,7 @@ func TestRun_ShutdownOnContextCancel(t *testing.T) {
 	srv, err := web.New(web.Config{
 		App:    &fakeApp{},
 		Bind:   "127.0.0.1",
-		Port:   18080,
+		Port:   0,
 		Output: io.Discard,
 	})
 	require.NoError(t, err)

@@ -117,7 +117,7 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 
 // isRootEntity returns true when e has no parent (no colon in canonical name = depth 0).
 func isRootEntity(e app.EntityResult) bool {
-	for _, c := range e.CanonicalName {
+	for _, c := range e.FullPathDisplay {
 		if c == ':' {
 			return false
 		}

@@ -39,13 +39,6 @@ func (f *fakeApp) GetChildren(_ context.Context, parentID string) ([]app.EntityR
 	return out, nil
 }
 
-func (f *fakeApp) GetEntityByPath(_ context.Context, _ string) (app.EntityResult, error) {
-	if len(f.entities) == 0 {
-		return app.EntityResult{}, f.err
-	}
-	return f.entities[0], f.err
-}
-
 func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.HistoryResult, error) {
 	return f.history, f.err
 }

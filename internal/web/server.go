@@ -42,9 +42,6 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Bind == "" {
 		cfg.Bind = "127.0.0.1"
 	}
-	if cfg.Port == 0 {
-		cfg.Port = 8080
-	}
 
 	tmpl, err := parseTemplates(assetsFS)
 	if err != nil {
