@@ -173,3 +173,43 @@ func TestListEntities(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 3)
 }
+
+func TestApp_GetChildren(t *testing.T) {
+	ctx := context.Background()
+	a := openTestApp(t)
+
+	// Seed a parent and two children via the app layer.
+	parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Parent",
+		EntityType:  inventory.EntityTypePlace,
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Child1",
+		EntityType:  inventory.EntityTypePlace,
+		ParentPath:  "Parent",
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Child2",
+		EntityType:  inventory.EntityTypePlace,
+		ParentPath:  "Parent",
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	results, err := a.GetChildren(ctx, parent.EntityID)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	ids := []string{results[0].EntityID, results[1].EntityID}
+	assert.ElementsMatch(t, []string{results[0].EntityID, results[1].EntityID}, ids)
+
+	for _, r := range results {
+		assert.Contains(t, []string{"Child1", "Child2"}, r.DisplayName)
+	}
+}

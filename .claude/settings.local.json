@@ -29,7 +29,8 @@
       "mcp__serena__read_memory",
       "Bash(go generate *)",
       "Bash(gotestsum *)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Skill(superpowers:writing-plans)"
     ]
   },
   "enableAllProjectMcpServers": true,
