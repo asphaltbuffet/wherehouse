@@ -9,8 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 func TestOpenDatabase(t *testing.T) {
@@ -120,7 +121,7 @@ func TestOpenDatabase(t *testing.T) {
 				return context.WithValue(context.Background(), config.ConfigKey, cfg)
 			},
 			wantErr: true,
-			errMsg:  "", // Database.Open will return its own error
+			errMsg:  "", // store.Open will return its own error
 		},
 		{
 			name: "error when path has invalid permissions",
@@ -153,18 +154,20 @@ func TestOpenDatabase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := tt.setup(t)
 
-			db, err := OpenDatabase(ctx)
+			s, a, err := OpenDatabase(ctx)
 
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
 					require.ErrorContains(t, err, tt.errMsg)
 				}
-				assert.Nil(t, db)
+				assert.Nil(t, s)
+				assert.Nil(t, a)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, db)
-				assert.NoError(t, db.Close())
+				require.NotNil(t, s)
+				assert.IsType(t, &app.App{}, a)
+				t.Cleanup(func() { _ = s.Close() })
 			}
 		})
 	}
@@ -182,10 +185,11 @@ func TestOpenDatabase_AutoMigration(t *testing.T) {
 	ctx := context.WithValue(context.Background(), config.ConfigKey, cfg)
 
 	// OpenDatabase creates and migrates the file if absent.
-	db, err := OpenDatabase(ctx)
+	s, a, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, db)
-	defer db.Close()
+	require.NotNil(t, s)
+	assert.IsType(t, &app.App{}, a)
+	t.Cleanup(func() { _ = s.Close() })
 
 	// Verify database file was created.
 	_, err = os.Stat(dbPath)
@@ -207,10 +211,11 @@ func TestOpenDatabase_ContextPropagation(t *testing.T) {
 	ctx := context.WithValue(context.Background(), customKey, "value")
 	ctx = context.WithValue(ctx, config.ConfigKey, cfg)
 
-	db, err := OpenDatabase(ctx)
+	s, a, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, db)
-	defer db.Close()
+	require.NotNil(t, s)
+	assert.IsType(t, &app.App{}, a)
+	t.Cleanup(func() { _ = s.Close() })
 
 	assert.Equal(t, "value", ctx.Value(customKey))
 }
@@ -226,17 +231,19 @@ func TestOpenDatabase_MultipleCallsSeparate(t *testing.T) {
 	}
 	ctx := context.WithValue(context.Background(), config.ConfigKey, cfg)
 
-	db1, err := OpenDatabase(ctx)
+	s1, a1, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, db1)
-	defer db1.Close()
+	require.NotNil(t, s1)
+	assert.IsType(t, &app.App{}, a1)
+	t.Cleanup(func() { _ = s1.Close() })
 
-	db2, err := OpenDatabase(ctx)
+	s2, a2, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, db2)
-	defer db2.Close()
+	require.NotNil(t, s2)
+	assert.IsType(t, &app.App{}, a2)
+	t.Cleanup(func() { _ = s2.Close() })
 
-	assert.NotSame(t, db1, db2)
+	assert.NotSame(t, s1, s2)
 }
 
 func TestOpenDatabase_ExistingDatabase(t *testing.T) {
@@ -250,21 +257,22 @@ func TestOpenDatabase_ExistingDatabase(t *testing.T) {
 	}
 	ctx := context.WithValue(context.Background(), config.ConfigKey, cfg)
 
-	// Initialize database directly.
-	db1, err := database.Open(database.Config{
+	// Initialize database directly via store.Open.
+	s1, err := store.Open(store.Config{
 		Path:        dbPath,
-		BusyTimeout: database.DefaultBusyTimeout,
+		BusyTimeout: store.DefaultBusyTimeout,
 		AutoMigrate: true,
 	})
 	require.NoError(t, err)
-	require.NotNil(t, db1)
-	db1.Close()
+	require.NotNil(t, s1)
+	_ = s1.Close()
 
 	// Open existing database via OpenDatabase.
-	db2, err := OpenDatabase(ctx)
+	s2, a, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, db2)
-	defer db2.Close()
+	require.NotNil(t, s2)
+	assert.IsType(t, &app.App{}, a)
+	t.Cleanup(func() { _ = s2.Close() })
 
 	info, err := os.Stat(dbPath)
 	require.NoError(t, err)
