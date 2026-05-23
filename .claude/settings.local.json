@@ -28,7 +28,8 @@
       "mcp__serena__initial_instructions",
       "mcp__serena__read_memory",
       "Bash(go generate *)",
-      "Bash(gotestsum -- ./internal/inventory/...)"
+      "Bash(gotestsum *)",
+      "Skill(update-config)"
     ]
   },
   "enableAllProjectMcpServers": true,
