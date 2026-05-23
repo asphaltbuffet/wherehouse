@@ -3,85 +3,75 @@ package scry_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
-	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-func openTestDB(t *testing.T) (*database.Database, context.Context) {
-	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(database.Config{
-		Path:        ":memory:",
-		BusyTimeout: database.DefaultBusyTimeout,
-		AutoMigrate: true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, ctx
+type fakeScryApp struct {
+	listResp []app.EntityResult
+	listErr  error
+	findResp []app.FindResult
+	findErr  error
+	findReq  app.FindEntitiesRequest
 }
 
-func appendEntity(t *testing.T, db *database.Database, id, name, entityType string) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := db.AppendEvent(ctx, database.EntityCreatedEvent, "testuser", map[string]any{
-		"entity_id":    id,
-		"display_name": name,
-		"entity_type":  entityType,
-		"parent_id":    nil,
-	}, "")
-	require.NoError(t, err)
+func (f *fakeScryApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
+	return f.listResp, f.listErr
 }
 
-func TestScry_ByName_TwoMatches(t *testing.T) {
-	db, ctx := openTestDB(t)
+func (f *fakeScryApp) FindEntities(_ context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error) {
+	f.findReq = req
+	return f.findResp, f.findErr
+}
 
-	id1 := nanoid.MustNew()
-	id2 := nanoid.MustNew()
-	appendEntity(t, db, id1, "screwdriver", "leaf")
-	appendEntity(t, db, id2, "screwdriver", "leaf")
-
-	cmd := scry.NewScryCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"screwdriver"})
-
+func TestRunScry_NoArg_ListsAll(t *testing.T) {
+	t.Parallel()
+	fake := &fakeScryApp{
+		listResp: []app.EntityResult{
+			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+		},
+	}
+	cmd := scry.NewScryCmd(fake)
+	cmd.SetArgs([]string{})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), id1)
-	assert.Contains(t, out.String(), id2)
+	assert.Contains(t, stdout.String(), "Garage")
 }
 
-func TestScry_NoArgs_ListsAll(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	appendEntity(t, db, nanoid.MustNew(), "hammer", "leaf")
-	appendEntity(t, db, nanoid.MustNew(), "wrench", "leaf")
-
-	cmd := scry.NewScryCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-
+func TestRunScry_WithArg_CallsFindEntities(t *testing.T) {
+	t.Parallel()
+	fake := &fakeScryApp{
+		findResp: []app.FindResult{
+			{Entity: app.EntityResult{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk}, Distance: 0},
+		},
+	}
+	cmd := scry.NewScryCmd(fake)
+	cmd.SetArgs([]string{"toolbox"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "hammer")
-	assert.Contains(t, out.String(), "wrench")
+	assert.Equal(t, "toolbox", fake.findReq.Query)
+	assert.Contains(t, stdout.String(), "Garage:Toolbox")
 }
 
-func TestScry_Nonexistent_EmptyOutput(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	cmd := scry.NewScryCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"doesnotexist"})
-
-	require.NoError(t, cmd.Execute())
-	assert.Empty(t, out.String())
+func TestRunScry_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeScryApp{listErr: errors.New("db down")}
+	cmd := scry.NewScryCmd(fake)
+	cmd.SetArgs([]string{})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db down")
 }
