@@ -18,7 +18,3 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /tree/{entityID}/children", s.handleTreeChildren)
 	mux.HandleFunc("GET /entities/{entityID}", s.handleEntityDetail)
 }
-
-func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-}
