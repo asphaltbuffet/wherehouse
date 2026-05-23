@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
@@ -35,11 +35,17 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 		})
 	}
 
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].Distance != results[j].Distance {
-			return results[i].Distance < results[j].Distance
+	slices.SortFunc(results, func(a, b FindResult) int {
+		if a.Distance != b.Distance {
+			return a.Distance - b.Distance
 		}
-		return results[i].Entity.DisplayName < results[j].Entity.DisplayName
+		if a.Entity.DisplayName < b.Entity.DisplayName {
+			return -1
+		}
+		if a.Entity.DisplayName > b.Entity.DisplayName {
+			return 1
+		}
+		return 0
 	})
 
 	if req.Limit > 0 && len(results) > req.Limit {

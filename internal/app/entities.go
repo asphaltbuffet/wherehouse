@@ -197,7 +197,6 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 		return nil, fmt.Errorf("parse path %q: %w", path, store.ErrNotFound)
 	}
 
-	// Build the canonical path by canonicalizing each segment.
 	canonicalSegments := make([]string, len(segments))
 	for i, seg := range segments {
 		canonicalSegments[i] = inventory.CanonicalizeString(seg)
@@ -211,7 +210,7 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 	}
 
 	for _, e := range candidates {
-		if e.FullPathCanonical == canonicalPath {
+		if e.FullPathCanonical == canonicalPath && e.Status != inventory.EntityStatusRemoved {
 			return e, nil
 		}
 	}

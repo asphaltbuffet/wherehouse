@@ -47,6 +47,7 @@ func (a *App) GetHistory(ctx context.Context, req GetHistoryRequest) ([]HistoryR
 	}
 
 	if req.OldestFirst {
+		// Limit applied before return — means "earliest N events".
 		if req.Limit > 0 && len(results) > req.Limit {
 			results = results[:req.Limit]
 		}
@@ -54,6 +55,7 @@ func (a *App) GetHistory(ctx context.Context, req GetHistoryRequest) ([]HistoryR
 	}
 
 	// Default: newest first — reverse in-place.
+	// Reverse to newest-first, then limit — so Limit means "latest N events".
 	for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
 		results[i], results[j] = results[j], results[i]
 	}
