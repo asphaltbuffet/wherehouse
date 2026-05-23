@@ -35,7 +35,12 @@ func TestRunScry_NoArg_ListsAll(t *testing.T) {
 	t.Parallel()
 	fake := &fakeScryApp{
 		listResp: []app.EntityResult{
-			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			{
+				EntityID:        "a",
+				FullPathDisplay: "Garage",
+				EntityType:      inventory.EntityTypePlace,
+				Status:          inventory.EntityStatusOk,
+			},
 		},
 	}
 	cmd := scry.NewScryCmd(fake)
@@ -51,7 +56,15 @@ func TestRunScry_WithArg_CallsFindEntities(t *testing.T) {
 	t.Parallel()
 	fake := &fakeScryApp{
 		findResp: []app.FindResult{
-			{Entity: app.EntityResult{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk}, Distance: 0},
+			{
+				Entity: app.EntityResult{
+					EntityID:        "b",
+					FullPathDisplay: "Garage:Toolbox",
+					EntityType:      inventory.EntityTypeContainer,
+					Status:          inventory.EntityStatusOk,
+				},
+				Distance: 0,
+			},
 		},
 	}
 	cmd := scry.NewScryCmd(fake)

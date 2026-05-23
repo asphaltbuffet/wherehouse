@@ -27,8 +27,18 @@ func TestRunList_ReturnsAll(t *testing.T) {
 	t.Parallel()
 	fake := &fakeListApp{
 		resp: []app.EntityResult{
-			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
-			{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk},
+			{
+				EntityID:        "a",
+				FullPathDisplay: "Garage",
+				EntityType:      inventory.EntityTypePlace,
+				Status:          inventory.EntityStatusOk,
+			},
+			{
+				EntityID:        "b",
+				FullPathDisplay: "Garage:Toolbox",
+				EntityType:      inventory.EntityTypeContainer,
+				Status:          inventory.EntityStatusOk,
+			},
 		},
 	}
 	cmd := list.NewListCmd(fake)
@@ -45,8 +55,18 @@ func TestRunList_FilterByType(t *testing.T) {
 	t.Parallel()
 	fake := &fakeListApp{
 		resp: []app.EntityResult{
-			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
-			{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk},
+			{
+				EntityID:        "a",
+				FullPathDisplay: "Garage",
+				EntityType:      inventory.EntityTypePlace,
+				Status:          inventory.EntityStatusOk,
+			},
+			{
+				EntityID:        "b",
+				FullPathDisplay: "Garage:Toolbox",
+				EntityType:      inventory.EntityTypeContainer,
+				Status:          inventory.EntityStatusOk,
+			},
 		},
 	}
 	cmd := list.NewListCmd(fake)
@@ -63,9 +83,24 @@ func TestRunList_FilterByUnderPath(t *testing.T) {
 	t.Parallel()
 	fake := &fakeListApp{
 		resp: []app.EntityResult{
-			{EntityID: "a", FullPathDisplay: "Garage", EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
-			{EntityID: "b", FullPathDisplay: "Garage:Toolbox", EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk},
-			{EntityID: "c", FullPathDisplay: "Garage:Toolbox:Wrench", EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			{
+				EntityID:        "a",
+				FullPathDisplay: "Garage",
+				EntityType:      inventory.EntityTypePlace,
+				Status:          inventory.EntityStatusOk,
+			},
+			{
+				EntityID:        "b",
+				FullPathDisplay: "Garage:Toolbox",
+				EntityType:      inventory.EntityTypeContainer,
+				Status:          inventory.EntityStatusOk,
+			},
+			{
+				EntityID:        "c",
+				FullPathDisplay: "Garage:Toolbox:Wrench",
+				EntityType:      inventory.EntityTypeLeaf,
+				Status:          inventory.EntityStatusOk,
+			},
 		},
 	}
 	cmd := list.NewListCmd(fake)

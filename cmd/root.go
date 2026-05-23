@@ -13,7 +13,6 @@ import (
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
-	"github.com/asphaltbuffet/wherehouse/cmd/migrate"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/cmd/rename"
@@ -63,7 +62,6 @@ Examples:
 	rootCmd.AddCommand(add.NewDefaultAddCmd())
 	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
 	rootCmd.AddCommand(listcmd.NewDefaultListCmd())
-	rootCmd.AddCommand(migrate.NewMigrateCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
 	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
 	rootCmd.AddCommand(rename.NewDefaultRenameCmd())
