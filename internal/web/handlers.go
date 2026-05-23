@@ -8,6 +8,8 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
+const historyLimit = 50
+
 // handleHealthz responds with 200 OK for liveness checks.
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -30,9 +32,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	data := struct{ Roots []app.EntityResult }{Roots: roots}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
+	if tmplErr := s.templates.ExecuteTemplate(w, "index", data); tmplErr != nil {
 		// TODO: wire structured logger — headers already sent, cannot call http.Error
-		fmt.Fprintf(os.Stderr, "execute index template: %v\n", err)
+		fmt.Fprintf(os.Stderr, "execute index template: %v\n", tmplErr)
 	}
 }
 
@@ -47,9 +49,9 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	for _, child := range children {
-		if err := s.templates.ExecuteTemplate(w, "tree_node", child); err != nil {
+		if tmplErr := s.templates.ExecuteTemplate(w, "tree_node", child); tmplErr != nil {
 			// TODO: wire structured logger — headers already sent, cannot call http.Error
-			fmt.Fprintf(os.Stderr, "execute tree_node template: %v\n", err)
+			fmt.Fprintf(os.Stderr, "execute tree_node template: %v\n", tmplErr)
 			return
 		}
 	}
@@ -79,7 +81,7 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 
 	history, err := s.cfg.App.GetHistory(r.Context(), app.GetHistoryRequest{
 		EntityID:    entityID,
-		Limit:       50,
+		Limit:       historyLimit,
 		OldestFirst: true,
 	})
 	if err != nil {
@@ -107,9 +109,9 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(w, "detail", data); err != nil {
+	if tmplErr := s.templates.ExecuteTemplate(w, "detail", data); tmplErr != nil {
 		// TODO: wire structured logger — headers already sent, cannot call http.Error
-		fmt.Fprintf(os.Stderr, "execute detail template: %v\n", err)
+		fmt.Fprintf(os.Stderr, "execute detail template: %v\n", tmplErr)
 	}
 }
 

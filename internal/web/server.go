@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"io"
@@ -57,4 +58,40 @@ func New(cfg Config) (*Server, error) {
 	}
 	srv.registerRoutes(mux)
 	return srv, nil
+}
+
+// Run starts the HTTP server, prints the URL, and blocks until ctx is cancelled
+// or an OS interrupt (SIGINT/SIGTERM) is received, then shuts down gracefully.
+func (s *Server) Run(ctx context.Context) error {
+	addr := fmt.Sprintf("http://%s:%d", s.cfg.Bind, s.cfg.Port)
+	fmt.Fprintln(s.cfg.Output, "Listening on", addr)
+
+	errCh := make(chan error, 1)
+	go func() {
+		if err := s.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+		close(errCh)
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("server error: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := s.httpSrv.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	return nil
+}
+
+// Handler returns the underlying http.Handler (for use in httptest).
+func (s *Server) Handler() http.Handler {
+	return s.httpSrv.Handler
 }
