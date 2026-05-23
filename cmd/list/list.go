@@ -18,6 +18,7 @@ type listEntry struct {
 	Status   string `json:"status"`
 }
 
+// NewDefaultListCmd returns the list command wired to the real database.
 func NewDefaultListCmd() *cobra.Command {
 	cmd := buildListCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -31,6 +32,7 @@ func NewDefaultListCmd() *cobra.Command {
 	return cmd
 }
 
+// NewListCmd returns the list command using the supplied listApp (for testing).
 func NewListCmd(a listApp) *cobra.Command {
 	cmd := buildListCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runList(cmd, args, a) }

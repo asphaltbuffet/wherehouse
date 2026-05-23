@@ -1,3 +1,4 @@
+// Package history implements the history command for displaying entity event history.
 package history
 
 import (

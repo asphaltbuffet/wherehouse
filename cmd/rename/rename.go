@@ -16,6 +16,7 @@ type renameResult struct {
 	NewPath  string `json:"new_path"`
 }
 
+// NewDefaultRenameCmd returns the rename command wired to the real database.
 func NewDefaultRenameCmd() *cobra.Command {
 	cmd := buildRenameCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -29,6 +30,7 @@ func NewDefaultRenameCmd() *cobra.Command {
 	return cmd
 }
 
+// NewRenameCmd returns the rename command using the supplied renameApp (for testing).
 func NewRenameCmd(a renameApp) *cobra.Command {
 	cmd := buildRenameCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runRename(cmd, args, a) }

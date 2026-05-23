@@ -1,3 +1,4 @@
+// Package rename implements the rename command for updating entity display names.
 package rename
 
 import (

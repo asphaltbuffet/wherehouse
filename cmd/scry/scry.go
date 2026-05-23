@@ -17,6 +17,7 @@ type scryEntry struct {
 	Status   string `json:"status"`
 }
 
+// NewDefaultScryCmd returns the scry command wired to the real database.
 func NewDefaultScryCmd() *cobra.Command {
 	cmd := buildScryCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -30,6 +31,7 @@ func NewDefaultScryCmd() *cobra.Command {
 	return cmd
 }
 
+// NewScryCmd returns the scry command using the supplied scryApp (for testing).
 func NewScryCmd(a scryApp) *cobra.Command {
 	cmd := buildScryCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runScry(cmd, args, a) }

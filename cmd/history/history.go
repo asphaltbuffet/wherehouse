@@ -17,6 +17,7 @@ type historyEntry struct {
 	ActorUser string `json:"actor_user"`
 }
 
+// NewDefaultHistoryCmd returns the history command wired to the real database.
 func NewDefaultHistoryCmd() *cobra.Command {
 	cmd := buildHistoryCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -30,6 +31,7 @@ func NewDefaultHistoryCmd() *cobra.Command {
 	return cmd
 }
 
+// NewHistoryCmd returns the history command using the supplied historyApp (for testing).
 func NewHistoryCmd(a historyApp) *cobra.Command {
 	cmd := buildHistoryCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runHistory(cmd, args, a) }
