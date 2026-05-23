@@ -1,0 +1,28 @@
+{{define "detail"}}
+<section>
+  <h2>{{.Entity.DisplayName}}</h2>
+  <dl class="detail-kv">
+    <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
+    <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
+    <dt>Status</dt>    <dd>{{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}</dd>
+    <dt>Date added</dt><dd>{{.DateAdded}}</dd>
+  </dl>
+
+  {{if .History}}
+  <h3>History</h3>
+  <table class="history-table">
+    <thead><tr><th>When</th><th>Event</th><th>By</th><th>Note</th></tr></thead>
+    <tbody>
+    {{range .History}}
+      <tr>
+        <td>{{.TimestampUTC}}</td>
+        <td>{{.EventType}}</td>
+        <td>{{.ActorUserID}}</td>
+        <td>{{.Note}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</section>
+{{end}}
