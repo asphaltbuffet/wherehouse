@@ -5,78 +5,64 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
-
-// NewDefaultRenameCmd returns a rename command that opens the database from context configuration at runtime.
-func NewDefaultRenameCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "rename <entity-id>",
-		Short: "Rename an entity",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, err := cli.OpenDatabase(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
-			}
-			defer db.Close()
-			return runRename(cmd, args, db)
-		},
-	}
-	cmd.Flags().StringP("to", "t", "", "New display name (REQUIRED)")
-	_ = cmd.MarkFlagRequired("to")
-	return cmd
-}
-
-// NewRenameCmd returns a rename command using the provided database. Intended for testing.
-func NewRenameCmd(db renameDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "rename <entity-id>",
-		Short: "Rename an entity",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRename(cmd, args, db)
-		},
-	}
-	cmd.Flags().StringP("to", "t", "", "New display name (REQUIRED)")
-	_ = cmd.MarkFlagRequired("to")
-	return cmd
-}
 
 type renameResult struct {
 	EntityID string `json:"entity_id"`
-	OldName  string `json:"old_name"`
 	NewName  string `json:"new_name"`
 	NewPath  string `json:"new_path"`
 }
 
-func runRename(cmd *cobra.Command, args []string, db renameDB) error {
+func NewDefaultRenameCmd() *cobra.Command {
+	cmd := buildRenameCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		s, a, err := cli.OpenDatabase(cmd.Context())
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer s.Close()
+		return runRename(cmd, args, a)
+	}
+	return cmd
+}
+
+func NewRenameCmd(a renameApp) *cobra.Command {
+	cmd := buildRenameCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runRename(cmd, args, a) }
+	return cmd
+}
+
+func buildRenameCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rename <path>",
+		Short: "Rename an entity by its full colon-separated path",
+		Long: `Rename an entity. Identify the entity by its full path (parent:child:...).
+
+Examples:
+  wherehouse rename "Garage:Toolbox" --to "Tool Chest"
+  wherehouse rename "Garage:Toolbox:Wrench" --to "Pipe Wrench"`,
+		Args: cobra.ExactArgs(1),
+	}
+	cmd.Flags().StringP("to", "t", "", "New display name (REQUIRED)")
+	_ = cmd.MarkFlagRequired("to")
+	return cmd
+}
+
+func runRename(cmd *cobra.Command, args []string, a renameApp) error {
 	ctx := cmd.Context()
-	entityID := args[0]
+	path := args[0]
 	toFlag, _ := cmd.Flags().GetString("to")
 
-	entity, err := db.GetEntity(ctx, entityID)
+	updated, err := a.RenameEntity(ctx, app.RenameEntityRequest{
+		EntityPath: path,
+		NewName:    toFlag,
+		ActorID:    cli.GetActorUserID(ctx),
+	})
 	if err != nil {
-		return fmt.Errorf("entity %q not found: %w", entityID, err)
-	}
-
-	oldName := entity.DisplayName
-
-	payload := map[string]any{
-		"entity_id":    entityID,
-		"display_name": toFlag,
-	}
-
-	actorUserID := cli.GetActorUserID(ctx)
-	if _, err = db.AppendEvent(ctx, database.EntityRenamedEvent, actorUserID, payload, ""); err != nil {
-		return fmt.Errorf("failed to rename entity: %w", err)
-	}
-
-	updated, err := db.GetEntity(ctx, entityID)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve renamed entity: %w", err)
+		return fmt.Errorf("failed to rename %q: %w", path, err)
 	}
 
 	cfg, ok := cli.GetConfig(ctx)
@@ -87,13 +73,11 @@ func runRename(cmd *cobra.Command, args []string, db renameDB) error {
 
 	if cfg.IsJSON() {
 		return out.JSON(renameResult{
-			EntityID: entityID,
-			OldName:  oldName,
+			EntityID: updated.EntityID,
 			NewName:  toFlag,
 			NewPath:  updated.FullPathDisplay,
 		})
 	}
-
-	out.Success(fmt.Sprintf("Renamed %q to %q (path: %s)", oldName, toFlag, updated.FullPathDisplay))
+	out.Success(fmt.Sprintf("Renamed %q to %q (path: %s)", path, toFlag, updated.FullPathDisplay))
 	return nil
 }
