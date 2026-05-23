@@ -4,21 +4,11 @@ package status
 import (
 	"context"
 
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
 //go:generate mockery
 
-type statusDB interface {
-	Close() error
-	GetEntity(ctx context.Context, entityID string) (*database.Entity, error)
-	AppendEvent(
-		ctx context.Context,
-		eventType database.EventType,
-		actorUserID string,
-		payload any,
-		note string,
-	) (int64, error)
+type statusApp interface {
+	ChangeStatus(ctx context.Context, req app.ChangeStatusRequest) error
 }
-
-var _ statusDB = (*database.Database)(nil)

@@ -5,99 +5,77 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-// NewDefaultStatusCmd returns a status command that opens the database from context configuration at runtime.
-func NewDefaultStatusCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "status <entity-id>",
-		Short: "Change the status of an entity",
-		Long: `Change the status of an entity.
-
-Valid statuses: ok, borrowed, missing, loaned, removed
-
-Examples:
-  wherehouse status <id> --set loaned --note "loaned to Alice"
-  wherehouse status <id> --set ok`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, err := cli.OpenDatabase(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
-			}
-			defer db.Close()
-			return runStatus(cmd, args, db)
-		},
-	}
-	cmd.Flags().StringP("set", "s", "", "New status: ok, borrowed, missing, loaned, removed (REQUIRED)")
-	_ = cmd.MarkFlagRequired("set")
-	cmd.Flags().StringP("note", "n", "", "Optional context note")
-	return cmd
-}
-
-// NewStatusCmd returns a status command using the provided database. Intended for testing.
-func NewStatusCmd(db statusDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "status <entity-id>",
-		Short: "Change the status of an entity",
-		Long: `Change the status of an entity.
-
-Valid statuses: ok, borrowed, missing, loaned, removed
-
-Examples:
-  wherehouse status <id> --set loaned --note "loaned to Alice"
-  wherehouse status <id> --set ok`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus(cmd, args, db)
-		},
-	}
-	cmd.Flags().StringP("set", "s", "", "New status: ok, borrowed, missing, loaned, removed (REQUIRED)")
-	_ = cmd.MarkFlagRequired("set")
-	cmd.Flags().StringP("note", "n", "", "Optional context note")
-	return cmd
-}
-
 type statusResult struct {
-	EntityID      string  `json:"entity_id"`
-	DisplayName   string  `json:"display_name"`
+	EntityID      string  `json:"entity_id,omitempty"`
+	Path          string  `json:"path"`
 	Status        string  `json:"status"`
 	StatusContext *string `json:"status_context,omitempty"`
 }
 
-func runStatus(cmd *cobra.Command, args []string, db statusDB) error {
+// NewDefaultStatusCmd returns a status command that opens the database from context configuration at runtime.
+func NewDefaultStatusCmd() *cobra.Command {
+	cmd := buildStatusCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		s, a, err := cli.OpenDatabase(cmd.Context())
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer s.Close()
+		return runStatus(cmd, args, a)
+	}
+	return cmd
+}
+
+// NewStatusCmd returns a status command using the provided statusApp. Intended for testing.
+func NewStatusCmd(a statusApp) *cobra.Command {
+	cmd := buildStatusCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStatus(cmd, args, a) }
+	return cmd
+}
+
+func buildStatusCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "status <path>",
+		Short: "Change the status of an entity",
+		Long: `Change the lifecycle status of an entity identified by its full path.
+
+Valid statuses: ok, borrowed, missing, loaned, removed
+
+Examples:
+  wherehouse status "Garage:Toolbox:Wrench" --set borrowed --note "loaned to Bob"
+  wherehouse status "Garage:Toolbox:Wrench" --set ok`,
+		Args: cobra.ExactArgs(1),
+	}
+	cmd.Flags().StringP("set", "s", "", "New status value (REQUIRED): ok, borrowed, missing, loaned, removed")
+	_ = cmd.MarkFlagRequired("set")
+	cmd.Flags().StringP("note", "n", "", "Optional context note for the status change")
+	return cmd
+}
+
+func runStatus(cmd *cobra.Command, args []string, a statusApp) error {
 	ctx := cmd.Context()
-	entityID := args[0]
+	path := args[0]
 	setFlag, _ := cmd.Flags().GetString("set")
 	noteFlag, _ := cmd.Flags().GetString("note")
 
-	newStatus, err := database.ParseEntityStatus(setFlag)
+	newStatus, err := inventory.ParseEntityStatus(setFlag)
 	if err != nil {
 		return err
 	}
 
-	entity, err := db.GetEntity(ctx, entityID)
-	if err != nil {
-		return fmt.Errorf("entity %q not found: %w", entityID, err)
-	}
-
-	var statusContext *string
-	if noteFlag != "" {
-		statusContext = &noteFlag
-	}
-
-	payload := map[string]any{
-		"entity_id":      entityID,
-		"status":         newStatus.String(),
-		"status_context": statusContext,
-	}
-
-	actorUserID := cli.GetActorUserID(ctx)
-	if _, err = db.AppendEvent(ctx, database.EntityStatusChangedEvent, actorUserID, payload, ""); err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
+	if err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+		EntityPath:    path,
+		Status:        newStatus,
+		StatusContext: noteFlag,
+		ActorID:       cli.GetActorUserID(ctx),
+	}); err != nil {
+		return fmt.Errorf("failed to update status of %q: %w", path, err)
 	}
 
 	cfg, ok := cli.GetConfig(ctx)
@@ -105,17 +83,18 @@ func runStatus(cmd *cobra.Command, args []string, db statusDB) error {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-
 	if cfg.IsJSON() {
+		var sc *string
+		if noteFlag != "" {
+			sc = &noteFlag
+		}
 		return out.JSON(statusResult{
-			EntityID:      entityID,
-			DisplayName:   entity.DisplayName,
+			Path:          path,
 			Status:        newStatus.String(),
-			StatusContext: statusContext,
+			StatusContext: sc,
 		})
 	}
-
-	msg := fmt.Sprintf("Status of %q set to %s", entity.DisplayName, newStatus)
+	msg := fmt.Sprintf("Status of %q set to %s", path, newStatus)
 	if noteFlag != "" {
 		msg += fmt.Sprintf(" (%s)", noteFlag)
 	}
