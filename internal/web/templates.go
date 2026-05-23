@@ -50,6 +50,8 @@ func statusClass(s inventory.EntityStatus) string {
 		return "loaned"
 	case inventory.EntityStatusMissing:
 		return "missing"
+	case inventory.EntityStatusRemoved:
+		return ""
 	default:
 		return ""
 	}

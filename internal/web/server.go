@@ -5,12 +5,19 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
-const shutdownTimeout = 5 * time.Second
+const (
+	shutdownTimeout   = 5 * time.Second
+	readHeaderTimeout = 30 * time.Second
+	readTimeout       = 60 * time.Second
+	writeTimeout      = 60 * time.Second
+)
 
 // Config holds all configuration for the web server.
 type Config struct {
@@ -49,11 +56,11 @@ func New(cfg Config) (*Server, error) {
 		cfg:       cfg,
 		templates: tmpl,
 		httpSrv: &http.Server{
-			Addr:              fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port),
+			Addr:              net.JoinHostPort(cfg.Bind, strconv.Itoa(cfg.Port)),
 			Handler:           mux,
-			ReadHeaderTimeout: 30 * time.Second,
-			ReadTimeout:       60 * time.Second,
-			WriteTimeout:      60 * time.Second,
+			ReadHeaderTimeout: readHeaderTimeout,
+			ReadTimeout:       readTimeout,
+			WriteTimeout:      writeTimeout,
 		},
 	}
 	srv.registerRoutes(mux)
@@ -63,7 +70,7 @@ func New(cfg Config) (*Server, error) {
 // Run starts the HTTP server, prints the URL, and blocks until ctx is cancelled
 // or an OS interrupt (SIGINT/SIGTERM) is received, then shuts down gracefully.
 func (s *Server) Run(ctx context.Context) error {
-	addr := fmt.Sprintf("http://%s:%d", s.cfg.Bind, s.cfg.Port)
+	addr := "http://" + net.JoinHostPort(s.cfg.Bind, strconv.Itoa(s.cfg.Port))
 	fmt.Fprintln(s.cfg.Output, "Listening on", addr)
 
 	errCh := make(chan error, 1)
@@ -91,7 +98,7 @@ func (s *Server) Run(ctx context.Context) error {
 	return nil
 }
 
-// Handler returns the underlying http.Handler (for use in httptest).
+// Handler returns the underlying [http.Handler] (for use in httptest).
 func (s *Server) Handler() http.Handler {
 	return s.httpSrv.Handler
 }
