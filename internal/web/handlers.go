@@ -3,7 +3,6 @@ package web
 import (
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
@@ -33,8 +32,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	data := struct{ Roots []app.EntityResult }{Roots: roots}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if tmplErr := s.templates.ExecuteTemplate(w, "index", data); tmplErr != nil {
-		// TODO: wire structured logger — headers already sent, cannot call http.Error
-		fmt.Fprintf(os.Stderr, "execute index template: %v\n", tmplErr)
+		// headers already sent; log and return
+		s.cfg.Logger.Error("execute index template", "error", tmplErr)
 	}
 }
 
@@ -50,8 +49,8 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	for _, child := range children {
 		if tmplErr := s.templates.ExecuteTemplate(w, "tree_node", child); tmplErr != nil {
-			// TODO: wire structured logger — headers already sent, cannot call http.Error
-			fmt.Fprintf(os.Stderr, "execute tree_node template: %v\n", tmplErr)
+			// headers already sent; log and return
+			s.cfg.Logger.Error("execute tree_node template", "error", tmplErr)
 			return
 		}
 	}
@@ -110,8 +109,8 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if tmplErr := s.templates.ExecuteTemplate(w, "detail", data); tmplErr != nil {
-		// TODO: wire structured logger — headers already sent, cannot call http.Error
-		fmt.Fprintf(os.Stderr, "execute detail template: %v\n", tmplErr)
+		// headers already sent; log and return
+		s.cfg.Logger.Error("execute detail template", "error", tmplErr)
 	}
 }
 

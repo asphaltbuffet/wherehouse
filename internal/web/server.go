@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/asphaltbuffet/wherehouse/internal/logging"
 )
 
 const (
@@ -24,7 +26,8 @@ type Config struct {
 	App    App
 	Bind   string
 	Port   int
-	Output io.Writer // destination for the startup URL line; defaults to os.Stdout
+	Output io.Writer      // destination for the startup URL line; defaults to os.Stdout
+	Logger logging.Logger // structured logger; defaults to logging.GetLogger()
 }
 
 // Server is the wherehouse web server.
@@ -41,6 +44,9 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.Bind == "" {
 		cfg.Bind = "127.0.0.1"
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = logging.GetLogger()
 	}
 
 	tmpl, err := parseTemplates(assetsFS)
