@@ -21,6 +21,10 @@ func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.
 	return nil, nil
 }
 
+func (f *fakeApp) CreateEntity(_ context.Context, _ app.CreateEntityRequest) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

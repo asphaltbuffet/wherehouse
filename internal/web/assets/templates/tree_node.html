@@ -21,7 +21,12 @@
     <span>{{entityTypeIcon .EntityType}}</span>
     <span>{{.DisplayName}}</span>
     {{$cls := statusClass .Status}}{{if $cls}}<span class="badge {{$cls}}">{{.Status}}</span>{{end}}
+    {{if ne .EntityType 3}}
+    <button class="add-btn"
+            title="Add item here"
+            onclick="event.stopPropagation();htmx.ajax('GET','/entities/{{.EntityID}}/add',{target:'#add-modal-body',swap:'innerHTML'});document.getElementById('add-modal').showModal()">+</button>
+    {{end}}
   </div>
-  <ul class="tree-children tree-node{{if .HasChildren}} collapsed{{end}}"></ul>
+  <ul id="tree-children-{{.EntityID}}" class="tree-children tree-node{{if .HasChildren}} collapsed{{end}}"></ul>
 </li>
 {{end}}

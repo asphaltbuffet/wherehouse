@@ -8,7 +8,13 @@
 </head>
 <body>
   <nav id="tree-panel">
-    <ul class="tree-node">
+    <div id="tree-panel-header">
+      <span>Inventory</span>
+      <button class="add-root-btn"
+              title="Add root item"
+              onclick="htmx.ajax('GET','/entities/add',{target:'#add-modal-body',swap:'innerHTML'});document.getElementById('add-modal').showModal()">+</button>
+    </div>
+    <ul id="tree-root-list" class="tree-node">
       {{range .Roots}}
         {{template "tree_node" .}}
       {{end}}
@@ -17,5 +23,9 @@
   <main id="detail-panel">
     <p style="color:#888">Select an item to see details.</p>
   </main>
+
+  <dialog id="add-modal">
+    <div id="add-modal-body"></div>
+  </dialog>
 </body>
 </html>{{end}}

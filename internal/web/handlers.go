@@ -3,8 +3,10 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 const historyLimit = 50
@@ -122,4 +124,103 @@ func isRootEntity(e app.EntityResult) bool {
 		}
 	}
 	return true
+}
+
+// handleAddItemForm returns an inline modal form for adding a child entity under parentID.
+func (s *Server) handleAddItemForm(w http.ResponseWriter, r *http.Request) {
+	s.renderAddForm(w, r, r.PathValue("parentID"))
+}
+
+// handleRootAddItemForm serves the add-item form for creating a root-level entity.
+func (s *Server) handleRootAddItemForm(w http.ResponseWriter, r *http.Request) {
+	s.renderAddForm(w, r, "")
+}
+
+type addFormData struct {
+	ParentID string // empty means root
+	Target   string // CSS selector for hx-target
+}
+
+func (s *Server) renderAddForm(w http.ResponseWriter, _ *http.Request, parentID string) {
+	target := "#tree-children-" + parentID
+	if parentID == "" {
+		target = "#tree-root-list"
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.templates.ExecuteTemplate(
+		w,
+		"add_item_form",
+		addFormData{ParentID: parentID, Target: target},
+	); err != nil {
+		s.cfg.Logger.Error("execute add_item_form template", "error", err)
+	}
+}
+
+// handleAddItem processes the POST form, creates the entity, and returns a fresh tree_node fragment.
+func (s *Server) handleAddItem(w http.ResponseWriter, r *http.Request) {
+	parentID := r.PathValue("parentID")
+
+	entities, err := s.cfg.App.ListEntities(r.Context())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list entities: %v", err), http.StatusInternalServerError)
+		return
+	}
+	var parentPath string
+	for _, e := range entities {
+		if e.EntityID == parentID {
+			parentPath = e.FullPathDisplay
+			break
+		}
+	}
+	if parentPath == "" {
+		http.Error(w, "parent entity not found", http.StatusNotFound)
+		return
+	}
+
+	s.createAndRenderNode(w, r, parentPath)
+}
+
+// handleRootAddItem processes the POST form for a new root-level entity.
+func (s *Server) handleRootAddItem(w http.ResponseWriter, r *http.Request) {
+	s.createAndRenderNode(w, r, "")
+}
+
+func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, parentPath string) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	displayName := strings.TrimSpace(r.FormValue("display_name"))
+	if displayName == "" {
+		http.Error(w, "display_name is required", http.StatusBadRequest)
+		return
+	}
+
+	entityType, err := inventory.ParseEntityType(r.FormValue("entity_type"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid entity_type: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	actor := strings.TrimSpace(r.FormValue("user"))
+	if actor == "" {
+		actor = "webui"
+	}
+
+	created, err := s.cfg.App.CreateEntity(r.Context(), app.CreateEntityRequest{
+		DisplayName: displayName,
+		EntityType:  entityType,
+		ParentPath:  parentPath,
+		ActorID:     actor,
+	})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("create entity: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if tmplErr := s.templates.ExecuteTemplate(w, "tree_node", created); tmplErr != nil {
+		s.cfg.Logger.Error("execute tree_node template", "error", tmplErr)
+	}
 }

@@ -13,4 +13,5 @@ type App interface {
 	ListEntities(ctx context.Context) ([]app.EntityResult, error)
 	GetChildren(ctx context.Context, parentID string) ([]app.EntityResult, error)
 	GetHistory(ctx context.Context, req app.GetHistoryRequest) ([]app.HistoryResult, error)
+	CreateEntity(ctx context.Context, req app.CreateEntityRequest) (app.EntityResult, error)
 }

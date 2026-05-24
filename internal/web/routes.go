@@ -17,4 +17,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /", s.handleIndex)
 	mux.HandleFunc("GET /tree/{entityID}/children", s.handleTreeChildren)
 	mux.HandleFunc("GET /entities/{entityID}", s.handleEntityDetail)
+	mux.HandleFunc("GET /entities/{parentID}/add", s.handleAddItemForm)
+	mux.HandleFunc("POST /entities/{parentID}/add", s.handleAddItem)
+	mux.HandleFunc("GET /entities/add", s.handleRootAddItemForm)
+	mux.HandleFunc("POST /entities/add", s.handleRootAddItem)
 }

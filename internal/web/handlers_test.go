@@ -43,6 +43,10 @@ func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.
 	return f.history, f.err
 }
 
+func (f *fakeApp) CreateEntity(_ context.Context, _ app.CreateEntityRequest) (app.EntityResult, error) {
+	return app.EntityResult{}, f.err
+}
+
 func newTestServer(t *testing.T, a web.App) *httptest.Server {
 	t.Helper()
 	srv, err := web.New(web.Config{
