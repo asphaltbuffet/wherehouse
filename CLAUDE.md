@@ -59,22 +59,21 @@ cmd/                     # CLI commands (cobra); one subdir per command
   config/                # config init/get/set/check/edit/path
   history/               # event timeline for an item
   list/                  # list items/locations
-  migrate/               # initialize database
   move/                  # move items between locations
   remove/                # remove items
   rename/                # rename items/locations
   scry/                  # find/search items
+  serve/                 # local web server (shell only — no HTTP/template/embed code)
   status/                # item status commands
   root.go                # root command, registers via NewDefaultXxxCmd()
 internal/
+  app/                   # business logic layer (App struct, EntityResult, HistoryResult)
   cli/                   # shared CLI helpers: selectors, output, flags, user identity
   config/                # XDG-compliant TOML config (viper-backed)
-  database/              # SQLite: events, projections, migrations, replay
-    eventTypes.go        # EventType iota + ParseEventType + stringer
-    eventHandler.go      # processEventInTx routing switch
-    entityEventHandler.go
-    replay.go            # event replay engine
-    migrations/          # SQL schema (golang-migrate)
+  eventbus/              # event dispatch and path-propagation
+  inventory/             # pure domain types (EntityType, EntityStatus, Entity, Event)
+  store/                 # SQLite persistence layer; migrations/ subdir has SQL schema
+  web/                   # HTTP server, handlers, templates, embedded assets
   entitypath/            # colon-separated path parsing (e.g. "Garage:Toolbox:Drawer")
   logging/               # structured logging + rotation
   nanoid/                # 10-char alphanumeric NanoID generation
@@ -93,6 +92,13 @@ Registered in `cmd/root.go` via `NewDefaultXxxCmd()`.
 
 ### Per-Command DB Interface
 Each `cmd/xxx/db.go` defines a minimal `xxxDB` interface covering only what that command needs, with a `//go:generate mockery` directive. Never pass `*database.DB` directly to a command's run function.
+
+### web package (internal/web)
+`cmd/serve/` is a **thin shell only** — no `net/http`, `html/template`, or `//go:embed`. All server logic lives in `internal/web`. Verify: `rg -l '"net/http"|"html/template"|//go:embed' cmd/serve/` → empty.
+
+`internal/web` uses `//go:embed assets` in `routes.go`. Tests use `httptest.NewServer(srv.Handler())`.
+
+**`EntityResult` field pitfall:** `CanonicalName` is the normalized *leaf name only* (no colons). `FullPathDisplay` is the full colon-separated path (e.g. `"Garage:Toolbox"`). Use `FullPathDisplay` when checking entity depth or path structure.
 
 ### Adding a New Event Type
 1. Add to `EventType` iota + line-comment string + `eventTypeByName` map in `internal/database/eventTypes.go`
@@ -124,3 +130,4 @@ All styles live as private fields on the `Styles` struct in `internal/styles/sty
 - `fd` over `find`, `rg` over `grep`, `sd` over `sed`, `jq` for JSON
 - No `&&` between shell commands — run as separate tool calls
 - No `git` commands — use `jj` equivalents
+- `jj describe <change-id> -m "message"` renames any commit; `jj log --no-graph -r 'trunk()..@'` reviews full branch history
