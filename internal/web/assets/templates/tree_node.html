@@ -1,0 +1,18 @@
+{{define "tree_node"}}
+<li>
+  <div class="tree-item"
+       hx-get="/tree/{{.EntityID}}/children"
+       hx-target="next .tree-children"
+       hx-swap="innerHTML"
+       hx-trigger="click[!this.dataset.expanded] once"
+       hx-on:htmx:after-request="this.dataset.expanded='1'"
+       hx-push-url="false"
+       onclick="document.querySelectorAll('.tree-item').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');
+                htmx.ajax('GET','/entities/{{.EntityID}}',{target:'#detail-panel',swap:'innerHTML'})">
+    <span>{{entityTypeIcon .EntityType}}</span>
+    <span>{{.DisplayName}}</span>
+    {{$cls := statusClass .Status}}{{if $cls}}<span class="badge {{$cls}}">{{.Status}}</span>{{end}}
+  </div>
+  <ul class="tree-children tree-node"></ul>
+</li>
+{{end}}

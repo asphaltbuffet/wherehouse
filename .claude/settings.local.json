@@ -6,6 +6,7 @@
       "Bash(fd:*)",
       "Bash(jj diff:*)",
       "Bash(jj log:*)",
+      "Bash(jj new:*)",
       "Bash(ls:*)",
       "Bash(mise run build:*)",
       "Bash(mise run dev:*)",
@@ -27,9 +28,11 @@
       "mcp__serena__search_for_pattern",
       "mcp__serena__initial_instructions",
       "mcp__serena__read_memory",
+      "Bash(go build *)",
       "Bash(go generate *)",
       "Bash(gotestsum *)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Skill(superpowers:writing-plans)"
     ]
   },
   "enableAllProjectMcpServers": true,

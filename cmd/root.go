@@ -17,6 +17,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/cmd/rename"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
+	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/cmd/status"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
@@ -66,6 +67,7 @@ Examples:
 	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
 	rootCmd.AddCommand(rename.NewDefaultRenameCmd())
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
+	rootCmd.AddCommand(serve.NewDefaultServeCmd())
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())
 
 	return rootCmd

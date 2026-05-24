@@ -184,6 +184,22 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 	return results, nil
 }
 
+// GetChildren returns direct children of parentID, excluding removed entities.
+func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult, error) {
+	entities, err := a.store.GetChildren(ctx, parentID)
+	if err != nil {
+		return nil, fmt.Errorf("get children of %s: %w", parentID, err)
+	}
+
+	results := make([]EntityResult, 0, len(entities))
+	for _, e := range entities {
+		if e.Status != inventory.EntityStatusRemoved {
+			results = append(results, entityToResult(e))
+		}
+	}
+	return results, nil
+}
+
 // resolveEntityPath looks up an entity by its colon-separated display path.
 // Returns store.ErrNotFound if no match exists.
 func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.Entity, error) {
