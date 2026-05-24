@@ -1,10 +1,26 @@
-{{define "detail"}}
-<section>
+{{define "detail_section"}}
+<section id="entity-detail">
   <h2>{{.Entity.DisplayName}}</h2>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
   <dl class="detail-kv">
+    <dt>Name</dt>
+    <dd>
+      {{.Entity.DisplayName}}
+      <button hx-get="/entities/{{.Entity.EntityID}}/edit/name"
+              hx-target="closest dd" hx-swap="outerHTML">Edit</button>
+    </dd>
     <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
     <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
-    <dt>Status</dt>    <dd>{{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}</dd>
+    <dt>Status</dt>
+    <dd>
+      {{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}
+      {{if .StatusEditable}}
+      <button hx-get="/entities/{{.Entity.EntityID}}/edit/status"
+              hx-target="closest dd" hx-swap="outerHTML">Edit</button>
+      {{else}}
+      <button disabled title="{{.Entity.Status}} status cannot be changed here">Edit</button>
+      {{end}}
+    </dd>
     <dt>Date added</dt><dd>{{.DateAdded}}</dd>
   </dl>
 
@@ -25,4 +41,12 @@
   </table>
   {{end}}
 </section>
+{{end}}
+
+{{define "detail"}}
+{{template "detail_section" .}}
+{{end}}
+
+{{define "tree_label_oob"}}
+<span id="tree-label-{{.EntityID}}" hx-swap-oob="true">{{.DisplayName}}</span>
 {{end}}

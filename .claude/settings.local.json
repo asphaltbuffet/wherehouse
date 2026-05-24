@@ -35,7 +35,9 @@
       "Skill(superpowers:writing-plans)",
       "mcp__serena__replace_content",
       "mcp__serena__replace_symbol_body",
-      "mcp__serena__insert_after_symbol"
+      "mcp__serena__insert_after_symbol",
+      "mcp__plugin_claude-code-home-manager_serena__find_symbol",
+      "mcp__plugin_claude-code-home-manager_serena__get_symbols_overview"
     ]
   },
   "enableAllProjectMcpServers": true,

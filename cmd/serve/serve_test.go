@@ -25,6 +25,14 @@ func (f *fakeApp) CreateEntity(_ context.Context, _ app.CreateEntityRequest) (ap
 	return app.EntityResult{}, nil
 }
 
+func (f *fakeApp) RenameEntity(_ context.Context, _ app.RenameEntityRequest) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
+
+func (f *fakeApp) ChangeStatus(_ context.Context, _ app.ChangeStatusRequest) error {
+	return nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

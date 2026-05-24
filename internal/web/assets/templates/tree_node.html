@@ -19,7 +19,7 @@
        })(this)">
     {{if .HasChildren}}<span class="chevron">▶</span>{{else}}<span class="chevron-placeholder"></span>{{end}}
     <span>{{entityTypeIcon .EntityType}}</span>
-    <span>{{.DisplayName}}</span>
+    <span id="tree-label-{{.EntityID}}">{{.DisplayName}}</span>
     {{$cls := statusClass .Status}}{{if $cls}}<span class="badge {{$cls}}">{{.Status}}</span>{{end}}
     {{if ne .EntityType 3}}
     <button class="add-btn"

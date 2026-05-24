@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -59,15 +60,19 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleEntityDetail returns the detail pane fragment for a single entity.
-func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
+type detailData struct {
+	Entity         app.EntityResult
+	DateAdded      string
+	History        []app.HistoryResult
+	StatusEditable bool
+	Error          string // populated by edit POST handlers; rendered inline above the detail dl
+}
 
-	entities, err := s.cfg.App.ListEntities(r.Context())
+func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailData, error) {
+	entities, err := s.cfg.App.ListEntities(ctx)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("list entities: %v", err), http.StatusInternalServerError)
-		return
+		return detailData{}, fmt.Errorf("list entities: %w", err)
 	}
-	// ListEntities excludes removed entities; removed entity IDs will 404.
 	var entity *app.EntityResult
 	for i := range entities {
 		if entities[i].EntityID == entityID {
@@ -76,44 +81,222 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if entity == nil {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
+		return detailData{}, nil // caller checks Entity.EntityID == ""
 	}
 
-	history, err := s.cfg.App.GetHistory(r.Context(), app.GetHistoryRequest{
+	history, err := s.cfg.App.GetHistory(ctx, app.GetHistoryRequest{
 		EntityID:    entityID,
 		Limit:       historyLimit,
 		OldestFirst: true,
 	})
 	if err != nil {
-		http.Error(w, fmt.Sprintf("get history: %v", err), http.StatusInternalServerError)
-		return
+		return detailData{}, fmt.Errorf("get history: %w", err)
 	}
 
 	dateAdded := ""
 	if len(history) > 0 {
 		dateAdded = history[0].TimestampUTC
 	}
-	// Flip to newest-first for display.
 	for i, j := 0, len(history)-1; i < j; i, j = i+1, j-1 {
 		history[i], history[j] = history[j], history[i]
 	}
 
-	data := struct {
-		Entity    app.EntityResult
-		DateAdded string
-		History   []app.HistoryResult
-	}{
-		Entity:    *entity,
-		DateAdded: dateAdded,
-		History:   history,
+	// borrowed and loaned transitions require dedicated flows with relationship data.
+	editable := entity.Status == inventory.EntityStatusOk ||
+		entity.Status == inventory.EntityStatusMissing
+
+	return detailData{
+		Entity:         *entity,
+		DateAdded:      dateAdded,
+		History:        history,
+		StatusEditable: editable,
+	}, nil
+}
+
+func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+
+	s.renderDetailSection(w, r, data)
+}
+
+func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, data detailData) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	tmplName := "detail"
+	if r.Header.Get("Hx-Request") == "true" {
+		tmplName = "detail_section"
+	}
+	if tmplErr := s.templates.ExecuteTemplate(w, tmplName, data); tmplErr != nil {
+		s.cfg.Logger.Error("execute detail template", "error", tmplErr)
+	}
+}
+
+func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if tmplErr := s.templates.ExecuteTemplate(w, "detail", data); tmplErr != nil {
-		// headers already sent; log and return
-		s.cfg.Logger.Error("execute detail template", "error", tmplErr)
+	if tmplErr := s.templates.ExecuteTemplate(w, "edit_name_form", struct {
+		EntityID    string
+		CurrentName string
+	}{
+		EntityID:    entityID,
+		CurrentName: data.Entity.DisplayName,
+	}); tmplErr != nil {
+		s.cfg.Logger.Error("execute edit_name_form template", "error", tmplErr)
 	}
+}
+
+func (s *Server) handleEditStatusForm(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.StatusEditable {
+		http.Error(w, "status cannot be edited here", http.StatusForbidden)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if tmplErr := s.templates.ExecuteTemplate(w, "edit_status_form", struct {
+		EntityID             string
+		CurrentStatus        string
+		CurrentStatusContext string
+	}{
+		EntityID:             entityID,
+		CurrentStatus:        data.Entity.Status.String(),
+		CurrentStatusContext: data.Entity.StatusContext,
+	}); tmplErr != nil {
+		s.cfg.Logger.Error("execute edit_status_form template", "error", tmplErr)
+	}
+}
+
+func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+
+	newName := strings.TrimSpace(r.FormValue("display_name"))
+	if newName == "" {
+		http.Error(w, "display_name is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err = s.cfg.App.RenameEntity(r.Context(), app.RenameEntityRequest{
+		EntityPath: data.Entity.FullPathDisplay,
+		NewName:    newName,
+		ActorID:    "webui",
+	})
+	if err != nil {
+		data.Error = fmt.Sprintf("rename failed: %v", err)
+		s.renderDetailSection(w, r, data)
+		return
+	}
+
+	// Re-fetch so the rendered section reflects the new name.
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	s.renderDetailSection(w, r, fresh)
+	if r.Header.Get("Hx-Request") == "true" {
+		_ = s.templates.ExecuteTemplate(w, "tree_label_oob", fresh.Entity)
+	}
+}
+
+func (s *Server) handleEditStatus(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.StatusEditable {
+		http.Error(w, "status cannot be edited here", http.StatusForbidden)
+		return
+	}
+
+	status, err := inventory.ParseEntityStatus(r.FormValue("status"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid status: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
+		EntityPath:    data.Entity.FullPathDisplay,
+		Status:        status,
+		StatusContext: strings.TrimSpace(r.FormValue("status_context")),
+		ActorID:       "webui",
+	})
+	if err != nil {
+		data.Error = fmt.Sprintf("status change failed: %v", err)
+		s.renderDetailSection(w, r, data)
+		return
+	}
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	s.renderDetailSection(w, r, fresh)
 }
 
 // isRootEntity returns true when e has no parent (no colon in canonical name = depth 0).

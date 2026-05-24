@@ -1,0 +1,16 @@
+{{define "edit_status_form"}}
+<dd>
+  <form hx-post="/entities/{{.EntityID}}/edit/status"
+        hx-target="#entity-detail" hx-swap="outerHTML">
+    <select name="status">
+      <option value="ok"      {{if eq .CurrentStatus "ok"}}selected{{end}}>ok</option>
+      <option value="missing" {{if eq .CurrentStatus "missing"}}selected{{end}}>missing</option>
+    </select>
+    <input type="text" name="status_context" value="{{.CurrentStatusContext}}" placeholder="context (optional)">
+    <button type="submit">✓</button>
+    <button type="button"
+            hx-get="/entities/{{.EntityID}}"
+            hx-target="#entity-detail" hx-swap="outerHTML">✕</button>
+  </form>
+</dd>
+{{end}}
