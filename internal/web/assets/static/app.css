@@ -48,6 +48,22 @@ body {
 .tree-item.selected { background: #d0e8ff; }
 
 .tree-children { padding-left: 1.2em; }
+.tree-children.collapsed { display: none; }
+
+.chevron-placeholder {
+  display: inline-block;
+  width: 1em;
+}
+
+.chevron {
+  font-size: 0.6em;
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: #999;
+  width: 1em;
+  text-align: center;
+}
+.chevron.open { transform: rotate(90deg); }
 
 .badge {
   font-size: 0.7em;

@@ -11,6 +11,7 @@ type EntityResult struct {
 	FullPathDisplay string
 	Status          inventory.EntityStatus
 	StatusContext   string
+	HasChildren     bool
 }
 
 // HistoryResult is the output representation of a single history event.
