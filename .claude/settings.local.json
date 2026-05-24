@@ -2,20 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(./dist/wherehouse:*)",
-      "Bash(/tmp/wherehouse:*)",
       "Bash(cat:*)",
       "Bash(fd:*)",
-      "Bash(go build:*)",
-      "Bash(go doc:*)",
-      "Bash(go get:*)",
-      "Bash(go list:*)",
-      "Bash(go mod tidy:*)",
-      "Bash(go run:*)",
-      "Bash(go test:*)",
-      "Bash(go tool cover:*)",
-      "Bash(go vet:*)",
-      "Bash(golangci-lint run:*)",
-      "Bash(grep:*)",
       "Bash(jj diff:*)",
       "Bash(jj log:*)",
       "Bash(ls:*)",
@@ -24,7 +12,6 @@
       "Bash(mise run lint:*)",
       "Bash(mise run test:*)",
       "Bash(mkdir:*)",
-      "Bash(staticcheck:*)",
       "Bash(test:*)",
       "Bash(wc:*)",
       "Skill(claude-md-management:revise-claude-md)",
@@ -37,11 +24,19 @@
       "mcp__serena__find_file",
       "mcp__serena__find_symbol",
       "mcp__serena__get_symbols_overview",
-      "mcp__serena__search_for_pattern"
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__initial_instructions",
+      "mcp__serena__read_memory",
+      "Bash(go generate *)",
+      "Bash(gotestsum *)",
+      "Skill(update-config)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "serena"
   ],
-  "outputStyle": "default"
+  "outputStyle": "Explanatory",
+  "spinnerTipsEnabled": false,
+  "prefersReducedMotion": true
 }

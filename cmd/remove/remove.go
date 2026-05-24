@@ -5,69 +5,58 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
 )
 
 // NewDefaultRemoveCmd returns a remove command that opens the database from context configuration at runtime.
 func NewDefaultRemoveCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "remove <entity-id>",
-		Short: "Remove an entity from the inventory",
-		Long: `Remove an entity from the inventory.
-
-Removed entities are hidden from all normal views.
-Their full history is preserved in the event log.`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, err := cli.OpenDatabase(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
-			}
-			defer db.Close()
-			return runRemove(cmd, args, db)
-		},
+	cmd := buildRemoveCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		s, a, err := cli.OpenDatabase(cmd.Context())
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer s.Close()
+		return runRemove(cmd, args, a)
 	}
-	cmd.Flags().StringP("note", "n", "", "Optional note for event")
 	return cmd
 }
 
-// NewRemoveCmd returns a remove command using the provided database. Intended for testing.
-func NewRemoveCmd(db removeDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "remove <entity-id>",
-		Short: "Remove an entity from the inventory",
-		Long: `Remove an entity from the inventory.
-
-Removed entities are hidden from all normal views.
-Their full history is preserved in the event log.`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRemove(cmd, args, db)
-		},
-	}
-	cmd.Flags().StringP("note", "n", "", "Optional note for event")
+// NewRemoveCmd returns a remove command using the provided removeApp. Intended for testing.
+func NewRemoveCmd(a removeApp) *cobra.Command {
+	cmd := buildRemoveCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runRemove(cmd, args, a) }
 	return cmd
 }
 
-func runRemove(cmd *cobra.Command, args []string, db removeDB) error {
+func buildRemoveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remove <path>",
+		Short: "Remove an entity from the inventory",
+		Long: `Remove an entity by its full colon-separated path.
+
+Examples:
+  wherehouse remove "Garage:Toolbox:Wrench"
+  wherehouse remove "Garage:Toolbox" --note "disposed"`,
+		Args: cobra.ExactArgs(1),
+	}
+	cmd.Flags().StringP("note", "n", "", "Optional note about why the entity was removed")
+	return cmd
+}
+
+func runRemove(cmd *cobra.Command, args []string, a removeApp) error {
 	ctx := cmd.Context()
-	entityID := args[0]
+	path := args[0]
 	noteFlag, _ := cmd.Flags().GetString("note")
 
-	entity, err := db.GetEntity(ctx, entityID)
-	if err != nil {
-		return fmt.Errorf("entity %q not found: %w", entityID, err)
-	}
-
-	payload := map[string]any{
-		"entity_id": entityID,
-	}
-
-	actorUserID := cli.GetActorUserID(ctx)
-	if _, err = db.AppendEvent(ctx, database.EntityRemovedEvent, actorUserID, payload, noteFlag); err != nil {
-		return fmt.Errorf("failed to remove entity: %w", err)
+	if err := a.RemoveEntity(ctx, app.RemoveEntityRequest{
+		EntityPath: path,
+		ActorID:    cli.GetActorUserID(ctx),
+		Note:       noteFlag,
+	}); err != nil {
+		return fmt.Errorf("failed to remove %q: %w", path, err)
 	}
 
 	cfg, ok := cli.GetConfig(ctx)
@@ -75,14 +64,11 @@ func runRemove(cmd *cobra.Command, args []string, db removeDB) error {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-
 	if cfg.IsJSON() {
 		return out.JSON(map[string]string{
-			"entity_id":    entityID,
-			"display_name": entity.DisplayName,
+			"path": path,
 		})
 	}
-
-	out.Success(fmt.Sprintf("Removed %q", entity.DisplayName))
+	out.Success(fmt.Sprintf("Removed %q", path))
 	return nil
 }

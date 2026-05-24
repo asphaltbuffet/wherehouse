@@ -4,21 +4,11 @@ package rename
 import (
 	"context"
 
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
 //go:generate mockery
 
-type renameDB interface {
-	Close() error
-	GetEntity(ctx context.Context, entityID string) (*database.Entity, error)
-	AppendEvent(
-		ctx context.Context,
-		eventType database.EventType,
-		actorUserID string,
-		payload any,
-		note string,
-	) (int64, error)
+type renameApp interface {
+	RenameEntity(ctx context.Context, req app.RenameEntityRequest) (app.EntityResult, error)
 }
-
-var _ renameDB = (*database.Database)(nil)

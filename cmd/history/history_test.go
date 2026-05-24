@@ -3,60 +3,58 @@ package history_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
-	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-func openTestDB(t *testing.T) (*database.Database, context.Context) {
-	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(database.Config{
-		Path:        ":memory:",
-		BusyTimeout: database.DefaultBusyTimeout,
-		AutoMigrate: true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, ctx
+type fakeHistoryApp struct {
+	req  app.GetHistoryRequest
+	resp []app.HistoryResult
+	err  error
 }
 
-func TestHistory_ShowsEvents(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	id := nanoid.MustNew()
-	_, err := db.AppendEvent(ctx, database.EntityCreatedEvent, "testuser", map[string]any{
-		"entity_id":    id,
-		"display_name": "hammer",
-		"entity_type":  "leaf",
-		"parent_id":    nil,
-	}, "")
-	require.NoError(t, err)
-
-	cmd := history.NewHistoryCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{id})
-
-	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "entity.created")
+func (f *fakeHistoryApp) GetHistory(_ context.Context, req app.GetHistoryRequest) ([]app.HistoryResult, error) {
+	f.req = req
+	return f.resp, f.err
 }
 
-func TestHistory_UnknownEntity_EmptyOutput(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	cmd := history.NewHistoryCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"doesnotexist"})
-
+func TestRunHistory_HappyPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeHistoryApp{
+		resp: []app.HistoryResult{
+			{
+				EventID:      1,
+				EventType:    inventory.EntityCreatedEvent,
+				TimestampUTC: "2026-05-22T00:00:00Z",
+				ActorUserID:  "user@example.com",
+			},
+		},
+	}
+	cmd := history.NewHistoryCmd(fake)
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Empty(t, out.String())
+	assert.Equal(t, "Garage:Toolbox:Wrench", fake.req.EntityPath)
+	assert.Contains(t, stdout.String(), "2026-05-22T00:00:00Z")
+}
+
+func TestRunHistory_PropagatesError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeHistoryApp{err: errors.New("not found")}
+	cmd := history.NewHistoryCmd(fake)
+	cmd.SetArgs([]string{"Garage:Missing"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
 }

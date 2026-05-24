@@ -3,15 +3,12 @@ package scry
 import (
 	"context"
 
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
 //go:generate mockery
 
-type scryDB interface {
-	Close() error
-	GetEntitiesByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Entity, error)
-	ListEntities(ctx context.Context, underID, entityType, status string) ([]*database.Entity, error)
+type scryApp interface {
+	ListEntities(ctx context.Context) ([]app.EntityResult, error)
+	FindEntities(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
 }
-
-var _ scryDB = (*database.Database)(nil)

@@ -4,15 +4,11 @@ package history
 import (
 	"context"
 
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
 //go:generate mockery
 
-type historyDB interface {
-	Close() error
-	GetEventsByEntity(ctx context.Context, entityID string) ([]*database.Event, error)
+type historyApp interface {
+	GetHistory(ctx context.Context, req app.GetHistoryRequest) ([]app.HistoryResult, error)
 }
-
-// Compile-time check that *database.Database satisfies historyDB.
-var _ historyDB = (*database.Database)(nil)

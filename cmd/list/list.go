@@ -2,69 +2,14 @@ package list
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
-
-// NewDefaultListCmd returns a list command that opens the database from context configuration at runtime.
-func NewDefaultListCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List entities in the inventory",
-		Long: `List entities in the inventory.
-
-Use --under to restrict to children of a specific entity, --type to filter
-by entity type, and --status to filter by lifecycle status.
-
-Examples:
-  wherehouse list                           # All entities
-  wherehouse list --under <id>              # Under a specific parent
-  wherehouse list --type container          # Containers only
-  wherehouse list --status missing`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, err := cli.OpenDatabase(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
-			}
-			defer db.Close()
-			return runList(cmd, args, db)
-		},
-	}
-	cmd.Flags().String("under", "", "Restrict to entities under this entity ID")
-	cmd.Flags().String("type", "", "Filter by type: place, container, or leaf")
-	cmd.Flags().String("status", "", "Filter by status: ok, borrowed, missing, loaned, removed")
-	return cmd
-}
-
-// NewListCmd returns a list command using the provided database. Intended for testing.
-func NewListCmd(db listDB) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List entities in the inventory",
-		Long: `List entities in the inventory.
-
-Use --under to restrict to children of a specific entity, --type to filter
-by entity type, and --status to filter by lifecycle status.
-
-Examples:
-  wherehouse list                           # All entities
-  wherehouse list --under <id>              # Under a specific parent
-  wherehouse list --type container          # Containers only
-  wherehouse list --status missing`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(cmd, args, db)
-		},
-	}
-	cmd.Flags().String("under", "", "Restrict to entities under this entity ID")
-	cmd.Flags().String("type", "", "Filter by type: place, container, or leaf")
-	cmd.Flags().String("status", "", "Filter by status: ok, borrowed, missing, loaned, removed")
-	return cmd
-}
 
 type listEntry struct {
 	EntityID string `json:"entity_id"`
@@ -73,15 +18,77 @@ type listEntry struct {
 	Status   string `json:"status"`
 }
 
-func runList(cmd *cobra.Command, _ []string, db listDB) error {
+// NewDefaultListCmd returns the list command wired to the real database.
+func NewDefaultListCmd() *cobra.Command {
+	cmd := buildListCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		s, a, err := cli.OpenDatabase(cmd.Context())
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer s.Close()
+		return runList(cmd, args, a)
+	}
+	return cmd
+}
+
+// NewListCmd returns the list command using the supplied listApp (for testing).
+func NewListCmd(a listApp) *cobra.Command {
+	cmd := buildListCmd()
+	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runList(cmd, args, a) }
+	return cmd
+}
+
+func buildListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List entities in the inventory",
+		Long: `List entities in the inventory.
+
+Use --under to restrict to children of a specific entity path, --type to filter
+by entity type, and --status to filter by lifecycle status.
+
+Examples:
+  wherehouse list                                    # All entities
+  wherehouse list --under "Garage:Toolbox"           # Under a specific path
+  wherehouse list --type container                   # Containers only
+  wherehouse list --status missing`,
+		Args: cobra.NoArgs,
+	}
+	cmd.Flags().String("under", "", "Restrict to entities under this path (e.g. Garage:Toolbox)")
+	cmd.Flags().String("type", "", "Filter by type: place, container, or leaf")
+	cmd.Flags().String("status", "", "Filter by status: ok, borrowed, missing, loaned, removed")
+	return cmd
+}
+
+func runList(cmd *cobra.Command, _ []string, a listApp) error {
 	ctx := cmd.Context()
-	underID, _ := cmd.Flags().GetString("under")
+	underPath, _ := cmd.Flags().GetString("under")
 	typeFilter, _ := cmd.Flags().GetString("type")
 	statusFilter, _ := cmd.Flags().GetString("status")
 
-	entities, err := db.ListEntities(ctx, underID, typeFilter, statusFilter)
+	var underPrefix string
+	if underPath != "" {
+		underPrefix = underPath + ":"
+	}
+
+	all, err := a.ListEntities(ctx)
 	if err != nil {
 		return fmt.Errorf("list failed: %w", err)
+	}
+
+	var entities []app.EntityResult
+	for _, e := range all {
+		if underPrefix != "" && !strings.HasPrefix(e.FullPathDisplay, underPrefix) {
+			continue
+		}
+		if typeFilter != "" && e.EntityType.String() != typeFilter {
+			continue
+		}
+		if statusFilter != "" && e.Status.String() != statusFilter {
+			continue
+		}
+		entities = append(entities, e)
 	}
 
 	cfg, ok := cli.GetConfig(ctx)

@@ -3,22 +3,11 @@ package add
 import (
 	"context"
 
-	"github.com/asphaltbuffet/wherehouse/internal/database"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
 //go:generate mockery
 
-type addDB interface {
-	Close() error
-	GetEntity(ctx context.Context, entityID string) (*database.Entity, error)
-	GetEntitiesByCanonicalName(ctx context.Context, canonicalName string) ([]*database.Entity, error)
-	AppendEvent(
-		ctx context.Context,
-		eventType database.EventType,
-		actorUserID string,
-		payload any,
-		note string,
-	) (int64, error)
+type addApp interface {
+	CreateEntity(ctx context.Context, req app.CreateEntityRequest) (app.EntityResult, error)
 }
-
-var _ addDB = (*database.Database)(nil)

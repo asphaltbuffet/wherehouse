@@ -3,149 +3,62 @@ package add_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
-	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-func openTestDB(t *testing.T) (*database.Database, context.Context) {
-	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(database.Config{
-		Path:        ":memory:",
-		BusyTimeout: database.DefaultBusyTimeout,
-		AutoMigrate: true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, ctx
+type fakeAddApp struct {
+	gotReq   app.CreateEntityRequest
+	response app.EntityResult
+	err      error
 }
 
-func TestAddEntity_TopLevel(t *testing.T) {
-	db, ctx := openTestDB(t)
-	cmd := add.NewAddCmd(db)
-	cmd.SetContext(ctx)
-
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"Garage", "--type", "place"})
-
-	err := cmd.Execute()
-	require.NoError(t, err)
-	assert.Contains(t, out.String(), "Garage")
+func (f *fakeAddApp) CreateEntity(_ context.Context, req app.CreateEntityRequest) (app.EntityResult, error) {
+	f.gotReq = req
+	return f.response, f.err
 }
 
-func TestAddEntity_DefaultTypeIsContainer(t *testing.T) {
-	db, ctx := openTestDB(t)
-	cmd := add.NewAddCmd(db)
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"Toolbox"})
+func TestRunAdd_HappyPath(t *testing.T) {
+	t.Parallel()
 
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	results, err := db.GetEntitiesByCanonicalName(ctx, "toolbox")
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, database.EntityTypeContainer, results[0].EntityType)
-}
-
-func TestAddEntity_NestedUnderParentByID(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	// Create parent first.
-	parentCmd := add.NewAddCmd(db)
-	parentCmd.SetContext(ctx)
-	parentCmd.SetArgs([]string{"Garage", "--type", "place"})
-	require.NoError(t, parentCmd.Execute())
-
-	// Look up parent ID.
-	parents, err := db.GetEntitiesByCanonicalName(ctx, "garage")
-	require.NoError(t, err)
-	require.Len(t, parents, 1)
-	parentID := parents[0].EntityID
-
-	// Add child using parent ID.
-	childCmd := add.NewAddCmd(db)
-	childCmd.SetContext(ctx)
-	var out bytes.Buffer
-	childCmd.SetOut(&out)
-	childCmd.SetArgs([]string{"Toolbox", "--in", parentID})
-
-	require.NoError(t, childCmd.Execute())
-	assert.Contains(t, out.String(), "Garage::Toolbox")
-}
-
-func TestAddEntity_NestedUnderParentByName(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	parentCmd := add.NewAddCmd(db)
-	parentCmd.SetContext(ctx)
-	parentCmd.SetArgs([]string{"Workshop", "--type", "place"})
-	require.NoError(t, parentCmd.Execute())
-
-	childCmd := add.NewAddCmd(db)
-	childCmd.SetContext(ctx)
-	var out bytes.Buffer
-	childCmd.SetOut(&out)
-	childCmd.SetArgs([]string{"Shelf", "--in", "Workshop"})
-
-	require.NoError(t, childCmd.Execute())
-	assert.Contains(t, out.String(), "Workshop::Shelf")
-}
-
-func TestAddEntity_AmbiguousParentName_Errors(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	// Create two entities with the same name.
-	for range 2 {
-		cmd := add.NewAddCmd(db)
-		cmd.SetContext(ctx)
-		cmd.SetArgs([]string{"Shelf", "--type", "place"})
-		require.NoError(t, cmd.Execute())
+	fake := &fakeAddApp{
+		response: app.EntityResult{
+			EntityID:        "abc1234567",
+			DisplayName:     "Wrench",
+			FullPathDisplay: "Garage:Toolbox:Wrench",
+			EntityType:      inventory.EntityTypeLeaf,
+		},
 	}
 
-	// Try to add under ambiguous name.
-	cmd := add.NewAddCmd(db)
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"box", "--in", "Shelf"})
-	err := cmd.Execute()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ambiguous")
-}
+	cmd := add.NewAddCmd(fake)
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--type", "leaf"})
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
 
-func TestAddEntity_UnknownParent_Errors(t *testing.T) {
-	db, ctx := openTestDB(t)
-	cmd := add.NewAddCmd(db)
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"thing", "--in", "doesnotexist"})
-	err := cmd.Execute()
-	require.Error(t, err)
-}
-
-func TestAddEntity_InvalidType_Errors(t *testing.T) {
-	db, ctx := openTestDB(t)
-	cmd := add.NewAddCmd(db)
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"thing", "--type", "bogus"})
-	err := cmd.Execute()
-	require.Error(t, err)
-}
-
-func TestAddEntity_DBBootstrapsOnFirstRun(t *testing.T) {
-	db, ctx := openTestDB(t)
-	cmd := add.NewAddCmd(db)
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"screwdriver"})
 	require.NoError(t, cmd.Execute())
+	assert.Equal(t, "Wrench", fake.gotReq.DisplayName)
+	assert.Equal(t, "Garage:Toolbox", fake.gotReq.ParentPath)
+	assert.Equal(t, inventory.EntityTypeLeaf, fake.gotReq.EntityType)
+}
 
-	results, err := db.GetEntitiesByCanonicalName(ctx, "screwdriver")
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
-	assert.Len(t, results[0].EntityID, nanoid.IDLength)
+func TestRunAdd_PropagatesAppError(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeAddApp{err: errors.New("boom")}
+	cmd := add.NewAddCmd(fake)
+	cmd.SetArgs([]string{"Garage:Wrench"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "boom")
 }

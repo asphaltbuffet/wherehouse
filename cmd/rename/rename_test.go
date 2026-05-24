@@ -3,75 +3,55 @@ package rename_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/rename"
-	"github.com/asphaltbuffet/wherehouse/internal/database"
-	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
-func openTestDB(t *testing.T) (*database.Database, context.Context) {
-	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(database.Config{
-		Path:        ":memory:",
-		BusyTimeout: database.DefaultBusyTimeout,
-		AutoMigrate: true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, ctx
+type fakeRenameApp struct {
+	req  app.RenameEntityRequest
+	resp app.EntityResult
+	err  error
 }
 
-func appendEntity(t *testing.T, db *database.Database, id, name, entityType string, parentID *string) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := db.AppendEvent(ctx, database.EntityCreatedEvent, "testuser", map[string]any{
-		"entity_id":    id,
-		"display_name": name,
-		"entity_type":  entityType,
-		"parent_id":    parentID,
-	}, "")
-	require.NoError(t, err)
+func (f *fakeRenameApp) RenameEntity(_ context.Context, req app.RenameEntityRequest) (app.EntityResult, error) {
+	f.req = req
+	return f.resp, f.err
 }
 
-func TestRenameEntity_UpdatesPathAndDescendants(t *testing.T) {
-	db, ctx := openTestDB(t)
-
-	garageID := nanoid.MustNew()
-	toolboxID := nanoid.MustNew()
-	screwdriverID := nanoid.MustNew()
-
-	appendEntity(t, db, garageID, "Garage", "place", nil)
-	appendEntity(t, db, toolboxID, "Toolbox", "container", &garageID)
-	appendEntity(t, db, screwdriverID, "screwdriver", "container", &toolboxID)
-
-	cmd := rename.NewRenameCmd(db)
-	cmd.SetContext(ctx)
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{toolboxID, "--to", "Big Toolbox"})
+func TestRunRename_HappyPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeRenameApp{
+		resp: app.EntityResult{
+			EntityID:        "abc",
+			DisplayName:     "NewName",
+			FullPathDisplay: "Garage:NewName",
+		},
+	}
+	cmd := rename.NewRenameCmd(fake)
+	cmd.SetArgs([]string{"Garage:OldName", "--to", "NewName"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
 
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "Big Toolbox")
-
-	toolbox, err := db.GetEntity(ctx, toolboxID)
-	require.NoError(t, err)
-	assert.Equal(t, "Garage::Big Toolbox", toolbox.FullPathDisplay)
-
-	sd, err := db.GetEntity(ctx, screwdriverID)
-	require.NoError(t, err)
-	assert.Equal(t, "Garage::Big Toolbox::screwdriver", sd.FullPathDisplay)
+	assert.Equal(t, "Garage:OldName", fake.req.EntityPath)
+	assert.Equal(t, "NewName", fake.req.NewName)
 }
 
-func TestRenameEntity_NotFound_Errors(t *testing.T) {
-	db, ctx := openTestDB(t)
-	cmd := rename.NewRenameCmd(db)
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"doesnotexist", "--to", "NewName"})
+func TestRunRename_PropagatesError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeRenameApp{err: errors.New("not found")}
+	cmd := rename.NewRenameCmd(fake)
+	cmd.SetArgs([]string{"Garage:Missing", "--to", "X"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
 	err := cmd.Execute()
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
 }
