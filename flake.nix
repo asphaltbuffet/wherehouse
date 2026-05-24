@@ -45,6 +45,7 @@
               ./gomod2nix.toml
               (lib.fileset.fileFilter (file: lib.hasSuffix ".go" file.name) ./.)
               (lib.fileset.fileFilter (file: lib.hasSuffix ".sql" file.name) ./.)
+              ./internal/web/assets
             ];
           };
 
