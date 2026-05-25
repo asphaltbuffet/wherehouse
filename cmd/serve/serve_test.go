@@ -33,6 +33,10 @@ func (f *fakeApp) ChangeStatus(_ context.Context, _ app.ChangeStatusRequest) err
 	return nil
 }
 
+func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {
+	return nil, nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

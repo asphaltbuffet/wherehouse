@@ -2,13 +2,16 @@
 <dd>
   <form hx-post="/entities/{{.EntityID}}/edit/status"
         hx-target="#entity-detail" hx-swap="outerHTML">
-    <select name="status">
+    <label for="status_select" class="visually-hidden">Status</label>
+    <select id="status_select" name="status">
       <option value="ok"      {{if eq .CurrentStatus "ok"}}selected{{end}}>ok</option>
       <option value="missing" {{if eq .CurrentStatus "missing"}}selected{{end}}>missing</option>
     </select>
-    <input type="text" name="status_context" value="{{.CurrentStatusContext}}" placeholder="context (optional)">
-    <button type="submit">✓</button>
-    <button type="button"
+    <label for="status_context_input" class="visually-hidden">Context (optional)</label>
+    <input id="status_context_input" type="text" name="status_context"
+           value="{{.CurrentStatusContext}}" placeholder="context (optional)">
+    <button type="submit" class="btn-link">✓</button>
+    <button type="button" class="btn-link"
             hx-get="/entities/{{.EntityID}}"
             hx-target="#entity-detail" hx-swap="outerHTML">✕</button>
   </form>

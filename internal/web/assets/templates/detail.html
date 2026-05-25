@@ -1,12 +1,14 @@
 {{define "detail_section"}}
 <section id="entity-detail">
+  {{template "breadcrumbs" .Breadcrumbs}}
   <h2>{{.Entity.DisplayName}}</h2>
-  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
   <dl class="detail-kv">
     <dt>Name</dt>
     <dd>
       {{.Entity.DisplayName}}
-      <button hx-get="/entities/{{.Entity.EntityID}}/edit/name"
+      <button class="btn-link"
+              hx-get="/entities/{{.Entity.EntityID}}/edit/name"
               hx-target="closest dd" hx-swap="outerHTML">Edit</button>
     </dd>
     <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
@@ -15,13 +17,15 @@
     <dd>
       {{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}
       {{if .StatusEditable}}
-      <button hx-get="/entities/{{.Entity.EntityID}}/edit/status"
+      <button class="btn-link"
+              hx-get="/entities/{{.Entity.EntityID}}/edit/status"
               hx-target="closest dd" hx-swap="outerHTML">Edit</button>
       {{else}}
-      <button disabled title="{{.Entity.Status}} status cannot be changed here">Edit</button>
+      <button class="btn-link" disabled aria-disabled="true"
+              title="{{.Entity.Status}} status cannot be changed here">Edit</button>
       {{end}}
     </dd>
-    <dt>Date added</dt><dd>{{.DateAdded}}</dd>
+    <dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd>
   </dl>
 
   {{if .History}}
@@ -31,7 +35,7 @@
     <tbody>
     {{range .History}}
       <tr>
-        <td>{{.TimestampUTC}}</td>
+        <td class="mono">{{.TimestampUTC}}</td>
         <td>{{.EventType}}</td>
         <td>{{.ActorUserID}}</td>
         <td>{{.Note}}</td>
@@ -49,4 +53,8 @@
 
 {{define "tree_label_oob"}}
 <span id="tree-label-{{.EntityID}}" hx-swap-oob="true">{{.DisplayName}}</span>
+{{end}}
+
+{{define "tree_badge_oob"}}
+{{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}" hx-swap-oob="true">{{if $cls}}{{.Status}}{{end}}</span>
 {{end}}

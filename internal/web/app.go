@@ -16,4 +16,5 @@ type App interface {
 	CreateEntity(ctx context.Context, req app.CreateEntityRequest) (app.EntityResult, error)
 	RenameEntity(ctx context.Context, req app.RenameEntityRequest) (app.EntityResult, error)
 	ChangeStatus(ctx context.Context, req app.ChangeStatusRequest) error
+	FindEntities(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
 }

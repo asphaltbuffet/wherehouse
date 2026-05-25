@@ -1,32 +1,52 @@
 {{define "tree_node"}}
-<li>
+<li role="treeitem"
+    aria-selected="false"
+    {{if .HasChildren}}aria-expanded="false"{{end}}
+    aria-label="{{.DisplayName}}">
   <div class="tree-item"
-       hx-get="/tree/{{.EntityID}}/children"
-       hx-target="next .tree-children"
+       tabindex="0"
+       hx-get="/entities/{{.EntityID}}"
+       hx-target="#detail-panel"
        hx-swap="innerHTML"
-       hx-trigger="click[!this.dataset.expanded] once"
-       hx-on:htmx:after-request="this.dataset.expanded='1'"
-       hx-push-url="false"
-       onclick="(function(el){
-         document.querySelectorAll('.tree-item').forEach(e=>e.classList.remove('selected'));
+       hx-push-url="true"
+       hx-on::after-request="(function(el){
+         document.querySelectorAll('.tree-item').forEach(function(e){
+           e.classList.remove('selected');
+           var ti = e.closest('[role=treeitem]');
+           if (ti) ti.setAttribute('aria-selected','false');
+         });
          el.classList.add('selected');
-         htmx.ajax('GET','/entities/{{.EntityID}}',{target:'#detail-panel',swap:'innerHTML'});
-         if (el.dataset.expanded) {
-           var ch = el.nextElementSibling;
-           ch.classList.toggle('collapsed');
-           el.querySelector('.chevron').classList.toggle('open');
+         el.closest('[role=treeitem]').setAttribute('aria-selected','true');
+       })(this)"
+       onclick="(function(el){
+         if (!el.dataset.expanded && el.closest('li').getAttribute('aria-expanded') !== null) {
+           htmx.ajax('GET','/tree/{{.EntityID}}/children',{target:'#tree-children-{{.EntityID}}',swap:'innerHTML'});
+           el.dataset.expanded='1';
+           el.closest('li').setAttribute('aria-expanded','true');
+           el.querySelector('.chevron').classList.add('open');
+         } else if (el.dataset.expanded) {
+           var ch = document.getElementById('tree-children-{{.EntityID}}');
+           var isCollapsed = ch.classList.toggle('collapsed');
+           el.querySelector('.chevron').classList.toggle('open', !isCollapsed);
+           el.closest('li').setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
          }
        })(this)">
-    {{if .HasChildren}}<span class="chevron">▶</span>{{else}}<span class="chevron-placeholder"></span>{{end}}
-    <span>{{entityTypeIcon .EntityType}}</span>
+    {{if .HasChildren}}
+    <span class="chevron" aria-hidden="true">
+      <svg viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>
+    </span>
+    {{else}}<span class="chevron-placeholder"></span>{{end}}
+    <span aria-hidden="true">{{entityTypeIcon .EntityType}}</span>
     <span id="tree-label-{{.EntityID}}">{{.DisplayName}}</span>
-    {{$cls := statusClass .Status}}{{if $cls}}<span class="badge {{$cls}}">{{.Status}}</span>{{end}}
+    {{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}">{{if $cls}}{{.Status}}{{end}}</span>
     {{if ne .EntityType 3}}
     <button class="add-btn"
-            title="Add item here"
+            aria-label="Add child item under {{.DisplayName}}"
             onclick="event.stopPropagation();htmx.ajax('GET','/entities/{{.EntityID}}/add',{target:'#add-modal-body',swap:'innerHTML'});document.getElementById('add-modal').showModal()">+</button>
     {{end}}
   </div>
-  <ul id="tree-children-{{.EntityID}}" class="tree-children tree-node{{if .HasChildren}} collapsed{{end}}"></ul>
+  <ul id="tree-children-{{.EntityID}}"
+      class="tree-children tree-node{{if .HasChildren}} collapsed{{end}}"
+      role="group"></ul>
 </li>
 {{end}}

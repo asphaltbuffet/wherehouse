@@ -10,7 +10,11 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-const historyLimit = 50
+const (
+	historyLimit  = 50
+	searchLimit   = 50
+	htmxHeaderVal = "true"
+)
 
 // handleHealthz responds with 200 OK for liveness checks.
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
@@ -65,7 +69,36 @@ type detailData struct {
 	DateAdded      string
 	History        []app.HistoryResult
 	StatusEditable bool
+	Breadcrumbs    []Breadcrumb
 	Error          string // populated by edit POST handlers; rendered inline above the detail dl
+}
+
+// Breadcrumb is one segment of the entity path shown above the detail heading.
+// EntityID is empty for the last (current) crumb — it renders as plain text.
+type Breadcrumb struct {
+	Name     string
+	EntityID string
+}
+
+// BreadcrumbsForEntity builds a breadcrumb slice from fullPath by matching each
+// path prefix against the provided entity list. Exported for testing.
+func BreadcrumbsForEntity(entities []app.EntityResult, fullPath string) []Breadcrumb {
+	parts := strings.Split(fullPath, ":")
+	crumbs := make([]Breadcrumb, len(parts))
+	for i, part := range parts {
+		prefix := strings.Join(parts[:i+1], ":")
+		id := ""
+		if i < len(parts)-1 {
+			for _, e := range entities {
+				if e.FullPathDisplay == prefix {
+					id = e.EntityID
+					break
+				}
+			}
+		}
+		crumbs[i] = Breadcrumb{Name: part, EntityID: id}
+	}
+	return crumbs
 }
 
 func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailData, error) {
@@ -110,6 +143,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		DateAdded:      dateAdded,
 		History:        history,
 		StatusEditable: editable,
+		Breadcrumbs:    BreadcrumbsForEntity(entities, entity.FullPathDisplay),
 	}, nil
 }
 
@@ -132,7 +166,7 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, data detailData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmplName := "detail"
-	if r.Header.Get("Hx-Request") == "true" {
+	if r.Header.Get("Hx-Request") == htmxHeaderVal {
 		tmplName = "detail_section"
 	}
 	if tmplErr := s.templates.ExecuteTemplate(w, tmplName, data); tmplErr != nil {
@@ -242,7 +276,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderDetailSection(w, r, fresh)
-	if r.Header.Get("Hx-Request") == "true" {
+	if r.Header.Get("Hx-Request") == htmxHeaderVal {
 		_ = s.templates.ExecuteTemplate(w, "tree_label_oob", fresh.Entity)
 	}
 }
@@ -297,6 +331,9 @@ func (s *Server) handleEditStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderDetailSection(w, r, fresh)
+	if r.Header.Get("Hx-Request") == htmxHeaderVal {
+		_ = s.templates.ExecuteTemplate(w, "tree_badge_oob", fresh.Entity)
+	}
 }
 
 // isRootEntity returns true when e has no parent (no colon in canonical name = depth 0).
@@ -405,5 +442,45 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if tmplErr := s.templates.ExecuteTemplate(w, "tree_node", created); tmplErr != nil {
 		s.cfg.Logger.Error("execute tree_node template", "error", tmplErr)
+	}
+}
+
+// handleSearch handles GET /search?q=... returning either a full page or
+// an HTMX fragment depending on the Hx-Request header.
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	tmplName := "search_page"
+	if r.Header.Get("Hx-Request") == htmxHeaderVal {
+		tmplName = "search_results"
+	}
+
+	if q == "" {
+		// Headers already written; log template errors rather than writing a 500.
+		if tmplErr := s.templates.ExecuteTemplate(w, tmplName, nil); tmplErr != nil {
+			s.cfg.Logger.Error("execute search template", "error", tmplErr)
+		}
+		return
+	}
+
+	results, err := s.cfg.App.FindEntities(r.Context(), app.FindEntitiesRequest{
+		Query: q,
+		Limit: searchLimit,
+	})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("search: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	data := struct {
+		Query   string
+		Results []app.FindResult
+	}{Query: q, Results: results}
+
+	// Headers already written; log template errors rather than writing a 500.
+	if tmplErr := s.templates.ExecuteTemplate(w, tmplName, data); tmplErr != nil {
+		s.cfg.Logger.Error("execute search template", "error", tmplErr)
 	}
 }

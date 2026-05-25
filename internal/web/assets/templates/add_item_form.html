@@ -5,25 +5,23 @@
       hx-swap="beforeend"
       hx-on:htmx:after-request="if(event.detail.successful){document.getElementById('add-modal').close();this.reset()}">
   <h2>Add Item</h2>
-  <label>
-    Display Name
-    <input type="text" name="display_name" required autofocus>
-  </label>
-  <label>
-    Type
-    <select name="entity_type">
-      <option value="place">Place</option>
-      <option value="container">Container</option>
-      <option value="leaf">Leaf</option>
-    </select>
-  </label>
-  <label>
-    User
-    <input type="text" name="user" placeholder="webui">
-  </label>
+  <label for="display_name">Display Name</label>
+  <input id="display_name" type="text" name="display_name" required autofocus>
+
+  <label for="entity_type">Type</label>
+  <select id="entity_type" name="entity_type">
+    <option value="place">Place</option>
+    <option value="container">Container</option>
+    <option value="leaf">Leaf</option>
+  </select>
+
+  <label for="user">User</label>
+  <input id="user" type="text" name="user" placeholder="webui">
+
   <div class="modal-actions">
-    <button type="submit">Add</button>
-    <button type="button" onclick="document.getElementById('add-modal').close()">Cancel</button>
+    <button type="submit" class="btn-primary">Add</button>
+    <button type="button" class="btn-ghost"
+            onclick="document.getElementById('add-modal').close()">Cancel</button>
   </div>
 </form>
 {{end}}

@@ -1,0 +1,25 @@
+{{define "header"}}
+<header class="app-header">
+  <a class="app-brand" href="/">Wherehouse</a>
+  <form class="app-search"
+        role="search"
+        hx-get="/search"
+        hx-target="#detail-panel"
+        hx-trigger="submit, keyup changed delay:300ms from:#q"
+        action="/search"
+        hx-push-url="true">
+    <label for="q" class="visually-hidden">Search inventory</label>
+    <input id="q" name="q" type="search" placeholder="Search items and locations…" autocomplete="off">
+  </form>
+  <div class="app-actions">
+    <button class="btn-ghost"
+            aria-label="Add root location"
+            aria-haspopup="dialog"
+            aria-controls="add-modal"
+            hx-get="/entities/add"
+            hx-target="#add-modal-body"
+            hx-swap="innerHTML"
+            hx-on::after-request="document.getElementById('add-modal').showModal()">+ Add root</button>
+  </div>
+</header>
+{{end}}

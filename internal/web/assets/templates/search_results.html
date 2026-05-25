@@ -1,0 +1,41 @@
+{{define "search_results"}}
+<section id="entity-detail">
+  {{if .}}
+    {{if .Results}}
+      <h2>Results for "{{.Query}}"</h2>
+      <ul class="search-results">
+        {{range .Results}}
+        <li class="search-result-item"
+            hx-get="/entities/{{.Entity.EntityID}}"
+            hx-target="#detail-panel"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            tabindex="0">
+          <span aria-hidden="true">{{entityTypeIcon .Entity.EntityType}}</span>
+          <div>
+            <div class="sr-name">{{.Entity.DisplayName}}</div>
+            <div class="sr-path">{{.Entity.FullPathDisplay}}</div>
+          </div>
+          {{$cls := statusClass .Entity.Status}}
+          {{if $cls}}<span class="badge {{$cls}}">{{.Entity.Status}}</span>{{end}}
+        </li>
+        {{end}}
+      </ul>
+    {{else}}
+      <div class="empty-state">
+        <span class="empty-icon">🔍</span>
+        <span>No results for "{{.Query}}".</span>
+      </div>
+    {{end}}
+  {{else}}
+    <div class="empty-state">
+      <span class="empty-icon">🔍</span>
+      <span>Type to search items and locations.</span>
+    </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "search_page"}}
+{{template "search_results" .}}
+{{end}}
