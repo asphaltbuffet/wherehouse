@@ -22,11 +22,13 @@
          var li = el.closest('li');
          var chevron = el.querySelector('.chevron');
          if (!el.dataset.expanded && li.getAttribute('aria-expanded') !== null) {
+           var ch = document.getElementById('tree-children-{{.EntityID}}');
            htmx.ajax('GET','/tree/{{.EntityID}}/children',{target:'#tree-children-{{.EntityID}}',swap:'innerHTML'});
            el.dataset.expanded='1';
            li.setAttribute('aria-expanded','true');
            chevron.classList.remove('chevron-hidden');
            chevron.classList.add('open');
+           ch.classList.remove('collapsed');
          } else if (el.dataset.expanded) {
            var ch = document.getElementById('tree-children-{{.EntityID}}');
            var isCollapsed = ch.classList.toggle('collapsed');

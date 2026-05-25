@@ -73,6 +73,12 @@ type detailData struct {
 	Error          string // populated by edit POST handlers; rendered inline above the detail dl
 }
 
+// detailPageData wraps detailData with the tree roots for full-page (non-HTMX) renders.
+type detailPageData struct {
+	Detail detailData
+	Roots  []app.EntityResult
+}
+
 // Breadcrumb is one segment of the entity path shown above the detail heading.
 // EntityID is empty for the last (current) crumb — it renders as plain text.
 type Breadcrumb struct {
@@ -165,11 +171,26 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, data detailData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmplName := "detail"
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
-		tmplName = "detail_section"
+		if tmplErr := s.templates.ExecuteTemplate(w, "detail_section", data); tmplErr != nil {
+			s.cfg.Logger.Error("execute detail template", "error", tmplErr)
+		}
+		return
 	}
-	if tmplErr := s.templates.ExecuteTemplate(w, tmplName, data); tmplErr != nil {
+
+	entities, err := s.cfg.App.ListEntities(r.Context())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list entities: %v", err), http.StatusInternalServerError)
+		return
+	}
+	var roots []app.EntityResult
+	for _, e := range entities {
+		if isRootEntity(e) {
+			roots = append(roots, e)
+		}
+	}
+	pageData := detailPageData{Detail: data, Roots: roots}
+	if tmplErr := s.templates.ExecuteTemplate(w, "detail", pageData); tmplErr != nil {
 		s.cfg.Logger.Error("execute detail template", "error", tmplErr)
 	}
 }
