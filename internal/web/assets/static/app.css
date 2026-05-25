@@ -318,7 +318,7 @@ h1, h2, h3 {
 }
 .tree-children.collapsed { display: none; }
 
-.chevron-placeholder { display: inline-block; width: 1em; }
+.chevron-hidden { visibility: hidden; }
 
 .chevron {
   display: inline-flex;
