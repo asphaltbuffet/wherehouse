@@ -11,6 +11,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
+	"github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
 const (
@@ -78,7 +79,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := struct{ Roots []app.EntityResult }{Roots: roots}
+	data := indexData{
+		Roots:     roots,
+		Version:   version.Version,
+		GitCommit: version.GitCommit,
+	}
 	s.renderHTML(w, "index", data)
 }
 
@@ -112,6 +117,12 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 	if _, werr := w.Write(buf.Bytes()); werr != nil {
 		s.cfg.Logger.Error("write tree children", "error", werr)
 	}
+}
+
+type indexData struct {
+	Roots     []app.EntityResult
+	Version   string
+	GitCommit string
 }
 
 // handleEntityDetail returns the detail pane fragment for a single entity.
