@@ -30,11 +30,11 @@ func parseTemplates(fsys fs.FS) (*template.Template, error) {
 func entityTypeIcon(t inventory.EntityType) string {
 	switch t {
 	case inventory.EntityTypePlace:
-		return "🏠"
+		return "📍"
 	case inventory.EntityTypeContainer:
-		return "📦"
+		return "🪣"
 	case inventory.EntityTypeLeaf:
-		return "🔧"
+		return "🏷️"
 	default:
 		return "•"
 	}
