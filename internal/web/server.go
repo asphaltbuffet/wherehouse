@@ -60,7 +60,7 @@ func New(cfg Config) (*Server, error) {
 		templates: tmpl,
 		httpSrv: &http.Server{
 			Addr:              net.JoinHostPort(cfg.Bind, strconv.Itoa(cfg.Port)),
-			Handler:           mux,
+			Handler:           securityHeaders(limitBody(csrfGuard(mux))),
 			ReadHeaderTimeout: readHeaderTimeout,
 			ReadTimeout:       readTimeout,
 			WriteTimeout:      writeTimeout,
