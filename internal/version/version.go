@@ -11,7 +11,7 @@ var (
 	// Version is the semantic version (injected via ldflags).
 	// Development default: "v0.1.0-dev".
 	// Release builds inject: "v0.1.0".
-	Version = "v0.1.0-dev"
+	Version = "dev"
 
 	// GitCommit is the git commit hash (short form).
 	// Injected via ldflags during build.
