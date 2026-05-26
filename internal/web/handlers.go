@@ -58,6 +58,16 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 // handleTreeChildren returns the direct children of an entity as tree_node fragments.
 func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
+
+	if _, err := s.cfg.App.GetEntityByID(r.Context(), entityID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "entity not found", http.StatusNotFound)
+			return
+		}
+		s.serverError(w, "get entity", err)
+		return
+	}
+
 	children, err := s.cfg.App.GetChildren(r.Context(), entityID)
 	if err != nil {
 		s.serverError(w, "get children", err)

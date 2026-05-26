@@ -118,6 +118,16 @@ func TestHandleHealthz(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
+func TestHandleTreeChildren_UnknownParentReturns404(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/tree/ghost/children")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
 func TestHandleEntityDetail_NotFound(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
 	defer ts.Close()
