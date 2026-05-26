@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="generate release notes"
+#MISE description="generate release notes and update README version pins"
 #MISE hide=true
 #MISE sources=["CHANGELOG.md"]
 #MISE outputs=["release_notes/notes.md"]
@@ -37,3 +37,7 @@ awk -v version="$1" '
   }
   END { print "\nSee full changelog at [CHANGELOG.md](CHANGELOG.md)\n"}
 ' "$chglog" > "release_notes/notes.md"
+
+# Update pinned Nix version references in README
+sd 'github:asphaltbuffet/wherehouse/v[0-9]+\.[0-9]+\.[0-9]+' \
+   "github:asphaltbuffet/wherehouse/v$1" README.md

@@ -7,7 +7,7 @@ before:
     - mise run generate
     - mise run completions
     - mise run manpages
-    - mise run release_notes {{ .RawVersion }}
+    - mise run pre-release {{ .RawVersion }}
 
 builds:
   - env:
