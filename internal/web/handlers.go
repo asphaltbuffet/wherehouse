@@ -417,29 +417,44 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmplName := "search_page"
-	if r.Header.Get("Hx-Request") == htmxHeaderVal {
-		tmplName = "search_results"
+	htmx := r.Header.Get("Hx-Request") == htmxHeaderVal
+
+	var searchData any
+	if q != "" {
+		results, err := s.cfg.App.FindEntities(r.Context(), app.FindEntitiesRequest{
+			Query: q,
+			Limit: searchLimit,
+		})
+		if err != nil {
+			s.serverError(w, "search", err)
+			return
+		}
+		searchData = struct {
+			Query   string
+			Results []app.FindResult
+		}{Query: q, Results: results}
 	}
 
-	if q == "" {
-		s.renderHTML(w, tmplName, nil)
+	if htmx {
+		s.renderHTML(w, "search_results", searchData)
 		return
 	}
 
-	results, err := s.cfg.App.FindEntities(r.Context(), app.FindEntitiesRequest{
-		Query: q,
-		Limit: searchLimit,
-	})
+	entities, err := s.cfg.App.ListEntities(r.Context())
 	if err != nil {
-		s.serverError(w, "search", err)
+		s.serverError(w, "list entities", err)
 		return
 	}
-
-	s.renderHTML(w, tmplName, struct {
-		Query   string
-		Results []app.FindResult
-	}{Query: q, Results: results})
+	var roots []app.EntityResult
+	for _, e := range entities {
+		if isRootEntity(e) {
+			roots = append(roots, e)
+		}
+	}
+	s.renderHTML(w, "search_page", struct {
+		Roots  []app.EntityResult
+		Search any
+	}{Roots: roots, Search: searchData})
 }
 
 // handleToggleMissing handles POST /entities/{entityID}/actions/toggle-missing.

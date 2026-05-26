@@ -64,6 +64,26 @@ func TestSecurityHeaders_Present(t *testing.T) {
 	assert.Equal(t, "no-referrer", resp.Header.Get("Referrer-Policy"))
 }
 
+func TestSearch_NonHTMXRendersFullShell(t *testing.T) {
+	entities := []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Garage", CanonicalName: "garage",
+			EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+	}
+	ts := newTestServer(t, &fakeApp{entities: entities})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/search?q=foo")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body, _ := io.ReadAll(resp.Body)
+	bs := string(body)
+	assert.Contains(t, bs, "<!doctype html>")
+	assert.Contains(t, bs, "tree-root-list")
+	assert.Contains(t, bs, "Garage")
+}
+
 func TestSearch_RejectsOverlyLongQuery(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{})
 	defer ts.Close()
