@@ -68,7 +68,9 @@ type detailData struct {
 	Entity         app.EntityResult
 	DateAdded      string
 	History        []app.HistoryResult
-	StatusEditable bool
+	CanAddChild    bool // false when EntityType == EntityTypeLeaf
+	CanMarkMissing bool // false when EntityType == EntityTypePlace
+	IsMissing      bool // true when Status == EntityStatusMissing
 	Breadcrumbs    []Breadcrumb
 	Error          string // populated by edit POST handlers; rendered inline above the detail dl
 }
@@ -148,7 +150,9 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		Entity:         *entity,
 		DateAdded:      dateAdded,
 		History:        history,
-		StatusEditable: editable,
+		CanAddChild:    entity.EntityType != inventory.EntityTypeLeaf,
+		CanMarkMissing: entity.EntityType != inventory.EntityTypePlace && editable,
+		IsMissing:      entity.Status == inventory.EntityStatusMissing,
 		Breadcrumbs:    BreadcrumbsForEntity(entities, entity.FullPathDisplay),
 	}, nil
 }
@@ -220,37 +224,6 @@ func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleEditStatusForm(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.StatusEditable {
-		http.Error(w, "status cannot be edited here", http.StatusForbidden)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if tmplErr := s.templates.ExecuteTemplate(w, "edit_status_form", struct {
-		EntityID             string
-		CurrentStatus        string
-		CurrentStatusContext string
-	}{
-		EntityID:             entityID,
-		CurrentStatus:        data.Entity.Status.String(),
-		CurrentStatusContext: data.Entity.StatusContext,
-	}); tmplErr != nil {
-		s.cfg.Logger.Error("execute edit_status_form template", "error", tmplErr)
-	}
-}
-
 func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -299,61 +272,6 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	s.renderDetailSection(w, r, fresh)
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
 		_ = s.templates.ExecuteTemplate(w, "tree_label_oob", fresh.Entity)
-	}
-}
-
-func (s *Server) handleEditStatus(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
-		return
-	}
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.StatusEditable {
-		http.Error(w, "status cannot be edited here", http.StatusForbidden)
-		return
-	}
-
-	status, err := inventory.ParseEntityStatus(r.FormValue("status"))
-	if err != nil {
-		http.Error(w, fmt.Sprintf("invalid status: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
-		EntityPath:    data.Entity.FullPathDisplay,
-		Status:        status,
-		StatusContext: strings.TrimSpace(r.FormValue("status_context")),
-		ActorID:       "webui",
-	})
-	if err != nil {
-		data.Error = fmt.Sprintf("status change failed: %v", err)
-		s.renderDetailSection(w, r, data)
-		return
-	}
-
-	fresh, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if fresh.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	s.renderDetailSection(w, r, fresh)
-	if r.Header.Get("Hx-Request") == htmxHeaderVal {
-		_ = s.templates.ExecuteTemplate(w, "tree_badge_oob", fresh.Entity)
 	}
 }
 
@@ -503,5 +421,51 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// Headers already written; log template errors rather than writing a 500.
 	if tmplErr := s.templates.ExecuteTemplate(w, tmplName, data); tmplErr != nil {
 		s.cfg.Logger.Error("execute search template", "error", tmplErr)
+	}
+}
+
+// handleToggleMissing handles POST /entities/{entityID}/actions/toggle-missing.
+// It toggles the entity's status between Ok and Missing.
+func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.CanMarkMissing {
+		http.Error(w, "status cannot be changed here", http.StatusForbidden)
+		return
+	}
+
+	target := inventory.EntityStatusMissing
+	if data.IsMissing {
+		target = inventory.EntityStatusOk
+	}
+
+	err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
+		EntityPath: data.Entity.FullPathDisplay,
+		Status:     target,
+		ActorID:    "webui",
+	})
+	if err != nil {
+		data.Error = fmt.Sprintf("status change failed: %v", err)
+		s.renderDetailSection(w, r, data)
+		return
+	}
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.renderDetailSection(w, r, fresh)
+	if r.Header.Get("Hx-Request") == htmxHeaderVal {
+		_ = s.templates.ExecuteTemplate(w, "tree_badge_oob", fresh.Entity)
 	}
 }

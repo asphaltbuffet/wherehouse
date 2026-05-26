@@ -22,8 +22,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /entities/add", s.handleRootAddItemForm)
 	mux.HandleFunc("POST /entities/add", s.handleRootAddItem)
 	mux.HandleFunc("GET /entities/{entityID}/edit/name", s.handleEditNameForm)
-	mux.HandleFunc("GET /entities/{entityID}/edit/status", s.handleEditStatusForm)
 	mux.HandleFunc("POST /entities/{entityID}/edit/name", s.handleEditName)
-	mux.HandleFunc("POST /entities/{entityID}/edit/status", s.handleEditStatus)
+	mux.HandleFunc("POST /entities/{entityID}/actions/toggle-missing", s.handleToggleMissing)
 	mux.HandleFunc("GET /search", s.handleSearch)
 }

@@ -3,30 +3,47 @@
   {{template "breadcrumbs" .Breadcrumbs}}
   <h2>{{.Entity.DisplayName}}</h2>
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
-  <dl class="detail-kv">
-    <dt>Name</dt>
-    <dd>
-      {{.Entity.DisplayName}}
-      <button class="btn-link"
-              hx-get="/entities/{{.Entity.EntityID}}/edit/name"
-              hx-target="closest dd" hx-swap="outerHTML">Edit</button>
-    </dd>
-    <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
-    <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
-    <dt>Status</dt>
-    <dd>
-      {{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}
-      {{if .StatusEditable}}
-      <button class="btn-link"
-              hx-get="/entities/{{.Entity.EntityID}}/edit/status"
-              hx-target="closest dd" hx-swap="outerHTML">Edit</button>
+  <div class="detail-top">
+    <dl class="detail-kv">
+      <dt>Name</dt>
+      <dd>
+        {{.Entity.DisplayName}}
+        <button class="btn-link"
+                hx-get="/entities/{{.Entity.EntityID}}/edit/name"
+                hx-target="closest dd" hx-swap="outerHTML">Edit</button>
+      </dd>
+      <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
+      <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
+      <dt>Status</dt>    <dd>{{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}</dd>
+      <dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd>
+    </dl>
+    <aside class="detail-actions" aria-label="Actions">
+      <h3 class="detail-actions-heading">Actions</h3>
+      {{if .CanAddChild}}
+      <button class="btn-ghost detail-action-btn"
+              onclick="htmx.ajax('GET','/entities/{{.Entity.EntityID}}/add',{target:'#add-modal-body',swap:'innerHTML'});document.getElementById('add-modal').showModal()">
+        Add child
+      </button>
       {{else}}
-      <button class="btn-link" disabled aria-disabled="true"
-              title="{{.Entity.Status}} status cannot be changed here">Edit</button>
+      <button class="btn-ghost detail-action-btn" disabled aria-disabled="true"
+              title="Leaf items cannot have children">
+        Add child
+      </button>
       {{end}}
-    </dd>
-    <dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd>
-  </dl>
+      {{if .CanMarkMissing}}
+      <button class="btn-ghost detail-action-btn"
+              hx-post="/entities/{{.Entity.EntityID}}/actions/toggle-missing"
+              hx-target="#entity-detail" hx-swap="outerHTML">
+        {{if .IsMissing}}Mark found{{else}}Mark missing{{end}}
+      </button>
+      {{else}}
+      <button class="btn-ghost detail-action-btn" disabled aria-disabled="true"
+              title="Status cannot be changed here">
+        Mark missing
+      </button>
+      {{end}}
+    </aside>
+  </div>
 
   {{if .History}}
   <h3>History</h3>
