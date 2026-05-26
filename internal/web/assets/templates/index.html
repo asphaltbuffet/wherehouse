@@ -2,20 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wherehouse</title>
   <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/tree.js" defer></script>
 </head>
 <body>
-  <nav id="tree-panel">
-    <ul class="tree-node">
-      {{range .Roots}}
-        {{template "tree_node" .}}
-      {{end}}
-    </ul>
-  </nav>
-  <main id="detail-panel">
-    <p style="color:#888">Select an item to see details.</p>
-  </main>
+  <a class="skip-link" href="#detail-panel">Skip to content</a>
+  {{template "header" .}}
+  <div class="app-shell">
+    <nav id="tree-panel" aria-label="Inventory tree">
+      <div id="tree-panel-header"><span>Inventory</span></div>
+      <ul id="tree-root-list" class="tree-node" role="tree">
+        {{range .Roots}}
+          {{template "tree_node" .}}
+        {{end}}
+      </ul>
+    </nav>
+    <main id="detail-panel" tabindex="-1">
+      <div class="empty-state">
+        <span class="empty-icon">📦</span>
+        <span>Select an item to see details.</span>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="add-modal" aria-label="Add item">
+    <div id="add-modal-body"></div>
+  </dialog>
 </body>
 </html>{{end}}

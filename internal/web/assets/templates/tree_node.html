@@ -1,18 +1,30 @@
 {{define "tree_node"}}
-<li>
+<li role="treeitem"
+    aria-selected="false"
+    {{if .HasChildren}}aria-expanded="false"{{end}}
+    aria-label="{{.DisplayName}}">
   <div class="tree-item"
-       hx-get="/tree/{{.EntityID}}/children"
-       hx-target="next .tree-children"
+       tabindex="0"
+       data-entity-id="{{.EntityID}}"
+       hx-get="/entities/{{.EntityID}}"
+       hx-target="#detail-panel"
        hx-swap="innerHTML"
-       hx-trigger="click[!this.dataset.expanded] once"
-       hx-on:htmx:after-request="this.dataset.expanded='1'"
-       hx-push-url="false"
-       onclick="document.querySelectorAll('.tree-item').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');
-                htmx.ajax('GET','/entities/{{.EntityID}}',{target:'#detail-panel',swap:'innerHTML'})">
-    <span>{{entityTypeIcon .EntityType}}</span>
-    <span>{{.DisplayName}}</span>
-    {{$cls := statusClass .Status}}{{if $cls}}<span class="badge {{$cls}}">{{.Status}}</span>{{end}}
+       hx-push-url="true">
+    <span class="chevron{{if not .HasChildren}} chevron-hidden{{end}}" aria-hidden="true">
+      <svg viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>
+    </span>
+    <span aria-hidden="true">{{entityTypeIcon .EntityType}}</span>
+    <span id="tree-label-{{.EntityID}}">{{.DisplayName}}</span>
+    {{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}">{{if $cls}}{{.Status}}{{end}}</span>
+    {{if ne .EntityType 3}}
+    <button class="add-btn"
+            type="button"
+            data-parent-id="{{.EntityID}}"
+            aria-label="Add child item under {{.DisplayName}}">+</button>
+    {{end}}
   </div>
-  <ul class="tree-children tree-node"></ul>
+  <ul id="tree-children-{{.EntityID}}"
+      class="tree-children tree-node{{if .HasChildren}} collapsed{{end}}"
+      role="group"></ul>
 </li>
 {{end}}

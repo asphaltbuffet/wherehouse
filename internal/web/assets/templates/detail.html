@@ -1,12 +1,51 @@
-{{define "detail"}}
-<section>
+{{define "detail_section"}}
+<section id="entity-detail">
+  {{template "breadcrumbs" .Breadcrumbs}}
   <h2>{{.Entity.DisplayName}}</h2>
-  <dl class="detail-kv">
-    <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
-    <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
-    <dt>Status</dt>    <dd>{{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}</dd>
-    <dt>Date added</dt><dd>{{.DateAdded}}</dd>
-  </dl>
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+  <div class="detail-top">
+    <dl class="detail-kv">
+      <dt>Name</dt>
+      <dd>
+        {{.Entity.DisplayName}}
+        <button class="btn-link"
+                hx-get="/entities/{{.Entity.EntityID}}/edit/name"
+                hx-target="closest dd" hx-swap="outerHTML">Edit</button>
+      </dd>
+      <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
+      <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
+      <dt>Status</dt>    <dd>{{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}</dd>
+      <dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd>
+    </dl>
+    <aside class="detail-actions" aria-label="Actions">
+      <h3 class="detail-actions-heading">Actions</h3>
+      {{if .CanAddChild}}
+      <button class="btn-ghost detail-action-btn"
+              type="button"
+              data-action="add-child"
+              data-parent-id="{{.Entity.EntityID}}">
+        Add child
+      </button>
+      {{else}}
+      <button class="btn-ghost detail-action-btn" disabled aria-disabled="true"
+              title="Leaf items cannot have children">
+        Add child
+      </button>
+      {{end}}
+      {{if .CanMarkMissing}}
+      <button class="btn-ghost detail-action-btn"
+              hx-post="/entities/{{.Entity.EntityID}}/actions/toggle-missing"
+              hx-target="#entity-detail" hx-swap="outerHTML">
+        {{if .IsMissing}}Mark found{{else}}Mark missing{{end}}
+      </button>
+      {{else}}
+      <button class="btn-ghost detail-action-btn" disabled aria-disabled="true"
+              title="Status cannot be changed here">
+        Mark missing
+      </button>
+      {{end}}
+    </aside>
+  </div>
 
   {{if .History}}
   <h3>History</h3>
@@ -15,7 +54,7 @@
     <tbody>
     {{range .History}}
       <tr>
-        <td>{{.TimestampUTC}}</td>
+        <td class="mono">{{.TimestampUTC}}</td>
         <td>{{.EventType}}</td>
         <td>{{.ActorUserID}}</td>
         <td>{{.Note}}</td>
@@ -25,4 +64,45 @@
   </table>
   {{end}}
 </section>
+{{end}}
+
+{{define "detail"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wherehouse</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/tree.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#detail-panel">Skip to content</a>
+  {{template "header" .}}
+  <div class="app-shell">
+    <nav id="tree-panel" aria-label="Inventory tree">
+      <div id="tree-panel-header"><span>Inventory</span></div>
+      <ul id="tree-root-list" class="tree-node" role="tree">
+        {{range .Roots}}
+          {{template "tree_node" .}}
+        {{end}}
+      </ul>
+    </nav>
+    <main id="detail-panel" tabindex="-1">
+      {{template "detail_section" .Detail}}
+    </main>
+  </div>
+
+  <dialog id="add-modal" aria-label="Add item">
+    <div id="add-modal-body"></div>
+  </dialog>
+</body>
+</html>{{end}}
+
+{{define "tree_label_oob"}}
+<span id="tree-label-{{.EntityID}}" hx-swap-oob="true">{{.DisplayName}}</span>
+{{end}}
+
+{{define "tree_badge_oob"}}
+{{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}" hx-swap-oob="true">{{if $cls}}{{.Status}}{{end}}</span>
 {{end}}

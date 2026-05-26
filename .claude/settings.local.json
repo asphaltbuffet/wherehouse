@@ -32,7 +32,20 @@
       "Bash(go generate *)",
       "Bash(gotestsum *)",
       "Skill(update-config)",
-      "Skill(superpowers:writing-plans)"
+      "Skill(superpowers:writing-plans)",
+      "mcp__serena__replace_content",
+      "mcp__serena__replace_symbol_body",
+      "mcp__serena__insert_after_symbol",
+      "mcp__plugin_claude-code-home-manager_serena__find_symbol",
+      "mcp__plugin_claude-code-home-manager_serena__get_symbols_overview",
+      "mcp__plugin_claude-code-home-manager_serena__initial_instructions",
+      "Skill(superpowers:subagent-driven-development)",
+      "mcp__plugin_claude-code-home-manager_serena__replace_content",
+      "mcp__plugin_claude-code-home-manager_serena__insert_after_symbol",
+      "mcp__plugin_claude-code-home-manager_serena__onboarding",
+      "mcp__plugin_claude-code-home-manager_serena__read_memory",
+      "mcp__plugin_claude-code-home-manager_serena__find_referencing_symbols",
+      "mcp__plugin_claude-code-home-manager_serena__safe_delete_symbol"
     ]
   },
   "enableAllProjectMcpServers": true,

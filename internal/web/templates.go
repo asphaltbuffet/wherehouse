@@ -30,11 +30,11 @@ func parseTemplates(fsys fs.FS) (*template.Template, error) {
 func entityTypeIcon(t inventory.EntityType) string {
 	switch t {
 	case inventory.EntityTypePlace:
-		return "🏠"
+		return "📍"
 	case inventory.EntityTypeContainer:
-		return "📦"
+		return "🪣"
 	case inventory.EntityTypeLeaf:
-		return "🔧"
+		return "🏷️"
 	default:
 		return "•"
 	}
@@ -43,7 +43,7 @@ func entityTypeIcon(t inventory.EntityType) string {
 func statusClass(s inventory.EntityStatus) string {
 	switch s {
 	case inventory.EntityStatusOk:
-		return "ok"
+		return ""
 	case inventory.EntityStatusBorrowed:
 		return "borrowed"
 	case inventory.EntityStatusLoaned:
@@ -51,7 +51,7 @@ func statusClass(s inventory.EntityStatus) string {
 	case inventory.EntityStatusMissing:
 		return "missing"
 	case inventory.EntityStatusRemoved:
-		return ""
+		return "removed"
 	default:
 		return ""
 	}

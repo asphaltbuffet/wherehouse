@@ -1,0 +1,18 @@
+{{define "breadcrumbs"}}
+{{if gt (len .) 1}}
+<nav class="breadcrumbs" aria-label="Location path">
+  {{range $i, $c := .}}
+    {{if $i}}<span class="sep" aria-hidden="true">›</span>{{end}}
+    {{if $c.EntityID}}
+      <a hx-get="/entities/{{$c.EntityID}}"
+         hx-target="#detail-panel"
+         hx-swap="innerHTML"
+         hx-push-url="true"
+         href="/entities/{{$c.EntityID}}">{{$c.Name}}</a>
+    {{else}}
+      <span>{{$c.Name}}</span>
+    {{end}}
+  {{end}}
+</nav>
+{{end}}
+{{end}}

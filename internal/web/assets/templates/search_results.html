@@ -1,0 +1,69 @@
+{{define "search_results"}}
+<section id="entity-detail">
+  {{if .}}
+    {{if .Results}}
+      <h2>Results for "{{.Query}}"</h2>
+      <ul class="search-results">
+        {{range .Results}}
+        <li class="search-result-item"
+            hx-get="/entities/{{.Entity.EntityID}}"
+            hx-target="#detail-panel"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            tabindex="0">
+          <span aria-hidden="true">{{entityTypeIcon .Entity.EntityType}}</span>
+          <div>
+            <div class="sr-name">{{.Entity.DisplayName}}</div>
+            <div class="sr-path">{{.Entity.FullPathDisplay}}</div>
+          </div>
+          {{$cls := statusClass .Entity.Status}}
+          {{if $cls}}<span class="badge {{$cls}}">{{.Entity.Status}}</span>{{end}}
+        </li>
+        {{end}}
+      </ul>
+    {{else}}
+      <div class="empty-state">
+        <span class="empty-icon">🔍</span>
+        <span>No results for "{{.Query}}".</span>
+      </div>
+    {{end}}
+  {{else}}
+    <div class="empty-state">
+      <span class="empty-icon">🔍</span>
+      <span>Type to search items and locations.</span>
+    </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "search_page"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wherehouse — Search</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/tree.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#detail-panel">Skip to content</a>
+  {{template "header" .}}
+  <div class="app-shell">
+    <nav id="tree-panel" aria-label="Inventory tree">
+      <div id="tree-panel-header"><span>Inventory</span></div>
+      <ul id="tree-root-list" class="tree-node" role="tree">
+        {{range .Roots}}
+          {{template "tree_node" .}}
+        {{end}}
+      </ul>
+    </nav>
+    <main id="detail-panel" tabindex="-1">
+      {{template "search_results" .Search}}
+    </main>
+  </div>
+  <dialog id="add-modal" aria-label="Add item">
+    <div id="add-modal-body"></div>
+  </dialog>
+</body>
+</html>{{end}}

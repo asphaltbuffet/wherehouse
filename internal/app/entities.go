@@ -168,6 +168,20 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 	return entityToResult(entity), nil
 }
 
+// GetEntityByID retrieves an entity by its stable ID.
+// Returns store.ErrNotFound if the entity does not exist; the returned
+// EntityResult has HasChildren=false (callers needing it should use ListEntities).
+func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult, error) {
+	entity, err := a.store.GetEntity(ctx, entityID)
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
+	}
+	if entity.Status == inventory.EntityStatusRemoved {
+		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, store.ErrNotFound)
+	}
+	return entityToResult(entity), nil
+}
+
 // ListEntities returns all non-removed entities.
 func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 	entities, err := a.store.ListEntities(ctx)
@@ -175,10 +189,19 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 		return nil, fmt.Errorf("list entities: %w", err)
 	}
 
+	parentIDs := make(map[string]bool, len(entities))
+	for _, e := range entities {
+		if e.ParentID != nil {
+			parentIDs[*e.ParentID] = true
+		}
+	}
+
 	results := make([]EntityResult, 0, len(entities))
 	for _, e := range entities {
 		if e.Status != inventory.EntityStatusRemoved {
-			results = append(results, entityToResult(e))
+			r := entityToResult(e)
+			r.HasChildren = parentIDs[e.EntityID]
+			results = append(results, r)
 		}
 	}
 	return results, nil
@@ -186,15 +209,24 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 
 // GetChildren returns direct children of parentID, excluding removed entities.
 func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult, error) {
-	entities, err := a.store.GetChildren(ctx, parentID)
+	entities, err := a.store.ListEntities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get children of %s: %w", parentID, err)
 	}
 
-	results := make([]EntityResult, 0, len(entities))
+	parentIDs := make(map[string]bool, len(entities))
 	for _, e := range entities {
-		if e.Status != inventory.EntityStatusRemoved {
-			results = append(results, entityToResult(e))
+		if e.ParentID != nil {
+			parentIDs[*e.ParentID] = true
+		}
+	}
+
+	results := make([]EntityResult, 0)
+	for _, e := range entities {
+		if e.ParentID != nil && *e.ParentID == parentID && e.Status != inventory.EntityStatusRemoved {
+			r := entityToResult(e)
+			r.HasChildren = parentIDs[e.EntityID]
+			results = append(results, r)
 		}
 	}
 	return results, nil

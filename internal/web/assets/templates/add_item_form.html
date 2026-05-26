@@ -1,0 +1,26 @@
+{{define "add_item_form"}}
+{{$action := "/entities/add"}}{{if .ParentID}}{{$action = printf "/entities/%s/add" .ParentID}}{{end}}
+<form hx-post="{{$action}}"
+      hx-target="{{.Target}}"
+      hx-swap="beforeend">
+  <h2>Add Item</h2>
+  <label for="display_name">Display Name</label>
+  <input id="display_name" type="text" name="display_name" required autofocus>
+
+  <label for="entity_type">Type</label>
+  <select id="entity_type" name="entity_type">
+    <option value="place">Place</option>
+    <option value="container">Container</option>
+    <option value="leaf">Leaf</option>
+  </select>
+
+  <label for="user">User</label>
+  <input id="user" type="text" name="user" placeholder="webui">
+
+  <div class="modal-actions">
+    <button type="submit" class="btn-primary">Add</button>
+    <button type="button" class="btn-ghost"
+            data-action="close-add-modal">Cancel</button>
+  </div>
+</form>
+{{end}}

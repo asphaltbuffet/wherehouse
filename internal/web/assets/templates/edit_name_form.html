@@ -1,0 +1,14 @@
+{{define "edit_name_form"}}
+<dd>
+  <form hx-post="/entities/{{.EntityID}}/edit/name"
+        hx-target="#entity-detail" hx-swap="outerHTML">
+    <label for="display_name_edit" class="visually-hidden">New name</label>
+    <input id="display_name_edit" type="text" name="display_name"
+           value="{{.CurrentName}}" required autofocus>
+    <button type="submit" class="btn-link">✓</button>
+    <button type="button" class="btn-link"
+            hx-get="/entities/{{.EntityID}}"
+            hx-target="#entity-detail" hx-swap="outerHTML">✕</button>
+  </form>
+</dd>
+{{end}}

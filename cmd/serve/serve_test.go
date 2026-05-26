@@ -14,10 +14,29 @@ import (
 type fakeApp struct{}
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) { return nil, nil }
+func (f *fakeApp) GetEntityByID(_ context.Context, _ string) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
 func (f *fakeApp) GetChildren(_ context.Context, _ string) ([]app.EntityResult, error) {
 	return nil, nil
 }
 func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.HistoryResult, error) {
+	return nil, nil
+}
+
+func (f *fakeApp) CreateEntity(_ context.Context, _ app.CreateEntityRequest) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
+
+func (f *fakeApp) RenameEntity(_ context.Context, _ app.RenameEntityRequest) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
+
+func (f *fakeApp) ChangeStatus(_ context.Context, _ app.ChangeStatusRequest) error {
+	return nil
+}
+
+func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {
 	return nil, nil
 }
 
