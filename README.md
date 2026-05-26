@@ -306,7 +306,31 @@ wherehouse move "paint roller" "Bedroom" --project "bedroom-repaint"
 wherehouse move "roller" Basement --keep-project
 ```
 
-### 8. Track Missing Items
+### 8. Browse the Web UI
+
+```bash
+# Start the local web server (default: http://127.0.0.1:8080)
+wherehouse serve
+
+# Use a different port
+wherehouse serve --port 9090
+
+# Listen on all interfaces (share with other devices on your LAN)
+wherehouse serve --bind 0.0.0.0
+```
+
+Open `http://localhost:8080` in your browser. The web UI shows a collapsible entity
+tree on the left and an entity detail panel on the right. From the UI you can:
+
+- Browse the full location/item hierarchy with collapsible nodes
+- Search across all entities
+- Add new items or locations under any parent
+- Edit entity names
+- Toggle the status of an item (active ↔ missing)
+
+The web server shuts down cleanly when you press `Ctrl-C`.
+
+### 9. Track Missing Items
 
 ```bash
 # Mark as missing
@@ -348,6 +372,9 @@ Location Management:
   location tree        Display hierarchy as tree (coming soon)
   location move        Reparent location in tree (coming soon)
   location delete      Remove empty location (coming soon)
+
+Web UI:
+  serve ✅             Start local web server to browse and manage inventory
 
 Project Management:
   project create       Start new project (coming soon)
@@ -893,21 +920,31 @@ mise run ci
   - [x] Flag overrides: `--db`, `--as` override config file values at runtime
   - [x] Clear error when database file is missing (guides user to `initialize database`)
 
-### 🚧 In Progress (v0.2.0 - Alpha)
+### ✅ Completed (v0.2.0 - Alpha)
 
-- [ ] CLI command implementations (continued)
-  - [ ] `project` subcommands
-  - [ ] `doctor`, `export`, `import`
-  - [ ] `missing`, `found`, `borrow`
-- [ ] Shell completions (bash, zsh, fish)
-- [ ] Man page generation
+- [x] Unified item/location entity model
+- [x] `serve` command with local web UI
+- [x] `rename` command
+- [x] `status` command (replaces `lost`/`found`/`loan`)
+- [x] `internal/app` business-logic layer
+- [x] `internal/store` SQLite persistence layer
+- [x] `internal/web` HTTP server with embedded assets
 
-### 📋 Planned (v0.3.0 - Beta)
+### ✅ Completed (v0.3.0 - Alpha)
+
+- [x] Web UI visual redesign (SpaceGrotesk/SpaceMono fonts, collapsible tree)
+- [x] Add and edit entities from the web UI
+- [x] Toggle item status (active ↔ missing) from the web UI
+- [x] HTTP security hardening (CSRF guard, security headers, body limits)
+- [x] Version and GitHub link in web UI footer
+- [x] Structured logging for the web server
+
+### 📋 Planned (v0.4.0 - Beta)
 
 - [ ] Terminal UI (TUI) for interactive browsing
 - [ ] Full-text search across items and notes
-- [ ] Export/import with multiple formats (JSON, CSV)
-- [ ] Performance optimizations
+- [ ] `doctor`, `export`, `import` commands
+- [ ] Shell completions (bash, zsh, fish)
 - [ ] Pre-compiled binaries for releases
 
 ### 🔮 Future (v1.0.0+)
@@ -1083,8 +1120,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Status**: Alpha development - database foundation complete, CLI in progress
+**Status**: Alpha development — CLI and local web UI complete, polish and export features in progress
 
-**Next milestone**: v0.2.0 with full CLI implementation (ETA: Q2 2026)
+**Current release**: v0.3.0
 
 **Star the project** if you find it useful! ⭐
