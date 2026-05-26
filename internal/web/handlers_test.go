@@ -14,6 +14,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 	"github.com/asphaltbuffet/wherehouse/internal/web"
 )
 
@@ -31,6 +32,18 @@ type fakeApp struct {
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
 	return f.entities, f.err
+}
+
+func (f *fakeApp) GetEntityByID(_ context.Context, entityID string) (app.EntityResult, error) {
+	if f.err != nil {
+		return app.EntityResult{}, f.err
+	}
+	for _, e := range f.entities {
+		if e.EntityID == entityID {
+			return e, nil
+		}
+	}
+	return app.EntityResult{}, store.ErrNotFound
 }
 
 func (f *fakeApp) GetChildren(_ context.Context, parentID string) ([]app.EntityResult, error) {

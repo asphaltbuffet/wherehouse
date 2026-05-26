@@ -2,17 +2,20 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 const (
-	historyLimit  = 50
 	searchLimit   = 50
+	maxQueryLen   = 100
+	maxFormBytes  = 16 * 1024 // upper bound for POST form bodies
 	htmxHeaderVal = "true"
 )
 
@@ -110,24 +113,29 @@ func BreadcrumbsForEntity(entities []app.EntityResult, fullPath string) []Breadc
 }
 
 func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailData, error) {
-	entities, err := s.cfg.App.ListEntities(ctx)
+	entity, err := s.cfg.App.GetEntityByID(ctx, entityID)
 	if err != nil {
-		return detailData{}, fmt.Errorf("list entities: %w", err)
-	}
-	var entity *app.EntityResult
-	for i := range entities {
-		if entities[i].EntityID == entityID {
-			entity = &entities[i]
-			break
+		if errors.Is(err, store.ErrNotFound) {
+			return detailData{}, nil // caller checks Entity.EntityID == ""
 		}
+		return detailData{}, fmt.Errorf("get entity: %w", err)
 	}
-	if entity == nil {
-		return detailData{}, nil // caller checks Entity.EntityID == ""
+
+	// Breadcrumbs need the full entity list to resolve ancestor IDs by path.
+	// Only required when the entity is not at the root; for root entities the
+	// breadcrumb template is hidden by len(.)<=1 anyway, so we skip the call.
+	var crumbEntities []app.EntityResult
+	if isRootEntity(entity) {
+		crumbEntities = []app.EntityResult{entity}
+	} else {
+		crumbEntities, err = s.cfg.App.ListEntities(ctx)
+		if err != nil {
+			return detailData{}, fmt.Errorf("list entities: %w", err)
+		}
 	}
 
 	history, err := s.cfg.App.GetHistory(ctx, app.GetHistoryRequest{
 		EntityID:    entityID,
-		Limit:       historyLimit,
 		OldestFirst: true,
 	})
 	if err != nil {
@@ -147,13 +155,13 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		entity.Status == inventory.EntityStatusMissing
 
 	return detailData{
-		Entity:         *entity,
+		Entity:         entity,
 		DateAdded:      dateAdded,
 		History:        history,
 		CanAddChild:    entity.EntityType != inventory.EntityTypeLeaf,
 		CanMarkMissing: entity.EntityType != inventory.EntityTypePlace && editable,
 		IsMissing:      entity.Status == inventory.EntityStatusMissing,
-		Breadcrumbs:    BreadcrumbsForEntity(entities, entity.FullPathDisplay),
+		Breadcrumbs:    BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
 	}, nil
 }
 
@@ -319,24 +327,18 @@ func (s *Server) renderAddForm(w http.ResponseWriter, _ *http.Request, parentID 
 func (s *Server) handleAddItem(w http.ResponseWriter, r *http.Request) {
 	parentID := r.PathValue("parentID")
 
-	entities, err := s.cfg.App.ListEntities(r.Context())
+	parent, err := s.cfg.App.GetEntityByID(r.Context(), parentID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("list entities: %v", err), http.StatusInternalServerError)
-		return
-	}
-	var parentPath string
-	for _, e := range entities {
-		if e.EntityID == parentID {
-			parentPath = e.FullPathDisplay
-			break
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "parent entity not found", http.StatusNotFound)
+			return
 		}
-	}
-	if parentPath == "" {
-		http.Error(w, "parent entity not found", http.StatusNotFound)
+		s.cfg.Logger.Error("get parent entity", "error", err, "entity_id", parentID)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	s.createAndRenderNode(w, r, parentPath)
+	s.createAndRenderNode(w, r, parent.FullPathDisplay)
 }
 
 // handleRootAddItem processes the POST form for a new root-level entity.

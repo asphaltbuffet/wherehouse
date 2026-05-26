@@ -168,6 +168,20 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 	return entityToResult(entity), nil
 }
 
+// GetEntityByID retrieves an entity by its stable ID.
+// Returns store.ErrNotFound if the entity does not exist; the returned
+// EntityResult has HasChildren=false (callers needing it should use ListEntities).
+func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult, error) {
+	entity, err := a.store.GetEntity(ctx, entityID)
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
+	}
+	if entity.Status == inventory.EntityStatusRemoved {
+		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, store.ErrNotFound)
+	}
+	return entityToResult(entity), nil
+}
+
 // ListEntities returns all non-removed entities.
 func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 	entities, err := a.store.ListEntities(ctx)
