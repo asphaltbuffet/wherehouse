@@ -46,7 +46,8 @@
       "mcp__plugin_claude-code-home-manager_serena__read_memory",
       "mcp__plugin_claude-code-home-manager_serena__find_referencing_symbols",
       "mcp__plugin_claude-code-home-manager_serena__safe_delete_symbol",
-      "mcp__plugin_github_github__issue_write"
+      "mcp__plugin_github_github__issue_write",
+      "mcp__plugin_claude-code-home-manager_serena__list_memories"
     ]
   },
   "enableAllProjectMcpServers": true,
