@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.3.0] - 2026-05-26
+
+### Added
+
+- Add entity creation and editing via web UI ([`1c53b8e`](https://github.com/asphaltbuffet/wherehouse/commit/1c53b8e))
+- Add collapsible tree nodes in web UI ([`7cbeb74`](https://github.com/asphaltbuffet/wherehouse/commit/7cbeb74))
+- Add actions panel to entity details page ([`d9994ae`](https://github.com/asphaltbuffet/wherehouse/commit/d9994ae))
+- Add CSRF guard, security headers, and request body size limits to HTTP layer ([`3979849`](https://github.com/asphaltbuffet/wherehouse/commit/3979849))
+- Add search query length cap (100 chars) ([`1987b7a`](https://github.com/asphaltbuffet/wherehouse/commit/1987b7a))
+- Add structured logging to web server ([`0275deb`](https://github.com/asphaltbuffet/wherehouse/commit/0275deb))
+- Add version and GitHub link to web UI footer ([`cb2d5c8`](https://github.com/asphaltbuffet/wherehouse/commit/cb2d5c8))
+
+### Changed
+
+- Redesign web UI visuals ([`00898a0`](https://github.com/asphaltbuffet/wherehouse/commit/00898a0))
+- Switch web UI fonts to SpaceGrotesk and SpaceMono ([`909256d`](https://github.com/asphaltbuffet/wherehouse/commit/909256d))
+- Hide `ok` status badge in entity tree ([`a6a10ac`](https://github.com/asphaltbuffet/wherehouse/commit/a6a10ac))
+- Use more generic icons for entity types ([`d1729a2`](https://github.com/asphaltbuffet/wherehouse/commit/d1729a2))
+- Move inline JS into `tree.js` via event delegation ([`430d9fb`](https://github.com/asphaltbuffet/wherehouse/commit/430d9fb))
+- Wrap search page in full HTML shell for non-HTMX requests ([`4beb957`](https://github.com/asphaltbuffet/wherehouse/commit/4beb957))
+- Improve `BreadcrumbsForEntity` from O(N²) to O(N) via path-indexed map ([`622aa94`](https://github.com/asphaltbuffet/wherehouse/commit/622aa94))
+- Fix dev build showing incorrect version info ([`3ad3411`](https://github.com/asphaltbuffet/wherehouse/commit/3ad3411))
+
+### Fixed
+
+- Fix tree section being too narrow in web UI ([`2c0c878`](https://github.com/asphaltbuffet/wherehouse/commit/2c0c878))
+- Fix entity details page not rendering full page on direct load ([`45b3863`](https://github.com/asphaltbuffet/wherehouse/commit/45b3863))
+- Fix tree collapse not working after adding first child entity ([`94a0049`](https://github.com/asphaltbuffet/wherehouse/commit/94a0049))
+- Fix missing status class for removed entities in web UI ([`318e22c`](https://github.com/asphaltbuffet/wherehouse/commit/318e22c))
+- Fix template errors returning partial responses instead of clean 500 ([`d2aa2f4`](https://github.com/asphaltbuffet/wherehouse/commit/d2aa2f4))
+- Fix tree-children endpoint returning 200 for unknown parent IDs ([`4bc7462`](https://github.com/asphaltbuffet/wherehouse/commit/4bc7462))
+- Fix 5xx responses leaking internal error details ([`b822410`](https://github.com/asphaltbuffet/wherehouse/commit/b822410))
+
 ## [0.2.0] - 2026-05-24
 
 ### Added
@@ -58,5 +91,6 @@ _First release._
 - Use NanoID instead of UUID for item identifiers (shorter, more readable) ([`4772974`](https://github.com/asphaltbuffet/wherehouse/commit/4772974))
 - Unify output styling across all commands ([`0e24808`](https://github.com/asphaltbuffet/wherehouse/commit/0e24808))
 
+[0.3.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.0.0...v0.1.0

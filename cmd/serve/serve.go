@@ -39,8 +39,8 @@ func buildServeCmd() *cobra.Command {
 		Use:   "serve",
 		Short: "Start a local web server to browse the inventory",
 		Long: `Start a local HTTP server that renders the inventory as a navigable
-tree in your browser. The server is read-only — use the CLI commands to modify
-inventory.
+tree in your browser. You can browse, search, add entities, edit names, and
+toggle item status (active/missing) from the UI.
 
 Examples:
   wherehouse serve                   # Listen on 127.0.0.1:8080
