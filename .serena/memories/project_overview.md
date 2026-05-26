@@ -26,33 +26,51 @@ Answers location questions with full audit trail. Alpha stage (v0.1.x).
 ```
 wherehouse/
 ├── cmd/                 # CLI commands (cobra); one subdir per command
+│   ├── add/             # add item / add location
+│   ├── config/          # config init/get/set/check/edit/path
+│   ├── history/         # event timeline for an item
+│   ├── list/            # list items/locations
+│   ├── move/            # move items between locations
+│   ├── remove/          # remove items
+│   ├── rename/          # rename items/locations
+│   ├── scry/            # find/search items
+│   ├── serve/           # thin shell only — no net/http, html/template, or //go:embed
+│   ├── status/          # item status commands
 │   └── root.go          # Root command; registers via NewDefaultXxxCmd()
 ├── internal/
-│   ├── cli/             # Shared CLI helpers (selectors, output, flags)
-│   ├── config/          # Configuration management
-│   ├── database/        # SQLite: events, projections, migrations, replay
-│   │   ├── eventTypes.go        # EventType iota + ParseEventType + stringer
-│   │   ├── eventHandler.go      # processEventInTx routing switch
-│   │   ├── itemEventHandler.go
-│   │   ├── locationEventHandler.go
-│   │   ├── projectEventHandler.go
-│   │   ├── replay.go            # Event replay engine
-│   │   ├── validation.go        # Integrity checks
-│   │   └── migrations/          # SQL schema (golang-migrate)
-│   ├── logging/         # Logging + log rotation
-│   ├── nanoid/          # NanoID generation
+│   ├── app/             # Business logic layer (App struct, EntityResult, HistoryResult, FindResult)
+│   ├── cli/             # Shared CLI helpers (selectors, output, flags, user identity)
+│   ├── config/          # XDG-compliant TOML config (viper-backed)
+│   ├── entitypath/      # Colon-separated path parsing (e.g. "Garage:Toolbox:Drawer")
+│   ├── eventbus/        # Event dispatch + projection handlers (Bus, Dispatch, handlers.go)
+│   ├── inventory/       # Pure domain types: EntityType, EntityStatus, Entity, Event, EventType iota
+│   ├── logging/         # Structured logging + rotation
+│   ├── nanoid/          # 10-char alphanumeric NanoID generation
+│   ├── store/           # SQLite persistence layer (Store, ExecInTransaction, WithRetry)
+│   │   └── migrations/  # SQL schema (golang-migrate)
 │   ├── styles/          # lipgloss appStyles singleton
-│   └── version/         # Build version info
-├── docs/DESIGN.md
-├── ai-docs/
-│   ├── knowledge/       # Authoritative AI agent reference docs
-│   ├── research/        # Design proposals (may not be implemented)
-│   └── sessions/        # Session plans/status
+│   ├── version/         # Build version info
+│   └── web/             # HTTP server, handlers, templates, embedded assets
+│       └── assets/      # //go:embed target (static/, templates/)
+├── docs/
+│   ├── DESIGN.md
+│   └── PROJECT-v0.md
 └── main.go
 ```
 
-## What Does NOT Exist Yet
+## Package Responsibilities (former internal/database/ is now split)
+- `internal/inventory/` — pure domain types + EventType iota + `eventTypeByName` map + stringer
+- `internal/store/` — raw SQLite I/O: Store struct, migrations, ExecInTransaction, WithRetry
+- `internal/eventbus/` — Bus struct, Dispatch, per-event handlers (handlers.go), path propagation
+- `internal/app/` — App struct, business logic above the store layer
+
+## EntityResult Field Pitfall
+`CanonicalName` = normalized leaf name only (no colons).
+`FullPathDisplay` = full colon-separated path (e.g. `"Garage:Toolbox"`).
+Use `FullPathDisplay` when checking entity depth or path structure.
+
+## What Does NOT Exist
 - `internal/tui/` (TUI is planned, not implemented)
 - Tags/tagging (no ItemTaggedEvent, no tags column)
-- Project CLI commands (database layer exists but not wired to cmd/)
-- `internal/events/` package (event types live in `internal/database/eventTypes.go`)
+- `internal/database/` package (decomposed — see Package Responsibilities above)
+- `ai-docs/` directory
