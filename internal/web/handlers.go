@@ -139,21 +139,19 @@ type Breadcrumb struct {
 	EntityID string
 }
 
-// BreadcrumbsForEntity builds a breadcrumb slice from fullPath by matching each
-// path prefix against the provided entity list. Exported for testing.
+// BreadcrumbsForEntity builds a breadcrumb slice from fullPath by matching
+// each path prefix against the provided entity list. Exported for testing.
 func BreadcrumbsForEntity(entities []app.EntityResult, fullPath string) []Breadcrumb {
 	parts := strings.Split(fullPath, ":")
+	idByPath := make(map[string]string, len(entities))
+	for _, e := range entities {
+		idByPath[e.FullPathDisplay] = e.EntityID
+	}
 	crumbs := make([]Breadcrumb, len(parts))
 	for i, part := range parts {
-		prefix := strings.Join(parts[:i+1], ":")
 		id := ""
 		if i < len(parts)-1 {
-			for _, e := range entities {
-				if e.FullPathDisplay == prefix {
-					id = e.EntityID
-					break
-				}
-			}
+			id = idByPath[strings.Join(parts[:i+1], ":")]
 		}
 		crumbs[i] = Breadcrumb{Name: part, EntityID: id}
 	}
