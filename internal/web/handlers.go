@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,36 @@ func (s *Server) serverError(w http.ResponseWriter, op string, err error) {
 	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
+// renderHTML renders one template into a buffer and writes it to w with the
+// HTML content-type. On template error the response is a clean 500 — the
+// partial output never reaches the client.
+func (s *Server) renderHTML(w http.ResponseWriter, name string, data any) {
+	var buf bytes.Buffer
+	if err := s.templates.ExecuteTemplate(&buf, name, data); err != nil {
+		s.serverError(w, "execute "+name, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		s.cfg.Logger.Error("write response", "error", err, "template", name)
+	}
+}
+
+// renderHTMLAppend renders into a buffer and appends to w without setting
+// Content-Type or status. Used for HTMX out-of-band swaps that follow a
+// primary render. Template errors are logged but the primary response is
+// not affected.
+func (s *Server) renderHTMLAppend(w http.ResponseWriter, name string, data any) {
+	var buf bytes.Buffer
+	if err := s.templates.ExecuteTemplate(&buf, name, data); err != nil {
+		s.cfg.Logger.Error("execute "+name, "error", err)
+		return
+	}
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		s.cfg.Logger.Error("write OOB", "error", err, "template", name)
+	}
+}
+
 // handleHealthz responds with 200 OK for liveness checks.
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -48,11 +79,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct{ Roots []app.EntityResult }{Roots: roots}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if tmplErr := s.templates.ExecuteTemplate(w, "index", data); tmplErr != nil {
-		// headers already sent; log and return
-		s.cfg.Logger.Error("execute index template", "error", tmplErr)
-	}
+	s.renderHTML(w, "index", data)
 }
 
 // handleTreeChildren returns the direct children of an entity as tree_node fragments.
@@ -74,13 +101,16 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	var buf bytes.Buffer
 	for _, child := range children {
-		if tmplErr := s.templates.ExecuteTemplate(w, "tree_node", child); tmplErr != nil {
-			// headers already sent; log and return
-			s.cfg.Logger.Error("execute tree_node template", "error", tmplErr)
+		if tmplErr := s.templates.ExecuteTemplate(&buf, "tree_node", child); tmplErr != nil {
+			s.serverError(w, "execute tree_node", tmplErr)
 			return
 		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, werr := w.Write(buf.Bytes()); werr != nil {
+		s.cfg.Logger.Error("write tree children", "error", werr)
 	}
 }
 
@@ -200,11 +230,8 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, data detailData) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
-		if tmplErr := s.templates.ExecuteTemplate(w, "detail_section", data); tmplErr != nil {
-			s.cfg.Logger.Error("execute detail template", "error", tmplErr)
-		}
+		s.renderHTML(w, "detail_section", data)
 		return
 	}
 
@@ -219,10 +246,7 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 			roots = append(roots, e)
 		}
 	}
-	pageData := detailPageData{Detail: data, Roots: roots}
-	if tmplErr := s.templates.ExecuteTemplate(w, "detail", pageData); tmplErr != nil {
-		s.cfg.Logger.Error("execute detail template", "error", tmplErr)
-	}
+	s.renderHTML(w, "detail", detailPageData{Detail: data, Roots: roots})
 }
 
 func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
@@ -238,16 +262,13 @@ func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if tmplErr := s.templates.ExecuteTemplate(w, "edit_name_form", struct {
+	s.renderHTML(w, "edit_name_form", struct {
 		EntityID    string
 		CurrentName string
 	}{
 		EntityID:    entityID,
 		CurrentName: data.Entity.DisplayName,
-	}); tmplErr != nil {
-		s.cfg.Logger.Error("execute edit_name_form template", "error", tmplErr)
-	}
+	})
 }
 
 func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
@@ -298,7 +319,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	}
 	s.renderDetailSection(w, r, fresh)
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
-		_ = s.templates.ExecuteTemplate(w, "tree_label_oob", fresh.Entity)
+		s.renderHTMLAppend(w, "tree_label_oob", fresh.Entity)
 	}
 }
 
@@ -332,14 +353,7 @@ func (s *Server) renderAddForm(w http.ResponseWriter, _ *http.Request, parentID 
 	if parentID == "" {
 		target = "#tree-root-list"
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(
-		w,
-		"add_item_form",
-		addFormData{ParentID: parentID, Target: target},
-	); err != nil {
-		s.cfg.Logger.Error("execute add_item_form template", "error", err)
-	}
+	s.renderHTML(w, "add_item_form", addFormData{ParentID: parentID, Target: target})
 }
 
 // handleAddItem processes the POST form, creates the entity, and returns a fresh tree_node fragment.
@@ -398,10 +412,7 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if tmplErr := s.templates.ExecuteTemplate(w, "tree_node", created); tmplErr != nil {
-		s.cfg.Logger.Error("execute tree_node template", "error", tmplErr)
-	}
+	s.renderHTML(w, "tree_node", created)
 }
 
 // handleSearch handles GET /search?q=... returning either a full page or
@@ -413,18 +424,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
 	tmplName := "search_page"
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
 		tmplName = "search_results"
 	}
 
 	if q == "" {
-		// Headers already written; log template errors rather than writing a 500.
-		if tmplErr := s.templates.ExecuteTemplate(w, tmplName, nil); tmplErr != nil {
-			s.cfg.Logger.Error("execute search template", "error", tmplErr)
-		}
+		s.renderHTML(w, tmplName, nil)
 		return
 	}
 
@@ -437,15 +443,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := struct {
+	s.renderHTML(w, tmplName, struct {
 		Query   string
 		Results []app.FindResult
-	}{Query: q, Results: results}
-
-	// Headers already written; log template errors rather than writing a 500.
-	if tmplErr := s.templates.ExecuteTemplate(w, tmplName, data); tmplErr != nil {
-		s.cfg.Logger.Error("execute search template", "error", tmplErr)
-	}
+	}{Query: q, Results: results})
 }
 
 // handleToggleMissing handles POST /entities/{entityID}/actions/toggle-missing.
@@ -491,6 +492,6 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 	}
 	s.renderDetailSection(w, r, fresh)
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
-		_ = s.templates.ExecuteTemplate(w, "tree_badge_oob", fresh.Entity)
+		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
 	}
 }
