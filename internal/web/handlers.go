@@ -398,6 +398,10 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 // an HTMX fragment depending on the Hx-Request header.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > maxQueryLen {
+		http.Error(w, "query too long", http.StatusBadRequest)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 

@@ -64,6 +64,18 @@ func TestSecurityHeaders_Present(t *testing.T) {
 	assert.Equal(t, "no-referrer", resp.Header.Get("Referrer-Policy"))
 }
 
+func TestSearch_RejectsOverlyLongQuery(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{})
+	defer ts.Close()
+
+	long := strings.Repeat("a", 200)
+	resp, err := ts.Client().Get(ts.URL + "/search?q=" + long)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
 func TestLimitBody_RejectsOversizedPOST(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
