@@ -321,14 +321,9 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// isRootEntity returns true when e has no parent (no colon in canonical name = depth 0).
+// isRootEntity returns true when e has no parent (no colon in path = depth 0).
 func isRootEntity(e app.EntityResult) bool {
-	for _, c := range e.FullPathDisplay {
-		if c == ':' {
-			return false
-		}
-	}
-	return true
+	return !strings.Contains(e.FullPathDisplay, ":")
 }
 
 // handleAddItemForm returns an inline modal form for adding a child entity under parentID.
