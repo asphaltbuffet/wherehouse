@@ -19,6 +19,14 @@ const (
 	htmxHeaderVal = "true"
 )
 
+// serverError logs the internal detail and returns a generic 500 to the client.
+// Use this for any failure that originates inside the server (DB, template, app
+// layer) — never expose the wrapped error text in the response.
+func (s *Server) serverError(w http.ResponseWriter, op string, err error) {
+	s.cfg.Logger.Error(op, "error", err)
+	http.Error(w, "internal error", http.StatusInternalServerError)
+}
+
 // handleHealthz responds with 200 OK for liveness checks.
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -28,7 +36,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	entities, err := s.cfg.App.ListEntities(r.Context())
 	if err != nil {
-		http.Error(w, fmt.Sprintf("list entities: %v", err), http.StatusInternalServerError)
+		s.serverError(w, "list entities", err)
 		return
 	}
 
@@ -52,7 +60,7 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 	children, err := s.cfg.App.GetChildren(r.Context(), entityID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("get children: %v", err), http.StatusInternalServerError)
+		s.serverError(w, "get children", err)
 		return
 	}
 
@@ -170,7 +178,7 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.serverError(w, "build detail data", err)
 		return
 	}
 	if data.Entity.EntityID == "" {
@@ -192,7 +200,7 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 
 	entities, err := s.cfg.App.ListEntities(r.Context())
 	if err != nil {
-		http.Error(w, fmt.Sprintf("list entities: %v", err), http.StatusInternalServerError)
+		s.serverError(w, "list entities", err)
 		return
 	}
 	var roots []app.EntityResult
@@ -212,7 +220,7 @@ func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.serverError(w, "build detail data", err)
 		return
 	}
 	if data.Entity.EntityID == "" {
@@ -242,7 +250,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.serverError(w, "build detail data", err)
 		return
 	}
 	if data.Entity.EntityID == "" {
@@ -262,7 +270,8 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 		ActorID:    "webui",
 	})
 	if err != nil {
-		data.Error = fmt.Sprintf("rename failed: %v", err)
+		s.cfg.Logger.Error("rename entity", "error", err, "entity_id", entityID)
+		data.Error = "rename failed"
 		s.renderDetailSection(w, r, data)
 		return
 	}
@@ -270,7 +279,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	// Re-fetch so the rendered section reflects the new name.
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.serverError(w, "build detail data", err)
 		return
 	}
 	if fresh.Entity.EntityID == "" {
@@ -333,8 +342,7 @@ func (s *Server) handleAddItem(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "parent entity not found", http.StatusNotFound)
 			return
 		}
-		s.cfg.Logger.Error("get parent entity", "error", err, "entity_id", parentID)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		s.serverError(w, "get parent entity", err)
 		return
 	}
 
@@ -360,7 +368,7 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 
 	entityType, err := inventory.ParseEntityType(r.FormValue("entity_type"))
 	if err != nil {
-		http.Error(w, fmt.Sprintf("invalid entity_type: %v", err), http.StatusBadRequest)
+		http.Error(w, "invalid entity_type", http.StatusBadRequest)
 		return
 	}
 
@@ -376,7 +384,7 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 		ActorID:     actor,
 	})
 	if err != nil {
-		http.Error(w, fmt.Sprintf("create entity: %v", err), http.StatusInternalServerError)
+		s.serverError(w, "create entity", err)
 		return
 	}
 
@@ -411,7 +419,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Limit: searchLimit,
 	})
 	if err != nil {
-		http.Error(w, fmt.Sprintf("search: %v", err), http.StatusInternalServerError)
+		s.serverError(w, "search", err)
 		return
 	}
 
@@ -433,7 +441,7 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.serverError(w, "build detail data", err)
 		return
 	}
 	if data.Entity.EntityID == "" {
@@ -456,14 +464,15 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 		ActorID:    "webui",
 	})
 	if err != nil {
-		data.Error = fmt.Sprintf("status change failed: %v", err)
+		s.cfg.Logger.Error("change status", "error", err, "entity_id", entityID)
+		data.Error = "status change failed"
 		s.renderDetailSection(w, r, data)
 		return
 	}
 
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.serverError(w, "build detail data", err)
 		return
 	}
 	s.renderDetailSection(w, r, fresh)

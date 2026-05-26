@@ -471,5 +471,5 @@ func TestHandleToggleMissing_AppError(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(t, string(body), "db error")
+	assert.Contains(t, string(body), "status change failed")
 }
