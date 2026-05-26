@@ -5,37 +5,11 @@
     aria-label="{{.DisplayName}}">
   <div class="tree-item"
        tabindex="0"
+       data-entity-id="{{.EntityID}}"
        hx-get="/entities/{{.EntityID}}"
        hx-target="#detail-panel"
        hx-swap="innerHTML"
-       hx-push-url="true"
-       hx-on::after-request="(function(el){
-         document.querySelectorAll('.tree-item').forEach(function(e){
-           e.classList.remove('selected');
-           var ti = e.closest('[role=treeitem]');
-           if (ti) ti.setAttribute('aria-selected','false');
-         });
-         el.classList.add('selected');
-         el.closest('[role=treeitem]').setAttribute('aria-selected','true');
-       })(this)"
-       onclick="(function(el){
-         var li = el.closest('li');
-         var chevron = el.querySelector('.chevron');
-         if (!el.dataset.expanded && li.getAttribute('aria-expanded') !== null) {
-           var ch = document.getElementById('tree-children-{{.EntityID}}');
-           htmx.ajax('GET','/tree/{{.EntityID}}/children',{target:'#tree-children-{{.EntityID}}',swap:'innerHTML'});
-           el.dataset.expanded='1';
-           li.setAttribute('aria-expanded','true');
-           chevron.classList.remove('chevron-hidden');
-           chevron.classList.add('open');
-           ch.classList.remove('collapsed');
-         } else if (el.dataset.expanded) {
-           var ch = document.getElementById('tree-children-{{.EntityID}}');
-           var isCollapsed = ch.classList.toggle('collapsed');
-           chevron.classList.toggle('open', !isCollapsed);
-           li.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
-         }
-       })(this)">
+       hx-push-url="true">
     <span class="chevron{{if not .HasChildren}} chevron-hidden{{end}}" aria-hidden="true">
       <svg viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>
     </span>
@@ -44,8 +18,9 @@
     {{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}">{{if $cls}}{{.Status}}{{end}}</span>
     {{if ne .EntityType 3}}
     <button class="add-btn"
-            aria-label="Add child item under {{.DisplayName}}"
-            onclick="event.stopPropagation();htmx.ajax('GET','/entities/{{.EntityID}}/add',{target:'#add-modal-body',swap:'innerHTML'});document.getElementById('add-modal').showModal()">+</button>
+            type="button"
+            data-parent-id="{{.EntityID}}"
+            aria-label="Add child item under {{.DisplayName}}">+</button>
     {{end}}
   </div>
   <ul id="tree-children-{{.EntityID}}"

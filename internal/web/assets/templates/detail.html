@@ -21,7 +21,9 @@
       <h3 class="detail-actions-heading">Actions</h3>
       {{if .CanAddChild}}
       <button class="btn-ghost detail-action-btn"
-              onclick="htmx.ajax('GET','/entities/{{.Entity.EntityID}}/add',{target:'#add-modal-body',swap:'innerHTML'});document.getElementById('add-modal').showModal()">
+              type="button"
+              data-action="add-child"
+              data-parent-id="{{.Entity.EntityID}}">
         Add child
       </button>
       {{else}}

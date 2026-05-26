@@ -2,23 +2,7 @@
 {{$action := "/entities/add"}}{{if .ParentID}}{{$action = printf "/entities/%s/add" .ParentID}}{{end}}
 <form hx-post="{{$action}}"
       hx-target="{{.Target}}"
-      hx-swap="beforeend"
-      hx-on:htmx:after-request="if(event.detail.successful){
-        document.getElementById('add-modal').close();
-        this.reset();
-        var target = document.querySelector(this.getAttribute('hx-target'));
-        if (target && target.children.length === 1) {
-          var li = target.closest('li');
-          if (li) {
-            li.setAttribute('aria-expanded','false');
-            var div = li.querySelector('.tree-item');
-            if (div) {
-              var ch = div.querySelector('.chevron');
-              if (ch) ch.classList.remove('chevron-hidden');
-            }
-          }
-        }
-      }">
+      hx-swap="beforeend">
   <h2>Add Item</h2>
   <label for="display_name">Display Name</label>
   <input id="display_name" type="text" name="display_name" required autofocus>
@@ -36,7 +20,7 @@
   <div class="modal-actions">
     <button type="submit" class="btn-primary">Add</button>
     <button type="button" class="btn-ghost"
-            onclick="document.getElementById('add-modal').close()">Cancel</button>
+            data-action="close-add-modal">Cancel</button>
   </div>
 </form>
 {{end}}
