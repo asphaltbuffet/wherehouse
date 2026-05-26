@@ -345,6 +345,7 @@ h1, h2, h3 {
 .badge.borrowed { background: var(--badge-borrowed-bg); color: var(--badge-borrowed-fg); }
 .badge.loaned  { background: var(--badge-loaned-bg);   color: var(--badge-loaned-fg); }
 .badge.missing { background: var(--badge-missing-bg);  color: var(--badge-missing-fg); }
+.badge.removed { background: transparent; color: var(--color-text-muted); text-decoration: line-through; }
 
 /* ── Add button (per tree item) ──────────────────────────────────────── */
 .add-btn {

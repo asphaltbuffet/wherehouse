@@ -51,7 +51,7 @@ func statusClass(s inventory.EntityStatus) string {
 	case inventory.EntityStatusMissing:
 		return "missing"
 	case inventory.EntityStatusRemoved:
-		return ""
+		return "removed"
 	default:
 		return ""
 	}
