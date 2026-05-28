@@ -82,6 +82,27 @@ func TestGetRootCmd_HasPersistentFlags(t *testing.T) {
 	require.NotNil(t, cmd.PersistentFlags().Lookup("quiet"))
 }
 
+func TestGetRootCmd_SilenceUsage(t *testing.T) {
+	rootCmd = nil
+	cmd := GetRootCmd()
+
+	assert.True(t, cmd.SilenceUsage)
+}
+
+func TestGetRootCmd_SilenceErrors(t *testing.T) {
+	rootCmd = nil
+	cmd := GetRootCmd()
+
+	assert.True(t, cmd.SilenceErrors)
+}
+
+func TestGetRootCmd_VersionSet(t *testing.T) {
+	rootCmd = nil
+	cmd := GetRootCmd()
+
+	assert.NotEmpty(t, cmd.Version)
+}
+
 // TestInitConfig_NoConfigFlagLogic tests the --no-config flag business logic.
 // Verifies that when noConfig is true, defaults are used regardless of other inputs.
 func TestInitConfig_NoConfigFlagLogic(t *testing.T) {
