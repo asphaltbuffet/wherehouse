@@ -264,4 +264,76 @@ func TestApp_GetChildren(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, results)
 	})
+
+	t.Run("HasChildren true when child has grandchildren", func(t *testing.T) {
+		ctx := context.Background()
+		a := openTestApp(t)
+
+		gp, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "GP",
+			EntityType:  inventory.EntityTypePlace,
+			ActorID:     "alice",
+		})
+		require.NoError(t, err)
+
+		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "Mid",
+			EntityType:  inventory.EntityTypeContainer,
+			ParentPath:  "GP",
+			ActorID:     "alice",
+		})
+		require.NoError(t, err)
+
+		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "Leaf",
+			EntityType:  inventory.EntityTypeLeaf,
+			ParentPath:  "GP:Mid",
+			ActorID:     "alice",
+		})
+		require.NoError(t, err)
+
+		results, err := a.GetChildren(ctx, gp.EntityID)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.True(t, results[0].HasChildren, "Mid should report HasChildren=true")
+	})
+
+	t.Run("HasChildren false when only grandchildren are removed", func(t *testing.T) {
+		ctx := context.Background()
+		a := openTestApp(t)
+
+		gp, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "GP",
+			EntityType:  inventory.EntityTypePlace,
+			ActorID:     "alice",
+		})
+		require.NoError(t, err)
+
+		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "Mid",
+			EntityType:  inventory.EntityTypeContainer,
+			ParentPath:  "GP",
+			ActorID:     "alice",
+		})
+		require.NoError(t, err)
+
+		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "Leaf",
+			EntityType:  inventory.EntityTypeLeaf,
+			ParentPath:  "GP:Mid",
+			ActorID:     "alice",
+		})
+		require.NoError(t, err)
+
+		err = a.RemoveEntity(ctx, app.RemoveEntityRequest{
+			EntityPath: "GP:Mid:Leaf",
+			ActorID:    "alice",
+		})
+		require.NoError(t, err)
+
+		results, err := a.GetChildren(ctx, gp.EntityID)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.False(t, results[0].HasChildren, "Mid should report HasChildren=false when its only child is removed")
+	})
 }

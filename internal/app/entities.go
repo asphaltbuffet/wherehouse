@@ -176,9 +176,6 @@ func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult,
 	if err != nil {
 		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
 	}
-	if entity.Status == inventory.EntityStatusRemoved {
-		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, store.ErrNotFound)
-	}
 	return entityToResult(entity), nil
 }
 
@@ -196,38 +193,27 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 		}
 	}
 
-	results := make([]EntityResult, 0, len(entities))
-	for _, e := range entities {
-		if e.Status != inventory.EntityStatusRemoved {
-			r := entityToResult(e)
-			r.HasChildren = parentIDs[e.EntityID]
-			results = append(results, r)
-		}
+	results := make([]EntityResult, len(entities))
+	for i, e := range entities {
+		r := entityToResult(e)
+		r.HasChildren = parentIDs[e.EntityID]
+		results[i] = r
 	}
 	return results, nil
 }
 
 // GetChildren returns direct children of parentID, excluding removed entities.
 func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult, error) {
-	entities, err := a.store.ListEntities(ctx)
+	rows, err := a.store.GetChildren(ctx, parentID)
 	if err != nil {
 		return nil, fmt.Errorf("get children of %s: %w", parentID, err)
 	}
 
-	parentIDs := make(map[string]bool, len(entities))
-	for _, e := range entities {
-		if e.ParentID != nil {
-			parentIDs[*e.ParentID] = true
-		}
-	}
-
-	results := make([]EntityResult, 0)
-	for _, e := range entities {
-		if e.ParentID != nil && *e.ParentID == parentID && e.Status != inventory.EntityStatusRemoved {
-			r := entityToResult(e)
-			r.HasChildren = parentIDs[e.EntityID]
-			results = append(results, r)
-		}
+	results := make([]EntityResult, len(rows))
+	for i, row := range rows {
+		r := entityToResult(row.Entity)
+		r.HasChildren = row.HasChildren
+		results[i] = r
 	}
 	return results, nil
 }
@@ -258,7 +244,7 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 	}
 
 	for _, e := range candidates {
-		if e.FullPathCanonical == canonicalPath && e.Status != inventory.EntityStatusRemoved {
+		if e.FullPathCanonical == canonicalPath {
 			return e, nil
 		}
 	}

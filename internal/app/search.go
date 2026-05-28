@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-// FindEntities searches for entities whose display name contains the query string.
+// FindEntities searches for non-removed entities whose display name contains the query string.
 // Results are sorted by Levenshtein distance (exact matches first), then alphabetically.
-// Removed entities are excluded.
 func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]FindResult, error) {
 	all, err := a.store.ListEntities(ctx)
 	if err != nil {
@@ -22,9 +19,6 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 	var results []FindResult
 
 	for _, e := range all {
-		if e.Status == inventory.EntityStatusRemoved {
-			continue
-		}
 		name := strings.ToLower(e.DisplayName)
 		if !strings.Contains(name, query) {
 			continue
