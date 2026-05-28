@@ -56,12 +56,13 @@ func (s *Store) UpdateEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 }
 
 // GetEntity retrieves a single entity by ID.
+// GetEntity retrieves a single non-removed entity by ID.
 func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, entity_type,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at
-		FROM entities_current WHERE entity_id = ?`
+		FROM entities_current WHERE entity_id = ? AND status != 'removed'`
 
 	row := s.db.QueryRowContext(ctx, query, entityID)
 	e, err := scanEntity(row.Scan)
@@ -76,12 +77,14 @@ func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Enti
 
 // GetEntitiesByCanonicalName retrieves all entities with a given canonical name,
 // ordered by full_path_canonical ASC, entity_id ASC.
+// GetEntitiesByCanonicalName retrieves all non-removed entities with a given canonical name,
+// ordered by full_path_canonical ASC, entity_id ASC.
 func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string) ([]*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, entity_type,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at
-		FROM entities_current WHERE canonical_name = ?
+		FROM entities_current WHERE canonical_name = ? AND status != 'removed'
 		ORDER BY full_path_canonical ASC, entity_id ASC`
 
 	rows, err := s.db.QueryContext(ctx, query, canonical)
@@ -92,25 +95,38 @@ func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string
 	return scanEntities(rows)
 }
 
-// GetChildren retrieves direct children of a parent entity,
-// ordered by display_name ASC, entity_id ASC.
-func (s *Store) GetChildren(ctx context.Context, parentID string) ([]*inventory.Entity, error) {
+// ChildRow is the result of GetChildren: the entity plus whether it has non-removed children of its own.
+type ChildRow struct {
+	Entity      *inventory.Entity
+	HasChildren bool
+}
+
+// GetChildren retrieves direct non-removed children of a parent entity, each annotated
+// with whether it has non-removed children of its own. Ordered by display_name ASC, entity_id ASC.
+func (s *Store) GetChildren(ctx context.Context, parentID string) ([]ChildRow, error) {
 	const query = `
-		SELECT entity_id, display_name, canonical_name, entity_type,
-		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
-		FROM entities_current WHERE parent_id = ?
-		ORDER BY display_name ASC, entity_id ASC`
+		SELECT ec.entity_id, ec.display_name, ec.canonical_name, ec.entity_type,
+		       ec.parent_id, ec.full_path_display, ec.full_path_canonical,
+		       ec.depth, ec.status, ec.status_context, ec.last_event_id, ec.updated_at,
+		       EXISTS (
+		           SELECT 1 FROM entities_current c
+		           WHERE c.parent_id = ec.entity_id AND c.status != 'removed'
+		       ) AS has_children
+		FROM entities_current ec
+		WHERE ec.parent_id = ? AND ec.status != 'removed'
+		ORDER BY ec.display_name ASC, ec.entity_id ASC`
 
 	rows, err := s.db.QueryContext(ctx, query, parentID)
 	if err != nil {
 		return nil, fmt.Errorf("get children of %s: %w", parentID, err)
 	}
 	defer rows.Close()
-	return scanEntities(rows)
+	return scanChildRows(rows)
 }
 
 // GetDescendants retrieves all descendants using path prefix matching,
+// ordered by depth ASC, display_name ASC, entity_id ASC.
+// GetDescendants retrieves all non-removed descendants using path prefix matching,
 // ordered by depth ASC, display_name ASC, entity_id ASC.
 func (s *Store) GetDescendants(ctx context.Context, entityID string) ([]*inventory.Entity, error) {
 	parent, err := s.GetEntity(ctx, entityID)
@@ -122,7 +138,7 @@ func (s *Store) GetDescendants(ctx context.Context, entityID string) ([]*invento
 		SELECT entity_id, display_name, canonical_name, entity_type,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at
-		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\'
+		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\' AND status != 'removed'
 		ORDER BY depth ASC, display_name ASC, entity_id ASC`
 
 	rows, err := s.db.QueryContext(ctx, query, escapeLIKE(parent.FullPathCanonical)+":%")
@@ -134,12 +150,14 @@ func (s *Store) GetDescendants(ctx context.Context, entityID string) ([]*invento
 }
 
 // ListEntities retrieves all entities ordered by full_path_display ASC, entity_id ASC.
+// ListEntities retrieves all non-removed entities ordered by full_path_display ASC, entity_id ASC.
 func (s *Store) ListEntities(ctx context.Context) ([]*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, entity_type,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at
 		FROM entities_current
+		WHERE status != 'removed'
 		ORDER BY full_path_display ASC, entity_id ASC`
 
 	rows, err := s.db.QueryContext(ctx, query)
@@ -215,6 +233,21 @@ func scanEntities(rows *sql.Rows) ([]*inventory.Entity, error) {
 		entities = append(entities, e)
 	}
 	return entities, rows.Err()
+}
+
+func scanChildRows(rows *sql.Rows) ([]ChildRow, error) {
+	var children []ChildRow
+	for rows.Next() {
+		var hasChildren bool
+		e, err := scanEntity(func(dest ...any) error {
+			return rows.Scan(append(dest, &hasChildren)...)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("scan child row: %w", err)
+		}
+		children = append(children, ChildRow{Entity: e, HasChildren: hasChildren})
+	}
+	return children, rows.Err()
 }
 
 // GetEntityTx retrieves a single entity by ID inside an existing transaction.

@@ -131,3 +131,17 @@ All styles live as private fields on the `Styles` struct in `internal/styles/sty
 - No `&&` between shell commands — run as separate tool calls
 - No `git` commands — use `jj` equivalents
 - `jj describe <change-id> -m "message"` renames any commit; `jj log --no-graph -r 'trunk()..@'` reviews full branch history
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues at `github.com/asphaltbuffet/wherehouse`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Custom label vocabulary in use (e.g. `to_triage`, `ready_afk`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo: one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
