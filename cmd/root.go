@@ -13,6 +13,7 @@ import (
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
+	"github.com/asphaltbuffet/wherehouse/cmd/man"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/cmd/rename"
@@ -69,6 +70,7 @@ Examples:
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 	rootCmd.AddCommand(serve.NewDefaultServeCmd())
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())
+	rootCmd.AddCommand(man.NewManCmd())
 
 	return rootCmd
 }
