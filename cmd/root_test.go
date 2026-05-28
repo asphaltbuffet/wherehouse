@@ -65,6 +65,7 @@ func TestGetRootCmd_HasSubcommands(t *testing.T) {
 	assert.True(t, subcommandNames["list"], "list subcommand should be registered")
 	assert.True(t, subcommandNames["move"], "move subcommand should be registered")
 	assert.True(t, subcommandNames["remove"], "remove subcommand should be registered")
+	assert.True(t, subcommandNames["man"], "man subcommand should be registered")
 }
 
 // TestGetRootCmd_HasPersistentFlags verifies root command has expected flags.
@@ -79,6 +80,27 @@ func TestGetRootCmd_HasPersistentFlags(t *testing.T) {
 	require.NotNil(t, cmd.PersistentFlags().Lookup("as"))
 	require.NotNil(t, cmd.PersistentFlags().Lookup("json"))
 	require.NotNil(t, cmd.PersistentFlags().Lookup("quiet"))
+}
+
+func TestGetRootCmd_SilenceUsage(t *testing.T) {
+	rootCmd = nil
+	cmd := GetRootCmd()
+
+	assert.True(t, cmd.SilenceUsage)
+}
+
+func TestGetRootCmd_SilenceErrors(t *testing.T) {
+	rootCmd = nil
+	cmd := GetRootCmd()
+
+	assert.True(t, cmd.SilenceErrors)
+}
+
+func TestGetRootCmd_VersionSet(t *testing.T) {
+	rootCmd = nil
+	cmd := GetRootCmd()
+
+	assert.NotEmpty(t, cmd.Version)
 }
 
 // TestInitConfig_NoConfigFlagLogic tests the --no-config flag business logic.

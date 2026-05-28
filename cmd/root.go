@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/fang"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
@@ -13,12 +12,14 @@ import (
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
+	"github.com/asphaltbuffet/wherehouse/cmd/man"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/cmd/rename"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/cmd/status"
+	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
 	"github.com/asphaltbuffet/wherehouse/internal/version"
@@ -44,6 +45,9 @@ func GetRootCmd() *cobra.Command {
 Examples:
   wherehouse --version        Show version information
   wherehouse --help           Show this help message`,
+		Version:           version.ShortVersion(),
+		SilenceUsage:      true,
+		SilenceErrors:     true,
 		PersistentPreRunE: initConfig,
 		// RunE is nil - displays help by default when no subcommands exist
 	}
@@ -69,6 +73,7 @@ Examples:
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 	rootCmd.AddCommand(serve.NewDefaultServeCmd())
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())
+	rootCmd.AddCommand(man.NewManCmd())
 
 	return rootCmd
 }
@@ -144,15 +149,15 @@ func loadConfigOrDefaults(configPath string, noConfig bool) (*config.Config, err
 	return cfg, nil
 }
 
-// Execute runs the root command using fang for enhanced styling and error handling.
+// Execute runs the root command and renders any error to stderr.
 // This is called by main.main() and is the application entry point.
 func Execute(ctx context.Context) error {
 	defer logging.Close()
 
-	return fang.Execute(
-		ctx,
-		GetRootCmd(),
-		fang.WithVersion(version.ShortVersion()),
-		fang.WithCommit(version.GitCommit),
-	)
+	root := GetRootCmd()
+	if err := root.ExecuteContext(ctx); err != nil {
+		cli.NewOutputWriter(os.Stdout, os.Stderr, false, false).Error(err.Error())
+		return err
+	}
+	return nil
 }
