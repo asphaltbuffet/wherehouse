@@ -78,13 +78,10 @@ func runImport(cmd *cobra.Command, a importApp) error {
 		return err
 	}
 
-	if replace && yes {
-		if clearErr := a.ClearAllData(ctx); clearErr != nil {
-			return fmt.Errorf("clear data: %w", clearErr)
-		}
-	}
-
-	result, err := a.ImportEvents(ctx, events, app.ImportOptions{Continue: cont})
+	result, err := a.ImportEvents(ctx, events, app.ImportOptions{
+		Continue: cont,
+		Replace:  replace && yes,
+	})
 	if err != nil {
 		return fmt.Errorf("import failed: %w", err)
 	}

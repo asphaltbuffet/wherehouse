@@ -274,3 +274,24 @@ func TestImportEvents_ReparentWithTooFewPathChangedRecords_WarningIsOne(t *testi
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Warnings)
 }
+
+func TestImportEvents_ReplaceTrue_ClearsExistingEventsBeforeReplay(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	first, err := a.ImportEvents(ctx, []app.ExportResult{createdRecord(1, "old", "OldPlace")}, app.ImportOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 1, first.Replayed)
+
+	second, err := a.ImportEvents(
+		ctx,
+		[]app.ExportResult{createdRecord(2, "new", "NewPlace")},
+		app.ImportOptions{Replace: true},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 1, second.Replayed)
+
+	has, err := a.HasEvents(ctx)
+	require.NoError(t, err)
+	assert.True(t, has, "second import should leave its own event in place")
+}

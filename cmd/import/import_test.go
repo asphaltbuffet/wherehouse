@@ -230,9 +230,12 @@ func TestRunImport_ReplaceAndYes_ClearsBeforeImport(t *testing.T) {
 	root.SetArgs([]string{"import", "--replace", "--yes"})
 
 	require.NoError(t, root.Execute())
-	assert.True(t, fake.clearCalled, "ClearAllData must be called when --replace --yes")
 	assert.True(t, fake.importCalled)
-	require.Equal(t, []string{"clear", "import"}, fake.callOrder, "ClearAllData must precede ImportEvents")
+	assert.True(
+		t,
+		fake.importOpts.Replace,
+		"--replace --yes must pass Replace=true to ImportEvents; app layer owns the clear",
+	)
 }
 
 func TestRunImport_YesWithoutReplace_AcceptedSilently(t *testing.T) {

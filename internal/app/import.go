@@ -66,9 +66,6 @@ func importEvents(
 	}
 
 	if opts.Replace {
-		if _, err := store.HasEvents(ctx); err != nil {
-			return ImportResult{}, fmt.Errorf("import: check existing data: %w", err)
-		}
 		if err := store.ClearAllData(ctx); err != nil {
 			return ImportResult{}, fmt.Errorf("import: clear data: %w", err)
 		}
