@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -173,6 +174,31 @@ func TestRunImport_QuietFlag_SuppressesSummary(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	assert.Empty(t, stderr.String(), "summary should be suppressed with --quiet")
+}
+
+func TestRunImport_LongLine_ParsesWithoutScannerOverflow(t *testing.T) {
+	t.Parallel()
+	fake := &fakeImportApp{importResult: app.ImportResult{Replayed: 1}}
+	cmd := importcmd.NewImportCmd(fake)
+
+	// 256 KiB note — comfortably above bufio.Scanner's default 64 KiB cap.
+	bigNote := strings.Repeat("x", 256*1024)
+	input := makeNDJSON([]app.ExportResult{
+		{
+			EventID:      1,
+			EventType:    "entity.created",
+			TimestampUTC: "2020-01-01T00:00:00Z",
+			ActorUserID:  "alice",
+			Payload:      json.RawMessage(`{}`),
+			Note:         &bigNote,
+		},
+	})
+	cmd.SetIn(bytes.NewBufferString(input))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, fake.importCalled, "long-line input must parse and reach ImportEvents")
 }
 
 func TestRunImport_NonEmptyDB_NoReplace_ReturnsError(t *testing.T) {

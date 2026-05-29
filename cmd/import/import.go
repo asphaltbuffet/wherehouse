@@ -124,6 +124,15 @@ func openInput(cmd *cobra.Command, filePath string) (io.Reader, func(), error) {
 func parseNDJSON(r io.Reader) ([]app.ExportResult, error) {
 	var events []app.ExportResult
 	scanner := bufio.NewScanner(r)
+	// Per-line cap: 16 MiB. The default 64 KiB is too tight — a single Event
+	// with a long human-typed Note can exceed it. 16 MiB is 4-5 orders of
+	// magnitude above realistic events while still failing loudly on garbage
+	// files (binary blobs masquerading as NDJSON). See CONTEXT.md "Note".
+	const (
+		initialBuf = 64 << 10 // 64 KiB — Scanner default; grows on demand up to maxLine.
+		maxLine    = 16 << 20 // 16 MiB.
+	)
+	scanner.Buffer(make([]byte, initialBuf), maxLine)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
