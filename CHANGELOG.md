@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] - 2026-05-28
+
+### Added
+
+- Add `export` command to stream the full event log to stdout as NDJSON (one JSON object per line, ordered by `event_id ASC`)
+- Add `--quiet` / `-q` flag to `export`: suppresses the zero-events warning on stderr; stdout data stream is unaffected
+- Add `--json` flag accepted as a no-op on `export` (command always emits NDJSON; flag exists for scripting consistency)
+- Add `app.ExportResult` type with all event fields; `payload` field is a nested JSON object (not base64 or a JSON string)
+- Add ADR documenting the export/import design
+
+### Changed
+
+- Remove unused `//go:generate mockery` directives from packages that no longer need generated mocks
+
 ## [0.3.0] - 2026-05-26
 
 ### Added
@@ -91,6 +105,7 @@ _First release._
 - Use NanoID instead of UUID for item identifiers (shorter, more readable) ([`4772974`](https://github.com/asphaltbuffet/wherehouse/commit/4772974))
 - Unify output styling across all commands ([`0e24808`](https://github.com/asphaltbuffet/wherehouse/commit/0e24808))
 
+[0.4.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/asphaltbuffet/wherehouse/compare/v0.0.0...v0.1.0
