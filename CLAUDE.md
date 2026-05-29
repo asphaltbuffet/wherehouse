@@ -34,6 +34,7 @@ Always run `mise run lint` and `mise run test` before committing.
 2. Run `/pre-commit` skill before every commit
 3. Run `/commit` skill for message conventions (conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`)
 4. Run `/audit-docs` after features or fixes
+5. Track deferred work as GitHub Issues (`github.com/asphaltbuffet/wherehouse`), not as TODOs in CLAUDE.md or comments in code
 
 ## Architecture: Event Sourcing
 
@@ -91,12 +92,25 @@ Every command package exposes two constructors:
 Registered in `cmd/root.go` via `NewDefaultXxxCmd()`.
 
 ### Per-Command DB Interface
-Each `cmd/xxx/db.go` defines a minimal `xxxDB` interface covering only what that command needs, with a `//go:generate mockery` directive. Never pass `*database.DB` directly to a command's run function.
+Each `cmd/xxx/db.go` defines a minimal `xxxDB` interface covering only what that command needs. Never pass `*database.DB` directly to a command's run function.
+
+These interfaces are **real seams**, not shallow pass-throughs — each has a hand-rolled fake in `*_test.go` as a genuine second adapter. Do not treat them as boilerplate candidates for deletion.
 
 ### web package (internal/web)
 `cmd/serve/` is a **thin shell only** — no `net/http`, `html/template`, or `//go:embed`. All server logic lives in `internal/web`. Verify: `rg -l '"net/http"|"html/template"|//go:embed' cmd/serve/` → empty.
 
 `internal/web` uses `//go:embed assets` in `routes.go`. Tests use `httptest.NewServer(srv.Handler())`.
+
+**Handler file layout** — handlers are split by operation cluster; add new handlers to the matching file:
+- `handlers_browse.go` — index, tree children, search (entity discovery/navigation)
+- `handlers_entity.go` — entity detail, edit name, toggle-missing, `buildDetailData`, `renderDetailSection`
+- `handlers_add.go` — add item forms and creation flow
+- `handlers_util.go` — `renderHTML`, `renderHTMLAppend`, `serverError`, `handleHealthz`, shared constants
+- `handlers_data.go` — create this when import/export handlers arrive (not yet present)
+
+**Handler test layout** — `handlers_test.go` holds shared fixtures only (`fakeApp`, `newTestServer`, `errTest`); test functions mirror the production file they cover (`handlers_browse_test.go`, `handlers_entity_test.go`, etc.).
+
+**Web layer growth intent** — `internal/web` is planned to reach parity with the CLI: move, remove, full status transitions (borrowed/loaned), import, export, and history views are all forthcoming. This is why the handler split happened before the file was critically large.
 
 **`EntityResult` field pitfall:** `CanonicalName` is the normalized *leaf name only* (no colons). `FullPathDisplay` is the full colon-separated path (e.g. `"Garage:Toolbox"`). Use `FullPathDisplay` when checking entity depth or path structure.
 
@@ -119,11 +133,11 @@ All styles live as private fields on the `Styles` struct in `internal/styles/sty
 - No magic numbers — use stdlib constants
 - UI: silence is success; verbose output only with `-v`/`--verbose`; `--json` on all commands
 
-## Open TODOs (from code review — do not silently ignore)
+### Fakes vs. mocks
 
-- **[M1]** Queries in `internal/database/item.go` and `location.go` missing `event_id ASC` tiebreakers on `ORDER BY display_name`
-- **[M2]** `cmd/remove/item.go` intentional system-location logic needs a clarifying comment
-- **[M3]** `internal/database/search.go` `extractLocationFromEvent` missing `item.removed` case
+**Prefer hand-rolled fakes for internal interfaces.** A fake is a simple struct that implements the interface with controllable return values (see `fakeApp` in `internal/web/handlers_test.go`, or `fakeAddApp` in `cmd/add/add_test.go`). Fakes are explicit, readable, and require no framework.
+
+**Reserve `mockery`-generated mocks for external dependencies** — third-party interfaces where you don't control the definition and a full fake would be fragile to maintain. Do not generate mocks for interfaces defined within this codebase.
 
 ## Shell Tooling Preferences
 
