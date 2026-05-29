@@ -71,6 +71,55 @@ func (b *Bus) Dispatch(
 	return eventID, nil
 }
 
+// ReplayEvent inserts a fully-populated event using its original TimestampUTC.
+// EntityPathChangedEvent is a no-op: it is skipped without error and returns 0.
+// All other event types go through applyEventTx as normal.
+func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, error) {
+	if ev.EventType == inventory.EntityPathChangedEvent {
+		return 0, nil
+	}
+
+	var eventID int64
+	err := b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		const q = `
+            INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+            VALUES (?, ?, ?, ?, ?, ?)`
+		result, err := tx.ExecContext(
+			ctx,
+			q,
+			ev.EventType,
+			ev.TimestampUTC,
+			ev.ActorUserID,
+			string(ev.Payload),
+			ev.Note,
+			ev.EntityID,
+		)
+		if err != nil {
+			return fmt.Errorf("insert event: %w", err)
+		}
+		id, err := result.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("get event ID: %w", err)
+		}
+		eventID = id
+
+		inserted := &inventory.Event{
+			EventID:      eventID,
+			EventType:    ev.EventType,
+			TimestampUTC: ev.TimestampUTC,
+			ActorUserID:  ev.ActorUserID,
+			Payload:      ev.Payload,
+			Note:         ev.Note,
+			EntityID:     ev.EntityID,
+		}
+		return b.applyEventTx(ctx, tx, inserted)
+	})
+	if err != nil {
+		return 0, err
+	}
+	return eventID, nil
+}
+
 func (b *Bus) applyEventTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
 	switch ev.EventType {
 	case inventory.EntityCreatedEvent:
