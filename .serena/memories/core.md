@@ -1,21 +1,24 @@
-# Core
+# Wherehouse — Core
 
-Wherehouse: CLI inventory management tool in Go. Event-sourced; `events` table is append-only source of truth; projection tables (`entities_current`) are derived/rebuildable.
+Event-sourced CLI inventory tracker (Go). Single binary, SQLite storage, no CGo.
 
-## Entry points
-- `cmd/` — Cobra CLI commands, one subdir per command
-- `internal/` — all business logic, store, web server, domain types
-- `main.go` — wires root command
+## Source map
+- `cmd/` — Cobra CLI commands; one subdir per command
+- `internal/app/` — business logic (App struct, import, export, doctor)
+- `internal/eventbus/` — event dispatch + projection maintenance (Bus)
+- `internal/store/` — SQLite persistence; `migrations/` has SQL schema
+- `internal/inventory/` — pure domain types (Entity, Event, EventType, EntityStatus)
+- `internal/web/` — HTTP server, handlers, embedded assets
+- `internal/entitypath/` — colon-separated path parsing
+- `internal/styles/` — lipgloss singleton
 
-## Critical invariants
-- All SQL goes through `internal/store` — commands never touch `*sql.DB` directly
-- `ExecInTransaction` + `WithRetry` wrappers for all DB ops
-- `ORDER BY` with ties must include `event_id ASC` as tiebreaker
-- Event replay ordering is strictly by `event_id`; timestamps are informational
-- No CGo; Go 1.25
+## Key invariants
+- Events are append-only; `event_id ASC` defines replay order (timestamps informational)
+- `entities_current` is the sole projection table — rebuildable from event stream
+- Every ORDER BY that could tie must include `event_id ASC` as tiebreaker
+- No undo — corrections create compensating events
 
-## Memory graph
-- Build/test/lint commands: `mem:suggested_commands`
-- Code conventions and patterns: `mem:conventions`
-- Tech stack details: `mem:tech_stack`
-- Task-done checklist: `mem:task_completion`
+Domain glossary: `mem:domain`
+Build/test commands: `mem:suggested_commands`
+Code conventions: `mem:conventions`
+Task completion: `mem:task_completion`

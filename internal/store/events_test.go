@@ -109,3 +109,31 @@ func TestClearAllData_PreservesSchemaMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, val, "schema_metadata should survive ClearAllData")
 }
+
+func TestGetAllEventsRaw(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	entityID := "e1"
+	payload := json.RawMessage(`{"entity_id":"e1","display_name":"Garage","entity_type":"place"}`)
+
+	_, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
+	require.NoError(t, err)
+
+	// Insert an event with an unknown type directly — AppendRawEvent enforces typed EventType.
+	_, err = s.DB().ExecContext(ctx,
+		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+		 VALUES (?, ?, ?, ?, NULL, ?)`,
+		"entity.unknown_future", "2026-01-01T00:00:00Z", "alice", `{}`, &entityID,
+	)
+	require.NoError(t, err)
+
+	events, err := s.GetAllEventsRaw(ctx)
+	require.NoError(t, err)
+	require.Len(t, events, 2)
+
+	assert.Equal(t, "entity.created", events[0].EventType)
+	assert.Equal(t, "entity.unknown_future", events[1].EventType)
+	assert.NotNil(t, events[0].EntityID)
+	assert.Equal(t, "e1", *events[0].EntityID)
+}

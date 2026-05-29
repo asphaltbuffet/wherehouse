@@ -1,30 +1,27 @@
-# Conventions
+# Code Conventions
 
-## Command pattern
-- `NewXxxCmd(db xxxDB)` for tests (inject interface); `NewDefaultXxxCmd()` for prod wiring
-- Each `cmd/xxx/db.go` defines a minimal `xxxDB` interface — these are real seams, not boilerplate
-- Hand-rolled fakes in `*_test.go`; mockery only for external deps
-
-## Store layer
-- All SQL in `internal/store`; never in cmd or app layers
-- Transactional methods take `(ctx, tx Tx)` — `Tx` is the store's abstraction over `*sql.Tx`
-- `ExecInTransaction` wraps begin/commit/rollback; `WithRetry` for SQLite busy errors
-- Projection tables (e.g. `entities_current`) are fully rebuildable from `events`
-
-## Event sourcing
-- No undo — corrections create compensating events
-- `events` schema: `event_id PK, event_type, timestamp_utc, actor_user_id, payload JSON, note`
-- Adding a new event type: update `EventType` iota + `eventTypeByName` map → `go generate ./...` → add case to `processEventInTx`
-
-## Web layer (`internal/web`)
-- `cmd/serve/` is thin shell only — no net/http, html/template, or //go:embed there
-- Handler split by cluster: `handlers_browse.go`, `handlers_entity.go`, `handlers_add.go`, `handlers_util.go`
-- `EntityResult.CanonicalName` = leaf name only; `FullPathDisplay` = full colon-separated path
-
-## Style
+- Go 1.25, no CGo
+- `testify/assert` non-fatal, `testify/require` for preconditions
 - Errors: `fmt.Errorf("context: %w", err)`
+- All DB ops: `ExecInTransaction` + `WithRetry` helpers
 - Timestamps: RFC3339 UTC `Z` suffix
-- No type assertions / `any` casts; no magic numbers
-- UI: silence is success; verbose only with `-v`/`--verbose`; `--json` on all commands
-- Styles: lipgloss via `internal/styles` singleton — never inline `lipgloss.NewStyle()`
-- Wong palette with `lipgloss.AdaptiveColor{Light, Dark}` for colorblind safety
+- No type assertions / `any` casts — typed interfaces
+- UI: silence is success; verbose with `-v`; `--json` on all commands
+
+## Command constructor pattern
+Every cmd package: `NewXxxCmd(db xxxDB)` (tests) + `NewDefaultXxxCmd()` (prod).
+Per-command `cmd/xxx/db.go` defines minimal interface — hand-rolled fakes in tests, NOT mockery.
+Reserve mockery for external/third-party interfaces only.
+
+## Styles
+All styles as private fields on `Styles` struct in `internal/styles/styles.go`.
+Use Wong palette with `lipgloss.AdaptiveColor{Light, Dark}`. Never inline `lipgloss.NewStyle()`.
+
+## Adding a new EventType
+1. Add to `EventType` iota + line-comment string + `eventTypeByName` map in `internal/database/eventTypes.go`
+2. `go generate ./...` to regenerate `eventtype_string.go`
+3. Add case to `processEventInTx` in `eventHandler.go`
+
+## applyEventTx vs applyEventProjectionOnlyTx
+`applyEventTx` — normal dispatch, calls `propagatePathChangesTx` on reparent (writes new events).
+`applyEventProjectionOnlyTx` — rebuild/replay dispatch, never writes events. Use for `TruncateAndReplay`. See ADR-0009.
