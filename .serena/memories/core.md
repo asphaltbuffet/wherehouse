@@ -1,24 +1,27 @@
-# Core — wherehouse
+# Core
 
-Event-sourced CLI inventory tracker ("where did I put my 10mm socket wrench?").
+Wherehouse: personal inventory tracker CLI. Go 1.25, event-sourced SQLite backend.
 
-## Key layers
+## Source map
 
-- `cmd/*/` — Cobra commands; one per operation; inject `*App` via per-cmd interface (`addApp`, `moveApp`, …)
-- `internal/app/` — Business logic; `App` struct; exposes `CreateEntity`, `RenameEntity`, `ReparentEntity`, `RemoveEntity`, `GetEntityByPath/ID`, `ListEntities`, `GetChildren`, `ChangeStatus`, `GetHistory`, `FindEntities`
-- `internal/eventbus/` — `Bus` dispatches events, inserts them, calls `applyEventTx` → per-type handler; handles path propagation
-- `internal/store/` — SQLite `Store`; wraps `*sql.DB`; `ExecInTransaction`/`WithRetry`; entities + events CRUD
-- `internal/inventory/` — Pure domain types: `Entity`, `EntityType`, `EntityStatus`, `Event`, `EventType`, `CanonicalizeString`
-- `internal/web/` — HTMX server; `internal/web/app.go` defines its own `App` interface (superset of cmd interfaces)
-- `internal/cli/` — Shared CLI helpers: `OpenDatabase`, `OutputWriter`, actor, flags, config access
-- `internal/entitypath/` — Colon-separated path type
+- `cmd/` — cobra commands, one subdir per command
+- `internal/app/` — business logic (`App` struct, result types like `HistoryResult`, `ExportResult`)
+- `internal/store/` — SQLite persistence (`Store` struct, migrations/)
+- `internal/inventory/` — pure domain types (`EntityType`, `EntityStatus`, `Entity`, `Event`)
+- `internal/cli/` — shared CLI helpers: selectors, output, user identity
+- `internal/config/` — XDG TOML config (viper)
+- `internal/web/` — HTTP server, handlers, templates, embedded assets
+- `internal/eventbus/` — event dispatch, path propagation
+- `internal/entitypath/` — colon-separated path parsing
+- `internal/styles/` — lipgloss appStyles singleton (Wong palette, AdaptiveColor)
+- `internal/nanoid/` — 10-char alphanumeric NanoID generation
+- `cmd/root.go` — root command, registers via `NewDefaultXxxCmd()`
 
-## Critical data flow
+## Key invariants
 
-Command → `cli.OpenDatabase` → `store.Open` + `app.New(store)` → command injects `*app.App` via local interface → `app.X` → `bus.Dispatch` → `applyEventTx` → handler updates `entities_current` projection in same tx
+- Events are immutable source of truth (append-only). Projections are rebuildable.
+- Every `ORDER BY` that could tie **must** include `event_id ASC` tiebreaker.
+- DB schema source of truth: `events(event_id PK, event_type, timestamp_utc, actor_user_id, payload JSON, note)`
+- Projection tables: `locations_current`, `items_current`, `projects_current`
 
-## Storage schema
-
-Two tables: `events` (append-only, source of truth) + `entities_current` (sole projection, rebuildable). Every `ORDER BY` that could tie must include `event_id ASC`.
-
-See `mem:tech_stack`, `mem:conventions`, `mem:suggested_commands`, `mem:task_completion`.
+See `mem:conventions` for command patterns; `mem:tech_stack` for build tools.
