@@ -219,7 +219,19 @@ wherehouse remove "Garage:Tool Chest:Broken Wrench"
 wherehouse remove "Garage:Old Box" --note "disposed"
 ```
 
-### 10. Web UI
+### 10. Export Event Log
+
+```bash
+# Export all events as NDJSON (one JSON object per line)
+wherehouse export
+
+# Suppress the "no events" warning when the database is empty
+wherehouse export --quiet
+```
+
+The `--json` flag is accepted silently (the command always emits NDJSON).
+
+### 11. Web UI
 
 ```bash
 # Start local web server (default: http://127.0.0.1:8080)
@@ -248,6 +260,7 @@ Entity Management:
   list                 List entities (--under, --type, --status filters)
   scry [<name>]        Search entities by name, or list all
   history <path>       Show full event timeline for an entity
+  export               Export all events as NDJSON to stdout
 
 Web UI:
   serve                Start local web server (--port, --bind)

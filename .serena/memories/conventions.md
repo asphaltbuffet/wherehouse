@@ -1,34 +1,45 @@
 # Conventions
 
-## Command pattern
-- Each `cmd/xxx/` exposes `NewXxxCmd(db xxxDB)` (test injection) + `NewDefaultXxxCmd()` (prod wiring via `cli.OpenDatabase`)
-- Per-command interface in `cmd/xxx/db.go`; `//go:generate mockery` directive there
-- Never pass `*store.Store` or `*app.App` directly — always via local interface
-- `cmd/serve/` is shell only — no net/http, html/template, //go:embed there; all lives in `internal/web`
+## Command constructor pattern (every cmd/xxx package)
 
-## Error handling
-- Wrap: `fmt.Errorf("context: %w", err)`
-- DB ops via `ExecInTransaction` + `WithRetry`
-- No type assertions / `any` casts — typed interfaces only
+- `cmd/xxx/db.go` — `xxxApp` interface (minimal methods only) + `//go:generate mockery`
+- `cmd/xxx/xxx.go` — `NewXxxCmd(app xxxApp)` (testable), `NewDefaultXxxCmd()` (prod wiring via `cli.OpenDatabase`), `buildXxxCmd()` (cobra.Command shell), `runXxx()` (logic)
+- Registered in `cmd/root.go` via `NewDefaultXxxCmd()`
+- Never pass `*database.DB` directly to run function
 
-## Testing
-- `testify/assert` for non-fatal, `testify/require` for preconditions
-- No mocking the DB in integration tests (burned by mock/prod divergence before)
+## cmd/history as canonical template
 
-## Ordering invariant
-- Every `ORDER BY` that could tie MUST include `event_id ASC` as tiebreaker
+```go
+// db.go
+type historyApp interface {
+    GetHistory(ctx context.Context, req app.GetHistoryRequest) ([]app.HistoryResult, error)
+}
 
-## UI conventions
-- Silence is success; verbose output with `-v`/`--verbose` only
-- `--json` on all commands
-- All styles via `internal/styles` singleton; no inline `lipgloss.NewStyle()` in rendering
+// history.go
+func NewDefaultHistoryCmd() *cobra.Command { /* opens DB, calls runHistory */ }
+func NewHistoryCmd(a historyApp) *cobra.Command { /* wires runE, used in tests */ }
+func buildHistoryCmd() *cobra.Command { /* pure cobra.Command definition */ }
+func runHistory(cmd *cobra.Command, args []string, a historyApp) error { /* logic */ }
+```
+
+## web package isolation
+
+`cmd/serve/` is a thin shell only — no `net/http`, `html/template`, `//go:embed`. All server logic in `internal/web`.
+
+## Styles
+
+All styles: private fields on `Styles` struct in `internal/styles/styles.go`, access via public accessors on singleton. Never inline `lipgloss.NewStyle()` in rendering.
+
+## Error wrapping
+
+`fmt.Errorf("context: %w", err)`
+
+## DB operations
+
+All via `ExecInTransaction` + `WithRetry` helpers.
 
 ## Timestamps
-- RFC3339 UTC with `Z` suffix
-- DB path must be absolute
 
-## Adding a new EventType
-1. Add to iota + line-comment string + `eventTypeByName` map in `internal/store/eventTypes.go` (note: CLAUDE.md says `internal/database` but actual path is `internal/store`)
-2. `go generate ./...` to regen `eventtype_string.go`
-3. Add case to `applyEventTx` in `internal/eventbus/bus.go`
-4. Add handler method on `Bus` in `internal/eventbus/handlers.go`
+RFC3339 with UTC `Z` suffix.
+
+## No type assertions / `any` casts — prefer typed interfaces.

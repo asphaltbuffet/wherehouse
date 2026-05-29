@@ -7,8 +7,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
-//go:generate mockery
-
 type renameApp interface {
 	RenameEntity(ctx context.Context, req app.RenameEntityRequest) (app.EntityResult, error)
 }

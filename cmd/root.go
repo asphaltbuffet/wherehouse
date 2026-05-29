@@ -10,6 +10,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
+	"github.com/asphaltbuffet/wherehouse/cmd/export"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
 	"github.com/asphaltbuffet/wherehouse/cmd/man"
@@ -65,6 +66,7 @@ Examples:
 
 	rootCmd.AddCommand(configpkg.NewConfigCmd())
 	rootCmd.AddCommand(add.NewDefaultAddCmd())
+	rootCmd.AddCommand(export.NewDefaultExportCmd())
 	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
 	rootCmd.AddCommand(listcmd.NewDefaultListCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())

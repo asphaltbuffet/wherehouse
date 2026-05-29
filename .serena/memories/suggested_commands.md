@@ -1,32 +1,29 @@
 # Suggested Commands
 
-## Build & test
+## Build & test (mise tasks in `.mise/tasks/`)
+
 ```
-mise run build      # go build → dist/wherehouse
-mise run test       # gotestsum, race, coverage → bin/coverage.out
-mise run lint       # golangci-lint --fix → bin/golangci-lint.html
-mise run generate   # go generate ./... (stringer)
-mise run mock       # regenerate mocks via mockery
-mise run dev        # generate + lint + test + snapshot + mock
-mise run snapshot   # goreleaser single-target snapshot
-mise run cover      # coverage HTML → bin/coverage.html
-mise run mod-tidy   # go mod tidy + gomod2nix generate
+mise run build     # go build → dist/wherehouse
+mise run test      # gotestsum, race detector, coverage
+mise run lint      # golangci-lint --fix
+mise run generate  # go generate ./... (stringer for iota enums)
+mise run mock      # regenerate mocks via mockery
+mise run dev       # generate + lint + test + snapshot + mock
+mise run snapshot  # goreleaser build (single target)
+mise run cover     # coverage HTML → bin/coverage.html
+mise run mod-tidy  # go mod tidy + gomod2nix generate
 ```
 
-## Single-package / single-test
+## Single package / test
+
 ```
-gotestsum -- -race ./internal/store/...
+gotestsum -- -race ./internal/database/...
 gotestsum -- -run TestFoo ./cmd/scry/...
 ```
 
-## VCS (jujutsu, not git)
-```
-jj log --no-graph -r 'trunk()..@'   # review branch history
-jj describe <change-id> -m "msg"    # rename a commit
-```
+## VCS (jujutsu — NOT git)
 
-## Preferred shell tools
-- `fd` over `find`
-- `rg` over `grep`
-- `sd` over `sed`
-- `jq` for JSON
+```
+jj log --no-graph -r 'trunk()..@'   # branch history
+jj describe <change-id> -m "msg"    # rename commit
+```
