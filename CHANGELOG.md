@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - 2026-05-28
+## [0.4.0] - 2026-05-29
 
 ### Added
 
@@ -13,6 +13,7 @@
 ### Changed
 
 - Remove unused `//go:generate mockery` directives from packages that no longer need generated mocks
+- Split web handler module into focused files by operation cluster to prepare for CLI-parity growth ([`c81ebc46`](https://github.com/asphaltbuffet/wherehouse/commit/c81ebc46))
 
 ## [0.3.0] - 2026-05-26
 
