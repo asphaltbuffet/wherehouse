@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,9 +9,25 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
+
+// NewDefaultDoctorCmd returns the doctor command wired to the real database.
+// NewDefaultDoctorCmd returns the doctor command wired to the real database.
+type doctorResult struct {
+	Healthy    bool          `json:"healthy"`
+	IssueCount int           `json:"issue_count"`
+	Issues     []issueResult `json:"issues"`
+	Rebuilt    *int          `json:"rebuilt,omitempty"`
+}
+
+type issueResult struct {
+	Kind        string `json:"kind"`
+	EventID     *int64 `json:"event_id"`
+	Description string `json:"description"`
+}
 
 // NewDefaultDoctorCmd returns the doctor command wired to the real database.
 func NewDefaultDoctorCmd() *cobra.Command {
@@ -23,27 +40,28 @@ func NewDefaultDoctorCmd() *cobra.Command {
 
 		out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
-		hasIssues := runConfigCheck(out, cfg)
-		if hasIssues {
-			return errors.New("doctor found issues")
-		}
+		configIssues := runConfigCheck(out, cfg)
 
-		s, a, err := cli.OpenDatabase(cmd.Context())
-		if err != nil {
-			out.Issue("config", fmt.Sprintf("cannot open database: %v", err))
-			return errors.New("doctor found issues")
+		s, a, dbErr := cli.OpenDatabase(cmd.Context())
+		if dbErr != nil {
+			configIssues = append(configIssues, app.DoctorIssue{
+				Kind:        app.DoctorKindConfig,
+				Description: fmt.Sprintf("cannot open database: %v", dbErr),
+			})
+			return runDoctor(cmd, args, configIssues, nil)
 		}
 		defer s.Close()
 
-		return runDoctor(cmd, args, a)
+		return runDoctor(cmd, args, configIssues, a)
 	}
 	return cmd
 }
 
 // NewDoctorCmd returns the doctor command with a provided doctorApp for testing.
+// NewDoctorCmd returns the doctor command with a provided doctorApp for testing.
 func NewDoctorCmd(a doctorApp) *cobra.Command {
 	cmd := buildDoctorCmd()
-	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runDoctor(cmd, args, a) }
+	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runDoctor(cmd, args, nil, a) }
 	return cmd
 }
 
@@ -65,18 +83,23 @@ Examples:
   wherehouse doctor
   wherehouse doctor --rebuild
   wherehouse doctor --rebuild --force`,
-		Args: cobra.NoArgs,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
 	}
 	cmd.Flags().Bool("rebuild", false, "rebuild projection from event log after checks")
 	cmd.Flags().BoolP("force", "f", false, "force rebuild even when issues are found (requires --rebuild)")
+	cmd.Flags().Bool("json", false, "emit a single JSON object instead of human-readable output")
 	return cmd
 }
 
 // runConfigCheck validates config files and DB path resolution.
 // Returns true if any config issues were found.
-func runConfigCheck(out *cli.OutputWriter, cfg *config.Config) bool {
+// runConfigCheck validates config files and DB path resolution.
+// Returns any config issues found.
+func runConfigCheck(out *cli.OutputWriter, cfg *config.Config) []app.DoctorIssue {
+	_ = out // reserved for future verbose output
 	fs := afero.NewOsFs()
-	hasIssues := false
+	var issues []app.DoctorIssue
 
 	for _, path := range []string{config.GetGlobalConfigPath(), config.GetLocalConfigPath()} {
 		if path == "" {
@@ -84,31 +107,39 @@ func runConfigCheck(out *cli.OutputWriter, cfg *config.Config) bool {
 		}
 		expanded, err := config.ExpandPath(path)
 		if err != nil {
-			out.Issue("config", fmt.Sprintf("cannot expand config path %q: %v", path, err))
-			hasIssues = true
+			issues = append(issues, app.DoctorIssue{
+				Kind:        app.DoctorKindConfig,
+				Description: fmt.Sprintf("cannot expand config path %q: %v", path, err),
+			})
 			continue
 		}
 		exists, err := aferoFileExists(fs, expanded)
 		if err != nil {
-			out.Issue("config", fmt.Sprintf("cannot access config %s: %v", expanded, err))
-			hasIssues = true
+			issues = append(issues, app.DoctorIssue{
+				Kind:        app.DoctorKindConfig,
+				Description: fmt.Sprintf("cannot access config %s: %v", expanded, err),
+			})
 			continue
 		}
 		if !exists {
 			continue
 		}
 		if err = config.Check(fs, expanded); err != nil {
-			out.Issue("config", fmt.Sprintf("invalid config %s: %v", expanded, err))
-			hasIssues = true
+			issues = append(issues, app.DoctorIssue{
+				Kind:        app.DoctorKindConfig,
+				Description: fmt.Sprintf("invalid config %s: %v", expanded, err),
+			})
 		}
 	}
 
 	if _, err := cfg.GetDatabasePath(); err != nil {
-		out.Issue("config", fmt.Sprintf("cannot resolve database path: %v", err))
-		hasIssues = true
+		issues = append(issues, app.DoctorIssue{
+			Kind:        app.DoctorKindConfig,
+			Description: fmt.Sprintf("cannot resolve database path: %v", err),
+		})
 	}
 
-	return hasIssues
+	return issues
 }
 
 func aferoFileExists(fs afero.Fs, path string) (bool, error) {
@@ -122,51 +153,82 @@ func aferoFileExists(fs afero.Fs, path string) (bool, error) {
 	return false, err
 }
 
-func runDoctor(cmd *cobra.Command, _ []string, a doctorApp) error {
+func runDoctor(cmd *cobra.Command, _ []string, configIssues []app.DoctorIssue, a doctorApp) error {
 	ctx := cmd.Context()
 	rebuild, _ := cmd.Flags().GetBool("rebuild")
 	force, _ := cmd.Flags().GetBool("force")
+	jsonMode, _ := cmd.Flags().GetBool("json")
 
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
 		cfg = config.GetDefaults()
 	}
-	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
+	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode || cfg.IsJSON(), cfg.IsQuiet())
 
-	hasIssues := false
+	allIssues, err := collectIssues(ctx, configIssues, a)
+	if err != nil {
+		return err
+	}
 
+	var replayCount *int
+	if rebuild && (force || len(allIssues) == 0) && a != nil {
+		count, rebuildErr := a.TruncateAndReplay(ctx)
+		if rebuildErr != nil {
+			return fmt.Errorf("doctor: rebuild: %w", rebuildErr)
+		}
+		replayCount = &count
+	}
+
+	return emitResult(out, allIssues, replayCount, jsonMode)
+}
+
+func collectIssues(ctx context.Context, configIssues []app.DoctorIssue, a doctorApp) ([]app.DoctorIssue, error) {
+	all := make([]app.DoctorIssue, 0, len(configIssues))
+	all = append(all, configIssues...)
+	if a == nil {
+		return all, nil
+	}
 	eventIssues, err := a.ValidateEventLog(ctx)
 	if err != nil {
-		return fmt.Errorf("doctor: validate event log: %w", err)
+		return nil, fmt.Errorf("doctor: validate event log: %w", err)
 	}
-	for _, issue := range eventIssues {
-		out.Issue(issue.Kind.String(), issue.Description)
-		hasIssues = true
-	}
-
+	all = append(all, eventIssues...)
 	projIssues, err := a.CheckProjectionConsistency(ctx)
 	if err != nil {
-		return fmt.Errorf("doctor: check projection: %w", err)
+		return nil, fmt.Errorf("doctor: check projection: %w", err)
 	}
-	for _, issue := range projIssues {
-		out.Issue(issue.Kind.String(), issue.Description)
-		hasIssues = true
-	}
+	return append(all, projIssues...), nil
+}
 
-	if rebuild && (force || !hasIssues) {
-		var replayCount int
-		replayCount, err = a.TruncateAndReplay(ctx)
-		if err != nil {
-			return fmt.Errorf("doctor: rebuild: %w", err)
+func emitResult(out *cli.OutputWriter, allIssues []app.DoctorIssue, replayCount *int, jsonMode bool) error {
+	hasIssues := len(allIssues) > 0
+
+	if jsonMode {
+		issues := make([]issueResult, len(allIssues))
+		for i, issue := range allIssues {
+			issues[i] = issueResult{Kind: issue.Kind.String(), EventID: issue.EventID, Description: issue.Description}
 		}
-		out.Success(fmt.Sprintf("Rebuilt projection from %d events.", replayCount))
-		return nil
+		if err := out.JSON(doctorResult{
+			Healthy:    !hasIssues,
+			IssueCount: len(allIssues),
+			Issues:     issues,
+			Rebuilt:    replayCount,
+		}); err != nil {
+			return err
+		}
+	} else {
+		for _, issue := range allIssues {
+			out.Issue(issue.Kind.String(), issue.Description)
+		}
+		if replayCount != nil {
+			out.Success(fmt.Sprintf("Rebuilt projection from %d events.", *replayCount))
+		} else if !hasIssues {
+			out.Success("OK")
+		}
 	}
 
 	if hasIssues {
 		return errors.New("doctor found issues")
 	}
-
-	out.Success("OK")
 	return nil
 }
