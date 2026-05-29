@@ -7,6 +7,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 var payloadPrototypes = map[inventory.EventType]func() any{
@@ -89,4 +90,99 @@ func (a *App) ValidateEventLog(ctx context.Context) ([]DoctorIssue, error) {
 		}
 	}
 	return issues, nil
+}
+
+// CheckProjectionConsistency performs a logical diff between the event log and the
+// entities_current projection without mutating any state.
+func (a *App) CheckProjectionConsistency(ctx context.Context) ([]DoctorIssue, error) {
+	events, err := a.store.GetAllEventsRaw(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("check projection consistency: %w", err)
+	}
+
+	expectedPresent, maxEventID := buildProjectionSets(events)
+
+	projRows, err := a.store.ListAllEntities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("check projection consistency: %w", err)
+	}
+
+	return checkProjectionRows(projRows, expectedPresent, maxEventID), nil
+}
+func buildProjectionSets(events []store.RawEvent) (map[string]bool, map[string]int64) {
+	created := make(map[string]bool)
+	removed := make(map[string]bool)
+	maxEventID := make(map[string]int64)
+
+	for _, ev := range events {
+		if ev.EntityID == nil {
+			continue
+		}
+		id := *ev.EntityID
+		if ev.EventID > maxEventID[id] {
+			maxEventID[id] = ev.EventID
+		}
+		et, parseErr := inventory.ParseEventType(ev.EventType)
+		if parseErr != nil {
+			continue
+		}
+		switch et { //nolint:exhaustive // only created/removed affect the expected-present set
+		case inventory.EntityCreatedEvent:
+			created[id] = true
+		case inventory.EntityRemovedEvent:
+			removed[id] = true
+		}
+	}
+
+	expectedPresent := make(map[string]bool, len(created))
+	for id := range created {
+		if !removed[id] {
+			expectedPresent[id] = true
+		}
+	}
+	return expectedPresent, maxEventID
+}
+
+func checkProjectionRows(
+	projRows []*inventory.Entity,
+	expectedPresent map[string]bool,
+	maxEventID map[string]int64,
+) []DoctorIssue {
+	issues := make([]DoctorIssue, 0)
+	inProjection := make(map[string]bool, len(projRows))
+
+	for _, row := range projRows {
+		inProjection[row.EntityID] = true
+
+		if !expectedPresent[row.EntityID] {
+			issues = append(issues, DoctorIssue{
+				Kind:        DoctorKindProjection,
+				Description: fmt.Sprintf("phantom projection row for entity %s", row.EntityID),
+			})
+			continue
+		}
+
+		if wantID, ok := maxEventID[row.EntityID]; ok && row.LastEventID != wantID {
+			issues = append(issues, DoctorIssue{
+				Kind: DoctorKindProjection,
+				Description: fmt.Sprintf(
+					"stale projection for entity %s: last_event_id=%d, want %d",
+					row.EntityID,
+					row.LastEventID,
+					wantID,
+				),
+			})
+		}
+	}
+
+	for id := range expectedPresent {
+		if !inProjection[id] {
+			issues = append(issues, DoctorIssue{
+				Kind:        DoctorKindProjection,
+				Description: fmt.Sprintf("missing projection row for entity %s", id),
+			})
+		}
+	}
+
+	return issues
 }

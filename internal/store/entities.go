@@ -168,6 +168,23 @@ func (s *Store) ListEntities(ctx context.Context) ([]*inventory.Entity, error) {
 	return scanEntities(rows)
 }
 
+// ListAllEntities returns all entities in the projection, including removed ones.
+func (s *Store) ListAllEntities(ctx context.Context) ([]*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, entity_type,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current
+		ORDER BY full_path_display ASC, entity_id ASC`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list all entities: %w", err)
+	}
+	defer rows.Close()
+	return scanEntities(rows)
+}
+
 // ComputeEntityPathTx computes full_path_display, full_path_canonical, and depth
 // for a new entity given its parent. Runs inside an existing transaction.
 // ComputeEntityPathTx computes full_path_display, full_path_canonical, and depth

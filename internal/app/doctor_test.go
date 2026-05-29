@@ -138,3 +138,87 @@ func TestValidateEventLog_EntityCreated_InvalidEntityType(t *testing.T) {
 	assert.Equal(t, app.DoctorKindEventLog, issues[0].Kind)
 	assert.Contains(t, issues[0].Description, "entity_type")
 }
+
+func TestCheckProjectionConsistency_CleanState(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	assert.NotNil(t, issues)
+	assert.Empty(t, issues)
+}
+
+func TestCheckProjectionConsistency_PhantomRow(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx := context.Background()
+
+	// Insert a projection row with no corresponding event log entry.
+	_, err := s.DB().ExecContext(ctx,
+		`INSERT INTO entities_current (entity_id, display_name, canonical_name, entity_type,
+		 parent_id, full_path_display, full_path_canonical, depth, status, status_context,
+		 last_event_id, updated_at)
+		 VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)`,
+		"phantom1", "Ghost", "ghost", "place", "Ghost", "ghost", 0, "ok", 99, "2026-01-01T00:00:00Z",
+	)
+	require.NoError(t, err)
+
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, app.DoctorKindProjection, issues[0].Kind)
+	assert.Contains(t, issues[0].Description, "phantom")
+}
+
+func TestCheckProjectionConsistency_MissingRow(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx := context.Background()
+
+	entityID := "missing1"
+	// Insert a created event with no corresponding projection row.
+	_, err := s.DB().ExecContext(ctx,
+		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+		 VALUES (?, ?, ?, ?, NULL, ?)`,
+		"entity.created", "2026-01-01T00:00:00Z", "alice",
+		`{"entity_id":"missing1","display_name":"Lost","entity_type":"item"}`, &entityID,
+	)
+	require.NoError(t, err)
+
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, app.DoctorKindProjection, issues[0].Kind)
+	assert.Contains(t, issues[0].Description, "missing")
+}
+
+func TestCheckProjectionConsistency_StaleLastEventID(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx := context.Background()
+
+	// Create entity normally so projection exists.
+	res, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Shelf", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	// Append a second event for the same entity (rename-like), bypassing normal app flow.
+	_, err = s.DB().ExecContext(ctx,
+		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+		 VALUES (?, ?, ?, ?, NULL, ?)`,
+		"entity.renamed", "2026-01-01T01:00:00Z", "alice",
+		`{"entity_id":"`+res.EntityID+`","display_name":"Shelf2"}`, &res.EntityID,
+	)
+	require.NoError(t, err)
+
+	// The projection still has the original last_event_id; the new event is not reflected.
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, app.DoctorKindProjection, issues[0].Kind)
+	assert.Contains(t, issues[0].Description, "stale")
+}
