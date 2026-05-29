@@ -16,11 +16,18 @@ type ImportOptions struct {
 }
 
 // ImportResult summarises the outcome of an import run.
+//
+// WarningCount is the number of non-fatal anomalies detected during replay
+// (e.g. orphaned EntityPathChangedEvent records, mismatched path-changed
+// payloads). Warnings holds one descriptive error per increment, in
+// detection order, so callers can render diagnostics rather than only a
+// count. len(Warnings) == WarningCount as an invariant.
 type ImportResult struct {
-	Replayed int
-	Failed   int
-	Warnings int
-	Errors   []error
+	Replayed     int
+	Failed       int
+	WarningCount int
+	Warnings     []error
+	Errors       []error
 }
 
 type importBus interface {
@@ -125,8 +132,9 @@ func (r *importRunner) processRecord(ctx context.Context, rec ExportResult) erro
 
 	if et == inventory.EntityPathChangedEvent {
 		if r.pendingReparentID < 0 {
-			r.log.Warn("import: orphaned EntityPathChangedEvent (no preceding reparent)")
-			r.result.Warnings++
+			orphan := fmt.Errorf("orphaned EntityPathChangedEvent at event_id %d (no preceding reparent)", rec.EventID)
+			r.log.Warn(orphan.Error())
+			r.warn(orphan)
 		} else {
 			r.pathChangedBuf = append(r.pathChangedBuf, rec)
 		}
@@ -156,6 +164,13 @@ func (r *importRunner) processRecord(ctx context.Context, rec ExportResult) erro
 	return nil
 }
 
+// warn records a non-fatal anomaly. It bumps the counter and appends a
+// descriptive error so callers see both "how many" and "which ones.".
+func (r *importRunner) warn(err error) {
+	r.result.WarningCount++
+	r.result.Warnings = append(r.result.Warnings, err)
+}
+
 func (r *importRunner) handleError(eventID int64, err error) error {
 	wrapped := fmt.Errorf("event id %d: %w", eventID, err)
 	if r.opts.Continue {
@@ -172,8 +187,13 @@ func (r *importRunner) flushValidation(ctx context.Context) {
 	}
 	generated, err := r.store.GetEventsAfter(ctx, r.pendingReparentID)
 	if err != nil {
-		r.log.Warn("import: could not retrieve generated path-changed events", "error", err)
-		r.result.Warnings++
+		wrapped := fmt.Errorf(
+			"could not retrieve generated path-changed events after reparent event_id %d: %w",
+			r.pendingReparentID,
+			err,
+		)
+		r.log.Warn(wrapped.Error())
+		r.warn(wrapped)
 		r.pendingReparentID = -1
 		r.pathChangedBuf = nil
 		return
@@ -187,14 +207,17 @@ func (r *importRunner) flushValidation(ctx context.Context) {
 		}
 	}
 	if len(genPC) != len(r.pathChangedBuf) {
-		r.log.Warn("import: path-changed count mismatch after reparent",
-			"expected", len(r.pathChangedBuf), "got", len(genPC))
-		r.result.Warnings++
+		mismatch := fmt.Errorf("path-changed count mismatch after reparent event_id %d (expected %d, got %d)",
+			r.pendingReparentID, len(r.pathChangedBuf), len(genPC))
+		r.log.Warn(mismatch.Error())
+		r.warn(mismatch)
 	} else {
 		for i, buf := range r.pathChangedBuf {
 			if string(genPC[i].Payload) != string(buf.Payload) {
-				r.log.Warn("import: path-changed payload mismatch", "index", i)
-				r.result.Warnings++
+				mismatch := fmt.Errorf("path-changed payload mismatch after reparent event_id %d at index %d",
+					r.pendingReparentID, i)
+				r.log.Warn(mismatch.Error())
+				r.warn(mismatch)
 				break
 			}
 		}

@@ -87,8 +87,12 @@ func runImport(cmd *cobra.Command, a importApp) error {
 	}
 
 	if !cli.IsQuietMode(cmd) {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Replayed: %d, Failed: %d, Warnings: %d\n",
-			result.Replayed, result.Failed, result.Warnings)
+		out := cmd.ErrOrStderr()
+		fmt.Fprintf(out, "Replayed: %d, Failed: %d, Warnings: %d\n",
+			result.Replayed, result.Failed, result.WarningCount)
+		for _, w := range result.Warnings {
+			fmt.Fprintf(out, "  warning: %s\n", w)
+		}
 	}
 
 	return nil

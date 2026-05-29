@@ -68,7 +68,7 @@ func TestImportEvents_SingleEvent_ReplayedCountIsOne(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Replayed)
 	assert.Equal(t, 0, result.Failed)
-	assert.Equal(t, 0, result.Warnings)
+	assert.Equal(t, 0, result.WarningCount)
 }
 
 func TestImportEvents_PathChangedEventNotCountedAsReplayed(t *testing.T) {
@@ -111,7 +111,7 @@ func TestImportEvents_NoReparentEvents_WarningsIsZero(t *testing.T) {
 
 	result, err := a.ImportEvents(ctx, events, app.ImportOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, 0, result.Warnings)
+	assert.Equal(t, 0, result.WarningCount)
 }
 
 func TestImportEvents_OrphanedPathChanged_WarningIsOne(t *testing.T) {
@@ -141,7 +141,10 @@ func TestImportEvents_OrphanedPathChanged_WarningIsOne(t *testing.T) {
 
 	result, err := a.ImportEvents(ctx, events, app.ImportOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, 1, result.Warnings)
+	assert.Equal(t, 1, result.WarningCount)
+	require.Len(t, result.Warnings, 1, "len(Warnings) must equal WarningCount")
+	assert.Contains(t, result.Warnings[0].Error(), "orphaned")
+	assert.Contains(t, result.Warnings[0].Error(), "event_id 1")
 }
 
 func TestImportEvents_Continue_AccumulatesFailedAndDoesNotAbort(t *testing.T) {
@@ -242,7 +245,7 @@ func TestImportEvents_ReparentWithMatchingPathChanged_WarningsIsZero(t *testing.
 
 	result, err := dest.ImportEvents(ctx, exportedEvents, app.ImportOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, 0, result.Warnings, "matching path-changed records should not produce warnings")
+	assert.Equal(t, 0, result.WarningCount, "matching path-changed records should not produce warnings")
 }
 
 func TestImportEvents_ReparentWithMismatchedPathChangedPayload_WarningIsOne(t *testing.T) {
@@ -263,7 +266,7 @@ func TestImportEvents_ReparentWithMismatchedPathChangedPayload_WarningIsOne(t *t
 
 	result, err := dest.ImportEvents(ctx, exportedEvents, app.ImportOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, 1, result.Warnings)
+	assert.Equal(t, 1, result.WarningCount)
 }
 
 func TestImportEvents_ReparentWithTooFewPathChangedRecords_WarningIsOne(t *testing.T) {
@@ -282,7 +285,7 @@ func TestImportEvents_ReparentWithTooFewPathChangedRecords_WarningIsOne(t *testi
 
 	result, err := dest.ImportEvents(ctx, filtered, app.ImportOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, 1, result.Warnings)
+	assert.Equal(t, 1, result.WarningCount)
 }
 
 func TestImportEvents_ReplaceTrue_ClearsExistingEventsBeforeReplay(t *testing.T) {

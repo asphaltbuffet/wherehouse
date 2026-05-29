@@ -72,7 +72,7 @@ func makeNDJSON(events []app.ExportResult) string {
 func TestRunImport_ValidInput_CallsImportEventsAndPrintsSummary(t *testing.T) {
 	t.Parallel()
 	fake := &fakeImportApp{
-		importResult: app.ImportResult{Replayed: 2, Failed: 0, Warnings: 0},
+		importResult: app.ImportResult{Replayed: 2, Failed: 0, WarningCount: 0},
 	}
 	cmd := importcmd.NewImportCmd(fake)
 	input := makeNDJSON([]app.ExportResult{
@@ -201,6 +201,39 @@ func TestRunImport_LongLine_ParsesWithoutScannerOverflow(t *testing.T) {
 	assert.True(t, fake.importCalled, "long-line input must parse and reach ImportEvents")
 }
 
+func TestRunImport_WarningsWithDetails_PrintsDetailLines(t *testing.T) {
+	t.Parallel()
+	fake := &fakeImportApp{
+		importResult: app.ImportResult{
+			Replayed:     1,
+			WarningCount: 2,
+			Warnings: []error{
+				errors.New("orphaned EntityPathChangedEvent at event_id 7"),
+				errors.New("path-changed count mismatch after reparent event_id 9 (expected 2, got 1)"),
+			},
+		},
+	}
+	cmd := importcmd.NewImportCmd(fake)
+	cmd.SetIn(bytes.NewBufferString(makeNDJSON([]app.ExportResult{
+		{
+			EventID:      1,
+			EventType:    "entity.created",
+			TimestampUTC: "2020-01-01T00:00:00Z",
+			ActorUserID:  "alice",
+			Payload:      json.RawMessage(`{}`),
+		},
+	})))
+	var stderr bytes.Buffer
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+
+	require.NoError(t, cmd.Execute())
+	out := stderr.String()
+	assert.Contains(t, out, "Warnings: 2", "summary line shows the count")
+	assert.Contains(t, out, "orphaned EntityPathChangedEvent at event_id 7", "detail line for warning #1")
+	assert.Contains(t, out, "path-changed count mismatch after reparent event_id 9", "detail line for warning #2")
+}
+
 func TestRunImport_NonEmptyDB_NoReplace_ReturnsError(t *testing.T) {
 	t.Parallel()
 	fake := &fakeImportApp{hasEvents: true}
@@ -281,7 +314,7 @@ func TestRunImport_ContinueFlag_ExitsZeroAndShowsFailedCount(t *testing.T) {
 	t.Parallel()
 	fake := &fakeImportApp{
 		hasEvents:    false,
-		importResult: app.ImportResult{Replayed: 1, Failed: 2, Warnings: 0},
+		importResult: app.ImportResult{Replayed: 1, Failed: 2, WarningCount: 0},
 	}
 	root := newTestRoot(fake)
 	input := makeNDJSON([]app.ExportResult{
