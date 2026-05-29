@@ -82,6 +82,14 @@ The normalized form of a name used for matching. Rules (from `CanonicalizeString
 
 The `scry` command searches for entities by name (fuzzy, using Levenshtein distance). It is a **search/find** command — not an inference engine for missing items. Results are `FindResult` values with `Entity` and `Distance` fields.
 
+### Tag
+
+A short, user-defined classification label applied to an entity. Tags are bare strings (no key-value pairs). They are stored in their canonical form only (via `CanonicalizeString`: lowercase, whitespace/`-`/`_` collapsed to `_`, leading/trailing `_` stripped). Any entity type (`place`, `container`, `leaf`) may have zero or more tags. Tags are used to group or filter entities across the hierarchy regardless of location or status.
+
+Tag mutations are recorded as events (`EntityTagAddedEvent`, `EntityTagRemovedEvent`). Current tags are maintained in the `entity_tags` projection table (`entity_id`, `tag`), which is rebuildable from the event stream. Tags are retained when an entity is removed (soft-delete consistency).
+
+Adding a tag that already exists, or removing a tag that is not present, is a silent no-op (warning logged). If the same tag appears in both `--add` and `--remove` in a single invocation, they cancel each other out (warning shown to user).
+
 ### Actor
 
 The user attributed to an event. Defaults to the OS username. Stored as `actor_user_id` on every event. Attribution only — no access control.
@@ -95,7 +103,7 @@ The user attributed to an event. Defaults to the OS username. Stored as `actor_u
 | "item" / "location" (as separate types) | "entity" | The model is unified; there is no separate item or location type |
 | "undo" | There is no undo | Corrections create new events |
 | "delete" (for soft removal) | "remove" | `EntityRemovedEvent` is a status change, not a physical deletion |
-| "tag" / "project" | — | Not implemented |
+| "project" | — | Not implemented |
 | "fuzzy match" | "Levenshtein search" | The exact algorithm is Levenshtein distance, used in `scry`/`FindEntities` |
 
 ---
