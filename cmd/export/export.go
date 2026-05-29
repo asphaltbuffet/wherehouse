@@ -1,6 +1,7 @@
 package export
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -41,9 +42,25 @@ Examples:
 }
 
 func runExport(cmd *cobra.Command, _ []string, a exportApp) error {
-	_, err := a.GetAllEvents(cmd.Context())
+	events, err := a.GetAllEvents(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("failed to export events: %w", err)
 	}
+
+	if len(events) == 0 {
+		if !cli.IsQuietMode(cmd) {
+			fmt.Fprintln(cmd.ErrOrStderr(), "warning: no events found")
+		}
+		return nil
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	for _, ev := range events {
+		err = enc.Encode(ev)
+		if err != nil {
+			return fmt.Errorf("encoding event %d: %w", ev.EventID, err)
+		}
+	}
+
 	return nil
 }
