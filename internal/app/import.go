@@ -37,6 +37,11 @@ func (a *App) ImportEvents(ctx context.Context, events []ExportResult, opts Impo
 	return importEvents(ctx, a.bus, a.store, events, opts)
 }
 
+// HasEvents reports whether the database contains any events.
+func (a *App) HasEvents(ctx context.Context) (bool, error) {
+	return a.store.HasEvents(ctx)
+}
+
 func importEvents(
 	ctx context.Context,
 	bus importBus,
