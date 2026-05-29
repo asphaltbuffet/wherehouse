@@ -222,3 +222,26 @@ func TestCheckProjectionConsistency_StaleLastEventID(t *testing.T) {
 	assert.Equal(t, app.DoctorKindProjection, issues[0].Kind)
 	assert.Contains(t, issues[0].Description, "stale")
 }
+
+func TestTruncateAndReplay_ReturnsCountAndProjectionIntact(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Shelf", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	count, err := a.TruncateAndReplay(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	entities, err := a.ListEntities(ctx)
+	require.NoError(t, err)
+	assert.Len(t, entities, 2)
+}

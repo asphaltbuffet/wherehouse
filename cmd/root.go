@@ -10,6 +10,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
+	"github.com/asphaltbuffet/wherehouse/cmd/doctor"
 	"github.com/asphaltbuffet/wherehouse/cmd/export"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	importcmd "github.com/asphaltbuffet/wherehouse/cmd/import"
@@ -77,6 +78,9 @@ Examples:
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 	rootCmd.AddCommand(serve.NewDefaultServeCmd())
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())
+	rootCmd.AddCommand(doctor.NewDefaultDoctorCmd())
+
+	// hidden internal commands — not shown in help output
 	rootCmd.AddCommand(man.NewManCmd())
 
 	return rootCmd

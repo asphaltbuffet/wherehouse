@@ -450,3 +450,39 @@ func TestNewOutputWriterFromConfig_QuietLevel2(t *testing.T) {
 
 	assert.Empty(t, out.String())
 }
+
+func TestOutputWriter_Issue_Normal(t *testing.T) {
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriter(out, err, false, false)
+
+	w.Issue("event_log", "event 3 missing entity_id")
+
+	output := out.String()
+	assert.Contains(t, output, "[event_log]")
+	assert.Contains(t, output, "event 3 missing entity_id")
+	assert.Empty(t, err.String())
+}
+
+func TestOutputWriter_Issue_JSONMode(t *testing.T) {
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriter(out, err, true, false)
+
+	w.Issue("projection", "phantom row: abc123")
+
+	var data map[string]string
+	require.NoError(t, json.Unmarshal(out.Bytes(), &data))
+	assert.Equal(t, "projection", data["kind"])
+	assert.Equal(t, "phantom row: abc123", data["description"])
+}
+
+func TestOutputWriter_Issue_AlwaysShown(t *testing.T) {
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriter(out, err, false, true)
+
+	w.Issue("config", "cannot resolve db path")
+
+	assert.Contains(t, out.String(), "[config]")
+}

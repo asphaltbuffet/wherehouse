@@ -1,17 +1,14 @@
 # Tech Stack
 
 - Language: Go 1.25, no CGo
-- DB: SQLite via `database/sql` + `go-migrate` for migrations (`internal/store/migrations/`)
-- CLI: Cobra (`cmd/`)
-- Config: Viper, XDG-compliant TOML (`internal/config/`)
-- Web: stdlib `net/http` + `html/template` + `//go:embed` (`internal/web/`)
-- Logging: structured + rotation (`internal/logging/`)
-- Styles: lipgloss + Wong palette (`internal/styles/`)
-- ID generation: 10-char alphanumeric NanoID (`internal/nanoid/`)
-- Build/task runner: `mise` (tasks in `.mise/tasks/`)
-- Linter: golangci-lint
-- Test runner: gotestsum
-- Snapshot/release: goreleaser
-- Nix: `gomod2nix` for reproducible builds
-- Mocks: mockery (external deps only; internal interfaces use hand-rolled fakes)
-- Assertions: testify (`assert` non-fatal, `require` preconditions)
+- CLI framework: cobra
+- DB: SQLite (via internal/store, migrations auto-apply)
+- Config: viper-backed TOML, XDG paths
+- UI: lipgloss (styles singleton), bubbletea where needed
+- Build: mise (`mise run build/test/lint/generate/mock/dev/snapshot`)
+- Test runner: gotestsum (race detector on)
+- Lint: golangci-lint --fix
+- Code gen: stringer (iota enums via `go generate`)
+- Mocks: mockery (external deps only — see `mem:conventions`)
+- Release: goreleaser
+- Module pins: gomod2nix for Nix reproducibility

@@ -109,6 +109,11 @@ func (a *App) CheckProjectionConsistency(ctx context.Context) ([]DoctorIssue, er
 
 	return checkProjectionRows(projRows, expectedPresent, maxEventID), nil
 }
+
+// TruncateAndReplay rebuilds all projection tables by replaying the event log and returns the number of replayed events.
+func (a *App) TruncateAndReplay(ctx context.Context) (int, error) {
+	return a.bus.TruncateAndReplay(ctx)
+}
 func buildProjectionSets(events []store.RawEvent) (map[string]bool, map[string]int64) {
 	created := make(map[string]bool)
 	removed := make(map[string]bool)
