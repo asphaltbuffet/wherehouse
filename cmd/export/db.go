@@ -7,8 +7,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
-//go:generate mockery
-
 type exportApp interface {
 	GetAllEvents(ctx context.Context) ([]app.ExportResult, error)
 }
