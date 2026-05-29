@@ -21,6 +21,7 @@ func New(s *store.Store) *Bus {
 }
 
 // Dispatch persists an event and applies it to projections in a single transaction.
+// The timestamp is set to [time.Now].UTC() and entity_id is parsed from the payload.
 func (b *Bus) Dispatch(
 	ctx context.Context,
 	eventType inventory.EventType,
@@ -36,14 +37,48 @@ func (b *Bus) Dispatch(
 		}
 	}
 
-	timestamp := time.Now().UTC().Format(time.RFC3339)
+	ev := &inventory.Event{
+		EventType:    eventType,
+		TimestampUTC: time.Now().UTC().Format(time.RFC3339),
+		ActorUserID:  actorUserID,
+		Payload:      payload,
+		Note:         note,
+		EntityID:     entityID,
+	}
+	return b.writeEvent(ctx, ev)
+}
 
+// ReplayEvent inserts a fully-populated event using its original TimestampUTC
+// and EntityID (no payload reparse). EntityPathChangedEvent is a no-op: it is
+// skipped without error and returns 0, because EntityReparentedEvent's handler
+// regenerates path-changed events itself.
+func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, error) {
+	if ev.EventType == inventory.EntityPathChangedEvent {
+		return 0, nil
+	}
+	return b.writeEvent(ctx, ev)
+}
+
+// writeEvent is the single canonical write path shared by Dispatch and
+// ReplayEvent. It inserts ev into the events table inside a transaction,
+// then runs applyEventTx in that same transaction so projection updates are
+// atomic with the event row.
+//
+// Callers populate ev's EventType, TimestampUTC, ActorUserID, Payload, Note,
+// and EntityID. EventID is assigned by SQLite and returned to the caller.
+//
+// If a future change needs to differ between Dispatch and ReplayEvent (e.g.
+// one path adds a validation step the other shouldn't), express it as a
+// parameter to writeEvent rather than re-splitting into two methods.
+func (b *Bus) writeEvent(ctx context.Context, ev *inventory.Event) (int64, error) {
 	var eventID int64
 	err := b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		const q = `
             INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
             VALUES (?, ?, ?, ?, ?, ?)`
-		result, err := tx.ExecContext(ctx, q, eventType, timestamp, actorUserID, string(payload), note, entityID)
+		result, err := tx.ExecContext(ctx, q,
+			ev.EventType, ev.TimestampUTC, ev.ActorUserID,
+			string(ev.Payload), ev.Note, ev.EntityID)
 		if err != nil {
 			return fmt.Errorf("insert event: %w", err)
 		}
@@ -53,17 +88,9 @@ func (b *Bus) Dispatch(
 		}
 		eventID = id
 
-		ev := &inventory.Event{
-			EventID:      eventID,
-			EventType:    eventType,
-			TimestampUTC: timestamp,
-			ActorUserID:  actorUserID,
-			Payload:      payload,
-			Note:         note,
-			EntityID:     entityID,
-		}
-
-		return b.applyEventTx(ctx, tx, ev)
+		inserted := *ev
+		inserted.EventID = eventID
+		return b.applyEventTx(ctx, tx, &inserted)
 	})
 	if err != nil {
 		return 0, err

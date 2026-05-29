@@ -40,6 +40,10 @@ Status changes may carry an optional `StatusContext` (free-text, e.g. borrower n
 
 An immutable, append-only record of something that happened. Events are the **source of truth**. The `event_id` (integer, autoincrement) defines replay order — timestamps are informational only.
 
+### Note
+
+Optional free-text annotation on an `Event`. Canonically human-typed and used infrequently — for example, a one-line reason on a corrective rename. **Not** intended to hold log output, attachments, file contents, or other large blobs. Import enforces a per-record size ceiling (16 MiB) so that garbage files (e.g. binary blobs masquerading as NDJSON) fail loudly at the parser rather than at the storage layer.
+
 ### EventType
 
 The six event types currently implemented:

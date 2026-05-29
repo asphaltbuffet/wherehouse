@@ -100,6 +100,36 @@ func (s *Store) GetEventsAfter(ctx context.Context, afterID int64) ([]*inventory
 	return scanEvents(rows)
 }
 
+// HasEvents reports whether the events table contains at least one row.
+func (s *Store) HasEvents(ctx context.Context) (bool, error) {
+	var exists bool
+	const query = `SELECT EXISTS(SELECT 1 FROM events LIMIT 1)`
+	if err := s.db.QueryRowContext(ctx, query).Scan(&exists); err != nil {
+		return false, fmt.Errorf("has events: %w", err)
+	}
+	return exists, nil
+}
+
+// ClearAllData deletes all rows from entities_current then events, leaving
+// schema_metadata intact.
+//
+// INVARIANT: entities_current is the only projection table (see CONTEXT.md
+// "Projection"). If a second projection table is ever added, it must also be
+// cleared here AND that change should be captured in an ADR — adding a
+// projection breaks the documented single-projection invariant and the
+// decision deserves to be recorded before the code is changed.
+func (s *Store) ClearAllData(ctx context.Context) error {
+	return s.ExecInTransaction(ctx, func(tx Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM entities_current`); err != nil {
+			return fmt.Errorf("clear entities: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM events`); err != nil {
+			return fmt.Errorf("clear events: %w", err)
+		}
+		return nil
+	})
+}
+
 func scanEvent(row *sql.Row) (*inventory.Event, error) {
 	var ev inventory.Event
 	var payloadStr string
