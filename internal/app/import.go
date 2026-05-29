@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
@@ -61,6 +62,31 @@ func importEvents(
 				i,
 				events[i].EventID,
 				events[i-1].EventID,
+			)
+		}
+	}
+
+	// Pre-replay validation (Level 2): every record must have a known EventType
+	// and a payload that parses as a JSON object. This runs before opts.Replace
+	// so a malformed input file cannot leave the database empty after ClearAllData
+	// followed by a mid-replay failure. Per-event-type schema validation is
+	// tracked as deferred work (see follow-up issue referenced in CHANGELOG).
+	for i, rec := range events {
+		if _, err := inventory.ParseEventType(rec.EventType); err != nil {
+			return ImportResult{}, fmt.Errorf(
+				"import: validation failed at index %d (event_id %d): %w",
+				i,
+				rec.EventID,
+				err,
+			)
+		}
+		var payloadShape map[string]any
+		if err := json.Unmarshal(rec.Payload, &payloadShape); err != nil {
+			return ImportResult{}, fmt.Errorf(
+				"import: validation failed at index %d (event_id %d): payload is not a JSON object: %w",
+				i,
+				rec.EventID,
+				err,
 			)
 		}
 	}

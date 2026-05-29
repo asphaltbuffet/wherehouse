@@ -148,14 +148,24 @@ func TestImportEvents_Continue_AccumulatesFailedAndDoesNotAbort(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
+	// Middle event renames an entity that was never created — passes Level 2
+	// validation (known type, valid JSON object payload) but fails at replay
+	// time inside applyEventTx. --continue must accumulate this as a per-event
+	// failure rather than aborting.
+	ghostID := "ghost"
+	renamePayload, _ := json.Marshal(map[string]string{
+		"entity_id":    ghostID,
+		"display_name": "WillFail",
+	})
 	events := []app.ExportResult{
 		createdRecord(1, "e1", "Garage"),
 		{
 			EventID:      2,
-			EventType:    "entity.nonexistent", // unknown type → parse error
+			EventType:    inventory.EntityRenamedEvent.String(),
 			TimestampUTC: "2020-01-01T00:00:00Z",
 			ActorUserID:  "alice",
-			Payload:      json.RawMessage(`{}`),
+			Payload:      renamePayload,
+			EntityID:     &ghostID,
 		},
 		createdRecord(3, "e2", "Shelf"),
 	}
@@ -294,4 +304,45 @@ func TestImportEvents_ReplaceTrue_ClearsExistingEventsBeforeReplay(t *testing.T)
 	has, err := a.HasEvents(ctx)
 	require.NoError(t, err)
 	assert.True(t, has, "second import should leave its own event in place")
+}
+
+func TestImportEvents_ReplaceTrue_MalformedRecordLeavesDBUntouched(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	first, err := a.ImportEvents(ctx, []app.ExportResult{createdRecord(1, "keep", "KeepMe")}, app.ImportOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 1, first.Replayed)
+
+	bad := app.ExportResult{
+		EventID:      2,
+		EventType:    "entity.created",
+		TimestampUTC: "2020-01-02T00:00:00Z",
+		ActorUserID:  "alice",
+		Payload:      json.RawMessage(`{`),
+	}
+	_, err = a.ImportEvents(ctx, []app.ExportResult{bad}, app.ImportOptions{Replace: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "event_id 2")
+
+	has, err := a.HasEvents(ctx)
+	require.NoError(t, err)
+	assert.True(t, has, "Replace must not clear the database when pre-validation fails")
+}
+
+func TestImportEvents_UnknownEventType_RejectedBeforeReplay(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	bad := app.ExportResult{
+		EventID:      1,
+		EventType:    "entity.exploded",
+		TimestampUTC: "2020-01-01T00:00:00Z",
+		ActorUserID:  "alice",
+		Payload:      json.RawMessage(`{}`),
+	}
+	_, err := a.ImportEvents(ctx, []app.ExportResult{bad}, app.ImportOptions{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "validation failed")
+	require.Contains(t, err.Error(), "event_id 1")
 }
