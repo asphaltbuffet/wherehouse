@@ -10,4 +10,5 @@ import (
 type importApp interface {
 	ImportEvents(ctx context.Context, events []app.ExportResult, opts app.ImportOptions) (app.ImportResult, error)
 	HasEvents(ctx context.Context) (bool, error)
+	ClearAllData(ctx context.Context) error
 }

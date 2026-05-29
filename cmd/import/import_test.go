@@ -31,18 +31,29 @@ type fakeImportApp struct {
 	importResult app.ImportResult
 	importErr    error
 	importCalled bool
+	importOpts   app.ImportOptions
+	clearCalled  bool
+	callOrder    []string
 }
 
 func (f *fakeImportApp) HasEvents(_ context.Context) (bool, error) {
 	return f.hasEvents, f.hasEventsErr
 }
 
+func (f *fakeImportApp) ClearAllData(_ context.Context) error {
+	f.clearCalled = true
+	f.callOrder = append(f.callOrder, "clear")
+	return nil
+}
+
 func (f *fakeImportApp) ImportEvents(
 	_ context.Context,
 	_ []app.ExportResult,
-	_ app.ImportOptions,
+	opts app.ImportOptions,
 ) (app.ImportResult, error) {
 	f.importCalled = true
+	f.importOpts = opts
+	f.callOrder = append(f.callOrder, "import")
 	return f.importResult, f.importErr
 }
 
@@ -162,4 +173,104 @@ func TestRunImport_QuietFlag_SuppressesSummary(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	assert.Empty(t, stderr.String(), "summary should be suppressed with --quiet")
+}
+
+func TestRunImport_NonEmptyDB_NoReplace_ReturnsError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeImportApp{hasEvents: true}
+	cmd := importcmd.NewImportCmd(fake)
+	cmd.SetIn(bytes.NewBufferString(makeNDJSON([]app.ExportResult{
+		{
+			EventID:      1,
+			EventType:    "entity.created",
+			TimestampUTC: "2020-01-01T00:00:00Z",
+			ActorUserID:  "alice",
+			Payload:      json.RawMessage(`{}`),
+		},
+	})))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.False(t, fake.importCalled, "ImportEvents must not be called when DB is non-empty and --replace not set")
+}
+
+func TestRunImport_ReplaceWithoutYes_ReturnsError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeImportApp{hasEvents: true}
+	root := newTestRoot(fake)
+	root.SetIn(bytes.NewBufferString(""))
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"import", "--replace"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.False(t, fake.clearCalled, "ClearAllData must not be called without --yes")
+	assert.False(t, fake.importCalled)
+}
+
+func TestRunImport_ReplaceAndYes_ClearsBeforeImport(t *testing.T) {
+	t.Parallel()
+	fake := &fakeImportApp{hasEvents: true}
+	root := newTestRoot(fake)
+	input := makeNDJSON([]app.ExportResult{
+		{
+			EventID:      1,
+			EventType:    "entity.created",
+			TimestampUTC: "2020-01-01T00:00:00Z",
+			ActorUserID:  "alice",
+			Payload:      json.RawMessage(`{}`),
+		},
+	})
+	root.SetIn(bytes.NewBufferString(input))
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"import", "--replace", "--yes"})
+
+	require.NoError(t, root.Execute())
+	assert.True(t, fake.clearCalled, "ClearAllData must be called when --replace --yes")
+	assert.True(t, fake.importCalled)
+	require.Equal(t, []string{"clear", "import"}, fake.callOrder, "ClearAllData must precede ImportEvents")
+}
+
+func TestRunImport_YesWithoutReplace_AcceptedSilently(t *testing.T) {
+	t.Parallel()
+	fake := &fakeImportApp{hasEvents: false}
+	root := newTestRoot(fake)
+	root.SetIn(bytes.NewBufferString(""))
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"import", "--yes"})
+
+	require.NoError(t, root.Execute())
+	assert.False(t, fake.clearCalled)
+}
+
+func TestRunImport_ContinueFlag_ExitsZeroAndShowsFailedCount(t *testing.T) {
+	t.Parallel()
+	fake := &fakeImportApp{
+		hasEvents:    false,
+		importResult: app.ImportResult{Replayed: 1, Failed: 2, Warnings: 0},
+	}
+	root := newTestRoot(fake)
+	input := makeNDJSON([]app.ExportResult{
+		{
+			EventID:      1,
+			EventType:    "entity.created",
+			TimestampUTC: "2020-01-01T00:00:00Z",
+			ActorUserID:  "alice",
+			Payload:      json.RawMessage(`{}`),
+		},
+	})
+	root.SetIn(bytes.NewBufferString(input))
+	var stderr bytes.Buffer
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"import", "--continue"})
+
+	require.NoError(t, root.Execute(), "exit must be 0 with --continue even on partial failure")
+	assert.True(t, fake.importOpts.Continue, "--continue must be passed through to ImportOptions")
+	assert.Contains(t, stderr.String(), "Failed: 2")
 }

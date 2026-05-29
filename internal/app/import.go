@@ -42,6 +42,11 @@ func (a *App) HasEvents(ctx context.Context) (bool, error) {
 	return a.store.HasEvents(ctx)
 }
 
+// ClearAllData removes all events and entity projections from the database.
+func (a *App) ClearAllData(ctx context.Context) error {
+	return a.store.ClearAllData(ctx)
+}
+
 func importEvents(
 	ctx context.Context,
 	bus importBus,

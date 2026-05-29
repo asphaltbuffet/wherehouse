@@ -2,9 +2,11 @@ package importcmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -49,6 +51,7 @@ Examples:
 	cmd.Flags().StringP("file", "f", "", "path to NDJSON file (default: stdin)")
 	cmd.Flags().Bool("replace", false, "clear all existing data before import")
 	cmd.Flags().Bool("yes", false, "confirm destructive --replace operation")
+	cmd.Flags().Bool("continue", false, "continue on per-event errors, accumulating failures")
 	return cmd
 }
 
@@ -58,47 +61,30 @@ func runImport(cmd *cobra.Command, a importApp) error {
 	filePath, _ := cmd.Flags().GetString("file")
 	replace, _ := cmd.Flags().GetBool("replace")
 	yes, _ := cmd.Flags().GetBool("yes")
+	cont, _ := cmd.Flags().GetBool("continue")
 
-	var r = cmd.InOrStdin()
-	if filePath != "" {
-		f, err := os.Open(filePath)
-		if err != nil {
-			return fmt.Errorf("open %q: %w", filePath, err)
-		}
-		defer f.Close()
-		r = f
+	if err := checkReplaceFlags(ctx, a, replace, yes); err != nil {
+		return err
 	}
 
-	if replace && !yes {
-		has, err := a.HasEvents(ctx)
-		if err != nil {
-			return fmt.Errorf("check existing data: %w", err)
-		}
-		if has {
-			return errors.New("database is not empty; pass --yes to confirm replacement")
+	r, closer, err := openInput(cmd, filePath)
+	if err != nil {
+		return err
+	}
+	defer closer()
+
+	events, err := parseNDJSON(r)
+	if err != nil {
+		return err
+	}
+
+	if replace && yes {
+		if clearErr := a.ClearAllData(ctx); clearErr != nil {
+			return fmt.Errorf("clear data: %w", clearErr)
 		}
 	}
 
-	var events []app.ExportResult
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		var ev app.ExportResult
-		if err := json.Unmarshal(line, &ev); err != nil {
-			return fmt.Errorf("malformed JSON: %w", err)
-		}
-		events = append(events, ev)
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read input: %w", err)
-	}
-
-	result, err := a.ImportEvents(ctx, events, app.ImportOptions{
-		Replace: replace && yes,
-	})
+	result, err := a.ImportEvents(ctx, events, app.ImportOptions{Continue: cont})
 	if err != nil {
 		return fmt.Errorf("import failed: %w", err)
 	}
@@ -109,4 +95,51 @@ func runImport(cmd *cobra.Command, a importApp) error {
 	}
 
 	return nil
+}
+
+func checkReplaceFlags(ctx context.Context, a importApp, replace, yes bool) error {
+	if replace && !yes {
+		return errors.New("--replace requires --yes to confirm the destructive operation")
+	}
+	if !replace {
+		has, err := a.HasEvents(ctx)
+		if err != nil {
+			return fmt.Errorf("check existing data: %w", err)
+		}
+		if has {
+			return errors.New("database is not empty; use --replace --yes to overwrite")
+		}
+	}
+	return nil
+}
+
+func openInput(cmd *cobra.Command, filePath string) (io.Reader, func(), error) {
+	if filePath == "" {
+		return cmd.InOrStdin(), func() {}, nil
+	}
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("open %q: %w", filePath, err)
+	}
+	return f, func() { _ = f.Close() }, nil
+}
+
+func parseNDJSON(r io.Reader) ([]app.ExportResult, error) {
+	var events []app.ExportResult
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var ev app.ExportResult
+		if err := json.Unmarshal(line, &ev); err != nil {
+			return nil, fmt.Errorf("malformed JSON: %w", err)
+		}
+		events = append(events, ev)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read input: %w", err)
+	}
+	return events, nil
 }
