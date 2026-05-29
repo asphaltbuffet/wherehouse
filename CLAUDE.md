@@ -159,3 +159,7 @@ Custom label vocabulary in use (e.g. `to_triage`, `ready_afk`). See `docs/agents
 ### Domain docs
 
 Single-context repo: one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+### Serena MCP gotcha
+
+`find_symbol` requires `name_path_pattern` (not `name_path`) — passing the wrong key causes a validation error.

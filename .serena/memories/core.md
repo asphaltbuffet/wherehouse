@@ -1,27 +1,21 @@
 # Core
 
-Wherehouse: personal inventory tracker CLI. Go 1.25, event-sourced SQLite backend.
+Wherehouse: CLI inventory management tool in Go. Event-sourced; `events` table is append-only source of truth; projection tables (`entities_current`) are derived/rebuildable.
 
-## Source map
+## Entry points
+- `cmd/` — Cobra CLI commands, one subdir per command
+- `internal/` — all business logic, store, web server, domain types
+- `main.go` — wires root command
 
-- `cmd/` — cobra commands, one subdir per command
-- `internal/app/` — business logic (`App` struct, result types like `HistoryResult`, `ExportResult`)
-- `internal/store/` — SQLite persistence (`Store` struct, migrations/)
-- `internal/inventory/` — pure domain types (`EntityType`, `EntityStatus`, `Entity`, `Event`)
-- `internal/cli/` — shared CLI helpers: selectors, output, user identity
-- `internal/config/` — XDG TOML config (viper)
-- `internal/web/` — HTTP server, handlers, templates, embedded assets
-- `internal/eventbus/` — event dispatch, path propagation
-- `internal/entitypath/` — colon-separated path parsing
-- `internal/styles/` — lipgloss appStyles singleton (Wong palette, AdaptiveColor)
-- `internal/nanoid/` — 10-char alphanumeric NanoID generation
-- `cmd/root.go` — root command, registers via `NewDefaultXxxCmd()`
+## Critical invariants
+- All SQL goes through `internal/store` — commands never touch `*sql.DB` directly
+- `ExecInTransaction` + `WithRetry` wrappers for all DB ops
+- `ORDER BY` with ties must include `event_id ASC` as tiebreaker
+- Event replay ordering is strictly by `event_id`; timestamps are informational
+- No CGo; Go 1.25
 
-## Key invariants
-
-- Events are immutable source of truth (append-only). Projections are rebuildable.
-- Every `ORDER BY` that could tie **must** include `event_id ASC` tiebreaker.
-- DB schema source of truth: `events(event_id PK, event_type, timestamp_utc, actor_user_id, payload JSON, note)`
-- Projection tables: `locations_current`, `items_current`, `projects_current`
-
-See `mem:conventions` for command patterns; `mem:tech_stack` for build tools.
+## Memory graph
+- Build/test/lint commands: `mem:suggested_commands`
+- Code conventions and patterns: `mem:conventions`
+- Tech stack details: `mem:tech_stack`
+- Task-done checklist: `mem:task_completion`

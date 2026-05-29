@@ -296,6 +296,14 @@ func (s *Store) GetDescendantsTx(ctx context.Context, tx Tx, entityID string) ([
 	return scanEntities(rows)
 }
 
+// TruncateEntitiesTx deletes all rows from entities_current within the supplied transaction.
+func (s *Store) TruncateEntitiesTx(ctx context.Context, tx Tx) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM entities_current`); err != nil {
+		return fmt.Errorf("truncate entities_current: %w", err)
+	}
+	return nil
+}
+
 func escapeLIKE(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `%`, `\%`)

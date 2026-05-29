@@ -1,45 +1,30 @@
 # Conventions
 
-## Command constructor pattern (every cmd/xxx package)
+## Command pattern
+- `NewXxxCmd(db xxxDB)` for tests (inject interface); `NewDefaultXxxCmd()` for prod wiring
+- Each `cmd/xxx/db.go` defines a minimal `xxxDB` interface — these are real seams, not boilerplate
+- Hand-rolled fakes in `*_test.go`; mockery only for external deps
 
-- `cmd/xxx/db.go` — `xxxApp` interface (minimal methods only) + `//go:generate mockery`
-- `cmd/xxx/xxx.go` — `NewXxxCmd(app xxxApp)` (testable), `NewDefaultXxxCmd()` (prod wiring via `cli.OpenDatabase`), `buildXxxCmd()` (cobra.Command shell), `runXxx()` (logic)
-- Registered in `cmd/root.go` via `NewDefaultXxxCmd()`
-- Never pass `*database.DB` directly to run function
+## Store layer
+- All SQL in `internal/store`; never in cmd or app layers
+- Transactional methods take `(ctx, tx Tx)` — `Tx` is the store's abstraction over `*sql.Tx`
+- `ExecInTransaction` wraps begin/commit/rollback; `WithRetry` for SQLite busy errors
+- Projection tables (e.g. `entities_current`) are fully rebuildable from `events`
 
-## cmd/history as canonical template
+## Event sourcing
+- No undo — corrections create compensating events
+- `events` schema: `event_id PK, event_type, timestamp_utc, actor_user_id, payload JSON, note`
+- Adding a new event type: update `EventType` iota + `eventTypeByName` map → `go generate ./...` → add case to `processEventInTx`
 
-```go
-// db.go
-type historyApp interface {
-    GetHistory(ctx context.Context, req app.GetHistoryRequest) ([]app.HistoryResult, error)
-}
+## Web layer (`internal/web`)
+- `cmd/serve/` is thin shell only — no net/http, html/template, or //go:embed there
+- Handler split by cluster: `handlers_browse.go`, `handlers_entity.go`, `handlers_add.go`, `handlers_util.go`
+- `EntityResult.CanonicalName` = leaf name only; `FullPathDisplay` = full colon-separated path
 
-// history.go
-func NewDefaultHistoryCmd() *cobra.Command { /* opens DB, calls runHistory */ }
-func NewHistoryCmd(a historyApp) *cobra.Command { /* wires runE, used in tests */ }
-func buildHistoryCmd() *cobra.Command { /* pure cobra.Command definition */ }
-func runHistory(cmd *cobra.Command, args []string, a historyApp) error { /* logic */ }
-```
-
-## web package isolation
-
-`cmd/serve/` is a thin shell only — no `net/http`, `html/template`, `//go:embed`. All server logic in `internal/web`.
-
-## Styles
-
-All styles: private fields on `Styles` struct in `internal/styles/styles.go`, access via public accessors on singleton. Never inline `lipgloss.NewStyle()` in rendering.
-
-## Error wrapping
-
-`fmt.Errorf("context: %w", err)`
-
-## DB operations
-
-All via `ExecInTransaction` + `WithRetry` helpers.
-
-## Timestamps
-
-RFC3339 with UTC `Z` suffix.
-
-## No type assertions / `any` casts — prefer typed interfaces.
+## Style
+- Errors: `fmt.Errorf("context: %w", err)`
+- Timestamps: RFC3339 UTC `Z` suffix
+- No type assertions / `any` casts; no magic numbers
+- UI: silence is success; verbose only with `-v`/`--verbose`; `--json` on all commands
+- Styles: lipgloss via `internal/styles` singleton — never inline `lipgloss.NewStyle()`
+- Wong palette with `lipgloss.AdaptiveColor{Light, Dark}` for colorblind safety
