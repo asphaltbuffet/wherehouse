@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
@@ -53,7 +54,7 @@ func runCheck(cmd *cobra.Command, _ []string) error {
 	hasErrors := false
 
 	// Check global config
-	globalExists, err := fileExists(cmdFS, expandedGlobal)
+	globalExists, err := afero.Exists(cmdFS, expandedGlobal)
 	if err != nil {
 		out.Error(fmt.Sprintf("cannot access global config %s: %v", expandedGlobal, err))
 		return fmt.Errorf("cannot access global config: %w", err)
@@ -70,7 +71,7 @@ func runCheck(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Check local config
-	localExists, err := fileExists(cmdFS, expandedLocal)
+	localExists, err := afero.Exists(cmdFS, expandedLocal)
 	if err != nil {
 		out.Error(fmt.Sprintf("cannot access local config %s: %v", expandedLocal, err))
 		return fmt.Errorf("cannot access local config: %w", err)
