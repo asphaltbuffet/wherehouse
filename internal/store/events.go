@@ -130,6 +130,39 @@ func (s *Store) ClearAllData(ctx context.Context) error {
 	})
 }
 
+// RawEvent is an unvalidated event row — EventType is a plain string so callers
+// can detect unknown types without triggering a scan error.
+type RawEvent struct {
+	EventID   int64
+	EventType string
+	Payload   json.RawMessage
+	EntityID  *string
+}
+
+// GetAllEventsRaw returns all events ordered by event_id ASC with EventType as a raw string.
+func (s *Store) GetAllEventsRaw(ctx context.Context) ([]RawEvent, error) {
+	const query = `
+		SELECT event_id, event_type, payload, entity_id
+		FROM events ORDER BY event_id ASC`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query all events raw: %w", err)
+	}
+	defer rows.Close()
+
+	var events []RawEvent
+	for rows.Next() {
+		var ev RawEvent
+		var payloadStr string
+		if scanErr := rows.Scan(&ev.EventID, &ev.EventType, &payloadStr, &ev.EntityID); scanErr != nil {
+			return nil, fmt.Errorf("scan raw event: %w", scanErr)
+		}
+		ev.Payload = json.RawMessage(payloadStr)
+		events = append(events, ev)
+	}
+	return events, rows.Err()
+}
+
 func scanEvent(row *sql.Row) (*inventory.Event, error) {
 	var ev inventory.Event
 	var payloadStr string

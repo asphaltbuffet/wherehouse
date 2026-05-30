@@ -2,10 +2,13 @@
 
 - Language: Go 1.25, no CGo
 - CLI framework: cobra
-- DB: SQLite (via `internal/store`)
-- Config: viper-backed TOML (XDG)
-- Styling: lipgloss (Wong palette, `AdaptiveColor{Light, Dark}`)
-- Test: `testify/assert` (non-fatal), `testify/require` (preconditions); mocks via mockery
-- Build: mise tasks (see `mem:suggested_commands`)
-- Release: goreleaser (snapshot only via `mise run snapshot`)
-- Module: `github.com/asphaltbuffet/wherehouse`
+- DB: SQLite (via internal/store, migrations auto-apply)
+- Config: viper-backed TOML, XDG paths
+- UI: lipgloss (styles singleton), bubbletea where needed
+- Build: mise (`mise run build/test/lint/generate/mock/dev/snapshot`)
+- Test runner: gotestsum (race detector on)
+- Lint: golangci-lint --fix
+- Code gen: stringer (iota enums via `go generate`)
+- Mocks: mockery (external deps only — see `mem:conventions`)
+- Release: goreleaser
+- Module pins: gomod2nix for Nix reproducibility

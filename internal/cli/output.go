@@ -101,6 +101,16 @@ func (w *OutputWriter) Info(msg string) {
 	fmt.Fprintln(w.out, w.styles.Info().Render(msg))
 }
 
+// Issue prints a typed diagnostic finding as "[kind] description".
+// Always shown regardless of quiet mode; in JSON mode emits {"kind": ..., "description": ...}.
+func (w *OutputWriter) Issue(kind, description string) {
+	if w.jsonMode {
+		_ = w.printJSON(map[string]string{"kind": kind, "description": description})
+		return
+	}
+	fmt.Fprintln(w.out, w.styles.WarningText().Render("["+kind+"]")+" "+description)
+}
+
 // KeyValue prints a key-value pair with styled formatting.
 // Suppressed in quiet mode. In JSON mode, outputs {key:value}.
 func (w *OutputWriter) KeyValue(key, value string) {

@@ -1,45 +1,33 @@
 # Conventions
 
-## Command constructor pattern (every cmd/xxx package)
+## Command pattern
+- Each `cmd/xxx/` exposes `NewXxxCmd(db xxxDB)` (test injection) + `NewDefaultXxxCmd()` (production).
+- `cmd/xxx/db.go` defines minimal `xxxDB` interface for that command only — never pass `*database.DB` directly.
+- These interfaces are real seams with hand-rolled fakes in `*_test.go`. Do not treat as boilerplate.
 
-- `cmd/xxx/db.go` — `xxxApp` interface (minimal methods only) + `//go:generate mockery`
-- `cmd/xxx/xxx.go` — `NewXxxCmd(app xxxApp)` (testable), `NewDefaultXxxCmd()` (prod wiring via `cli.OpenDatabase`), `buildXxxCmd()` (cobra.Command shell), `runXxx()` (logic)
-- Registered in `cmd/root.go` via `NewDefaultXxxCmd()`
-- Never pass `*database.DB` directly to run function
+## Fakes vs mocks
+- Hand-rolled fakes for all internal interfaces (struct with controllable return values).
+- mockery-generated mocks ONLY for external/third-party interfaces.
+- Never generate mocks for interfaces defined within this codebase.
 
-## cmd/history as canonical template
-
-```go
-// db.go
-type historyApp interface {
-    GetHistory(ctx context.Context, req app.GetHistoryRequest) ([]app.HistoryResult, error)
-}
-
-// history.go
-func NewDefaultHistoryCmd() *cobra.Command { /* opens DB, calls runHistory */ }
-func NewHistoryCmd(a historyApp) *cobra.Command { /* wires runE, used in tests */ }
-func buildHistoryCmd() *cobra.Command { /* pure cobra.Command definition */ }
-func runHistory(cmd *cobra.Command, args []string, a historyApp) error { /* logic */ }
-```
-
-## web package isolation
-
-`cmd/serve/` is a thin shell only — no `net/http`, `html/template`, `//go:embed`. All server logic in `internal/web`.
+## Error handling
+- Wrap: `fmt.Errorf("context: %w", err)`
+- All DB ops use `ExecInTransaction` + `WithRetry` helpers.
 
 ## Styles
+- All styles on `Styles` struct in `internal/styles/styles.go`, accessed via public accessor methods on `appStyles` singleton.
+- Never inline `lipgloss.NewStyle()` in rendering functions.
+- Wong palette with `lipgloss.AdaptiveColor{Light, Dark}` for colorblind safety.
 
-All styles: private fields on `Styles` struct in `internal/styles/styles.go`, access via public accessors on singleton. Never inline `lipgloss.NewStyle()` in rendering.
+## Tests
+- `testify/assert` for non-fatal, `testify/require` for preconditions.
+- App-layer tests use `openTestApp(t)` (returns `*app.App`); if store access needed, use `openTestAppWithStore(t)`.
+- Both helpers are defined in the `internal/app` test package.
 
-## Error wrapping
-
-`fmt.Errorf("context: %w", err)`
-
-## DB operations
-
-All via `ExecInTransaction` + `WithRetry` helpers.
-
-## Timestamps
-
-RFC3339 with UTC `Z` suffix.
-
-## No type assertions / `any` casts — prefer typed interfaces.
+## Misc
+- Timestamps: RFC3339 UTC `Z` suffix.
+- No type assertions / `any` casts — prefer typed interfaces.
+- No magic numbers — use stdlib constants.
+- UI: silence is success; verbose only with `-v`/`--verbose`; `--json` on all commands.
+- No comments unless WHY is non-obvious.
+- web package: `cmd/serve/` is shell only — no `net/http`, `html/template`, `//go:embed` there.

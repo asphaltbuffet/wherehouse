@@ -140,6 +140,38 @@ func (b *Bus) handleEntityReparented(ctx context.Context, tx store.Tx, ev *inven
 	return nil
 }
 
+// handleEntityReparentedProjectionOnlyTx updates the reparented entity's path in
+// the projection without calling propagatePathChangesTx. Used during projection
+// rebuilds where EntityPathChangedEvents already in the event log will be applied
+// directly, so regenerating them would corrupt the projection and grow the event log.
+func (b *Bus) handleEntityReparentedProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityReparentedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: unmarshal: %w", err)
+	}
+
+	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: get entity: %w", err)
+	}
+
+	entity.ParentID = p.NewParentID
+	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
+		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
+	)
+	if err != nil {
+		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: recompute path: %w", err)
+	}
+
+	entity.LastEventID = ev.EventID
+	entity.UpdatedAt = time.Now().UTC()
+
+	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
+		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: %w", err)
+	}
+	return nil
+}
+
 func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
 	var p EntityPathChangedPayload
 	if err := json.Unmarshal(ev.Payload, &p); err != nil {
