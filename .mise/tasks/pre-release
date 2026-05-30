@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-#MISE description="generate release notes and update README version pins"
+#MISE description="generate release notes from CHANGELOG"
 #MISE hide=true
-#MISE sources=["CHANGELOG.md"]
+#MISE sources=["CHANGELOG.md", "VERSION"]
 #MISE outputs=["release_notes/notes.md"]
 
 set -euo pipefail
 
-if [ $# -ne 1 ]; then
-  echo "Usage: $0 <version>"
+if [ ! -f VERSION ]; then
+  echo "Error: VERSION file not found"
+  exit 1
+fi
+
+version=$(tr -d '[:space:]' < VERSION)
+
+chglog="CHANGELOG.md"
+
+if [ ! -f "$chglog" ]; then
+  echo "File not found: $chglog"
   exit 1
 fi
 
 rm -rf release_notes
 mkdir release_notes
 
-chglog="CHANGELOG.md"
-
-# check if the file exists
-if [ ! -f "$chglog" ]; then
-  echo "File not found: $chglog"
-  exit 1
-fi
-
-# extract content for specific version
-awk -v version="$1" '
+awk -v version="$version" '
   BEGIN { found=0 }
   {
     if ($0 ~ "^## \\[" version "\\]") {
@@ -38,5 +38,9 @@ awk -v version="$1" '
   END { print "\nSee full changelog at [CHANGELOG.md](CHANGELOG.md)\n"}
 ' "$chglog" > "release_notes/notes.md"
 
-# Update pinned Nix version references in README
-sed -i -E 's|github:asphaltbuffet/wherehouse/v[0-9]+\.[0-9]+\.[0-9]+|github:asphaltbuffet/wherehouse/v'"$1"'|g' README.md
+if [ ! -s release_notes/notes.md ]; then
+  echo "Error: release_notes/notes.md is empty — no CHANGELOG entry found for ${version}"
+  exit 1
+fi
+
+echo "  ✓ release_notes/notes.md generated for ${version}"

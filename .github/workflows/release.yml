@@ -4,14 +4,14 @@ name: Release Workflow
 
 on:
   push:
-    # run only against tags
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - VERSION
+  workflow_dispatch:
 
 permissions:
   contents: write
-  # packages: write
-  # issues: write
 
 jobs:
   goreleaser:
@@ -33,6 +33,54 @@ jobs:
       - uses: crazy-max/ghaction-upx@v4
         with:
           install-only: true
+
+      - name: Read version
+        id: version
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate code
+        run: mise run generate
+
+      - name: Generate completions
+        run: mise run completions
+
+      - name: Generate manpages
+        run: mise run manpages
+
+      - name: Generate release notes
+        run: mise run pre-release
+
+      - name: Assert release notes non-empty
+        run: test -s release_notes/notes.md
+
+      - name: Assert CHANGELOG entry exists
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "Error: no '## [${VERSION}]' section in CHANGELOG.md"
+            exit 1
+          fi
+
+      - name: Assert tag does not already exist
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="v${VERSION}"
+          if git tag -l | grep -qx "$tag"; then
+            echo "Error: tag ${tag} already exists - was this release already published?"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="v${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release ${tag}"
+          git push origin "$tag"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7

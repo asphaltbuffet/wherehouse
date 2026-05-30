@@ -424,6 +424,29 @@ mise run dev        # binary lands in dist/<os>_<arch>_<variant>/wherehouse
 
 ---
 
+### Releasing
+
+Releases are triggered automatically when `VERSION` changes on `main`. Every merge to main is _potentially_ a release — gated by whether `VERSION` was bumped.
+
+**To cut a release:**
+
+1. Add a `## [x.y.z] - YYYY-MM-DD` entry to `CHANGELOG.md`
+2. Run `mise run release <major|minor|patch>` — this:
+   - Computes the next version
+   - Verifies the CHANGELOG entry exists
+   - Writes `VERSION`
+   - Updates nix flake pins in this file
+3. Commit `VERSION`, `CHANGELOG.md`, and `README.md` together and open a PR
+
+When the PR merges, CI detects the `VERSION` change and:
+- Extracts release notes from `CHANGELOG.md`
+- Creates and pushes the `v<version>` tag
+- Runs goreleaser to build binaries and publish the GitHub release
+
+**If you merge without bumping `VERSION`**, no release fires — your changes wait for the next PR that does bump it. A CI check (`release-check.yml`) will fail the PR if `VERSION` changed but `CHANGELOG.md` has no matching entry.
+
+---
+
 ## Troubleshooting
 
 ### `SQLITE_BUSY` / lock errors
