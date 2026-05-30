@@ -38,9 +38,7 @@ func NewDefaultDoctorCmd() *cobra.Command {
 			cfg = config.GetDefaults()
 		}
 
-		out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-
-		configIssues := runConfigCheck(out, cfg)
+		configIssues := runConfigCheck(cfg)
 
 		s, a, dbErr := cli.OpenDatabase(cmd.Context())
 		if dbErr != nil {
@@ -96,8 +94,7 @@ Examples:
 // Returns true if any config issues were found.
 // runConfigCheck validates config files and DB path resolution.
 // Returns any config issues found.
-func runConfigCheck(out *cli.OutputWriter, cfg *config.Config) []app.DoctorIssue {
-	_ = out // reserved for future verbose output
+func runConfigCheck(cfg *config.Config) []app.DoctorIssue {
 	fs := afero.NewOsFs()
 	var issues []app.DoctorIssue
 
