@@ -60,23 +60,41 @@ func TestValidateEventLog_UnknownEventType(t *testing.T) {
 }
 
 func TestValidateEventLog_MalformedPayload(t *testing.T) {
-	a, s := openTestAppWithStore(t)
-	ctx := context.Background()
+	tests := []struct {
+		name       string
+		eventType  string
+		wantIssues int
+	}{
+		{name: "entity.created", eventType: "entity.created", wantIssues: 1},
+		{name: "entity.renamed", eventType: "entity.renamed", wantIssues: 1},
+		{name: "entity.reparented", eventType: "entity.reparented", wantIssues: 1},
+		{name: "entity.path_changed", eventType: "entity.path_changed", wantIssues: 1},
+		{name: "entity.status_changed", eventType: "entity.status_changed", wantIssues: 1},
+		// malformed entity.removed is also orphaned (no prior create), so two issues fire.
+		{name: "entity.removed", eventType: "entity.removed", wantIssues: 2},
+	}
 
-	entityID := "e1"
-	_, err := s.DB().ExecContext(ctx,
-		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
-		 VALUES (?, ?, ?, ?, NULL, ?)`,
-		"entity.created", "2026-01-01T00:00:00Z", "alice", `not-json`, &entityID,
-	)
-	require.NoError(t, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a, s := openTestAppWithStore(t)
+			ctx := context.Background()
 
-	issues, err := a.ValidateEventLog(ctx)
-	require.NoError(t, err)
-	require.Len(t, issues, 1)
-	assert.Equal(t, app.DoctorKindEventLog, issues[0].Kind)
-	assert.NotNil(t, issues[0].EventID)
-	assert.Contains(t, issues[0].Description, "payload")
+			entityID := "e1"
+			_, err := s.DB().ExecContext(ctx,
+				`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+				VALUES (?, ?, ?, ?, NULL, ?)`,
+				tc.eventType, "2026-01-01T00:00:00Z", "alice", `not-json`, &entityID,
+			)
+			require.NoError(t, err)
+
+			issues, err := a.ValidateEventLog(ctx)
+			require.NoError(t, err)
+			require.Len(t, issues, tc.wantIssues)
+			assert.Equal(t, app.DoctorKindEventLog, issues[0].Kind)
+			assert.NotNil(t, issues[0].EventID)
+			assert.Contains(t, issues[0].Description, "payload")
+		})
+	}
 }
 
 func TestValidateEventLog_MissingEntityID(t *testing.T) {
@@ -244,4 +262,106 @@ func TestTruncateAndReplay_ReturnsCountAndProjectionIntact(t *testing.T) {
 	entities, err := a.ListEntities(ctx)
 	require.NoError(t, err)
 	assert.Len(t, entities, 2)
+}
+
+func TestValidateEventLog_AllPayloadTypes_Valid(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx := context.Background()
+
+	rows := []struct {
+		eventType string
+		payload   string
+	}{
+		{"entity.created", `{"entity_id":"e1","display_name":"Garage","entity_type":"place"}`},
+		{"entity.renamed", `{"entity_id":"e1","display_name":"Garage"}`},
+		{"entity.reparented", `{"entity_id":"e1","new_parent_id":null}`},
+		{
+			"entity.path_changed",
+			`{"entity_id":"e1","full_path_display":"Garage","full_path_canonical":"garage","depth":0}`,
+		},
+		{"entity.status_changed", `{"entity_id":"e1","status":"ok"}`},
+		{"entity.removed", `{"entity_id":"e1"}`},
+	}
+
+	entityID := "e1"
+	for _, r := range rows {
+		_, err := s.DB().ExecContext(ctx,
+			`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+			VALUES (?, ?, ?, ?, NULL, ?)`,
+			r.eventType, "2026-01-01T00:00:00Z", "alice", r.payload, &entityID,
+		)
+		require.NoError(t, err)
+	}
+
+	issues, err := a.ValidateEventLog(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, issues)
+}
+
+func TestValidateEventLog_OrphanedRemove(t *testing.T) {
+	tests := []struct {
+		name        string
+		events      []struct{ eventType, entityID string }
+		wantIssues  int
+		wantEventID bool
+	}{
+		{
+			name: "orphaned_remove",
+			events: []struct{ eventType, entityID string }{
+				{"entity.removed", "e1"},
+			},
+			wantIssues:  1,
+			wantEventID: true,
+		},
+		{
+			name: "valid_remove",
+			events: []struct{ eventType, entityID string }{
+				{"entity.created", "e1"},
+				{"entity.removed", "e1"},
+			},
+			wantIssues: 0,
+		},
+		{
+			name: "remove_before_create",
+			events: []struct{ eventType, entityID string }{
+				{"entity.removed", "e1"},
+				{"entity.created", "e1"},
+			},
+			wantIssues: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a, s := openTestAppWithStore(t)
+			ctx := context.Background()
+
+			payloads := map[string]string{
+				"entity.created": `{"entity_id":"e1","display_name":"Widget","entity_type":"leaf"}`,
+				"entity.removed": `{"entity_id":"e1"}`,
+			}
+
+			for _, ev := range tc.events {
+				entityID := ev.entityID
+				_, err := s.DB().ExecContext(ctx,
+					`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+					VALUES (?, ?, ?, ?, NULL, ?)`,
+					ev.eventType, "2026-01-01T00:00:00Z", "alice", payloads[ev.eventType], &entityID,
+				)
+				require.NoError(t, err)
+			}
+
+			issues, err := a.ValidateEventLog(ctx)
+			require.NoError(t, err)
+			require.Len(t, issues, tc.wantIssues)
+			if tc.wantIssues > 0 {
+				assert.Equal(t, app.DoctorKindEventLog, issues[0].Kind)
+				assert.Contains(t, issues[0].Description, "entity.removed")
+				assert.Contains(t, issues[0].Description, "entity.created")
+				if tc.wantEventID {
+					assert.NotNil(t, issues[0].EventID)
+				}
+			}
+		})
+	}
 }

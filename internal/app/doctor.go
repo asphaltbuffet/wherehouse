@@ -28,68 +28,101 @@ type DoctorIssue struct {
 
 // ValidateEventLog reads all events and returns a DoctorIssue for each structural problem found.
 // Returns an empty (non-nil) slice when the log is clean. Never mutates state.
+// Returns an empty (non-nil) slice when the log is clean. Never mutates state.
 func (a *App) ValidateEventLog(ctx context.Context) ([]DoctorIssue, error) {
 	events, err := a.store.GetAllEventsRaw(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("validate event log: %w", err)
 	}
 
+	createdIDs := make(map[string]bool)
+	removedIDs := make(map[string]int64) // entity ID → first remove event_id
+
 	issues := make([]DoctorIssue, 0)
 	for _, ev := range events {
-		id := ev.EventID
 		et, parseErr := inventory.ParseEventType(ev.EventType)
-		if parseErr != nil {
+
+		// Track created/removed before per-event validation so that malformed
+		// or otherwise-flagged events are still counted for orphan detection.
+		if parseErr == nil && ev.EntityID != nil && *ev.EntityID != "" {
+			switch et { //nolint:exhaustive // only created/removed affect orphan tracking
+			case inventory.EntityCreatedEvent:
+				createdIDs[*ev.EntityID] = true
+			case inventory.EntityRemovedEvent:
+				if _, seen := removedIDs[*ev.EntityID]; !seen {
+					removedIDs[*ev.EntityID] = ev.EventID
+				}
+			}
+		}
+
+		issues = append(issues, validateSingleEvent(ev, et, parseErr)...)
+	}
+
+	for entityID, removeEventID := range removedIDs {
+		if !createdIDs[entityID] {
+			eid := removeEventID
 			issues = append(issues, DoctorIssue{
 				Kind:        DoctorKindEventLog,
-				EventID:     &id,
-				Description: fmt.Sprintf("unknown event type %q", ev.EventType),
+				EventID:     &eid,
+				Description: fmt.Sprintf("entity %s has entity.removed event but no entity.created event", entityID),
 			})
-			continue
-		}
-
-		if proto, ok := payloadPrototypes[et]; ok {
-			target := proto()
-			if unmarshalErr := json.Unmarshal(ev.Payload, target); unmarshalErr != nil {
-				issues = append(issues, DoctorIssue{
-					Kind:        DoctorKindEventLog,
-					EventID:     &id,
-					Description: fmt.Sprintf("malformed payload for %s: %v", ev.EventType, unmarshalErr),
-				})
-				continue
-			}
-		}
-
-		if ev.EntityID == nil || *ev.EntityID == "" {
-			issues = append(issues, DoctorIssue{
-				Kind:        DoctorKindEventLog,
-				EventID:     &id,
-				Description: fmt.Sprintf("event %d missing entity_id", id),
-			})
-			continue
-		}
-
-		if et == inventory.EntityCreatedEvent {
-			var p eventbus.EntityCreatedPayload
-			_ = json.Unmarshal(ev.Payload, &p) // already validated above
-			if p.DisplayName == "" {
-				issues = append(issues, DoctorIssue{
-					Kind:        DoctorKindEventLog,
-					EventID:     &id,
-					Description: fmt.Sprintf("entity.created event %d missing display_name", id),
-				})
-				continue
-			}
-			if _, typeErr := inventory.ParseEntityType(p.EntityType); typeErr != nil {
-				issues = append(issues, DoctorIssue{
-					Kind:        DoctorKindEventLog,
-					EventID:     &id,
-					Description: fmt.Sprintf("entity.created event %d invalid entity_type %q", id, p.EntityType),
-				})
-				continue
-			}
 		}
 	}
+
 	return issues, nil
+}
+
+func validateSingleEvent(ev store.RawEvent, et inventory.EventType, parseErr error) []DoctorIssue {
+	id := ev.EventID
+	var issues []DoctorIssue
+
+	if parseErr != nil {
+		return append(issues, DoctorIssue{
+			Kind:        DoctorKindEventLog,
+			EventID:     &id,
+			Description: fmt.Sprintf("unknown event type %q", ev.EventType),
+		})
+	}
+
+	if proto, ok := payloadPrototypes[et]; ok {
+		target := proto()
+		if unmarshalErr := json.Unmarshal(ev.Payload, target); unmarshalErr != nil {
+			return append(issues, DoctorIssue{
+				Kind:        DoctorKindEventLog,
+				EventID:     &id,
+				Description: fmt.Sprintf("malformed payload for %s: %v", ev.EventType, unmarshalErr),
+			})
+		}
+	}
+
+	if ev.EntityID == nil || *ev.EntityID == "" {
+		return append(issues, DoctorIssue{
+			Kind:        DoctorKindEventLog,
+			EventID:     &id,
+			Description: fmt.Sprintf("event %d missing entity_id", id),
+		})
+	}
+
+	if et == inventory.EntityCreatedEvent {
+		var p eventbus.EntityCreatedPayload
+		_ = json.Unmarshal(ev.Payload, &p) // already validated above
+		if p.DisplayName == "" {
+			return append(issues, DoctorIssue{
+				Kind:        DoctorKindEventLog,
+				EventID:     &id,
+				Description: fmt.Sprintf("entity.created event %d missing display_name", id),
+			})
+		}
+		if _, typeErr := inventory.ParseEntityType(p.EntityType); typeErr != nil {
+			return append(issues, DoctorIssue{
+				Kind:        DoctorKindEventLog,
+				EventID:     &id,
+				Description: fmt.Sprintf("entity.created event %d invalid entity_type %q", id, p.EntityType),
+			})
+		}
+	}
+
+	return issues
 }
 
 // CheckProjectionConsistency performs a logical diff between the event log and the

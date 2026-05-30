@@ -115,9 +115,11 @@ These interfaces are **real seams**, not shallow pass-throughs — each has a ha
 **`EntityResult` field pitfall:** `CanonicalName` is the normalized *leaf name only* (no colons). `FullPathDisplay` is the full colon-separated path (e.g. `"Garage:Toolbox"`). Use `FullPathDisplay` when checking entity depth or path structure.
 
 ### Adding a New Event Type
-1. Add to `EventType` iota + line-comment string + `eventTypeByName` map in `internal/database/eventTypes.go`
+1. Add to `EventType` iota + line-comment string + `eventTypeByName` map in `internal/inventory/event_type.go`
 2. Run `go generate ./...` to regenerate `eventtype_string.go`
-3. Add a case to `processEventInTx` in `eventHandler.go`
+3. Add a case to `applyEventTx` in `internal/eventbus/bus.go`
+4. Add a payload struct to `internal/eventbus/payloads.go`
+5. Add an entry to `payloadPrototypes` in `internal/app/doctor.go`
 
 ### Styles
 All styles live as private fields on the `Styles` struct in `internal/styles/styles.go`. Access via public accessor methods on the `appStyles` singleton. Never inline `lipgloss.NewStyle()` in rendering functions. Use Wong palette with `lipgloss.AdaptiveColor{Light, Dark}` for colorblind safety.

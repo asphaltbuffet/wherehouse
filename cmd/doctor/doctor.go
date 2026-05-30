@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -38,9 +37,7 @@ func NewDefaultDoctorCmd() *cobra.Command {
 			cfg = config.GetDefaults()
 		}
 
-		out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-
-		configIssues := runConfigCheck(out, cfg)
+		configIssues := runConfigCheck(cfg)
 
 		s, a, dbErr := cli.OpenDatabase(cmd.Context())
 		if dbErr != nil {
@@ -96,8 +93,7 @@ Examples:
 // Returns true if any config issues were found.
 // runConfigCheck validates config files and DB path resolution.
 // Returns any config issues found.
-func runConfigCheck(out *cli.OutputWriter, cfg *config.Config) []app.DoctorIssue {
-	_ = out // reserved for future verbose output
+func runConfigCheck(cfg *config.Config) []app.DoctorIssue {
 	fs := afero.NewOsFs()
 	var issues []app.DoctorIssue
 
@@ -113,7 +109,7 @@ func runConfigCheck(out *cli.OutputWriter, cfg *config.Config) []app.DoctorIssue
 			})
 			continue
 		}
-		exists, err := aferoFileExists(fs, expanded)
+		exists, err := afero.Exists(fs, expanded)
 		if err != nil {
 			issues = append(issues, app.DoctorIssue{
 				Kind:        app.DoctorKindConfig,
@@ -140,17 +136,6 @@ func runConfigCheck(out *cli.OutputWriter, cfg *config.Config) []app.DoctorIssue
 	}
 
 	return issues
-}
-
-func aferoFileExists(fs afero.Fs, path string) (bool, error) {
-	_, err := fs.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
 }
 
 func runDoctor(cmd *cobra.Command, _ []string, configIssues []app.DoctorIssue, a doctorApp) error {
