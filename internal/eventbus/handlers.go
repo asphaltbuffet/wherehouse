@@ -172,6 +172,60 @@ func (b *Bus) handleEntityReparentedProjectionOnlyTx(ctx context.Context, tx sto
 	return nil
 }
 
+// handleEntityReparentedComputePayloadsTx updates the projection for the
+// reparented entity and all its descendants (no event writes) and returns the
+// expected EntityPathChangedPayload for each descendant. Used by ReplayEvent
+// so import can validate export integrity without side-effect event insertion.
+func (b *Bus) handleEntityReparentedComputePayloadsTx(ctx context.Context, tx store.Tx, ev *inventory.Event) ([]EntityPathChangedPayload, error) {
+	var p EntityReparentedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: unmarshal: %w", err)
+	}
+
+	// Fetch descendants before updating the parent so the path-prefix query
+	// still matches the old canonical path stored in the DB.
+	descendants, err := b.store.GetDescendantsTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: get descendants: %w", err)
+	}
+
+	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: get entity: %w", err)
+	}
+
+	entity.ParentID = p.NewParentID
+	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
+		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: recompute path: %w", err)
+	}
+
+	entity.LastEventID = ev.EventID
+	entity.UpdatedAt = time.Now().UTC()
+
+	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
+		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: update entity: %w", err)
+	}
+
+	payloads := ComputeDescendantPathPayloads(entity, descendants)
+
+	for i, d := range descendants {
+		dp := payloads[i]
+		d.FullPathDisplay = dp.FullPathDisplay
+		d.FullPathCanonical = dp.FullPathCanonical
+		d.Depth = dp.Depth
+		d.LastEventID = ev.EventID
+		d.UpdatedAt = time.Now().UTC()
+		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
+			return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: update descendant %s: %w", d.EntityID, err)
+		}
+	}
+
+	return payloads, nil
+}
+
 func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
 	var p EntityPathChangedPayload
 	if err := json.Unmarshal(ev.Payload, &p); err != nil {
@@ -249,34 +303,17 @@ func (b *Bus) propagatePathChangesTx(
 	parent *inventory.Entity,
 	descendants []*inventory.Entity,
 ) error {
-	updated := map[string]*inventory.Entity{parent.EntityID: parent}
+	payloads := ComputeDescendantPathPayloads(parent, descendants)
 
-	for _, d := range descendants {
-		var parentDisplay, parentCanonical string
-		var parentDepth int
-		if d.ParentID != nil {
-			p, ok := updated[*d.ParentID]
-			if !ok {
-				return fmt.Errorf("propagatePathChangesTx: parent %s of %s not in updated set", *d.ParentID, d.EntityID)
-			}
-			parentDisplay = p.FullPathDisplay
-			parentCanonical = p.FullPathCanonical
-			parentDepth = p.Depth
-		}
-
-		d.FullPathDisplay = parentDisplay + ":" + d.DisplayName
-		d.FullPathCanonical = parentCanonical + ":" + d.CanonicalName
-		d.Depth = parentDepth + 1
+	for i, d := range descendants {
+		p := payloads[i]
+		d.FullPathDisplay = p.FullPathDisplay
+		d.FullPathCanonical = p.FullPathCanonical
+		d.Depth = p.Depth
 		d.LastEventID = triggeringEv.EventID
 		d.UpdatedAt = time.Now().UTC()
 
-		payload := EntityPathChangedPayload{
-			EntityID:          d.EntityID,
-			FullPathDisplay:   d.FullPathDisplay,
-			FullPathCanonical: d.FullPathCanonical,
-			Depth:             d.Depth,
-		}
-		payloadJSON, err := json.Marshal(payload)
+		payloadJSON, err := json.Marshal(p)
 		if err != nil {
 			return fmt.Errorf("marshal path_changed payload for %s: %w", d.EntityID, err)
 		}
@@ -298,9 +335,43 @@ func (b *Bus) propagatePathChangesTx(
 		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
 			return fmt.Errorf("update descendant %s: %w", d.EntityID, err)
 		}
-
-		updated[d.EntityID] = d
 	}
 
 	return nil
+}
+
+// ComputeDescendantPathPayloads computes the new EntityPathChangedPayload for
+// each descendant given the already-updated parent. Descendants must be ordered
+// parent-before-child (depth ASC). No DB access; safe to call outside a
+// transaction.
+func ComputeDescendantPathPayloads(parent *inventory.Entity, descendants []*inventory.Entity) []EntityPathChangedPayload {
+	updated := map[string]*inventory.Entity{parent.EntityID: parent}
+	payloads := make([]EntityPathChangedPayload, len(descendants))
+
+	for i, d := range descendants {
+		var parentDisplay, parentCanonical string
+		var parentDepth int
+		if d.ParentID != nil {
+			if p, ok := updated[*d.ParentID]; ok {
+				parentDisplay = p.FullPathDisplay
+				parentCanonical = p.FullPathCanonical
+				parentDepth = p.Depth
+			}
+		}
+
+		computed := *d
+		computed.FullPathDisplay = parentDisplay + ":" + d.DisplayName
+		computed.FullPathCanonical = parentCanonical + ":" + d.CanonicalName
+		computed.Depth = parentDepth + 1
+
+		payloads[i] = EntityPathChangedPayload{
+			EntityID:          d.EntityID,
+			FullPathDisplay:   computed.FullPathDisplay,
+			FullPathCanonical: computed.FullPathCanonical,
+			Depth:             computed.Depth,
+		}
+		updated[d.EntityID] = &computed
+	}
+
+	return payloads
 }
