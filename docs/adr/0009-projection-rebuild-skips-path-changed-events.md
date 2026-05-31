@@ -22,4 +22,4 @@ A boolean `writesEvents bool` parameter on `applyEventTx` was considered and rej
 
 ## Relationship to `ReplayEvent` (import)
 
-`ReplayEvent` has the same event-log-growth defect — it also routes `EntityReparentedEvent` through `applyEventTx`. Fixing it requires redesigning the import path-changed validation (see ADR-0005), which currently relies on `GetEventsAfter` side effects to detect export corruption. That work is tracked in issue #191.
+`ReplayEvent` previously had the same event-log-growth defect — it routed `EntityReparentedEvent` through `applyEventTx`, which called `propagatePathChangesTx` and inserted duplicate `EntityPathChangedEvent` rows on every import run. This was fixed in #191: `ReplayEvent` now uses a closure that routes `EntityReparentedEvent` through `handleEntityReparentedComputePayloadsTx` (updates the projection, no event writes) and all other events through `applyEventProjectionOnlyTx`. The import path-changed validation no longer relies on `GetEventsAfter` side effects; see ADR-0005.

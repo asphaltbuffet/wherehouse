@@ -4,7 +4,9 @@
 
 Replaying path-changed events via `ReplayEvent` during import would corrupt the projection: `handleEntityReparented` already regenerates them, so each descendant's path would be updated twice — once by the reparent handler and once by the explicit path-changed replay.
 
-Instead, import skips `EntityPathChangedEvent` records during replay. The bus regenerates them correctly when each `EntityReparentedEvent` is replayed. The skipped records from the export are not discarded — they are compared against the freshly-generated records (via `store.GetEventsAfter`) to validate export integrity. Count mismatches or payload mismatches are surfaced as warnings on the `ImportResult` and logged via the structured logger. This validation is non-fatal: a warning indicates possible export corruption or schema divergence but does not abort the import.
+Instead, import skips `EntityPathChangedEvent` records during replay. The bus recomputes the correct descendant paths when each `EntityReparentedEvent` is replayed (via `handleEntityReparentedComputePayloadsTx`) and returns the expected `EntityPathChangedPayload` for each affected descendant directly in the `ReplayEvent` return value. The skipped records from the export are not discarded — they are buffered and compared field-by-field against the bus-returned payloads to validate export integrity. Count mismatches or payload mismatches are surfaced as warnings on the `ImportResult` and logged via the structured logger. This validation is non-fatal: a warning indicates possible export corruption or schema divergence but does not abort the import.
+
+No new `EntityPathChangedEvent` rows are written to the event log during import. The event-log-growth defect that existed when `ReplayEvent` used `applyEventTx` (which called `propagatePathChangesTx`) was fixed in #191.
 
 ## Warning surface
 
