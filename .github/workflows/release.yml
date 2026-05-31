@@ -47,12 +47,6 @@ jobs:
       - name: Generate manpages
         run: mise run manpages
 
-      - name: Generate release notes
-        run: mise run pre-release
-
-      - name: Assert release notes non-empty
-        run: test -s release_notes/notes.md
-
       - name: Assert CHANGELOG entry exists
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -87,7 +81,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: "~> v2"
-          args: release --clean --release-notes=release_notes/notes.md
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}

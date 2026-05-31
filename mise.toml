@@ -30,7 +30,7 @@ description = "remove build artifacts"
 run = '''
 #!/usr/bin/env bash
 
-declare -a dirs=("dist" "bin" "completions" "manpages" "release_notes")
+declare -a dirs=("dist" "bin" "completions" "manpages")
 
 for d in "${dirs[@]}"; do
   rm -rf $d
