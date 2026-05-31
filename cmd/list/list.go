@@ -33,7 +33,7 @@ func NewDefaultListCmd() *cobra.Command {
 }
 
 // NewListCmd returns the list command using the supplied listApp (for testing).
-func NewListCmd(a listApp) *cobra.Command {
+func NewListCmd(a *app.App) *cobra.Command {
 	cmd := buildListCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runList(cmd, args, a) }
 	return cmd
@@ -61,7 +61,7 @@ Examples:
 	return cmd
 }
 
-func runList(cmd *cobra.Command, _ []string, a listApp) error {
+func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	ctx := cmd.Context()
 	underPath, _ := cmd.Flags().GetString("under")
 	typeFilter, _ := cmd.Flags().GetString("type")
