@@ -8,9 +8,11 @@ We added a `Bus.ReplayEvent(ctx, *inventory.Event) (int64, error)` method that a
 
 ## Implementation note: shared writeEvent helper
 
-Both `Dispatch` and `ReplayEvent` now delegate to a private `Bus.writeEvent(ctx, *inventory.Event) (int64, error)` helper that owns the INSERT + `LastInsertId` + `applyEventTx` sequence. The public separation between `Dispatch` and `ReplayEvent` remains because the two paths differ in how they source `TimestampUTC` and `EntityID`:
+Both `Dispatch` and `ReplayEvent` delegate to a private `Bus.writeEvent(ctx, *inventory.Event, applyFn) (int64, error)` helper that owns the INSERT + `LastInsertId` + apply-function sequence. The public separation between `Dispatch` and `ReplayEvent` remains because the two paths differ in how they source `TimestampUTC` and `EntityID`, and in which apply function they use:
 
-- `Dispatch` stamps `time.Now()` and parses `entity_id` from the payload.
-- `ReplayEvent` uses the values already on the supplied `*inventory.Event`.
+- `Dispatch` stamps `time.Now()`, parses `entity_id` from the payload, and calls `applyEventTx` (which writes derived `EntityPathChangedEvent` rows as a side effect).
+- `ReplayEvent` uses the values already on the supplied `*inventory.Event` and passes a closure as the apply function: `EntityReparentedEvent` is routed to `handleEntityReparentedComputePayloadsTx` (updates projection, no event writes, returns computed payloads); all other events go through `applyEventProjectionOnlyTx`.
 
-If a future change needs to differ further between the two paths (for example, one adds a validation step or a side effect the other shouldn't), express it as a parameter to `writeEvent` rather than re-splitting the helper into two implementations. Keeping a single canonical write path is what makes "ReplayEvent and Dispatch produce identical post-conditions" a checkable property instead of a hope.
+## ReplayEvent return signature
+
+`ReplayEvent` returns `(int64, []EntityPathChangedPayload, error)`. The payload slice is non-nil only when the replayed event is an `EntityReparentedEvent`; it carries the expected `EntityPathChangedPayload` for each affected descendant, computed from the post-reparent projection state. The import layer uses these to validate the path-changed records buffered from the export stream without relying on `GetEventsAfter` side effects. See ADR-0005.

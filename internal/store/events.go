@@ -87,19 +87,6 @@ func (s *Store) GetAllEvents(ctx context.Context) ([]*inventory.Event, error) {
 	return scanEvents(rows)
 }
 
-// GetEventsAfter retrieves events with event_id > afterID, ordered by event_id ASC.
-func (s *Store) GetEventsAfter(ctx context.Context, afterID int64) ([]*inventory.Event, error) {
-	const query = `
-		SELECT event_id, event_type, timestamp_utc, actor_user_id, payload, note, entity_id
-		FROM events WHERE event_id > ? ORDER BY event_id ASC`
-	rows, err := s.db.QueryContext(ctx, query, afterID)
-	if err != nil {
-		return nil, fmt.Errorf("query events after %d: %w", afterID, err)
-	}
-	defer rows.Close()
-	return scanEvents(rows)
-}
-
 // HasEvents reports whether the events table contains at least one row.
 func (s *Store) HasEvents(ctx context.Context) (bool, error) {
 	var exists bool
