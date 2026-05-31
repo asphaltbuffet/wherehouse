@@ -78,7 +78,7 @@ cp dist/wherehouse ~/.local/bin/
 **Standalone install**:
 
 ```bash
-nix profile install github:asphaltbuffet/wherehouse/v0.4.0
+nix profile install github:asphaltbuffet/wherehouse/v0.5.0
 ```
 
 **Home Manager** — add as an input and load the bundled module:
@@ -89,7 +89,7 @@ nix profile install github:asphaltbuffet/wherehouse/v0.4.0
   inputs = {
     nixpkgs.url      = "github:NixOS/nixpkgs/nixpkgs-unstable";
     home-manager.url = "github:nix-community/home-manager";
-    wherehouse.url   = "github:asphaltbuffet/wherehouse/v0.4.0";
+    wherehouse.url   = "github:asphaltbuffet/wherehouse/v0.5.0";
     wherehouse.inputs.nixpkgs.follows = "nixpkgs";
   };
 
@@ -231,7 +231,25 @@ wherehouse export --quiet
 
 The `--json` flag is accepted silently (the command always emits NDJSON).
 
-### 11. Web UI
+### 11. Check Inventory Health
+
+```bash
+# Run all checks (config, event log, projection consistency)
+wherehouse doctor
+
+# Rebuild the projection from the event log when checks pass
+wherehouse doctor --rebuild
+
+# Rebuild even if issues are found
+wherehouse doctor --rebuild --force
+
+# JSON output (healthy flag + issue list)
+wherehouse doctor --json
+```
+
+Exit code is non-zero when any issue is found, making it safe to use in scripts.
+
+### 12. Web UI
 
 ```bash
 # Start local web server (default: http://127.0.0.1:8080)
@@ -261,6 +279,7 @@ Entity Management:
   scry [<name>]        Search entities by name, or list all
   history <path>       Show full event timeline for an entity
   export               Export all events as NDJSON to stdout
+  doctor               Check inventory health (--rebuild, --rebuild --force)
 
 Web UI:
   serve                Start local web server (--port, --bind)
