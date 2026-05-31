@@ -1,4 +1,5 @@
 [tools]
+changie = "latest"
 semver = "latest"
 "aqua:golangci/golangci-lint" = "prefix:2.8"
 "aqua:gotestyourself/gotestsum" = "latest"
