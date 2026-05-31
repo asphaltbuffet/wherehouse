@@ -138,5 +138,5 @@ sources = ["**/*.go", "**/testdata/**"]
 outputs = ["bin/coverage.out"]
 run = [
   "mkdir -p bin",
-  "gotestsum -- -race -covermode=atomic -coverprofile=bin/coverage.out $(go list ./... | grep -v /mocks | grep -v /ai-docs)",
+  "gotestsum -- -race -covermode=atomic -coverprofile=bin/coverage.out $(go list ./... | grep -v /mocks)",
 ]
