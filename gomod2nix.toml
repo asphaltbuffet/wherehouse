@@ -8,8 +8,8 @@ schema = 3
     version = "v0.4.3"
     hash = "sha256-y+QDUxGOKhugEMQLRUTZYT2C+wKqYHnMLJ44jbh7+JA="
   [mod."github.com/charmbracelet/ultraviolet"]
-    version = "v0.0.0-20260511121909-c840852527f3"
-    hash = "sha256-oWEEaaetCmXvflD03MWy8qD105Kd62iI62+lxofE9Ns="
+    version = "v0.0.0-20260525132238-948f4557a654"
+    hash = "sha256-V0e1U50upnr+gWvao41MTiLHAbd5wAlt4GD8hiAVZ38="
   [mod."github.com/charmbracelet/x/ansi"]
     version = "v0.11.7"
     hash = "sha256-q8BZJq4K7NE5ETocN9/G/EoV0dUyD703ONSfHiUYzWQ="
@@ -62,8 +62,8 @@ schema = 3
     version = "v0.0.22"
     hash = "sha256-6O/0jc33pKUzlzUGpH8Ekk54XgJvx6Qe7kJtbcNJAV4="
   [mod."github.com/mattn/go-runewidth"]
-    version = "v0.0.23"
-    hash = "sha256-SmChZ2U1aR8pW3LPhdM7KcVF5TO6VcHgRzBtUXbBWJA="
+    version = "v0.0.24"
+    hash = "sha256-t2uvZkmlTXQCj76p4poI9y82iziJX2lF44UhkLgLN40="
   [mod."github.com/muesli/cancelreader"]
     version = "v0.2.2"
     hash = "sha256-uEPpzwRJBJsQWBw6M71FDfgJuR7n55d/7IV8MO+rpwQ="
@@ -149,8 +149,8 @@ schema = 3
     version = "v3.0.1"
     hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
   [mod."modernc.org/libc"]
-    version = "v1.72.4"
-    hash = "sha256-aXRAp/N8UXsU+E60ASo7usYQXIbYkKR22dTpAysgsEg="
+    version = "v1.72.5"
+    hash = "sha256-cydq6kiFj4DGytqJkzqL817lJifI2lGCLrG0J9IXchw="
   [mod."modernc.org/mathutil"]
     version = "v1.7.1"
     hash = "sha256-COZ5rF2GhQVR1r6a0DanJ8qwQ94JSKdQxTMWrDzE0Cc="
@@ -158,5 +158,5 @@ schema = 3
     version = "v1.11.0"
     hash = "sha256-MkybF8vvrxXS5j7O8w3skwTo0aMo1yjWS0K440rYcHM="
   [mod."modernc.org/sqlite"]
-    version = "v1.50.1"
-    hash = "sha256-JbGP3eerH/6mgzI0aq9SpLLwe6ld6PV/zJReG8mLQN0="
+    version = "v1.51.0"
+    hash = "sha256-rnxjwdV89PgD8cfobWqHzco4JlqFk+mHG5kv/MUAsF4="

@@ -5,6 +5,7 @@
 ### Changed
 
 - Matched config check issues output format with doctor issues
+- Bump modernc.org/sqlite to v1.51.0
 
 ### Fixed
 
@@ -22,7 +23,6 @@
 
 - Add `import` command to load backups or migrate database
 - Add `export` command to stream the full event log to stdout as NDJSON (one JSON object per line, ordered by `event_id ASC`)
-- Add ADR documenting the export/import design
 
 ## [0.3.0] - 2026-05-26
 
@@ -64,12 +64,6 @@
 - Add `serve` command to expose a local web UI for browsing entities ([`9c4ad3e`](https://github.com/asphaltbuffet/wherehouse/commit/9c4ad3e))
 - Add `rename` command to rename items and locations ([`b122e03`](https://github.com/asphaltbuffet/wherehouse/commit/b122e03))
 - Add `status` command to manage entity lifecycle (active/inactive) ([`04a1b34`](https://github.com/asphaltbuffet/wherehouse/commit/04a1b34))
-- Add `internal/web` package with HTTP handlers, routing, and embedded assets ([`0a19ac9`](https://github.com/asphaltbuffet/wherehouse/commit/0a19ac9))
-- Add `internal/eventbus` package for event dispatch and path propagation ([`afa93d2`](https://github.com/asphaltbuffet/wherehouse/commit/afa93d2))
-- Add `internal/inventory` package with unified `Entity`/`Event` domain types ([`28001313`](https://github.com/asphaltbuffet/wherehouse/commit/28001313))
-- Add `internal/entitypath` package for colon-separated path parsing ([`c6b093d`](https://github.com/asphaltbuffet/wherehouse/commit/c6b093d))
-- Add `internal/store` package replacing legacy database layer ([`974a7d7`](https://github.com/asphaltbuffet/wherehouse/commit/974a7d7))
-- Add `internal/app` business logic layer (`App` struct, path-based operations) ([`c8c0b41`](https://github.com/asphaltbuffet/wherehouse/commit/c8c0b41))
 
 ### Changed
 
