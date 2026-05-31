@@ -25,7 +25,7 @@ func NewDefaultRemoveCmd() *cobra.Command {
 }
 
 // NewRemoveCmd returns a remove command using the provided removeApp. Intended for testing.
-func NewRemoveCmd(a removeApp) *cobra.Command {
+func NewRemoveCmd(a *app.App) *cobra.Command {
 	cmd := buildRemoveCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runRemove(cmd, args, a) }
 	return cmd
@@ -46,7 +46,7 @@ Examples:
 	return cmd
 }
 
-func runRemove(cmd *cobra.Command, args []string, a removeApp) error {
+func runRemove(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 	path := args[0]
 	noteFlag, _ := cmd.Flags().GetString("note")
