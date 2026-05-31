@@ -32,7 +32,7 @@ func NewDefaultHistoryCmd() *cobra.Command {
 }
 
 // NewHistoryCmd returns the history command using the supplied historyApp (for testing).
-func NewHistoryCmd(a historyApp) *cobra.Command {
+func NewHistoryCmd(a *app.App) *cobra.Command {
 	cmd := buildHistoryCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runHistory(cmd, args, a) }
 	return cmd
@@ -50,7 +50,7 @@ Examples:
 	}
 }
 
-func runHistory(cmd *cobra.Command, args []string, a historyApp) error {
+func runHistory(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 	events, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityPath: args[0]})
 	if err != nil {

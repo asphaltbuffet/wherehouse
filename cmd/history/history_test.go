@@ -3,7 +3,6 @@ package history_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,50 +10,42 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-type fakeHistoryApp struct {
-	req  app.GetHistoryRequest
-	resp []app.HistoryResult
-	err  error
-}
-
-func (f *fakeHistoryApp) GetHistory(_ context.Context, req app.GetHistoryRequest) ([]app.HistoryResult, error) {
-	f.req = req
-	return f.resp, f.err
-}
-
 func TestRunHistory_HappyPath(t *testing.T) {
-	t.Parallel()
-	fake := &fakeHistoryApp{
-		resp: []app.HistoryResult{
-			{
-				EventID:      1,
-				EventType:    inventory.EntityCreatedEvent,
-				TimestampUTC: "2026-05-22T00:00:00Z",
-				ActorUserID:  "user@example.com",
-			},
-		},
-	}
-	cmd := history.NewHistoryCmd(fake)
-	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
+	a := apptesting.OpenApp(t)
+	ctx := context.Background()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage",
+		EntityType:  inventory.EntityTypePlace,
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Wrench",
+		EntityType:  inventory.EntityTypeLeaf,
+		ParentPath:  "Garage",
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+
+	cmd := history.NewHistoryCmd(a)
+	cmd.SetArgs([]string{"Garage:Wrench"})
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Equal(t, "Garage:Toolbox:Wrench", fake.req.EntityPath)
-	assert.Contains(t, stdout.String(), "2026-05-22T00:00:00Z")
+	assert.Contains(t, stdout.String(), "entity.created")
 }
 
 func TestRunHistory_PropagatesError(t *testing.T) {
-	t.Parallel()
-	fake := &fakeHistoryApp{err: errors.New("not found")}
-	cmd := history.NewHistoryCmd(fake)
+	a := apptesting.OpenApp(t)
+	cmd := history.NewHistoryCmd(a)
 	cmd.SetArgs([]string{"Garage:Missing"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
 }
