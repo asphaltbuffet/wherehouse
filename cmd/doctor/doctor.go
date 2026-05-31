@@ -56,7 +56,7 @@ func NewDefaultDoctorCmd() *cobra.Command {
 
 // NewDoctorCmd returns the doctor command with a provided doctorApp for testing.
 // NewDoctorCmd returns the doctor command with a provided doctorApp for testing.
-func NewDoctorCmd(a doctorApp) *cobra.Command {
+func NewDoctorCmd(a *app.App) *cobra.Command {
 	cmd := buildDoctorCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runDoctor(cmd, args, nil, a) }
 	return cmd
@@ -138,7 +138,7 @@ func runConfigCheck(cfg *config.Config) []app.DoctorIssue {
 	return issues
 }
 
-func runDoctor(cmd *cobra.Command, _ []string, configIssues []app.DoctorIssue, a doctorApp) error {
+func runDoctor(cmd *cobra.Command, _ []string, configIssues []app.DoctorIssue, a *app.App) error {
 	ctx := cmd.Context()
 	rebuild, _ := cmd.Flags().GetBool("rebuild")
 	force, _ := cmd.Flags().GetBool("force")
@@ -167,7 +167,7 @@ func runDoctor(cmd *cobra.Command, _ []string, configIssues []app.DoctorIssue, a
 	return emitResult(out, allIssues, replayCount, jsonMode)
 }
 
-func collectIssues(ctx context.Context, configIssues []app.DoctorIssue, a doctorApp) ([]app.DoctorIssue, error) {
+func collectIssues(ctx context.Context, configIssues []app.DoctorIssue, a *app.App) ([]app.DoctorIssue, error) {
 	all := make([]app.DoctorIssue, 0, len(configIssues))
 	all = append(all, configIssues...)
 	if a == nil {
