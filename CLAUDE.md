@@ -80,21 +80,19 @@ internal/
   nanoid/                # 10-char alphanumeric NanoID generation
   styles/                # lipgloss appStyles singleton
   version/               # build version info
+  apptesting/            # exported test helper: OpenApp(t) wires *app.App over in-memory SQLite
 ```
 
 ## Key Patterns
 
 ### Command Constructor Pattern
 Every command package exposes two constructors:
-- `NewXxxCmd(db xxxDB)` — for tests (inject interface)
+- `NewXxxCmd(a *app.App)` — for tests (inject real App over in-memory SQLite)
 - `NewDefaultXxxCmd()` — for production wiring
 
 Registered in `cmd/root.go` via `NewDefaultXxxCmd()`.
 
-### Per-Command DB Interface
-Each `cmd/xxx/db.go` defines a minimal `xxxDB` interface covering only what that command needs. Never pass `*database.DB` directly to a command's run function.
-
-These interfaces are **real seams**, not shallow pass-throughs — each has a hand-rolled fake in `*_test.go` as a genuine second adapter. Do not treat them as boilerplate candidates for deletion.
+There are no per-command `xxxApp` interfaces and no `cmd/*/db.go` files. Command tests use `apptesting.OpenApp(t)` from `internal/apptesting` and assert on DB state rather than captured arguments. See ADR 0013.
 
 ### web package (internal/web)
 `cmd/serve/` is a **thin shell only** — no `net/http`, `html/template`, or `//go:embed`. All server logic lives in `internal/web`. Verify: `rg -l '"net/http"|"html/template"|//go:embed' cmd/serve/` → empty.

@@ -33,7 +33,7 @@ func NewDefaultStatusCmd() *cobra.Command {
 }
 
 // NewStatusCmd returns a status command using the provided statusApp. Intended for testing.
-func NewStatusCmd(a statusApp) *cobra.Command {
+func NewStatusCmd(a *app.App) *cobra.Command {
 	cmd := buildStatusCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStatus(cmd, args, a) }
 	return cmd
@@ -58,7 +58,7 @@ Examples:
 	return cmd
 }
 
-func runStatus(cmd *cobra.Command, args []string, a statusApp) error {
+func runStatus(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 	path := args[0]
 	setFlag, _ := cmd.Flags().GetString("set")

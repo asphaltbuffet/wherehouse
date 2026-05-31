@@ -31,7 +31,7 @@ func NewDefaultRenameCmd() *cobra.Command {
 }
 
 // NewRenameCmd returns the rename command using the supplied renameApp (for testing).
-func NewRenameCmd(a renameApp) *cobra.Command {
+func NewRenameCmd(a *app.App) *cobra.Command {
 	cmd := buildRenameCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runRename(cmd, args, a) }
 	return cmd
@@ -53,7 +53,7 @@ Examples:
 	return cmd
 }
 
-func runRename(cmd *cobra.Command, args []string, a renameApp) error {
+func runRename(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 	path := args[0]
 	toFlag, _ := cmd.Flags().GetString("to")

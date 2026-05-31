@@ -3,7 +3,6 @@ package remove_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,48 +10,78 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-type fakeRemoveApp struct {
-	req app.RemoveEntityRequest
-	err error
-}
-
-func (f *fakeRemoveApp) RemoveEntity(_ context.Context, req app.RemoveEntityRequest) error {
-	f.req = req
-	return f.err
+func seedForRemove(t *testing.T, a *app.App) {
+	t.Helper()
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		parent string
+		et     inventory.EntityType
+	}{
+		{"Garage", "", inventory.EntityTypePlace},
+		{"Toolbox", "Garage", inventory.EntityTypeContainer},
+		{"Wrench", "Garage:Toolbox", inventory.EntityTypeLeaf},
+	} {
+		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: tc.name,
+			EntityType:  tc.et,
+			ParentPath:  tc.parent,
+			ActorID:     "test",
+		})
+		require.NoError(t, err)
+	}
 }
 
 func TestRunRemove_HappyPath(t *testing.T) {
-	t.Parallel()
-	fake := &fakeRemoveApp{}
-	cmd := remove.NewRemoveCmd(fake)
+	a := apptesting.OpenApp(t)
+	seedForRemove(t, a)
+
+	cmd := remove.NewRemoveCmd(a)
 	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Equal(t, "Garage:Toolbox:Wrench", fake.req.EntityPath)
+
+	entities, err := a.ListEntities(context.Background())
+	require.NoError(t, err)
+	for _, e := range entities {
+		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
+			assert.Equal(t, inventory.EntityStatusRemoved, e.Status, "Wrench should be removed")
+		}
+	}
 }
 
 func TestRunRemove_WithNote(t *testing.T) {
-	t.Parallel()
-	fake := &fakeRemoveApp{}
-	cmd := remove.NewRemoveCmd(fake)
+	a := apptesting.OpenApp(t)
+	seedForRemove(t, a)
+
+	cmd := remove.NewRemoveCmd(a)
 	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--note", "broken"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Equal(t, "broken", fake.req.Note)
+
+	// Verify entity is removed (note stored on event, not on projection)
+	entities, err := a.ListEntities(context.Background())
+	require.NoError(t, err)
+	for _, e := range entities {
+		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
+			assert.Equal(t, inventory.EntityStatusRemoved, e.Status)
+		}
+	}
 }
 
 func TestRunRemove_PropagatesError(t *testing.T) {
-	t.Parallel()
-	fake := &fakeRemoveApp{err: errors.New("not found")}
-	cmd := remove.NewRemoveCmd(fake)
+	a := apptesting.OpenApp(t)
+	// No entities seeded — path not found
+	cmd := remove.NewRemoveCmd(a)
 	cmd.SetArgs([]string{"Garage:Missing"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
 }

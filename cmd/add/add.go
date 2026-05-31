@@ -44,7 +44,7 @@ Examples:
 }
 
 // NewAddCmd returns the add command wired to the provided addApp (for testing).
-func NewAddCmd(a addApp) *cobra.Command {
+func NewAddCmd(a *app.App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <name>",
 		Short: "Add an entity to the inventory",
@@ -57,7 +57,7 @@ func NewAddCmd(a addApp) *cobra.Command {
 	return cmd
 }
 
-func runAdd(cmd *cobra.Command, args []string, a addApp) error {
+func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 
 	p, err := entitypath.Parse(args[0])

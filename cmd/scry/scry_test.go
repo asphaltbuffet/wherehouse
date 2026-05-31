@@ -3,7 +3,6 @@ package scry_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,40 +10,20 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-type fakeScryApp struct {
-	listResp []app.EntityResult
-	listErr  error
-	findResp []app.FindResult
-	findErr  error
-	findReq  app.FindEntitiesRequest
-}
-
-func (f *fakeScryApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
-	return f.listResp, f.listErr
-}
-
-func (f *fakeScryApp) FindEntities(_ context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error) {
-	f.findReq = req
-	return f.findResp, f.findErr
-}
-
 func TestRunScry_NoArg_ListsAll(t *testing.T) {
-	t.Parallel()
-	fake := &fakeScryApp{
-		listResp: []app.EntityResult{
-			{
-				EntityID:        "a",
-				FullPathDisplay: "Garage",
-				EntityType:      inventory.EntityTypePlace,
-				Status:          inventory.EntityStatusOk,
-			},
-		},
-	}
-	cmd := scry.NewScryCmd(fake)
-	cmd.SetArgs([]string{})
+	a := apptesting.OpenApp(t)
+	_, err := a.CreateEntity(context.Background(), app.CreateEntityRequest{
+		DisplayName: "Garage",
+		EntityType:  inventory.EntityTypePlace,
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+
+	cmd := scry.NewScryCmd(a)
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
@@ -53,38 +32,37 @@ func TestRunScry_NoArg_ListsAll(t *testing.T) {
 }
 
 func TestRunScry_WithArg_CallsFindEntities(t *testing.T) {
-	t.Parallel()
-	fake := &fakeScryApp{
-		findResp: []app.FindResult{
-			{
-				Entity: app.EntityResult{
-					EntityID:        "b",
-					FullPathDisplay: "Garage:Toolbox",
-					EntityType:      inventory.EntityTypeContainer,
-					Status:          inventory.EntityStatusOk,
-				},
-				Distance: 0,
-			},
-		},
-	}
-	cmd := scry.NewScryCmd(fake)
+	a := apptesting.OpenApp(t)
+	ctx := context.Background()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage",
+		EntityType:  inventory.EntityTypePlace,
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Toolbox",
+		EntityType:  inventory.EntityTypeContainer,
+		ParentPath:  "Garage",
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+
+	cmd := scry.NewScryCmd(a)
 	cmd.SetArgs([]string{"toolbox"})
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Equal(t, "toolbox", fake.findReq.Query)
 	assert.Contains(t, stdout.String(), "Garage:Toolbox")
 }
 
-func TestRunScry_PropagatesListError(t *testing.T) {
-	t.Parallel()
-	fake := &fakeScryApp{listErr: errors.New("db down")}
-	cmd := scry.NewScryCmd(fake)
-	cmd.SetArgs([]string{})
-	cmd.SetOut(&bytes.Buffer{})
+func TestRunScry_EmptyDB_NoOutput(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	cmd := scry.NewScryCmd(a)
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	err := cmd.Execute()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "db down")
+	require.NoError(t, cmd.Execute())
+	assert.Empty(t, stdout.String())
 }

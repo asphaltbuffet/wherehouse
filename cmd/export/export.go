@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 )
 
@@ -24,7 +25,7 @@ func NewDefaultExportCmd() *cobra.Command {
 }
 
 // NewExportCmd returns the export command using the supplied exportApp (for testing).
-func NewExportCmd(a exportApp) *cobra.Command {
+func NewExportCmd(a *app.App) *cobra.Command {
 	cmd := buildExportCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runExport(cmd, args, a) }
 	return cmd
@@ -41,7 +42,7 @@ Examples:
 	}
 }
 
-func runExport(cmd *cobra.Command, _ []string, a exportApp) error {
+func runExport(cmd *cobra.Command, _ []string, a *app.App) error {
 	events, err := a.GetAllEvents(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("failed to export events: %w", err)
