@@ -62,11 +62,20 @@ func (b *Bus) Dispatch(
 // error and returns 0 — the import path omits these from replay and validates
 // them separately (see ADR-0005). See also: the event-log-growth issue filed
 // against this behaviour.
-func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, error) {
+func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []EntityPathChangedPayload, error) {
 	if ev.EventType == inventory.EntityPathChangedEvent {
-		return 0, nil
+		return 0, nil, nil
 	}
-	return b.writeEvent(ctx, ev, b.applyEventTx)
+	var payloads []EntityPathChangedPayload
+	id, err := b.writeEvent(ctx, ev, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+		if ev.EventType == inventory.EntityReparentedEvent {
+			var applyErr error
+			payloads, applyErr = b.handleEntityReparentedComputePayloadsTx(ctx, tx, ev)
+			return applyErr
+		}
+		return b.applyEventProjectionOnlyTx(ctx, tx, ev)
+	})
+	return id, payloads, err
 }
 
 // writeEvent is the single canonical write path shared by Dispatch and
