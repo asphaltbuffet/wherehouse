@@ -2,6 +2,10 @@
 
 ## [0.5.1] - 2026-05-31
 
+### Changed
+
+- Matched config check issues output format with doctor issues
+
 ### Fixed
 
 - Fix duplication of entity path changed events during imports
