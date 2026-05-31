@@ -32,7 +32,7 @@ func NewDefaultMoveCmd() *cobra.Command {
 }
 
 // NewMoveCmd returns a move command using the provided moveApp. Intended for testing.
-func NewMoveCmd(a moveApp) *cobra.Command {
+func NewMoveCmd(a *app.App) *cobra.Command {
 	cmd := buildMoveCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runMove(cmd, args, a) }
 	return cmd
@@ -56,7 +56,7 @@ Examples:
 	return cmd
 }
 
-func runMove(cmd *cobra.Command, args []string, a moveApp) error {
+func runMove(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 	srcPath := args[0]
 	destPath, _ := cmd.Flags().GetString("to")
