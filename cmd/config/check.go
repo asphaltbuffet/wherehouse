@@ -62,8 +62,7 @@ func runCheck(cmd *cobra.Command, _ []string) error {
 	if globalExists {
 		err = config.Check(cmdFS, expandedGlobal)
 		if err != nil {
-			out.Error(fmt.Sprintf("Configuration invalid: %s", expandedGlobal))
-			out.Println(fmt.Sprintf("  Error: %v", err))
+			out.Issue("config", fmt.Sprintf("Configuration invalid: %s — %v", expandedGlobal, err))
 			hasErrors = true
 		} else {
 			out.Success(fmt.Sprintf("Global config valid: %s", expandedGlobal))
@@ -79,8 +78,7 @@ func runCheck(cmd *cobra.Command, _ []string) error {
 	if localExists {
 		err = config.Check(cmdFS, expandedLocal)
 		if err != nil {
-			out.Error(fmt.Sprintf("Configuration invalid: %s", expandedLocal))
-			out.Println(fmt.Sprintf("  Error: %v", err))
+			out.Issue("config", fmt.Sprintf("Configuration invalid: %s — %v", expandedLocal, err))
 			hasErrors = true
 		} else {
 			out.Success(fmt.Sprintf("Local config valid: %s", expandedLocal))
