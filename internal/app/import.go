@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
 )
@@ -31,13 +32,12 @@ type ImportResult struct {
 }
 
 type importBus interface {
-	ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, error)
+	ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []eventbus.EntityPathChangedPayload, error)
 }
 
 type importStore interface {
 	HasEvents(ctx context.Context) (bool, error)
 	ClearAllData(ctx context.Context) error
-	GetEventsAfter(ctx context.Context, afterID int64) ([]*inventory.Event, error)
 }
 
 // ImportEvents replays a slice of ExportResult records into the database.
@@ -104,24 +104,34 @@ func importEvents(
 		}
 	}
 
-	r := &importRunner{bus: bus, store: store, log: logging.GetLogger(), opts: opts, pendingReparentID: -1}
+	r := &importRunner{bus: bus, store: store, log: logging.GetLogger(), opts: opts}
 	for _, rec := range events {
 		if err := r.processRecord(ctx, rec); err != nil {
 			return r.result, err
 		}
 	}
-	r.flushValidation(ctx)
+	r.flushValidation()
 	return r.result, nil
 }
 
 type importRunner struct {
-	bus               importBus
-	store             importStore
-	log               logging.Logger
-	opts              ImportOptions
-	result            ImportResult
-	pendingReparentID int64
-	pathChangedBuf    []ExportResult
+	bus    importBus
+	store  importStore
+	log    logging.Logger
+	opts   ImportOptions
+	result ImportResult
+
+	// pendingReparent is set when an EntityReparentedEvent has been replayed
+	// but its buffered EntityPathChangedEvent records have not yet been
+	// validated. Nil means no reparent is in flight.
+	pendingReparent *pendingReparentState
+	pathChangedBuf  []ExportResult
+}
+
+type pendingReparentState struct {
+	eventID  int64
+	entityID *string
+	payloads []eventbus.EntityPathChangedPayload
 }
 
 func (r *importRunner) processRecord(ctx context.Context, rec ExportResult) error {
@@ -131,7 +141,7 @@ func (r *importRunner) processRecord(ctx context.Context, rec ExportResult) erro
 	}
 
 	if et == inventory.EntityPathChangedEvent {
-		if r.pendingReparentID < 0 {
+		if r.pendingReparent == nil {
 			orphan := fmt.Errorf("orphaned EntityPathChangedEvent at event_id %d (no preceding reparent)", rec.EventID)
 			r.log.Warn(orphan.Error())
 			r.warn(orphan)
@@ -141,7 +151,7 @@ func (r *importRunner) processRecord(ctx context.Context, rec ExportResult) erro
 		return nil
 	}
 
-	r.flushValidation(ctx)
+	r.flushValidation()
 
 	ev := &inventory.Event{
 		EventType:    et,
@@ -152,14 +162,18 @@ func (r *importRunner) processRecord(ctx context.Context, rec ExportResult) erro
 		EntityID:     rec.EntityID,
 	}
 
-	newID, replayErr := r.bus.ReplayEvent(ctx, ev)
+	newID, payloads, replayErr := r.bus.ReplayEvent(ctx, ev)
 	if replayErr != nil {
 		return r.handleError(rec.EventID, replayErr)
 	}
 	r.result.Replayed++
 
 	if et == inventory.EntityReparentedEvent {
-		r.pendingReparentID = newID
+		r.pendingReparent = &pendingReparentState{
+			eventID:  newID,
+			entityID: rec.EntityID,
+			payloads: payloads,
+		}
 	}
 	return nil
 }
@@ -181,47 +195,44 @@ func (r *importRunner) handleError(eventID int64, err error) error {
 	return wrapped
 }
 
-func (r *importRunner) flushValidation(ctx context.Context) {
-	if r.pendingReparentID < 0 {
+func (r *importRunner) flushValidation() {
+	if r.pendingReparent == nil {
 		return
 	}
-	generated, err := r.store.GetEventsAfter(ctx, r.pendingReparentID)
-	if err != nil {
-		wrapped := fmt.Errorf(
-			"could not retrieve generated path-changed events after reparent event_id %d: %w",
-			r.pendingReparentID,
-			err,
-		)
-		r.log.Warn(wrapped.Error())
-		r.warn(wrapped)
-		r.pendingReparentID = -1
-		r.pathChangedBuf = nil
+	pr := r.pendingReparent
+	r.pendingReparent = nil
+
+	computed := pr.payloads
+	buf := r.pathChangedBuf
+	r.pathChangedBuf = nil
+
+	if len(computed) != len(buf) {
+		mismatch := fmt.Errorf("path-changed count mismatch after reparent event_id %d (expected %d, got %d)",
+			pr.eventID, len(buf), len(computed))
+		r.log.Warn(mismatch.Error())
+		r.warn(mismatch)
 		return
 	}
-	var genPC []*inventory.Event
-	for _, ev := range generated {
-		if ev.EventType == inventory.EntityPathChangedEvent {
-			genPC = append(genPC, ev)
-		} else {
+
+	for i, bufRec := range buf {
+		var imported eventbus.EntityPathChangedPayload
+		if err := json.Unmarshal(bufRec.Payload, &imported); err != nil {
+			mismatch := fmt.Errorf("path-changed payload parse error after reparent event_id %d at index %d: %w",
+				pr.eventID, i, err)
+			r.log.Warn(mismatch.Error())
+			r.warn(mismatch)
+			break
+		}
+		c := computed[i]
+		if imported.EntityID != c.EntityID ||
+			imported.FullPathDisplay != c.FullPathDisplay ||
+			imported.FullPathCanonical != c.FullPathCanonical ||
+			imported.Depth != c.Depth {
+			mismatch := fmt.Errorf("path-changed payload mismatch after reparent event_id %d at index %d",
+				pr.eventID, i)
+			r.log.Warn(mismatch.Error())
+			r.warn(mismatch)
 			break
 		}
 	}
-	if len(genPC) != len(r.pathChangedBuf) {
-		mismatch := fmt.Errorf("path-changed count mismatch after reparent event_id %d (expected %d, got %d)",
-			r.pendingReparentID, len(r.pathChangedBuf), len(genPC))
-		r.log.Warn(mismatch.Error())
-		r.warn(mismatch)
-	} else {
-		for i, buf := range r.pathChangedBuf {
-			if string(genPC[i].Payload) != string(buf.Payload) {
-				mismatch := fmt.Errorf("path-changed payload mismatch after reparent event_id %d at index %d",
-					r.pendingReparentID, i)
-				r.log.Warn(mismatch.Error())
-				r.warn(mismatch)
-				break
-			}
-		}
-	}
-	r.pendingReparentID = -1
-	r.pathChangedBuf = nil
 }

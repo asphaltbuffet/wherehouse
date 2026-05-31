@@ -176,7 +176,11 @@ func (b *Bus) handleEntityReparentedProjectionOnlyTx(ctx context.Context, tx sto
 // reparented entity and all its descendants (no event writes) and returns the
 // expected EntityPathChangedPayload for each descendant. Used by ReplayEvent
 // so import can validate export integrity without side-effect event insertion.
-func (b *Bus) handleEntityReparentedComputePayloadsTx(ctx context.Context, tx store.Tx, ev *inventory.Event) ([]EntityPathChangedPayload, error) {
+func (b *Bus) handleEntityReparentedComputePayloadsTx(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+) ([]EntityPathChangedPayload, error) {
 	var p EntityReparentedPayload
 	if err := json.Unmarshal(ev.Payload, &p); err != nil {
 		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: unmarshal: %w", err)
@@ -344,7 +348,10 @@ func (b *Bus) propagatePathChangesTx(
 // each descendant given the already-updated parent. Descendants must be ordered
 // parent-before-child (depth ASC). No DB access; safe to call outside a
 // transaction.
-func ComputeDescendantPathPayloads(parent *inventory.Entity, descendants []*inventory.Entity) []EntityPathChangedPayload {
+func ComputeDescendantPathPayloads(
+	parent *inventory.Entity,
+	descendants []*inventory.Entity,
+) []EntityPathChangedPayload {
 	updated := map[string]*inventory.Entity{parent.EntityID: parent}
 	payloads := make([]EntityPathChangedPayload, len(descendants))
 

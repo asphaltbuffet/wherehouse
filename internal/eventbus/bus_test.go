@@ -56,7 +56,7 @@ func TestReplayEvent_ReturnsNewDBAssignedID(t *testing.T) {
 		Payload:      payload,
 	}
 
-	id, err := b.ReplayEvent(ctx, ev)
+	id, _, err := b.ReplayEvent(ctx, ev)
 	require.NoError(t, err)
 	assert.Positive(t, id)
 }
@@ -77,7 +77,7 @@ func TestReplayEvent_PreservesOriginalTimestamp(t *testing.T) {
 		Payload:      payload,
 	}
 
-	id, err := b.ReplayEvent(ctx, ev)
+	id, _, err := b.ReplayEvent(ctx, ev)
 	require.NoError(t, err)
 
 	stored, err := s.GetEventByID(ctx, id)
@@ -100,7 +100,7 @@ func TestReplayEvent_PathChangedEvent_IsNoOp(t *testing.T) {
 		Payload:      payload,
 	}
 
-	id, err := b.ReplayEvent(ctx, ev)
+	id, _, err := b.ReplayEvent(ctx, ev)
 	require.NoError(t, err)
 	assert.Zero(t, id, "path-changed replay should return 0 (no row inserted)")
 
@@ -124,7 +124,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 		Payload:      payload,
 	}
 
-	_, err := b.ReplayEvent(ctx, ev)
+	_, _, err := b.ReplayEvent(ctx, ev)
 	require.NoError(t, err)
 
 	entity, err := s.GetEntity(ctx, "r3")
