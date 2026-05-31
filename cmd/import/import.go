@@ -30,7 +30,7 @@ func NewDefaultImportCmd() *cobra.Command {
 }
 
 // NewImportCmd returns the import command using the supplied importApp (for testing).
-func NewImportCmd(a importApp) *cobra.Command {
+func NewImportCmd(a *app.App) *cobra.Command {
 	cmd := buildImportCmd()
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error { return runImport(cmd, a) }
 	return cmd
@@ -55,7 +55,7 @@ Examples:
 	return cmd
 }
 
-func runImport(cmd *cobra.Command, a importApp) error {
+func runImport(cmd *cobra.Command, a *app.App) error {
 	ctx := cmd.Context()
 
 	filePath, _ := cmd.Flags().GetString("file")
@@ -98,7 +98,7 @@ func runImport(cmd *cobra.Command, a importApp) error {
 	return nil
 }
 
-func checkReplaceFlags(ctx context.Context, a importApp, replace, yes bool) error {
+func checkReplaceFlags(ctx context.Context, a *app.App, replace, yes bool) error {
 	if replace && !yes {
 		return errors.New("--replace requires --yes to confirm the destructive operation")
 	}
