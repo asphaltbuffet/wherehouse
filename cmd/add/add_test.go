@@ -3,7 +3,6 @@ package add_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,54 +10,60 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-type fakeAddApp struct {
-	gotReq   app.CreateEntityRequest
-	response app.EntityResult
-	err      error
-}
-
-func (f *fakeAddApp) CreateEntity(_ context.Context, req app.CreateEntityRequest) (app.EntityResult, error) {
-	f.gotReq = req
-	return f.response, f.err
-}
-
 func TestRunAdd_HappyPath(t *testing.T) {
-	t.Parallel()
-
-	fake := &fakeAddApp{
-		response: app.EntityResult{
-			EntityID:        "abc1234567",
-			DisplayName:     "Wrench",
-			FullPathDisplay: "Garage:Toolbox:Wrench",
-			EntityType:      inventory.EntityTypeLeaf,
-		},
+	a := apptesting.OpenApp(t)
+	ctx := context.Background()
+	// Pre-create parents so add can resolve the parent path
+	for _, tc := range []struct {
+		name   string
+		parent string
+		et     inventory.EntityType
+	}{
+		{"Garage", "", inventory.EntityTypePlace},
+		{"Toolbox", "Garage", inventory.EntityTypeContainer},
+	} {
+		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: tc.name,
+			EntityType:  tc.et,
+			ParentPath:  tc.parent,
+			ActorID:     "test",
+		})
+		require.NoError(t, err)
 	}
 
-	cmd := add.NewAddCmd(fake)
+	cmd := add.NewAddCmd(a)
 	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--type", "leaf"})
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
-
 	require.NoError(t, cmd.Execute())
-	assert.Equal(t, "Wrench", fake.gotReq.DisplayName)
-	assert.Equal(t, "Garage:Toolbox", fake.gotReq.ParentPath)
-	assert.Equal(t, inventory.EntityTypeLeaf, fake.gotReq.EntityType)
+
+	entities, err := a.ListEntities(ctx)
+	require.NoError(t, err)
+
+	var wrench *inventory.EntityType
+	for _, e := range entities {
+		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
+			et := e.EntityType
+			wrench = &et
+		}
+	}
+	require.NotNil(t, wrench, "Wrench entity should exist after add")
+	assert.Equal(t, inventory.EntityTypeLeaf, *wrench)
 }
 
 func TestRunAdd_PropagatesAppError(t *testing.T) {
-	t.Parallel()
-
-	fake := &fakeAddApp{err: errors.New("boom")}
-	cmd := add.NewAddCmd(fake)
-	cmd.SetArgs([]string{"Garage:Wrench"})
+	a := apptesting.OpenApp(t)
+	cmd := add.NewAddCmd(a)
+	// Path with only a separator is invalid
+	cmd.SetArgs([]string{":"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "boom")
 }
