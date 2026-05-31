@@ -32,7 +32,7 @@ func NewDefaultScryCmd() *cobra.Command {
 }
 
 // NewScryCmd returns the scry command using the supplied scryApp (for testing).
-func NewScryCmd(a scryApp) *cobra.Command {
+func NewScryCmd(a *app.App) *cobra.Command {
 	cmd := buildScryCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runScry(cmd, args, a) }
 	return cmd
@@ -51,7 +51,7 @@ Examples:
 	}
 }
 
-func runScry(cmd *cobra.Command, args []string, a scryApp) error {
+func runScry(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 
 	var entities []app.EntityResult
