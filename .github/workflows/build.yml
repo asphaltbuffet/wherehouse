@@ -72,6 +72,15 @@ jobs:
         with:
           install-only: true
 
+      - name: Generate code
+        run: mise run generate
+
+      - name: Generate completions
+        run: mise run completions
+
+      - name: Generate manpages
+        run: mise run manpages
+
       - name: Release Test
         uses: goreleaser/goreleaser-action@v7
         with:

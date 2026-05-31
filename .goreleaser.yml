@@ -2,13 +2,6 @@
 ---
 version: 2
 
-before:
-  hooks:
-    - mise run generate
-    - mise run completions
-    - mise run manpages
-    - mise run pre-release {{ .RawVersion }}
-
 builds:
   - env:
       - CGO_ENABLED=0
