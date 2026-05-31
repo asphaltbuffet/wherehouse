@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
@@ -34,7 +36,10 @@ func (a *App) ValidateEventLog(ctx context.Context) ([]DoctorIssue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("validate event log: %w", err)
 	}
+	return validateEventLog(events), nil
+}
 
+func validateEventLog(events []store.RawEvent) []DoctorIssue {
 	createdIDs := make(map[string]bool)
 	removedIDs := make(map[string]int64) // entity ID → first remove event_id
 
@@ -69,7 +74,7 @@ func (a *App) ValidateEventLog(ctx context.Context) ([]DoctorIssue, error) {
 		}
 	}
 
-	return issues, nil
+	return issues
 }
 
 func validateSingleEvent(ev store.RawEvent, et inventory.EventType, parseErr error) []DoctorIssue {
@@ -141,6 +146,33 @@ func (a *App) CheckProjectionConsistency(ctx context.Context) ([]DoctorIssue, er
 	}
 
 	return checkProjectionRows(projRows, expectedPresent, maxEventID), nil
+}
+
+// RunDoctorChecks fetches the event log and projection rows once (concurrently)
+// and runs both validation passes against the shared data.
+func (a *App) RunDoctorChecks(ctx context.Context) ([]DoctorIssue, error) {
+	var events []store.RawEvent
+	var projRows []*inventory.Entity
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		var err error
+		events, err = a.store.GetAllEventsRaw(egCtx)
+		return err
+	})
+	eg.Go(func() error {
+		var err error
+		projRows, err = a.store.ListAllEntities(egCtx)
+		return err
+	})
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("doctor checks: %w", err)
+	}
+
+	issues := validateEventLog(events)
+	expectedPresent, maxEventID := buildProjectionSets(events)
+	issues = append(issues, checkProjectionRows(projRows, expectedPresent, maxEventID)...)
+	return issues, nil
 }
 
 // TruncateAndReplay rebuilds all projection tables by replaying the event log and returns the number of replayed events.

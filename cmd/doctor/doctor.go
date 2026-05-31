@@ -173,16 +173,11 @@ func collectIssues(ctx context.Context, configIssues []app.DoctorIssue, a doctor
 	if a == nil {
 		return all, nil
 	}
-	eventIssues, err := a.ValidateEventLog(ctx)
+	checks, err := a.RunDoctorChecks(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("doctor: validate event log: %w", err)
+		return nil, fmt.Errorf("doctor: %w", err)
 	}
-	all = append(all, eventIssues...)
-	projIssues, err := a.CheckProjectionConsistency(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("doctor: check projection: %w", err)
-	}
-	return append(all, projIssues...), nil
+	return append(all, checks...), nil
 }
 
 func emitResult(out *cli.OutputWriter, allIssues []app.DoctorIssue, replayCount *int, jsonMode bool) error {

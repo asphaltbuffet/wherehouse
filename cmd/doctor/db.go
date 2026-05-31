@@ -7,7 +7,6 @@ import (
 )
 
 type doctorApp interface {
-	ValidateEventLog(ctx context.Context) ([]app.DoctorIssue, error)
-	CheckProjectionConsistency(ctx context.Context) ([]app.DoctorIssue, error)
+	RunDoctorChecks(ctx context.Context) ([]app.DoctorIssue, error)
 	TruncateAndReplay(ctx context.Context) (int, error)
 }

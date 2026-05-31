@@ -16,10 +16,8 @@ import (
 )
 
 type fakeDoctorApp struct {
-	eventIssues []app.DoctorIssue
-	eventErr    error
-	projIssues  []app.DoctorIssue
-	projErr     error
+	issues      []app.DoctorIssue
+	checksErr   error
 	replayCount int
 	replayErr   error
 }
@@ -44,12 +42,8 @@ func unmarshalDoctorResult(t *testing.T, b []byte) jsonDoctorResult {
 	return r
 }
 
-func (f *fakeDoctorApp) ValidateEventLog(_ context.Context) ([]app.DoctorIssue, error) {
-	return f.eventIssues, f.eventErr
-}
-
-func (f *fakeDoctorApp) CheckProjectionConsistency(_ context.Context) ([]app.DoctorIssue, error) {
-	return f.projIssues, f.projErr
+func (f *fakeDoctorApp) RunDoctorChecks(_ context.Context) ([]app.DoctorIssue, error) {
+	return f.issues, f.checksErr
 }
 
 func (f *fakeDoctorApp) TruncateAndReplay(_ context.Context) (int, error) {
@@ -71,7 +65,7 @@ func TestRunDoctor_AllClean_PrintsOK(t *testing.T) {
 func TestRunDoctor_EventLogIssues_PrintedAndNonZero(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDoctorApp{
-		eventIssues: []app.DoctorIssue{
+		issues: []app.DoctorIssue{
 			{Kind: app.DoctorKindEventLog, Description: "event 3 missing entity_id"},
 		},
 	}
@@ -89,7 +83,7 @@ func TestRunDoctor_EventLogIssues_PrintedAndNonZero(t *testing.T) {
 func TestRunDoctor_ProjectionIssues_PrintedAndNonZero(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDoctorApp{
-		projIssues: []app.DoctorIssue{
+		issues: []app.DoctorIssue{
 			{Kind: app.DoctorKindProjection, Description: "phantom row: abc123"},
 		},
 	}
@@ -107,10 +101,8 @@ func TestRunDoctor_ProjectionIssues_PrintedAndNonZero(t *testing.T) {
 func TestRunDoctor_BothChecksRun_WhenEventLogHasIssues(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDoctorApp{
-		eventIssues: []app.DoctorIssue{
+		issues: []app.DoctorIssue{
 			{Kind: app.DoctorKindEventLog, Description: "event 1 bad"},
-		},
-		projIssues: []app.DoctorIssue{
 			{Kind: app.DoctorKindProjection, Description: "phantom row: xyz"},
 		},
 	}
@@ -141,9 +133,7 @@ func TestRunDoctor_Rebuild_Clean_PrintsCount(t *testing.T) {
 func TestRunDoctor_Rebuild_WithIssues_Skipped(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDoctorApp{
-		eventIssues: []app.DoctorIssue{
-			{Kind: app.DoctorKindEventLog, Description: "bad event"},
-		},
+		issues:      []app.DoctorIssue{{Kind: app.DoctorKindEventLog, Description: "bad event"}},
 		replayCount: 5,
 	}
 	cmd := doctor.NewDoctorCmd(fake)
@@ -160,9 +150,7 @@ func TestRunDoctor_Rebuild_WithIssues_Skipped(t *testing.T) {
 func TestRunDoctor_RebuildForce_WithIssues_Runs(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDoctorApp{
-		eventIssues: []app.DoctorIssue{
-			{Kind: app.DoctorKindEventLog, Description: "bad event"},
-		},
+		issues:      []app.DoctorIssue{{Kind: app.DoctorKindEventLog, Description: "bad event"}},
 		replayCount: 3,
 	}
 	cmd := doctor.NewDoctorCmd(fake)
@@ -179,14 +167,14 @@ func TestRunDoctor_RebuildForce_WithIssues_Runs(t *testing.T) {
 
 func TestRunDoctor_AppError_Propagates(t *testing.T) {
 	t.Parallel()
-	fake := &fakeDoctorApp{eventErr: errTest}
+	fake := &fakeDoctorApp{checksErr: errTest}
 	cmd := doctor.NewDoctorCmd(fake)
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "validate event log")
+	assert.ErrorIs(t, err, errTest)
 }
 
 func TestRunDoctor_JSON_AllClean(t *testing.T) {
@@ -211,7 +199,7 @@ func TestRunDoctor_JSON_AllClean(t *testing.T) {
 func TestRunDoctor_JSON_WithIssues(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDoctorApp{
-		eventIssues: []app.DoctorIssue{
+		issues: []app.DoctorIssue{
 			{Kind: app.DoctorKindEventLog, Description: "event 3 missing entity_id"},
 		},
 	}
@@ -235,7 +223,7 @@ func TestRunDoctor_JSON_WithIssues(t *testing.T) {
 func TestRunDoctor_JSON_EventID_NullWhenAbsent(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDoctorApp{
-		eventIssues: []app.DoctorIssue{
+		issues: []app.DoctorIssue{
 			{Kind: app.DoctorKindEventLog, Description: "no event id"},
 		},
 	}
@@ -254,7 +242,7 @@ func TestRunDoctor_JSON_EventID_PresentWhenSet(t *testing.T) {
 	t.Parallel()
 	eventID := int64(42)
 	fake := &fakeDoctorApp{
-		eventIssues: []app.DoctorIssue{
+		issues: []app.DoctorIssue{
 			{Kind: app.DoctorKindEventLog, EventID: &eventID, Description: "bad payload"},
 		},
 	}
