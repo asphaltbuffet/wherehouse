@@ -132,3 +132,26 @@ func TestToMoveOutput_JSONContract(t *testing.T) {
 	assert.NotContains(t, string(b), "old_path")
 	assert.NotContains(t, string(b), "new_path")
 }
+
+func TestToStatusOutput_WithNote(t *testing.T) {
+	b, err := json.Marshal(app.ToStatusOutput("Garage:Bike", inventory.EntityStatusLoaned, "to Alex"))
+	require.NoError(t, err)
+
+	assert.JSONEq(t, `{
+		"path": "Garage:Bike",
+		"status": "loaned",
+		"status_context": "to Alex"
+	}`, string(b))
+}
+
+func TestToStatusOutput_NoNoteOmitsContext(t *testing.T) {
+	b, err := json.Marshal(app.ToStatusOutput("Garage:Bike", inventory.EntityStatusMissing, ""))
+	require.NoError(t, err)
+
+	// status_context is omitted entirely when there is no note.
+	assert.JSONEq(t, `{
+		"path": "Garage:Bike",
+		"status": "missing"
+	}`, string(b))
+	assert.NotContains(t, string(b), "status_context")
+}

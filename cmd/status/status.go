@@ -11,13 +11,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-type statusResult struct {
-	EntityID      string  `json:"entity_id,omitempty"`
-	Path          string  `json:"path"`
-	Status        string  `json:"status"`
-	StatusContext *string `json:"status_context,omitempty"`
-}
-
 // NewDefaultStatusCmd returns a status command that opens the database from context configuration at runtime.
 func NewDefaultStatusCmd() *cobra.Command {
 	cmd := buildStatusCmd()
@@ -83,16 +76,8 @@ func runStatus(cmd *cobra.Command, args []string, a *app.App) error {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-	if cfg.IsJSON() {
-		var sc *string
-		if noteFlag != "" {
-			sc = &noteFlag
-		}
-		return out.JSON(statusResult{
-			Path:          path,
-			Status:        newStatus.String(),
-			StatusContext: sc,
-		})
+	if out.IsJSON() {
+		return out.JSON(app.ToStatusOutput(path, newStatus, noteFlag))
 	}
 	msg := fmt.Sprintf("Status of %q set to %s", path, newStatus)
 	if noteFlag != "" {

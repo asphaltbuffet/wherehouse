@@ -109,3 +109,26 @@ func ToMoveOutput(result EntityResult) MoveOutput {
 		Path:        result.FullPathDisplay,
 	}
 }
+
+// StatusOutput is the `status` command's JSON output shape. Because ChangeStatus
+// returns no result, this is projected from the command's inputs rather than an
+// EntityResult (see issue #214). StatusContext is omitted when there is no note.
+type StatusOutput struct {
+	Path          string                 `json:"path"`
+	Status        inventory.EntityStatus `json:"status"`
+	StatusContext *string                `json:"status_context,omitempty"`
+}
+
+// ToStatusOutput projects a status change into the `status` output shape. An
+// empty note yields a nil StatusContext, which omitempty drops from the JSON.
+func ToStatusOutput(path string, status inventory.EntityStatus, note string) StatusOutput {
+	var sc *string
+	if note != "" {
+		sc = &note
+	}
+	return StatusOutput{
+		Path:          path,
+		Status:        status,
+		StatusContext: sc,
+	}
+}
