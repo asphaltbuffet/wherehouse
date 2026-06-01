@@ -89,3 +89,23 @@ func TestToHistoryItems_JSONContract(t *testing.T) {
 		"actor_user": "grue"
 	}]`, string(b))
 }
+
+func TestToAddOutput_JSONContract(t *testing.T) {
+	result := app.EntityResult{
+		EntityID:        "add1234567",
+		DisplayName:     "Wrench",
+		CanonicalName:   "wrench",
+		EntityType:      inventory.EntityTypeLeaf,
+		FullPathDisplay: "Garage:Toolbox:Wrench",
+		Status:          inventory.EntityStatusOk,
+	}
+
+	b, err := json.Marshal(app.ToAddOutput(result))
+	require.NoError(t, err)
+
+	// Pins the current `wherehouse add --json` shape.
+	assert.JSONEq(t, `{
+		"entity_id": "add1234567",
+		"path": "Garage:Toolbox:Wrench"
+	}`, string(b))
+}

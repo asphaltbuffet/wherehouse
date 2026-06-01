@@ -132,6 +132,13 @@ func (w *OutputWriter) JSON(data any) error {
 	return w.printJSON(data)
 }
 
+// IsJSON reports whether the writer is in JSON mode. Commands whose text output
+// is multi-call styled messaging (e.g. Success + KeyValue) dispatch on this to
+// emit a projected JSON shape, rather than funnelling styled text through Render.
+func (w *OutputWriter) IsJSON() bool {
+	return w.jsonMode
+}
+
 // Render writes a command's primary result, choosing the encoding from the
 // writer's mode: in JSON mode it marshals result; otherwise it writes the
 // string produced by textFn. The text formatter is only invoked in text mode,

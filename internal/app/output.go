@@ -77,3 +77,17 @@ func ToHistoryItems(results []HistoryResult) []HistoryItem {
 	}
 	return items
 }
+
+// AddOutput is the `add` command's JSON output shape for a newly created entity.
+type AddOutput struct {
+	EntityID string `json:"entity_id"`
+	Path     string `json:"path"`
+}
+
+// ToAddOutput projects a created entity result into the `add` output shape.
+func ToAddOutput(result EntityResult) AddOutput {
+	return AddOutput{
+		EntityID: result.EntityID,
+		Path:     result.FullPathDisplay,
+	}
+}
