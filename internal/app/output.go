@@ -28,3 +28,29 @@ func ToListItems(results []EntityResult) []ListItem {
 	}
 	return items
 }
+
+// ScryItem is the `scry` command's JSON output shape. It currently coincides
+// with ListItem, but is kept separate because scry is expected to gain a match
+// Distance field (see issue #216) that list does not have.
+type ScryItem struct {
+	EntityID string                 `json:"entity_id"`
+	Path     string                 `json:"path"`
+	Type     inventory.EntityType   `json:"type"`
+	Status   inventory.EntityStatus `json:"status"`
+}
+
+// ToScryItems projects entity results into the `scry` output shape. Callers
+// flatten []FindResult to []EntityResult first; the match Distance is dropped
+// (see issue #216).
+func ToScryItems(results []EntityResult) []ScryItem {
+	items := make([]ScryItem, len(results))
+	for i, e := range results {
+		items[i] = ScryItem{
+			EntityID: e.EntityID,
+			Path:     e.FullPathDisplay,
+			Type:     e.EntityType,
+			Status:   e.Status,
+		}
+	}
+	return items
+}

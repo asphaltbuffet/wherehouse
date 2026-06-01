@@ -41,3 +41,27 @@ func TestToListItems_JSONContract(t *testing.T) {
 func TestToListItems_Empty(t *testing.T) {
 	assert.Empty(t, app.ToListItems(nil))
 }
+
+func TestToScryItems_JSONContract(t *testing.T) {
+	results := []app.EntityResult{
+		{
+			EntityID:        "xyz9876543",
+			DisplayName:     "Hammer",
+			CanonicalName:   "hammer",
+			EntityType:      inventory.EntityTypeLeaf,
+			FullPathDisplay: "Garage:Toolbox:Hammer",
+			Status:          inventory.EntityStatusOk,
+		},
+	}
+
+	b, err := json.Marshal(app.ToScryItems(results))
+	require.NoError(t, err)
+
+	// Pins the current `wherehouse scry --json` wire format (Distance omitted; see #216).
+	assert.JSONEq(t, `[{
+		"entity_id": "xyz9876543",
+		"path": "Garage:Toolbox:Hammer",
+		"type": "leaf",
+		"status": "ok"
+	}]`, string(b))
+}
