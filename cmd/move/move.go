@@ -10,13 +10,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
-type moveResult struct {
-	EntityID    string `json:"entity_id"`
-	DisplayName string `json:"display_name"`
-	OldPath     string `json:"old_path"`
-	NewPath     string `json:"new_path"`
-}
-
 // NewDefaultMoveCmd returns a move command that opens the database from context configuration at runtime.
 func NewDefaultMoveCmd() *cobra.Command {
 	cmd := buildMoveCmd()
@@ -75,13 +68,8 @@ func runMove(cmd *cobra.Command, args []string, a *app.App) error {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-	if cfg.IsJSON() {
-		return out.JSON(moveResult{
-			EntityID:    updated.EntityID,
-			DisplayName: updated.DisplayName,
-			OldPath:     srcPath,
-			NewPath:     updated.FullPathDisplay,
-		})
+	if out.IsJSON() {
+		return out.JSON(app.ToMoveOutput(updated))
 	}
 	out.Success(fmt.Sprintf("Moved %q → %s", srcPath, updated.FullPathDisplay))
 	return nil

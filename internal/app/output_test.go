@@ -109,3 +109,26 @@ func TestToAddOutput_JSONContract(t *testing.T) {
 		"path": "Garage:Toolbox:Wrench"
 	}`, string(b))
 }
+
+func TestToMoveOutput_JSONContract(t *testing.T) {
+	result := app.EntityResult{
+		EntityID:        "mov1234567",
+		DisplayName:     "Wrench",
+		CanonicalName:   "wrench",
+		EntityType:      inventory.EntityTypeLeaf,
+		FullPathDisplay: "Shed:Wrench",
+		Status:          inventory.EntityStatusOk,
+	}
+
+	b, err := json.Marshal(app.ToMoveOutput(result))
+	require.NoError(t, err)
+
+	// New `move --json` shape (ADR 0014): current location only, no old_path.
+	assert.JSONEq(t, `{
+		"entity_id": "mov1234567",
+		"display_name": "Wrench",
+		"path": "Shed:Wrench"
+	}`, string(b))
+	assert.NotContains(t, string(b), "old_path")
+	assert.NotContains(t, string(b), "new_path")
+}

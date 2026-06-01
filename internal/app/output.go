@@ -91,3 +91,21 @@ func ToAddOutput(result EntityResult) AddOutput {
 		Path:     result.FullPathDisplay,
 	}
 }
+
+// MoveOutput is the `move` command's JSON output shape. It reports the entity's
+// current location only; the prior location is recorded by the move event and
+// surfaced via the history command (ADR 0014).
+type MoveOutput struct {
+	EntityID    string `json:"entity_id"`
+	DisplayName string `json:"display_name"`
+	Path        string `json:"path"`
+}
+
+// ToMoveOutput projects a moved entity result into the `move` output shape.
+func ToMoveOutput(result EntityResult) MoveOutput {
+	return MoveOutput{
+		EntityID:    result.EntityID,
+		DisplayName: result.DisplayName,
+		Path:        result.FullPathDisplay,
+	}
+}
