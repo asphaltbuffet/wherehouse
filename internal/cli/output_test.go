@@ -486,3 +486,49 @@ func TestOutputWriter_Issue_AlwaysShown(t *testing.T) {
 
 	assert.Contains(t, out.String(), "[config]")
 }
+
+type renderProbe struct {
+	Name string `json:"name"`
+}
+
+func TestOutputWriter_Render_JSONMode(t *testing.T) {
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriter(out, err, true, false)
+
+	textCalled := false
+	require.NoError(t, w.Render(renderProbe{Name: "widget"}, func() string {
+		textCalled = true
+		return "TEXT"
+	}))
+
+	assert.JSONEq(t, `{"name":"widget"}`, out.String())
+	assert.False(t, textCalled, "text formatter must not run in JSON mode")
+}
+
+func TestOutputWriter_Render_TextMode(t *testing.T) {
+	out := &bytes.Buffer{}
+	err := &bytes.Buffer{}
+	w := NewOutputWriter(out, err, false, false)
+
+	require.NoError(t, w.Render(renderProbe{Name: "widget"}, func() string {
+		return "plain text\n"
+	}))
+
+	assert.Equal(t, "plain text\n", out.String())
+	assert.NotContains(t, out.String(), "{", "must not marshal JSON in text mode")
+}
+
+// Render emits the primary result even in quiet mode: quiet suppresses chatter,
+// not the answer the user explicitly requested.
+func TestOutputWriter_Render_QuietModeStillEmits(t *testing.T) {
+	jsonOut := &bytes.Buffer{}
+	wJSON := NewOutputWriter(jsonOut, &bytes.Buffer{}, true, true)
+	require.NoError(t, wJSON.Render(renderProbe{Name: "x"}, func() string { return "T\n" }))
+	assert.JSONEq(t, `{"name":"x"}`, jsonOut.String())
+
+	textOut := &bytes.Buffer{}
+	wText := NewOutputWriter(textOut, &bytes.Buffer{}, false, true)
+	require.NoError(t, wText.Render(renderProbe{Name: "x"}, func() string { return "T\n" }))
+	assert.Equal(t, "T\n", textOut.String())
+}
