@@ -46,9 +46,7 @@ events (event_id PK, event_type, timestamp_utc, actor_user_id, payload JSON, not
 ```
 
 **Projection tables (derived, rebuildable):**
-- `locations_current` — current location hierarchy
-- `items_current` — current item state and associations
-- `projects_current` — active and completed projects
+- `entities_current` — current entity state (places, containers, items) and hierarchy; `status` is `TEXT NOT NULL DEFAULT 'ok'` with a `CHECK` constraint over the status names
 
 Every `ORDER BY` that could tie **must** include `event_id ASC` as a tiebreaker.
 
@@ -93,6 +91,14 @@ Every command package exposes two constructors:
 Registered in `cmd/root.go` via `NewDefaultXxxCmd()`.
 
 There are no per-command `xxxApp` interfaces and no `cmd/*/db.go` files. Command tests use `apptesting.OpenApp(t)` from `internal/apptesting` and assert on DB state rather than captured arguments. See ADR 0013.
+
+### Command JSON output
+A command's `--json` shape is an **app-owned** type with JSON tags in `internal/app/output.go`, built by a pure projector (`app.ToXxx(...)`). Commands never declare local `xxxResult`/`xxxEntry` structs, call `.String()` on enums for JSON, or marshal inline. Enums (`inventory.EntityType`/`EntityStatus`/`EventType`) serialize as string names via their own `MarshalJSON`.
+
+- **Data-table output** (`list`/`scry`/`history`): `return out.Render(app.ToXxxItems(rows), func() string { …text… })`. `Render` picks json-vs-text; the text closure owns all newlines (empty result ⇒ `""` ⇒ no output) and may use styles.
+- **Status-message output** (`add`/`move`/`status`): `if out.IsJSON() { return out.JSON(app.ToXxxOutput(...)) }` then the existing `out.Success`/`KeyValue` text calls.
+
+`internal/app` must stay free of `internal/styles`/`lipgloss` — text formatting lives at the `cmd`/`cli` boundary. See ADR 0014.
 
 ### web package (internal/web)
 `cmd/serve/` is a **thin shell only** — no `net/http`, `html/template`, or `//go:embed`. All server logic lives in `internal/web`. Verify: `rg -l '"net/http"|"html/template"|//go:embed' cmd/serve/` → empty.
