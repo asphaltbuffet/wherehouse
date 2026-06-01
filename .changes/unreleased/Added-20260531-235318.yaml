@@ -1,0 +1,5 @@
+kind: Added
+body: New forbidigo linting pattern for `entitypath.Separator` outside of `internal/entitypath`
+time: 2026-05-31T23:53:18.048370636-04:00
+custom:
+    Issue: '#206'

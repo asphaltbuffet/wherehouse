@@ -2,13 +2,13 @@ package list
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 )
 
 type listEntry struct {
@@ -67,9 +67,14 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	typeFilter, _ := cmd.Flags().GetString("type")
 	statusFilter, _ := cmd.Flags().GetString("status")
 
-	var underPrefix string
+	var underParsed entitypath.Path
 	if underPath != "" {
-		underPrefix = underPath + ":"
+		var parseErr error
+
+		underParsed, parseErr = entitypath.Parse(underPath)
+		if parseErr != nil {
+			return fmt.Errorf("invalid --under path: %w", parseErr)
+		}
 	}
 
 	all, err := a.ListEntities(ctx)
@@ -77,19 +82,7 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 		return fmt.Errorf("list failed: %w", err)
 	}
 
-	var entities []app.EntityResult
-	for _, e := range all {
-		if underPrefix != "" && !strings.HasPrefix(e.FullPathDisplay, underPrefix) {
-			continue
-		}
-		if typeFilter != "" && e.EntityType.String() != typeFilter {
-			continue
-		}
-		if statusFilter != "" && e.Status.String() != statusFilter {
-			continue
-		}
-		entities = append(entities, e)
-	}
+	entities := filterEntities(all, underParsed, typeFilter, statusFilter)
 
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
@@ -115,4 +108,33 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 			e.EntityID, e.FullPathDisplay, e.EntityType, e.Status)
 	}
 	return nil
+}
+
+func filterEntities(all []app.EntityResult, under entitypath.Path, typeFilter, statusFilter string) []app.EntityResult {
+	var out []app.EntityResult
+
+	for _, e := range all {
+		if typeFilter != "" && e.EntityType.String() != typeFilter {
+			continue
+		}
+
+		if statusFilter != "" && e.Status.String() != statusFilter {
+			continue
+		}
+
+		if !under.IsEmpty() {
+			ep, parseErr := entitypath.Parse(e.FullPathDisplay)
+			if parseErr != nil {
+				continue
+			}
+
+			if !under.IsAncestor(ep) {
+				continue
+			}
+		}
+
+		out = append(out, e)
+	}
+
+	return out
 }

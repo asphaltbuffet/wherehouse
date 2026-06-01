@@ -38,6 +38,18 @@ func (p Path) Append(name string) (Path, error) {
 	return p.Join(name)
 }
 
+// AppendTo parses parent as a Path and appends leaf as a single segment.
+// It is a convenience wrapper for the common pattern of building a child path
+// from a stored string (e.g. a FullPathDisplay from the DB) and a leaf name.
+func AppendTo(parent, leaf string) (Path, error) {
+	p, err := Parse(parent)
+	if err != nil {
+		return Path(""), fmt.Errorf("entitypath.AppendTo: parse parent: %w", err)
+	}
+
+	return p.Append(leaf)
+}
+
 // Clean collapses adjacent separators and trims a single trailing separator
 // (except for Root). It is idempotent. It does not resolve "." or "..".
 func (p Path) Clean() Path {

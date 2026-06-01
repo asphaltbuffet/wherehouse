@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
@@ -213,7 +214,10 @@ func (b *Bus) handleEntityReparentedComputePayloadsTx(
 		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: update entity: %w", err)
 	}
 
-	payloads := ComputeDescendantPathPayloads(entity, descendants)
+	payloads, err := ComputeDescendantPathPayloads(entity, descendants)
+	if err != nil {
+		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: compute descendant paths: %w", err)
+	}
 
 	for i, d := range descendants {
 		dp := payloads[i]
@@ -307,7 +311,10 @@ func (b *Bus) propagatePathChangesTx(
 	parent *inventory.Entity,
 	descendants []*inventory.Entity,
 ) error {
-	payloads := ComputeDescendantPathPayloads(parent, descendants)
+	payloads, err := ComputeDescendantPathPayloads(parent, descendants)
+	if err != nil {
+		return fmt.Errorf("handleEntityReparented: compute descendant paths: %w", err)
+	}
 
 	for i, d := range descendants {
 		p := payloads[i]
@@ -317,7 +324,8 @@ func (b *Bus) propagatePathChangesTx(
 		d.LastEventID = triggeringEv.EventID
 		d.UpdatedAt = time.Now().UTC()
 
-		payloadJSON, err := json.Marshal(p)
+		var payloadJSON []byte
+		payloadJSON, err = json.Marshal(p)
 		if err != nil {
 			return fmt.Errorf("marshal path_changed payload for %s: %w", d.EntityID, err)
 		}
@@ -351,7 +359,7 @@ func (b *Bus) propagatePathChangesTx(
 func ComputeDescendantPathPayloads(
 	parent *inventory.Entity,
 	descendants []*inventory.Entity,
-) []EntityPathChangedPayload {
+) ([]EntityPathChangedPayload, error) {
 	updated := map[string]*inventory.Entity{parent.EntityID: parent}
 	payloads := make([]EntityPathChangedPayload, len(descendants))
 
@@ -367,8 +375,18 @@ func ComputeDescendantPathPayloads(
 		}
 
 		computed := *d
-		computed.FullPathDisplay = parentDisplay + ":" + d.DisplayName
-		computed.FullPathCanonical = parentCanonical + ":" + d.CanonicalName
+		displayPath, err := entitypath.AppendTo(parentDisplay, d.DisplayName)
+		if err != nil {
+			return nil, fmt.Errorf("build display path for %s: %w", d.EntityID, err)
+		}
+
+		canonicalPath, err := entitypath.AppendTo(parentCanonical, d.CanonicalName)
+		if err != nil {
+			return nil, fmt.Errorf("build canonical path for %s: %w", d.EntityID, err)
+		}
+
+		computed.FullPathDisplay = displayPath.String()
+		computed.FullPathCanonical = canonicalPath.String()
 		computed.Depth = parentDepth + 1
 
 		payloads[i] = EntityPathChangedPayload{
@@ -380,5 +398,5 @@ func ComputeDescendantPathPayloads(
 		updated[d.EntityID] = &computed
 	}
 
-	return payloads
+	return payloads, nil
 }
