@@ -4,11 +4,8 @@ name: Release Workflow
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - VERSION
-  workflow_dispatch:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -34,9 +31,9 @@ jobs:
         with:
           install-only: true
 
-      - name: Read version
+      - name: Extract version from tag
         id: version
-        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Generate code
         run: mise run generate
@@ -56,32 +53,12 @@ jobs:
             exit 1
           fi
 
-      - name: Assert tag does not already exist
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          tag="v${VERSION}"
-          if git tag -l | grep -qx "$tag"; then
-            echo "Error: tag ${tag} already exists - was this release already published?"
-            exit 1
-          fi
-
-      - name: Create and push tag
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          tag="v${VERSION}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Release ${tag}"
-          git push origin "$tag"
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser-pro
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes=".changes/${{ steps.version.outputs.version }}.md"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
@@ -40,19 +41,28 @@ type Breadcrumb struct {
 // BreadcrumbsForEntity builds a breadcrumb slice from fullPath by matching
 // each path prefix against the provided entity list. Exported for testing.
 func BreadcrumbsForEntity(entities []app.EntityResult, fullPath string) []Breadcrumb {
-	parts := strings.Split(fullPath, ":")
+	p, err := entitypath.Parse(fullPath)
+	if err != nil {
+		return nil
+	}
+
 	idByPath := make(map[string]string, len(entities))
 	for _, e := range entities {
 		idByPath[e.FullPathDisplay] = e.EntityID
 	}
-	crumbs := make([]Breadcrumb, len(parts))
-	for i, part := range parts {
-		id := ""
-		if i < len(parts)-1 {
-			id = idByPath[strings.Join(parts[:i+1], ":")]
-		}
-		crumbs[i] = Breadcrumb{Name: part, EntityID: id}
+
+	ancestors := p.Ancestors()
+	crumbs := make([]Breadcrumb, 0, len(ancestors)+1)
+
+	for _, ancestor := range ancestors {
+		crumbs = append(crumbs, Breadcrumb{
+			Name:     ancestor.Base(),
+			EntityID: idByPath[ancestor.String()],
+		})
 	}
+
+	crumbs = append(crumbs, Breadcrumb{Name: p.Base()})
+
 	return crumbs
 }
 

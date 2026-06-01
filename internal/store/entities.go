@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -214,10 +215,17 @@ func (s *Store) ComputeEntityPathTx(
 		return "", "", 0, fmt.Errorf("query parent %s: %w", *parentID, scanErr)
 	}
 
-	return strings.Join([]string{parentDisplay, displayName}, ":"),
-		strings.Join([]string{parentCanonical, canonicalName}, ":"),
-		parentDepth + 1,
-		nil
+	display, err := entitypath.AppendTo(parentDisplay, displayName)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("build display path: %w", err)
+	}
+
+	canonical, err := entitypath.AppendTo(parentCanonical, canonicalName)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("build canonical path: %w", err)
+	}
+
+	return display.String(), canonical.String(), parentDepth + 1, nil
 }
 
 type scanFunc func(dest ...any) error

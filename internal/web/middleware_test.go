@@ -67,7 +67,8 @@ func TestSecurityHeaders_Present(t *testing.T) {
 func TestSearch_NonHTMXRendersFullShell(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Garage", CanonicalName: "garage",
-			EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			FullPathDisplay: "Garage",
+			EntityType:      inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()

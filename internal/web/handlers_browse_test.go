@@ -15,7 +15,8 @@ import (
 func TestHandleIndex(t *testing.T) {
 	fake := &fakeApp{entities: []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Garage", CanonicalName: "garage",
-			EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			FullPathDisplay: "Garage",
+			EntityType:      inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
 	}}
 	ts := newTestServer(t, fake)
 	defer ts.Close()

@@ -1,6 +1,5 @@
 [tools]
 changie = "latest"
-semver = "latest"
 "aqua:golangci/golangci-lint" = "prefix:2.8"
 "aqua:gotestyourself/gotestsum" = "latest"
 "aqua:vektra/mockery" = "3"
@@ -82,6 +81,7 @@ sources = ["**/*.go", ".golangci.yml"]
 outputs = ["bin/golangci-lint.html"]
 run = [
   "mkdir -p bin",
+  "golangci-lint config verify",
   "golangci-lint run --fix --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
 ]
 

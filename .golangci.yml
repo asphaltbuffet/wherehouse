@@ -275,6 +275,12 @@ linters:
       # Default: false
       allow-empty-returns: true
 
+    forbidigo:
+      # Forbid entitypath.Separator outside internal/entitypath — callers must use path methods.
+      forbid:
+        - pattern: entitypath\.Separator
+          msg: "use entitypath path methods (New, Parse, Append, HasPrefix, …) instead of referencing the separator directly"
+
     funcorder:
       # Checks if the exported methods of a structure are placed before the non-exported ones.
       # Default: true

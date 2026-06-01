@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -235,7 +234,12 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 	for i, seg := range segments {
 		canonicalSegments[i] = inventory.CanonicalizeString(seg)
 	}
-	canonicalPath := strings.Join(canonicalSegments, ":")
+	p2, err := entitypath.New(canonicalSegments...)
+	if err != nil {
+		return nil, fmt.Errorf("build canonical path: %w", err)
+	}
+
+	canonicalPath := p2.String()
 	canonicalLeaf := canonicalSegments[len(canonicalSegments)-1]
 
 	candidates, err := a.store.GetEntitiesByCanonicalName(ctx, canonicalLeaf)

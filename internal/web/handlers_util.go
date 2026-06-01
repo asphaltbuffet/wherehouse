@@ -3,9 +3,9 @@ package web
 import (
 	"bytes"
 	"net/http"
-	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 )
 
 const (
@@ -60,5 +60,10 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 
 // isRootEntity returns true when e has no parent (no colon in path = depth 0).
 func isRootEntity(e app.EntityResult) bool {
-	return !strings.Contains(e.FullPathDisplay, ":")
+	p, err := entitypath.Parse(e.FullPathDisplay)
+	if err != nil {
+		return false
+	}
+
+	return p.Depth() == 1
 }
