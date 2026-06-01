@@ -445,24 +445,29 @@ mise run dev        # binary lands in dist/<os>_<arch>_<variant>/wherehouse
 
 ### Releasing
 
-Releases are triggered automatically when `VERSION` changes on `main`. Every merge to main is _potentially_ a release — gated by whether `VERSION` was bumped.
+The changelog (`.changes/`) is the single source of truth for versions. Releases are triggered by pushing a version tag to GitHub — there is no `VERSION` file.
 
 **To cut a release:**
 
-1. Add a `## [x.y.z] - YYYY-MM-DD` entry to `CHANGELOG.md`
-2. Run `mise run release <major|minor|patch>` — this:
-   - Computes the next version
-   - Verifies the CHANGELOG entry exists
-   - Writes `VERSION`
+1. As you work, use `changie new` to record user-facing changes in `.changes/unreleased/`. This is optional for non-user-facing changes (tooling, CI, docs) — but at least one fragment must exist before a release.
+2. Run `mise run pre-release <major|minor|patch>` — this:
+   - Hard-fails if no unreleased fragments exist
+   - Runs `changie batch <bump>` to create `.changes/<version>.md`
+   - Runs `changie merge` to update `CHANGELOG.md`
    - Updates nix flake pins in this file
-3. Commit `VERSION`, `CHANGELOG.md`, and `README.md` together and open a PR
+3. Commit `.changes/`, `CHANGELOG.md`, and `README.md` together and open a PR
+4. After the PR merges, run `mise run release` — this:
+   - Asserts the working copy is clean and `@` is on trunk
+   - Asserts the tag doesn't already exist
+   - Asserts `CHANGELOG.md` has an entry for the version
+   - Creates and pushes the `v<version>` tag
 
-When the PR merges, CI detects the `VERSION` change and:
-- Extracts release notes from `CHANGELOG.md`
-- Creates and pushes the `v<version>` tag
-- Runs goreleaser to build binaries and publish the GitHub release
+When the tag push lands, CI:
+- Extracts the version from the tag name
+- Asserts `CHANGELOG.md` has a matching entry
+- Runs goreleaser with `.changes/<version>.md` as the release notes
 
-**If you merge without bumping `VERSION`**, no release fires — your changes wait for the next PR that does bump it. A CI check (`release-check.yml`) will fail the PR if `VERSION` changed but `CHANGELOG.md` has no matching entry.
+**Non-user-facing changes** (dependency bumps, CI fixes, tooling) should not trigger a release. Merge them to main without running `pre-release` — they will be bundled into the next release that does have user-facing changes.
 
 ---
 

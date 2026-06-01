@@ -59,6 +59,7 @@ release:
     owner: asphaltbuffet
     name: wherehouse
   prerelease: auto
+  mode: replace
 
 announce:
   skip: true

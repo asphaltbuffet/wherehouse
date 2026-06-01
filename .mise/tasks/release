@@ -1,49 +1,52 @@
 #!/usr/bin/env bash
-#MISE description="Bump VERSION, update CHANGELOG pin check, and update README nix pins"
-#USAGE arg "bump" help="Version bump type" {
-#USAGE   choices "major" "minor" "patch"
-#USAGE }
+#MISE description="Create and push a release tag from the latest changie version"
 
 set -euo pipefail
 
-bump="${usage_bump}"
-
-# --- Read current version ---
-if [ ! -f VERSION ]; then
-  echo "Error: VERSION file not found"
+# --- Assert working copy is clean ---
+if [ -n "$(jj diff -s 2>/dev/null)" ]; then
+  echo "Error: working copy has pending changes"
+  jj diff -s
   exit 1
 fi
 
-current=$(tr -d '[:space:]' < VERSION)
+# --- Assert we are on trunk ---
+at=$(jj log --no-graph -r '@' --template 'commit_id' 2>/dev/null)
+trunk=$(jj log --no-graph -r 'trunk()' --template 'commit_id' 2>/dev/null)
+if [ "$at" != "$trunk" ]; then
+  echo "Error: not on trunk — current @ is not trunk()"
+  echo "  Merge your PR before releasing."
+  exit 1
+fi
 
-# --- Compute next version ---
-next=$(semver bump "$bump" "$current")
+# --- Get version from changie ---
+version=$(changie latest)
+if [ -z "$version" ]; then
+  echo "Error: changie latest returned empty — has pre-release been run?"
+  exit 1
+fi
 
-echo "Current: ${current}"
-echo "Next:    ${next}"
+echo "Version: ${version}"
+
+# --- Assert CHANGELOG has an entry ---
+bare="${version#v}"
+if ! grep -q "^## \[${bare}\]" CHANGELOG.md; then
+  echo "Error: no '## [${bare}]' entry in CHANGELOG.md"
+  echo "  Run 'mise run pre-release <major|minor|patch>' first."
+  exit 1
+fi
+echo "  ✓ CHANGELOG.md has entry for ${bare}"
+
+# --- Assert tag does not already exist ---
+if jj tag list 2>/dev/null | grep -q "^${version}:"; then
+  echo "Error: tag ${version} already exists — was this release already published?"
+  exit 1
+fi
+echo "  ✓ Tag ${version} does not exist yet"
+
+# --- Create and push tag ---
+jj tag create "${version}" --revision @
+jj git push --tag "${version}"
+
 echo ""
-
-# --- Assert new > current ---
-if [ "$(semver compare "$next" "$current")" -le 0 ]; then
-  echo "Error: new version ${next} is not greater than current ${current}"
-  exit 1
-fi
-
-# --- Assert CHANGELOG entry exists ---
-if ! grep -q "^## \[${next}\]" CHANGELOG.md; then
-  echo "Error: no '## [${next}]' section found in CHANGELOG.md"
-  echo "  Add a changelog entry before releasing"
-  exit 1
-fi
-echo "  ✓ CHANGELOG.md has entry for ${next}"
-
-# --- Write VERSION ---
-echo "${next}" > VERSION
-echo "  ✓ VERSION updated to ${next}"
-
-# --- Update README nix pins ---
-sd "github:asphaltbuffet/wherehouse/v${current}" "github:asphaltbuffet/wherehouse/v${next}" README.md
-echo "  ✓ README.md nix pins updated"
-
-echo ""
-echo "Done. Commit VERSION, README.md, and CHANGELOG.md together and open a PR."
+echo "Done. CI will build and publish the release for ${version}."
