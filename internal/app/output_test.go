@@ -65,3 +65,27 @@ func TestToScryItems_JSONContract(t *testing.T) {
 		"status": "ok"
 	}]`, string(b))
 }
+
+func TestToHistoryItems_JSONContract(t *testing.T) {
+	results := []app.HistoryResult{
+		{
+			EventID:      42,
+			EventType:    inventory.EntityStatusChangedEvent,
+			TimestampUTC: "2026-06-01T12:00:00Z",
+			ActorUserID:  "grue",
+			Payload:      []byte(`{"ignored":true}`),
+			Note:         "should not appear",
+		},
+	}
+
+	b, err := json.Marshal(app.ToHistoryItems(results))
+	require.NoError(t, err)
+
+	// Pins the current `wherehouse history --json` shape: Payload and Note are dropped.
+	assert.JSONEq(t, `[{
+		"event_id": 42,
+		"event_type": "entity.status_changed",
+		"timestamp": "2026-06-01T12:00:00Z",
+		"actor_user": "grue"
+	}]`, string(b))
+}

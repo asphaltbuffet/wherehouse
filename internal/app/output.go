@@ -54,3 +54,26 @@ func ToScryItems(results []EntityResult) []ScryItem {
 	}
 	return items
 }
+
+// HistoryItem is the `history` command's JSON output shape: one row per event.
+// Payload and Note from HistoryResult are intentionally omitted.
+type HistoryItem struct {
+	EventID   int64               `json:"event_id"`
+	EventType inventory.EventType `json:"event_type"`
+	Timestamp string              `json:"timestamp"`
+	ActorUser string              `json:"actor_user"`
+}
+
+// ToHistoryItems projects history results into the `history` output shape.
+func ToHistoryItems(results []HistoryResult) []HistoryItem {
+	items := make([]HistoryItem, len(results))
+	for i, e := range results {
+		items[i] = HistoryItem{
+			EventID:   e.EventID,
+			EventType: e.EventType,
+			Timestamp: e.TimestampUTC,
+			ActorUser: e.ActorUserID,
+		}
+	}
+	return items
+}
