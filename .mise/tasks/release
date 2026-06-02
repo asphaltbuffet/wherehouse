@@ -11,10 +11,10 @@ if [ -n "$(jj diff -s 2>/dev/null)" ]; then
 fi
 
 # --- Assert we are on trunk ---
-at=$(jj log --no-graph -r '@' --template 'commit_id' 2>/dev/null)
+parent=$(jj log --no-graph -r '@-' --template 'commit_id' 2>/dev/null)
 trunk=$(jj log --no-graph -r 'trunk()' --template 'commit_id' 2>/dev/null)
-if [ "$at" != "$trunk" ]; then
-  echo "Error: not on trunk — current @ is not trunk()"
+if [ "$parent" != "$trunk" ]; then
+  echo "Error: not on trunk — current @ parent is not trunk()"
   echo "  Merge your PR before releasing."
   exit 1
 fi
@@ -45,7 +45,7 @@ fi
 echo "  ✓ Tag ${version} does not exist yet"
 
 # --- Create and push tag ---
-jj tag create "${version}" --revision @
+jj tag create "${version}" --revision "${trunk}"
 jj git push --tag "${version}"
 
 echo ""
