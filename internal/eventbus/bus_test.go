@@ -131,3 +131,27 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Projected Room", entity.DisplayName)
 }
+
+func TestPayloadFactories_CoversAllEventTypes(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+
+	factories := b.PayloadFactories()
+
+	allTypes := []inventory.EventType{
+		inventory.EntityCreatedEvent,
+		inventory.EntityRenamedEvent,
+		inventory.EntityReparentedEvent,
+		inventory.EntityPathChangedEvent,
+		inventory.EntityStatusChangedEvent,
+		inventory.EntityRemovedEvent,
+	}
+
+	for _, et := range allTypes {
+		factory, ok := factories[et]
+		require.True(t, ok, "PayloadFactories missing entry for %s", et)
+		require.NotNil(t, factory, "factory for %s is nil", et)
+		instance := factory()
+		assert.NotNil(t, instance, "factory() for %s returned nil", et)
+	}
+}

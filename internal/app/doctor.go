@@ -12,15 +12,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
-var payloadPrototypes = map[inventory.EventType]func() any{
-	inventory.EntityCreatedEvent:       func() any { return &eventbus.EntityCreatedPayload{} },
-	inventory.EntityRenamedEvent:       func() any { return &eventbus.EntityRenamedPayload{} },
-	inventory.EntityReparentedEvent:    func() any { return &eventbus.EntityReparentedPayload{} },
-	inventory.EntityPathChangedEvent:   func() any { return &eventbus.EntityPathChangedPayload{} },
-	inventory.EntityStatusChangedEvent: func() any { return &eventbus.EntityStatusChangedPayload{} },
-	inventory.EntityRemovedEvent:       func() any { return &eventbus.EntityRemovedPayload{} },
-}
-
 // DoctorIssue describes a single structural problem found during a doctor validation.
 type DoctorIssue struct {
 	Kind        DoctorKind
@@ -30,16 +21,15 @@ type DoctorIssue struct {
 
 // ValidateEventLog reads all events and returns a DoctorIssue for each structural problem found.
 // Returns an empty (non-nil) slice when the log is clean. Never mutates state.
-// Returns an empty (non-nil) slice when the log is clean. Never mutates state.
 func (a *App) ValidateEventLog(ctx context.Context) ([]DoctorIssue, error) {
 	events, err := a.store.GetAllEventsRaw(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("validate event log: %w", err)
 	}
-	return validateEventLog(events), nil
+	return validateEventLog(events, a.bus.PayloadFactories()), nil
 }
 
-func validateEventLog(events []store.RawEvent) []DoctorIssue {
+func validateEventLog(events []store.RawEvent, factories map[inventory.EventType]func() any) []DoctorIssue {
 	createdIDs := make(map[string]bool)
 	removedIDs := make(map[string]int64) // entity ID → first remove event_id
 
@@ -60,7 +50,7 @@ func validateEventLog(events []store.RawEvent) []DoctorIssue {
 			}
 		}
 
-		issues = append(issues, validateSingleEvent(ev, et, parseErr)...)
+		issues = append(issues, validateSingleEvent(ev, et, parseErr, factories)...)
 	}
 
 	for entityID, removeEventID := range removedIDs {
@@ -77,7 +67,12 @@ func validateEventLog(events []store.RawEvent) []DoctorIssue {
 	return issues
 }
 
-func validateSingleEvent(ev store.RawEvent, et inventory.EventType, parseErr error) []DoctorIssue {
+func validateSingleEvent(
+	ev store.RawEvent,
+	et inventory.EventType,
+	parseErr error,
+	factories map[inventory.EventType]func() any,
+) []DoctorIssue {
 	id := ev.EventID
 	var issues []DoctorIssue
 
@@ -89,7 +84,7 @@ func validateSingleEvent(ev store.RawEvent, et inventory.EventType, parseErr err
 		})
 	}
 
-	if proto, ok := payloadPrototypes[et]; ok {
+	if proto, ok := factories[et]; ok {
 		target := proto()
 		if unmarshalErr := json.Unmarshal(ev.Payload, target); unmarshalErr != nil {
 			return append(issues, DoctorIssue{
@@ -169,7 +164,7 @@ func (a *App) RunDoctorChecks(ctx context.Context) ([]DoctorIssue, error) {
 		return nil, fmt.Errorf("doctor checks: %w", err)
 	}
 
-	issues := validateEventLog(events)
+	issues := validateEventLog(events, a.bus.PayloadFactories())
 	expectedPresent, maxEventID := buildProjectionSets(events)
 	issues = append(issues, checkProjectionRows(projRows, expectedPresent, maxEventID)...)
 	return issues, nil

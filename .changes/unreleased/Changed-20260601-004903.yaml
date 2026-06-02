@@ -1,0 +1,5 @@
+kind: Changed
+body: Refactored event-type registration into single regristry
+time: 2026-06-01T00:49:03.438956358-04:00
+custom:
+    Issue: '#204'

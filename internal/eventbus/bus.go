@@ -10,14 +10,67 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
+type eventHandlerFn func(context.Context, store.Tx, *inventory.Event) error
+
+type eventRegistration struct {
+	payloadFactory func() any
+	applyFn        eventHandlerFn
+	replayFn       eventHandlerFn // nil falls back to applyFn
+}
+
 // Bus is the single entry point for persisting events and updating projections.
 type Bus struct {
-	store *store.Store
+	store    *store.Store
+	registry map[inventory.EventType]eventRegistration
 }
 
 // New creates a new Bus backed by the given Store.
 func New(s *store.Store) *Bus {
-	return &Bus{store: s}
+	b := &Bus{
+		store:    s,
+		registry: make(map[inventory.EventType]eventRegistration),
+	}
+	b.registerAll()
+	return b
+}
+
+func (b *Bus) registerAll() {
+	b.registry[inventory.EntityCreatedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityCreatedPayload{} },
+		applyFn:        b.handleEntityCreated,
+	}
+	b.registry[inventory.EntityRenamedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityRenamedPayload{} },
+		applyFn:        b.handleEntityRenamed,
+	}
+	b.registry[inventory.EntityReparentedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityReparentedPayload{} },
+		applyFn:        b.handleEntityReparented,
+		replayFn:       b.handleEntityReparentedProjectionOnlyTx,
+	}
+	b.registry[inventory.EntityPathChangedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityPathChangedPayload{} },
+		applyFn:        b.handleEntityPathChanged,
+	}
+	b.registry[inventory.EntityStatusChangedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityStatusChangedPayload{} },
+		applyFn:        b.handleEntityStatusChanged,
+	}
+	b.registry[inventory.EntityRemovedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityRemovedPayload{} },
+		applyFn:        b.handleEntityRemoved,
+	}
+}
+
+// PayloadFactories returns the live registry map of payload factory functions,
+// keyed by EventType. Used by doctor validation to unmarshal payloads without
+// maintaining a duplicate map.
+func (b *Bus) PayloadFactories() map[inventory.EventType]func() any {
+	factories := make(map[inventory.EventType]func() any, len(b.registry))
+	for et, reg := range b.registry {
+		factories[et] = reg.payloadFactory
+	}
+	return factories
 }
 
 // Dispatch persists an event and applies it to projections in a single transaction.
@@ -122,22 +175,11 @@ func (b *Bus) writeEvent(
 }
 
 func (b *Bus) applyEventTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	switch ev.EventType {
-	case inventory.EntityCreatedEvent:
-		return b.handleEntityCreated(ctx, tx, ev)
-	case inventory.EntityRenamedEvent:
-		return b.handleEntityRenamed(ctx, tx, ev)
-	case inventory.EntityReparentedEvent:
-		return b.handleEntityReparented(ctx, tx, ev)
-	case inventory.EntityPathChangedEvent:
-		return b.handleEntityPathChanged(ctx, tx, ev)
-	case inventory.EntityStatusChangedEvent:
-		return b.handleEntityStatusChanged(ctx, tx, ev)
-	case inventory.EntityRemovedEvent:
-		return b.handleEntityRemoved(ctx, tx, ev)
-	default:
+	reg, ok := b.registry[ev.EventType]
+	if !ok {
 		return fmt.Errorf("unknown event type: %s", ev.EventType)
 	}
+	return reg.applyFn(ctx, tx, ev)
 }
 
 // applyEventProjectionOnlyTx is like applyEventTx but never writes new events.
@@ -146,22 +188,15 @@ func (b *Bus) applyEventTx(ctx context.Context, tx store.Tx, ev *inventory.Event
 // handleEntityPathChanged. Used by ReplayEvent (import) and TruncateAndReplay
 // (projection rebuild) so neither path grows the event log.
 func (b *Bus) applyEventProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	switch ev.EventType {
-	case inventory.EntityCreatedEvent:
-		return b.handleEntityCreated(ctx, tx, ev)
-	case inventory.EntityRenamedEvent:
-		return b.handleEntityRenamed(ctx, tx, ev)
-	case inventory.EntityReparentedEvent:
-		return b.handleEntityReparentedProjectionOnlyTx(ctx, tx, ev)
-	case inventory.EntityPathChangedEvent:
-		return b.handleEntityPathChanged(ctx, tx, ev)
-	case inventory.EntityStatusChangedEvent:
-		return b.handleEntityStatusChanged(ctx, tx, ev)
-	case inventory.EntityRemovedEvent:
-		return b.handleEntityRemoved(ctx, tx, ev)
-	default:
+	reg, ok := b.registry[ev.EventType]
+	if !ok {
 		return fmt.Errorf("unknown event type: %s", ev.EventType)
 	}
+	fn := reg.applyFn
+	if reg.replayFn != nil {
+		fn = reg.replayFn
+	}
+	return fn(ctx, tx, ev)
 }
 
 // TruncateAndReplay rebuilds entities_current from the full event log.
