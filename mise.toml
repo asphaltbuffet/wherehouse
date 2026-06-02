@@ -21,7 +21,7 @@ go build \
 
 [tasks.ci]
 description = "CI build pipeline"
-depends = ["generate", "mod-tidy", "mock", "test", "cover", "build", "diff"]
+depends = ["generate", "mod-tidy", "mock", "test", "cover", "diff"]
 hide = true
 
 [tasks.clean]
