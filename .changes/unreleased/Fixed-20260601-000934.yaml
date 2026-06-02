@@ -1,5 +1,0 @@
-kind: Fixed
-body: Fixed missing root entities in queries
-time: 2026-06-01T00:09:34.733072253-04:00
-custom:
-    Issue: '#206'

@@ -1,5 +1,0 @@
-kind: Changed
-body: '*breaking* Refactor `move` output to standard shape; `old_path` removed'
-time: 2026-06-01T12:54:45.130400079-04:00
-custom:
-    Issue: '#209'
