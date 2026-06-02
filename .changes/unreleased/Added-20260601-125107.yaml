@@ -1,0 +1,5 @@
+kind: Added
+body: Add JSON marshaling for enum types
+time: 2026-06-01T12:51:07.922116073-04:00
+custom:
+    Issue: '#209'

@@ -2,6 +2,7 @@ package history
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -9,13 +10,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
-
-type historyEntry struct {
-	EventID   int64  `json:"event_id"`
-	EventType string `json:"event_type"`
-	Timestamp string `json:"timestamp"`
-	ActorUser string `json:"actor_user"`
-}
 
 // NewDefaultHistoryCmd returns the history command wired to the real database.
 func NewDefaultHistoryCmd() *cobra.Command {
@@ -62,21 +56,12 @@ func runHistory(cmd *cobra.Command, args []string, a *app.App) error {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-	if cfg.IsJSON() {
-		entries := make([]historyEntry, len(events))
-		for i, e := range events {
-			entries[i] = historyEntry{
-				EventID:   e.EventID,
-				EventType: e.EventType.String(),
-				Timestamp: e.TimestampUTC,
-				ActorUser: e.ActorUserID,
-			}
+	return out.Render(app.ToHistoryItems(events), func() string {
+		var b strings.Builder
+		for _, e := range events {
+			fmt.Fprintf(&b, "%d  %s  %s  %s\n",
+				e.EventID, e.TimestampUTC, e.EventType, e.ActorUserID)
 		}
-		return out.JSON(entries)
-	}
-	for _, e := range events {
-		fmt.Fprintf(cmd.OutOrStdout(), "%d  %s  %s  %s\n",
-			e.EventID, e.TimestampUTC, e.EventType, e.ActorUserID)
-	}
-	return nil
+		return b.String()
+	})
 }

@@ -132,6 +132,32 @@ func (w *OutputWriter) JSON(data any) error {
 	return w.printJSON(data)
 }
 
+// IsJSON reports whether the writer is in JSON mode. Commands whose text output
+// is multi-call styled messaging (e.g. Success + KeyValue) dispatch on this to
+// emit a projected JSON shape, rather than funnelling styled text through Render.
+func (w *OutputWriter) IsJSON() bool {
+	return w.jsonMode
+}
+
+// Render writes a command's primary result, choosing the encoding from the
+// writer's mode: in JSON mode it marshals result; otherwise it writes the
+// string produced by textFn. The text formatter is only invoked in text mode,
+// so callers may build styled output lazily without paying for it under --json.
+//
+// Render emits in quiet mode as well: quiet suppresses incidental status
+// messages (Success/Info), not the result the user explicitly asked for.
+//
+// In text mode the string from textFn is written verbatim (via Print, no added
+// newline): the formatter owns all line breaks, so an empty result that returns
+// "" produces no output — matching streaming list/scry output.
+func (w *OutputWriter) Render(result any, textFn func() string) error {
+	if w.jsonMode {
+		return w.printJSON(result)
+	}
+	w.Print(textFn())
+	return nil
+}
+
 // Print prints plain text to stdout without styling or newline.
 // Bypasses quiet mode (always prints). Use for scripting-friendly output.
 func (w *OutputWriter) Print(msg string) {

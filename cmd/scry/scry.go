@@ -2,6 +2,7 @@ package scry
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -9,13 +10,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
-
-type scryEntry struct {
-	EntityID string `json:"entity_id"`
-	Path     string `json:"path"`
-	Type     string `json:"type"`
-	Status   string `json:"status"`
-}
 
 // NewDefaultScryCmd returns the scry command wired to the real database.
 func NewDefaultScryCmd() *cobra.Command {
@@ -77,21 +71,12 @@ func runScry(cmd *cobra.Command, args []string, a *app.App) error {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-	if cfg.IsJSON() {
-		entries := make([]scryEntry, len(entities))
-		for i, e := range entities {
-			entries[i] = scryEntry{
-				EntityID: e.EntityID,
-				Path:     e.FullPathDisplay,
-				Type:     e.EntityType.String(),
-				Status:   e.Status.String(),
-			}
+	return out.Render(app.ToScryItems(entities), func() string {
+		var b strings.Builder
+		for _, e := range entities {
+			fmt.Fprintf(&b, "%s  %s  [%s] (%s)\n",
+				e.EntityID, e.FullPathDisplay, e.EntityType, e.Status)
 		}
-		return out.JSON(entries)
-	}
-	for _, e := range entities {
-		fmt.Fprintf(cmd.OutOrStdout(), "%s  %s  [%s] (%s)\n",
-			e.EntityID, e.FullPathDisplay, e.EntityType, e.Status)
-	}
-	return nil
+		return b.String()
+	})
 }

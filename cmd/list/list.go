@@ -2,6 +2,7 @@ package list
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -10,13 +11,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 )
-
-type listEntry struct {
-	EntityID string `json:"entity_id"`
-	Path     string `json:"path"`
-	Type     string `json:"type"`
-	Status   string `json:"status"`
-}
 
 // NewDefaultListCmd returns the list command wired to the real database.
 func NewDefaultListCmd() *cobra.Command {
@@ -90,24 +84,14 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
-	if cfg.IsJSON() {
-		entries := make([]listEntry, len(entities))
-		for i, e := range entities {
-			entries[i] = listEntry{
-				EntityID: e.EntityID,
-				Path:     e.FullPathDisplay,
-				Type:     e.EntityType.String(),
-				Status:   e.Status.String(),
-			}
+	return out.Render(app.ToListItems(entities), func() string {
+		var b strings.Builder
+		for _, e := range entities {
+			fmt.Fprintf(&b, "%s  %s  [%s] (%s)\n",
+				e.EntityID, e.FullPathDisplay, e.EntityType, e.Status)
 		}
-		return out.JSON(entries)
-	}
-
-	for _, e := range entities {
-		fmt.Fprintf(cmd.OutOrStdout(), "%s  %s  [%s] (%s)\n",
-			e.EntityID, e.FullPathDisplay, e.EntityType, e.Status)
-	}
-	return nil
+		return b.String()
+	})
 }
 
 func filterEntities(all []app.EntityResult, under entitypath.Path, typeFilter, statusFilter string) []app.EntityResult {

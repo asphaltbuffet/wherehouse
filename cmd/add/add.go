@@ -12,11 +12,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-type addResult struct {
-	EntityID string `json:"entity_id"`
-	Path     string `json:"path"`
-}
-
 // NewDefaultAddCmd returns the add command wired to a real database opened from context config.
 func NewDefaultAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -93,8 +88,8 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
-	if cfg.IsJSON() {
-		return out.JSON(addResult{EntityID: result.EntityID, Path: result.FullPathDisplay})
+	if out.IsJSON() {
+		return out.JSON(app.ToAddOutput(result))
 	}
 
 	out.Success(fmt.Sprintf("Added %q (%s) at path %s", p, entityType, result.FullPathDisplay))
