@@ -1,5 +1,0 @@
-kind: Added
-body: Add `OutputWriter.Render` consolidated output method
-time: 2026-06-01T12:52:24.890650109-04:00
-custom:
-    Issue: '#209'
