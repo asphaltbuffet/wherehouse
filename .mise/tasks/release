@@ -38,15 +38,15 @@ fi
 echo "  ✓ CHANGELOG.md has entry for ${bare}"
 
 # --- Assert tag does not already exist ---
-if jj tag list 2>/dev/null | grep -q "^${version}:"; then
+if git tag --list "${version}" | grep -q "^${version}$"; then
   echo "Error: tag ${version} already exists — was this release already published?"
   exit 1
 fi
 echo "  ✓ Tag ${version} does not exist yet"
 
 # --- Create and push tag ---
-jj tag create "${version}" --revision "${trunk}"
-jj git push --tag "${version}"
+git tag "${version}" "${trunk}"
+git push origin "${version}"
 
 echo ""
 echo "Done. CI will build and publish the release for ${version}."
