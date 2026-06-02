@@ -1,4 +1,4 @@
-package version
+package versioncmd
 
 import (
 	"strings"
@@ -12,7 +12,6 @@ func TestApplicationName(t *testing.T) {
 }
 
 func TestFullVersion_DefaultValues(t *testing.T) {
-	// Save original values
 	origVersion := Version
 	origCommit := GitCommit
 	defer func() {
@@ -20,7 +19,6 @@ func TestFullVersion_DefaultValues(t *testing.T) {
 		GitCommit = origCommit
 	}()
 
-	// Reset to defaults
 	Version = "v0.1.0-dev"
 	GitCommit = "unknown"
 
@@ -29,7 +27,6 @@ func TestFullVersion_DefaultValues(t *testing.T) {
 }
 
 func TestFullVersion_WithGitCommit(t *testing.T) {
-	// Save original values
 	origVersion := Version
 	origCommit := GitCommit
 	defer func() {
@@ -37,7 +34,6 @@ func TestFullVersion_WithGitCommit(t *testing.T) {
 		GitCommit = origCommit
 	}()
 
-	// Simulate build injection
 	Version = "v0.1.0-dev"
 	GitCommit = "abc1234"
 
@@ -46,7 +42,6 @@ func TestFullVersion_WithGitCommit(t *testing.T) {
 }
 
 func TestFullVersion_ReleaseVersion(t *testing.T) {
-	// Save original values
 	origVersion := Version
 	origCommit := GitCommit
 	defer func() {
@@ -54,7 +49,6 @@ func TestFullVersion_ReleaseVersion(t *testing.T) {
 		GitCommit = origCommit
 	}()
 
-	// Simulate release build injection
 	Version = "v0.1.0"
 	GitCommit = "abc1234"
 
@@ -63,7 +57,6 @@ func TestFullVersion_ReleaseVersion(t *testing.T) {
 }
 
 func TestShortVersion_Default(t *testing.T) {
-	// Save original value
 	origVersion := Version
 	defer func() {
 		Version = origVersion
@@ -76,7 +69,6 @@ func TestShortVersion_Default(t *testing.T) {
 }
 
 func TestShortVersion_Release(t *testing.T) {
-	// Save original value
 	origVersion := Version
 	defer func() {
 		Version = origVersion
@@ -89,7 +81,6 @@ func TestShortVersion_Release(t *testing.T) {
 }
 
 func TestBuildInfo_NoInfo(t *testing.T) {
-	// Save original values
 	origCommit := GitCommit
 	origDate := BuildDate
 	defer func() {
@@ -97,7 +88,6 @@ func TestBuildInfo_NoInfo(t *testing.T) {
 		BuildDate = origDate
 	}()
 
-	// Both unknown
 	GitCommit = "unknown"
 	BuildDate = "unknown"
 
@@ -105,7 +95,6 @@ func TestBuildInfo_NoInfo(t *testing.T) {
 }
 
 func TestBuildInfo_CommitOnly(t *testing.T) {
-	// Save original values
 	origCommit := GitCommit
 	origDate := BuildDate
 	defer func() {
@@ -121,7 +110,6 @@ func TestBuildInfo_CommitOnly(t *testing.T) {
 }
 
 func TestBuildInfo_CommitAndDate(t *testing.T) {
-	// Save original values
 	origCommit := GitCommit
 	origDate := BuildDate
 	defer func() {
@@ -137,7 +125,6 @@ func TestBuildInfo_CommitAndDate(t *testing.T) {
 }
 
 func TestSemanticVersionFormat_Default(t *testing.T) {
-	// Save original value
 	origVersion := Version
 	defer func() {
 		Version = origVersion
@@ -145,15 +132,11 @@ func TestSemanticVersionFormat_Default(t *testing.T) {
 
 	Version = "v0.1.0-dev"
 
-	// Verify starts with 'v'
 	assert.True(t, strings.HasPrefix(Version, "v"), "Version should start with 'v'")
-
-	// Verify contains dev suffix
 	assert.Contains(t, Version, "-dev", "Development version should contain '-dev' suffix")
 }
 
 func TestSemanticVersionFormat_Release(t *testing.T) {
-	// Save original value
 	origVersion := Version
 	defer func() {
 		Version = origVersion
@@ -161,10 +144,7 @@ func TestSemanticVersionFormat_Release(t *testing.T) {
 
 	Version = "v0.1.0"
 
-	// Verify starts with 'v'
 	assert.True(t, strings.HasPrefix(Version, "v"), "Version should start with 'v'")
-
-	// Verify does NOT contain dev suffix
 	assert.NotContains(t, Version, "-dev", "Release version should not contain '-dev' suffix")
 }
 
@@ -215,7 +195,6 @@ func TestFullVersion_Format(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save original values
 			origVersion := Version
 			origCommit := GitCommit
 			defer func() {
@@ -223,7 +202,6 @@ func TestFullVersion_Format(t *testing.T) {
 				GitCommit = origCommit
 			}()
 
-			// Set test values
 			Version = tt.version
 			GitCommit = tt.gitCommit
 
@@ -270,7 +248,6 @@ func TestBuildInfo_Format(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save original values
 			origCommit := GitCommit
 			origDate := BuildDate
 			defer func() {
@@ -278,7 +255,6 @@ func TestBuildInfo_Format(t *testing.T) {
 				BuildDate = origDate
 			}()
 
-			// Set test values
 			GitCommit = tt.gitCommit
 			BuildDate = tt.buildDate
 

@@ -1,6 +1,6 @@
 [tools]
 changie = "latest"
-"aqua:golangci/golangci-lint" = "prefix:2.8"
+"aqua:golangci/golangci-lint" = "prefix:2.9"
 "aqua:gotestyourself/gotestsum" = "latest"
 "aqua:vektra/mockery" = "3"
 "go:github.com/nix-community/gomod2nix" = "latest"
@@ -68,17 +68,31 @@ alias = "gen"
 sources = ["./**/*.go"]
 run = "go generate ./..."
 
+[tasks.lint-fix]
+description = "fix linting issues in project files"
+depends = ["generate", "mock", "lint-verify"]
+wait_for = ["test", "mock"]
+run = [
+  "mkdir -p bin",
+  "golangci-lint run --fix --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
+]
+
 [tasks.lint]
 description = "lint project files"
-depends = ["generate", "mock"]
+depends = ["generate", "mock", "lint-verify"]
 wait_for = ["test", "mock"]
 sources = ["**/*.go", ".golangci.yml"]
 outputs = ["bin/golangci-lint.html"]
 run = [
   "mkdir -p bin",
-  "golangci-lint config verify",
-  "golangci-lint run --fix --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
+  "golangci-lint run --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
 ]
+
+[tasks.lint-verify]
+description = "verify linting config"
+sources = [".golangci.yml"]
+run = ["golangci-lint config verify"]
+hide = true
 
 [tasks.manpages]
 description = "generate man pages"

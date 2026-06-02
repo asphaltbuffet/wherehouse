@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/goccy/go-json"
-
 	"charm.land/lipgloss/v2"
+	"github.com/goccy/go-json"
 
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/styles"
