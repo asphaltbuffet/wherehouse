@@ -43,27 +43,86 @@ func TestToListItems_Empty(t *testing.T) {
 }
 
 func TestToScryItems_JSONContract(t *testing.T) {
-	results := []app.EntityResult{
-		{
-			EntityID:        "xyz9876543",
-			DisplayName:     "Hammer",
-			CanonicalName:   "hammer",
-			EntityType:      inventory.EntityTypeLeaf,
-			FullPathDisplay: "Garage:Toolbox:Hammer",
-			Status:          inventory.EntityStatusOk,
-		},
-	}
+	t.Run("list-all: distance is null", func(t *testing.T) {
+		results := []app.FindResult{
+			{
+				Entity: app.EntityResult{
+					EntityID:        "xyz9876543",
+					DisplayName:     "Hammer",
+					CanonicalName:   "hammer",
+					EntityType:      inventory.EntityTypeLeaf,
+					FullPathDisplay: "Garage:Toolbox:Hammer",
+					Status:          inventory.EntityStatusOk,
+				},
+				Distance: 0,
+			},
+		}
 
-	b, err := json.Marshal(app.ToScryItems(results))
-	require.NoError(t, err)
+		b, err := json.Marshal(app.ToScryItems(results, false))
+		require.NoError(t, err)
 
-	// Pins the current `wherehouse scry --json` wire format (Distance omitted; see #216).
-	assert.JSONEq(t, `[{
-		"entity_id": "xyz9876543",
-		"path": "Garage:Toolbox:Hammer",
-		"type": "leaf",
-		"status": "ok"
-	}]`, string(b))
+		assert.JSONEq(t, `[{
+			"entity_id": "xyz9876543",
+			"path": "Garage:Toolbox:Hammer",
+			"type": "leaf",
+			"status": "ok",
+			"distance": null
+		}]`, string(b))
+	})
+
+	t.Run("search: distance is integer (0 for exact match)", func(t *testing.T) {
+		results := []app.FindResult{
+			{
+				Entity: app.EntityResult{
+					EntityID:        "xyz9876543",
+					DisplayName:     "Hammer",
+					CanonicalName:   "hammer",
+					EntityType:      inventory.EntityTypeLeaf,
+					FullPathDisplay: "Garage:Toolbox:Hammer",
+					Status:          inventory.EntityStatusOk,
+				},
+				Distance: 0,
+			},
+		}
+
+		b, err := json.Marshal(app.ToScryItems(results, true))
+		require.NoError(t, err)
+
+		assert.JSONEq(t, `[{
+			"entity_id": "xyz9876543",
+			"path": "Garage:Toolbox:Hammer",
+			"type": "leaf",
+			"status": "ok",
+			"distance": 0
+		}]`, string(b))
+	})
+
+	t.Run("search: non-zero distance", func(t *testing.T) {
+		results := []app.FindResult{
+			{
+				Entity: app.EntityResult{
+					EntityID:        "abc1234567",
+					DisplayName:     "Hamster",
+					CanonicalName:   "hamster",
+					EntityType:      inventory.EntityTypeLeaf,
+					FullPathDisplay: "Garage:Toolbox:Hamster",
+					Status:          inventory.EntityStatusOk,
+				},
+				Distance: 3,
+			},
+		}
+
+		b, err := json.Marshal(app.ToScryItems(results, true))
+		require.NoError(t, err)
+
+		assert.JSONEq(t, `[{
+			"entity_id": "abc1234567",
+			"path": "Garage:Toolbox:Hamster",
+			"type": "leaf",
+			"status": "ok",
+			"distance": 3
+		}]`, string(b))
+	})
 }
 
 func TestToHistoryItems_JSONContract(t *testing.T) {

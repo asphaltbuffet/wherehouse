@@ -37,19 +37,26 @@ type ScryItem struct {
 	Path     string                 `json:"path"`
 	Type     inventory.EntityType   `json:"type"`
 	Status   inventory.EntityStatus `json:"status"`
+	Distance *int                   `json:"distance"`
 }
 
 // ToScryItems projects entity results into the `scry` output shape. Callers
 // flatten []FindResult to []EntityResult first; the match Distance is dropped
 // (see issue #216).
-func ToScryItems(results []EntityResult) []ScryItem {
+func ToScryItems(results []FindResult, searched bool) []ScryItem {
 	items := make([]ScryItem, len(results))
-	for i, e := range results {
+	for i, r := range results {
+		var dist *int
+		if searched {
+			d := r.Distance
+			dist = &d
+		}
 		items[i] = ScryItem{
-			EntityID: e.EntityID,
-			Path:     e.FullPathDisplay,
-			Type:     e.EntityType,
-			Status:   e.Status,
+			EntityID: r.Entity.EntityID,
+			Path:     r.Entity.FullPathDisplay,
+			Type:     r.Entity.EntityType,
+			Status:   r.Entity.Status,
+			Distance: dist,
 		}
 	}
 	return items
