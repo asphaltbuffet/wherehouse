@@ -1,10 +1,11 @@
 [tools]
 changie = "latest"
-"aqua:golangci/golangci-lint" = "prefix:2.9"
 "aqua:gotestyourself/gotestsum" = "latest"
-"aqua:vektra/mockery" = "3"
-"go:github.com/nix-community/gomod2nix" = "latest"
-"go:golang.org/x/tools/cmd/stringer" = "latest"
+"aqua:vektra/mockery" = "3.7.0"
+"go:github.com/nix-community/gomod2nix" = "1.7.0"
+"go:golang.org/x/tools/cmd/goimports" = "0.45.0"
+"go:golang.org/x/tools/cmd/stringer" = "0.45.0"
+golangci-lint = "2.9"
 
 [tasks.build]
 description = "go build"
@@ -35,13 +36,13 @@ go clean -i -cache -testcache -modcache -fuzzcache -x
 hide = true
 
 [tasks.cover]
-description="go test coverage"
+description = "go test coverage"
 depends = ["test"]
 sources = ["bin/coverage.out"]
 outputs = ["bin/coverage.html"]
 run = [
   "go tool cover -html=bin/coverage.out -o bin/coverage.html",
-  "go tool cover -func=bin/coverage.out"
+  "go tool cover -func=bin/coverage.out",
 ]
 
 [tasks.dev]
