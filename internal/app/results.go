@@ -36,14 +36,10 @@ type FindResult struct {
 	Distance int
 }
 
-func (a *App) entityToResult(ctx context.Context, e *inventory.Entity) (EntityResult, error) {
+func entityToResult(e *inventory.Entity, tags []string) EntityResult {
 	statusCtx := ""
 	if e.StatusContext != nil {
 		statusCtx = *e.StatusContext
-	}
-	tags, err := a.store.GetTagsByEntity(ctx, e.EntityID)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("get tags for %q: %w", e.EntityID, err)
 	}
 	return EntityResult{
 		EntityID:        e.EntityID,
@@ -54,5 +50,16 @@ func (a *App) entityToResult(ctx context.Context, e *inventory.Entity) (EntityRe
 		Status:          e.Status,
 		StatusContext:   statusCtx,
 		Tags:            tags,
-	}, nil
+	}
+}
+
+// entityWithTags fetches tags for a single entity and returns the full EntityResult.
+// Use this for point-lookup operations. For list operations use store.GetTagsByEntities
+// with entityToResult directly to avoid N+1 queries (see ADR 0015).
+func (a *App) entityWithTags(ctx context.Context, e *inventory.Entity) (EntityResult, error) {
+	tags, err := a.store.GetTagsByEntity(ctx, e.EntityID)
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("get tags for %q: %w", e.EntityID, err)
+	}
+	return entityToResult(e, tags), nil
 }

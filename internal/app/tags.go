@@ -42,6 +42,10 @@ func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 		note = &req.Note
 	}
 
+	// Each tag mutation is dispatched as a separate event in its own transaction.
+	// This is intentional: each event is self-describing and independently replayable.
+	// A crash mid-loop leaves the projection in a partial state, but TruncateAndReplay
+	// will reconstruct the correct state from the event stream.
 	// Removals first to avoid spurious duplicate-tag warnings.
 	for tag := range removeSet {
 		payload := eventbus.EntityTagRemovedPayload{EntityID: entity.EntityID, Tag: tag}
