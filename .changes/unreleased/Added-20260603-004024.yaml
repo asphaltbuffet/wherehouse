@@ -1,5 +1,0 @@
-kind: Added
-body: Include distance in scry output
-time: 2026-06-03T00:40:24.206672359-04:00
-custom:
-    Issue: '#216'
