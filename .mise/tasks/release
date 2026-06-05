@@ -44,8 +44,8 @@ if git tag --list "${version}" | grep -q "^${version}$"; then
 fi
 echo "  ✓ Tag ${version} does not exist yet"
 
-# --- Create and push tag ---
-git tag "${version}" "${trunk}"
+# --- Create and push tag (git directly — jj tag support is not yet first-class) ---
+git tag -m "${version}" "${version}" "${trunk}"
 git push origin "${version}"
 
 echo ""

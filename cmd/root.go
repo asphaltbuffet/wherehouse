@@ -25,7 +25,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
-	"github.com/asphaltbuffet/wherehouse/internal/version"
+	versioncmd "github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
 // Global configuration instance accessible to all commands.
@@ -48,7 +48,7 @@ func GetRootCmd() *cobra.Command {
 Examples:
   wherehouse --version        Show version information
   wherehouse --help           Show this help message`,
-		Version:           version.ShortVersion(),
+		Version:           versioncmd.ShortVersion(),
 		SilenceUsage:      true,
 		SilenceErrors:     true,
 		PersistentPreRunE: initConfig,

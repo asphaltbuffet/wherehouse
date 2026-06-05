@@ -66,3 +66,41 @@ func TestRunScry_EmptyDB_NoOutput(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.Empty(t, stdout.String())
 }
+
+func TestRunScry_WithArg_Verbose_ShowsDistance(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := context.Background()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage",
+		EntityType:  inventory.EntityTypePlace,
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+
+	cmd := scry.NewScryCmd(a)
+	cmd.SetArgs([]string{"-v", "garage"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stdout.String(), "dist:")
+}
+
+func TestRunScry_NoArg_Verbose_NoDistance(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := context.Background()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage",
+		EntityType:  inventory.EntityTypePlace,
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+
+	cmd := scry.NewScryCmd(a)
+	cmd.SetArgs([]string{"-v"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+	assert.NotContains(t, stdout.String(), "dist:")
+}

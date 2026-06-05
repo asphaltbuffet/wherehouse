@@ -8,7 +8,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
-	"github.com/asphaltbuffet/wherehouse/internal/version"
+	versioncmd "github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
 type indexData struct {
@@ -34,8 +34,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	data := indexData{
 		Roots:     roots,
-		Version:   version.Version,
-		GitCommit: version.GitCommit,
+		Version:   versioncmd.Version,
+		GitCommit: versioncmd.GitCommit,
 	}
 	s.renderHTML(w, "index", data)
 }

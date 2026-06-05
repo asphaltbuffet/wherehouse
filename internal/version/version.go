@@ -1,10 +1,12 @@
-package version
+package versioncmd
 
 import "fmt"
 
 const (
 	// ApplicationName is the name of the application.
 	ApplicationName = "wherehouse"
+
+	unknownBuildValue = "unknown"
 )
 
 var (
@@ -40,10 +42,10 @@ func ShortVersion() string {
 // Format: abc1234 (2026-02-20T12:34:56Z)
 // Returns empty string if no build information available.
 func BuildInfo() string {
-	if GitCommit == "unknown" && BuildDate == "unknown" {
+	if GitCommit == unknownBuildValue && BuildDate == unknownBuildValue {
 		return ""
 	}
-	if BuildDate == "unknown" {
+	if BuildDate == unknownBuildValue {
 		return GitCommit
 	}
 	return fmt.Sprintf("%s (%s)", GitCommit, BuildDate)

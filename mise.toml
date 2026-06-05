@@ -1,10 +1,11 @@
 [tools]
 changie = "latest"
-"aqua:golangci/golangci-lint" = "prefix:2.8"
 "aqua:gotestyourself/gotestsum" = "latest"
-"aqua:vektra/mockery" = "3"
-"go:github.com/nix-community/gomod2nix" = "latest"
-"go:golang.org/x/tools/cmd/stringer" = "latest"
+"aqua:vektra/mockery" = "3.7.0"
+"go:github.com/nix-community/gomod2nix" = "1.7.0"
+"go:golang.org/x/tools/cmd/goimports" = "0.45.0"
+"go:golang.org/x/tools/cmd/stringer" = "0.45.0"
+golangci-lint = "2.9"
 
 [tasks.build]
 description = "go build"
@@ -18,11 +19,6 @@ go build \
   -ldflags "-X ${PKG}.Version=${VERSION} -X ${PKG}.GitCommit=${COMMIT} -X ${PKG}.BuildDate=${DATE}" \
   -o dist/ ./...
 '''
-
-[tasks.ci]
-description = "CI build pipeline"
-depends = ["generate", "mod-tidy", "mock", "test", "cover", "diff"]
-hide = true
 
 [tasks.clean]
 description = "remove build artifacts"
@@ -40,13 +36,13 @@ go clean -i -cache -testcache -modcache -fuzzcache -x
 hide = true
 
 [tasks.cover]
-description="go test coverage"
+description = "go test coverage"
 depends = ["test"]
 sources = ["bin/coverage.out"]
 outputs = ["bin/coverage.html"]
 run = [
   "go tool cover -html=bin/coverage.out -o bin/coverage.html",
-  "go tool cover -func=bin/coverage.out"
+  "go tool cover -func=bin/coverage.out",
 ]
 
 [tasks.dev]
@@ -73,17 +69,31 @@ alias = "gen"
 sources = ["./**/*.go"]
 run = "go generate ./..."
 
+[tasks.lint-fix]
+description = "fix linting issues in project files"
+depends = ["generate", "mock", "lint-verify"]
+wait_for = ["test", "mock"]
+run = [
+  "mkdir -p bin",
+  "golangci-lint run --fix --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
+]
+
 [tasks.lint]
 description = "lint project files"
-depends = ["generate", "mock"]
+depends = ["generate", "mock", "lint-verify"]
 wait_for = ["test", "mock"]
 sources = ["**/*.go", ".golangci.yml"]
 outputs = ["bin/golangci-lint.html"]
 run = [
   "mkdir -p bin",
-  "golangci-lint config verify",
-  "golangci-lint run --fix --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
+  "golangci-lint run --output.html.path=bin/golangci-lint.html --output.text.path=stdout",
 ]
+
+[tasks.lint-verify]
+description = "verify linting config"
+sources = [".golangci.yml"]
+run = ["golangci-lint config verify"]
+hide = true
 
 [tasks.manpages]
 description = "generate man pages"

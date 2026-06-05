@@ -8,8 +8,8 @@ schema = 3
     version = "v0.4.3"
     hash = "sha256-y+QDUxGOKhugEMQLRUTZYT2C+wKqYHnMLJ44jbh7+JA="
   [mod."github.com/charmbracelet/ultraviolet"]
-    version = "v0.0.0-20260525132238-948f4557a654"
-    hash = "sha256-V0e1U50upnr+gWvao41MTiLHAbd5wAlt4GD8hiAVZ38="
+    version = "v0.0.0-20260601155805-6cf7526a1b3f"
+    hash = "sha256-G8Fc+CpColDz4XaPmAMXTT3X0wXF3ZVhrkMRtTVxLhI="
   [mod."github.com/charmbracelet/x/ansi"]
     version = "v0.11.7"
     hash = "sha256-q8BZJq4K7NE5ETocN9/G/EoV0dUyD703ONSfHiUYzWQ="

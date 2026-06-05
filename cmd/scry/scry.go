@@ -33,49 +33,58 @@ func NewScryCmd(a *app.App) *cobra.Command {
 }
 
 func buildScryCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "scry [<name>]",
 		Short: "Search for entities by name or list all",
 		Long: `Search for entities by name, or list all entities if no name is given.
 
 Examples:
   wherehouse scry                  # List all entities
-  wherehouse scry "toolbox"        # Find entities matching "toolbox"`,
+  wherehouse scry "toolbox"        # Find entities matching "toolbox"
+  wherehouse scry -v "toolbox"     # Include Levenshtein distance in output`,
 		Args: cobra.MaximumNArgs(1),
 	}
+	cmd.Flags().BoolP("verbose", "v", false, "Show Levenshtein distance in search results")
+	return cmd
 }
 
 func runScry(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 
-	var entities []app.EntityResult
+	var results []app.FindResult
 	if len(args) == 1 {
-		results, err := a.FindEntities(ctx, app.FindEntitiesRequest{Query: args[0]})
+		found, err := a.FindEntities(ctx, app.FindEntitiesRequest{Query: args[0]})
 		if err != nil {
 			return fmt.Errorf("scry failed: %w", err)
 		}
-		entities = make([]app.EntityResult, len(results))
-		for i, r := range results {
-			entities[i] = r.Entity
-		}
+		results = found
 	} else {
-		var err error
-		entities, err = a.ListEntities(ctx)
+		entities, err := a.ListEntities(ctx)
 		if err != nil {
 			return fmt.Errorf("scry failed: %w", err)
+		}
+		results = make([]app.FindResult, len(entities))
+		for i, e := range entities {
+			results[i] = app.FindResult{Entity: e}
 		}
 	}
 
+	verbose, _ := cmd.Flags().GetBool("verbose")
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-	return out.Render(app.ToScryItems(entities), func() string {
+	return out.Render(app.ToScryItems(results, len(args) == 1), func() string {
 		var b strings.Builder
-		for _, e := range entities {
-			fmt.Fprintf(&b, "%s  %s  [%s] (%s)\n",
-				e.EntityID, e.FullPathDisplay, e.EntityType, e.Status)
+		for _, r := range results {
+			if len(args) == 1 && verbose {
+				fmt.Fprintf(&b, "%s  %s  [%s] (%s) dist:%d\n",
+					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.EntityType, r.Entity.Status, r.Distance)
+			} else {
+				fmt.Fprintf(&b, "%s  %s  [%s] (%s)\n",
+					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.EntityType, r.Entity.Status)
+			}
 		}
 		return b.String()
 	})

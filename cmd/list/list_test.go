@@ -1,4 +1,4 @@
-package list_test
+package listcmd_test
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/asphaltbuffet/wherehouse/cmd/list"
+	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
@@ -41,7 +41,7 @@ func TestRunList_ReturnsAll(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedThree(t, a)
 
-	cmd := list.NewListCmd(a)
+	cmd := listcmd.NewListCmd(a)
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
@@ -54,7 +54,7 @@ func TestRunList_FilterByType(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedThree(t, a)
 
-	cmd := list.NewListCmd(a)
+	cmd := listcmd.NewListCmd(a)
 	cmd.SetArgs([]string{"--type", "container"})
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
@@ -68,7 +68,7 @@ func TestRunList_FilterByUnderPath(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedThree(t, a)
 
-	cmd := list.NewListCmd(a)
+	cmd := listcmd.NewListCmd(a)
 	cmd.SetArgs([]string{"--under", "Garage:Toolbox"})
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
@@ -81,7 +81,7 @@ func TestRunList_FilterByUnderPath(t *testing.T) {
 
 func TestRunList_EmptyDB_ReturnsNoOutput(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	cmd := list.NewListCmd(a)
+	cmd := listcmd.NewListCmd(a)
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})

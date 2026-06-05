@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  checks: write
 
 jobs:
   govulncheck:
@@ -64,12 +63,15 @@ jobs:
         uses: jdx/mise-action@v4
 
       - name: Download generated files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: generated
 
       - name: Mod tidy
         run: mise run mod-tidy
+
+      - name: Build
+        run: mise run build
 
       - name: Test
         run: mise run test
@@ -97,6 +99,9 @@ jobs:
     name: Lint
     needs: generate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - name: Clone Repository
         uses: actions/checkout@v6
@@ -110,11 +115,14 @@ jobs:
         uses: jdx/mise-action@v4
 
       - name: Download generated files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: generated
+
+      - name: Mod tidy
+        run: mise run mod-tidy
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.8
+          version: v2.9

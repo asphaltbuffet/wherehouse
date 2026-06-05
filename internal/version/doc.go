@@ -1,4 +1,4 @@
-// Package version provides version information for the wherehouse application.
+// Package versioncmd provides version information for the wherehouse application.
 // Version information follows semantic versioning 2.0 (semver.org).
 //
 // Build-time injection:
@@ -12,4 +12,4 @@
 //
 //	Development: v0.1.0-dev+abc1234
 //	Release:     v0.1.0+abc1234
-package version
+package versioncmd
