@@ -54,7 +54,7 @@ func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (Entity
 		return EntityResult{}, fmt.Errorf("get created entity: %w", err)
 	}
 
-	return entityToResult(entity), nil
+	return a.entityToResult(ctx, entity)
 }
 
 // RenameEntity renames an entity resolved by its current path.
@@ -87,7 +87,7 @@ func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (Entity
 		return EntityResult{}, fmt.Errorf("get renamed entity: %w", err)
 	}
 
-	return entityToResult(updated), nil
+	return a.entityToResult(ctx, updated)
 }
 
 // ReparentEntity moves an entity to a new parent, resolved by paths.
@@ -130,7 +130,7 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 		return EntityResult{}, fmt.Errorf("get reparented entity: %w", err)
 	}
 
-	return entityToResult(updated), nil
+	return a.entityToResult(ctx, updated)
 }
 
 // RemoveEntity permanently marks an entity as removed.
@@ -164,7 +164,7 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 	if err != nil {
 		return EntityResult{}, err
 	}
-	return entityToResult(entity), nil
+	return a.entityToResult(ctx, entity)
 }
 
 // GetEntityByID retrieves an entity by its stable ID.
@@ -175,7 +175,7 @@ func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult,
 	if err != nil {
 		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
 	}
-	return entityToResult(entity), nil
+	return a.entityToResult(ctx, entity)
 }
 
 // ListEntities returns all non-removed entities.
@@ -194,9 +194,12 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 
 	results := make([]EntityResult, len(entities))
 	for i, e := range entities {
-		r := entityToResult(e)
-		r.HasChildren = parentIDs[e.EntityID]
-		results[i] = r
+		var toResultErr error
+		results[i], toResultErr = a.entityToResult(ctx, e)
+		if toResultErr != nil {
+			return nil, toResultErr
+		}
+		results[i].HasChildren = parentIDs[e.EntityID]
 	}
 	return results, nil
 }
@@ -210,9 +213,12 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 
 	results := make([]EntityResult, len(rows))
 	for i, row := range rows {
-		r := entityToResult(row.Entity)
-		r.HasChildren = row.HasChildren
-		results[i] = r
+		var rowErr error
+		results[i], rowErr = a.entityToResult(ctx, row.Entity)
+		if rowErr != nil {
+			return nil, rowErr
+		}
+		results[i].HasChildren = row.HasChildren
 	}
 	return results, nil
 }

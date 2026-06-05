@@ -56,10 +56,15 @@ The six event types currently implemented:
 | `EntityPathChangedEvent` | Derived path update (propagated from ancestor reparent) |
 | `EntityStatusChangedEvent` | Status (and optional context) changed |
 | `EntityRemovedEvent` | Entity was soft-deleted |
+| `EntityTagAddedEvent` | A tag was applied to an entity |
+| `EntityTagRemovedEvent` | A tag was removed from an entity |
 
 ### Projection
 
-The `entities_current` table — derived, rebuildable state computed by replaying all events in `event_id` order. It is the **only** projection table. Projections are disposable; authoritative state is always the event stream.
+Derived, rebuildable state computed by replaying all events in `event_id` order. Projections are disposable; authoritative state is always the event stream. Current projection tables:
+
+- `entities_current` — current entity state (places, containers, items) and hierarchy
+- `entity_tags` — current tag set per entity; populated by `EntityTagAddedEvent` / `EntityTagRemovedEvent`
 
 ### Path
 
@@ -125,7 +130,7 @@ The top-level verdict of a `doctor` run. `true` when no `DoctorIssue`s were foun
 - Events are append-only. Never mutate or delete an event row.
 - Replay order is strictly by `event_id ASC`. Timestamps do not determine order.
 - Every `ORDER BY` that could tie must include `event_id ASC` as a tiebreaker.
-- `entities_current` is the sole projection table. It must be rebuildable from the event stream.
+- All projection tables (`entities_current`, `entity_tags`) must be fully rebuildable by replaying the event stream. `TruncateAndReplay` truncates all projection tables before replaying.
 - Entity canonical names are not globally unique across all types — but uniqueness within a parent is enforced at the application layer.
 - Path propagation is recursive: reparenting an entity triggers `EntityPathChangedEvent` for all descendants.
 - `EntityRemovedEvent` sets `status = "removed"`. Removed entities remain in `entities_current` (soft delete).

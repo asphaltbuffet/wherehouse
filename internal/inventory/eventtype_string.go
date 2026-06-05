@@ -14,11 +14,13 @@ func _() {
 	_ = x[EntityPathChangedEvent-4]
 	_ = x[EntityStatusChangedEvent-5]
 	_ = x[EntityRemovedEvent-6]
+	_ = x[EntityTagAddedEvent-7]
+	_ = x[EntityTagRemovedEvent-8]
 }
 
-const _EventType_name = "entity.createdentity.renamedentity.reparentedentity.path_changedentity.status_changedentity.removed"
+const _EventType_name = "entity.createdentity.renamedentity.reparentedentity.path_changedentity.status_changedentity.removedentity.tag_addedentity.tag_removed"
 
-var _EventType_index = [...]uint8{0, 14, 28, 45, 64, 85, 99}
+var _EventType_index = [...]uint8{0, 14, 28, 45, 64, 85, 99, 115, 133}
 
 func (i EventType) String() string {
 	idx := int(i) - 1

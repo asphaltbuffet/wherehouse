@@ -57,3 +57,17 @@ type FindEntitiesRequest struct {
 	Query string
 	Limit int
 }
+
+// TagEntityRequest is the input for adding/removing tags on an entity.
+type TagEntityRequest struct {
+	EntityPath string
+	ActorID    string
+	Add        []string
+	Remove     []string
+	Note       string
+}
+
+// ListTagsRequest is the input for listing tags on an entity.
+type ListTagsRequest struct {
+	EntityPath string
+}

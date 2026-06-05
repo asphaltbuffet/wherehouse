@@ -139,3 +139,17 @@ func ToStatusOutput(path string, status inventory.EntityStatus, note string) Sta
 		StatusContext: sc,
 	}
 }
+
+// TagOutput is the --json output shape for the tag command.
+type TagOutput struct {
+	Path string   `json:"path"`
+	Tags []string `json:"tags"`
+}
+
+// ToTagOutput builds a TagOutput from a path and sorted tag slice.
+func ToTagOutput(path string, tags []string) TagOutput {
+	if tags == nil {
+		tags = []string{}
+	}
+	return TagOutput{Path: path, Tags: tags}
+}

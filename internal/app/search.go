@@ -23,8 +23,12 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 		if !strings.Contains(name, query) {
 			continue
 		}
+		er, toResultErr := a.entityToResult(ctx, e)
+		if toResultErr != nil {
+			return nil, toResultErr
+		}
 		results = append(results, FindResult{
-			Entity:   entityToResult(e),
+			Entity:   er,
 			Distance: levenshtein(query, name),
 		})
 	}

@@ -39,3 +39,15 @@ type EntityStatusChangedPayload struct {
 type EntityRemovedPayload struct {
 	EntityID string `json:"entity_id"`
 }
+
+// EntityTagAddedPayload is the JSON payload for an EntityTagAddedEvent.
+type EntityTagAddedPayload struct {
+	EntityID string `json:"entity_id"`
+	Tag      string `json:"tag"`
+}
+
+// EntityTagRemovedPayload is the JSON payload for an EntityTagRemovedEvent.
+type EntityTagRemovedPayload struct {
+	EntityID string `json:"entity_id"`
+	Tag      string `json:"tag"`
+}

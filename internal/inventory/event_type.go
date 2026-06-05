@@ -17,6 +17,8 @@ const (
 	EntityPathChangedEvent                        // entity.path_changed
 	EntityStatusChangedEvent                      // entity.status_changed
 	EntityRemovedEvent                            // entity.removed
+	EntityTagAddedEvent                           // entity.tag_added
+	EntityTagRemovedEvent                         // entity.tag_removed
 )
 
 var eventTypeByName = map[string]EventType{
@@ -26,6 +28,8 @@ var eventTypeByName = map[string]EventType{
 	EntityPathChangedEvent.String():   EntityPathChangedEvent,
 	EntityStatusChangedEvent.String(): EntityStatusChangedEvent,
 	EntityRemovedEvent.String():       EntityRemovedEvent,
+	EntityTagAddedEvent.String():      EntityTagAddedEvent,
+	EntityTagRemovedEvent.String():    EntityTagRemovedEvent,
 }
 
 // ParseEventType converts a string to an EventType, returning an error for unknown values.
