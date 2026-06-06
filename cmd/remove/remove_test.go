@@ -2,7 +2,6 @@ package remove_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ import (
 
 func seedForRemove(t *testing.T, a *app.App) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, tc := range []struct {
 		name   string
 		parent string
@@ -46,7 +45,7 @@ func TestRunRemove_HappyPath(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
 
-	entities, err := a.ListEntities(context.Background())
+	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	for _, e := range entities {
 		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
@@ -66,7 +65,7 @@ func TestRunRemove_WithNote(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 
 	// Verify entity is removed (note stored on event, not on projection)
-	entities, err := a.ListEntities(context.Background())
+	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	for _, e := range entities {
 		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {

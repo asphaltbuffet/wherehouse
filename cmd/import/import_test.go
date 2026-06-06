@@ -2,7 +2,6 @@ package importcmd_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -47,7 +46,7 @@ func oneCreatedEvent() []app.ExportResult {
 
 func seedOne(t *testing.T, a *app.App) {
 	t.Helper()
-	_, err := a.CreateEntity(context.Background(), app.CreateEntityRequest{
+	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
 		DisplayName: "Garage",
 		EntityType:  inventory.EntityTypePlace,
 		ActorID:     "test",

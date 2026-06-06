@@ -2,7 +2,6 @@ package export_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -25,7 +24,7 @@ func newTestRoot(a *app.App) *cobra.Command {
 
 func seedOne(t *testing.T, a *app.App) {
 	t.Helper()
-	_, err := a.CreateEntity(context.Background(), app.CreateEntityRequest{
+	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
 		DisplayName: "Garage",
 		EntityType:  inventory.EntityTypePlace,
 		ActorID:     "test",
@@ -65,7 +64,7 @@ func TestRunExport_OneEvent_OutputsValidJSON(t *testing.T) {
 
 func TestRunExport_MultipleEvents_OrderedByEventID(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	// Seeding 3 entities = 3 entity.created events
 	for _, tc := range []struct {
 		name   string

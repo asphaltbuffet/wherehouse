@@ -2,7 +2,6 @@ package listcmd_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,7 @@ import (
 // seedThree creates Garage (place) → Garage:Toolbox (container) → Garage:Toolbox:Wrench (leaf).
 func seedThree(t *testing.T, a *app.App) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, tc := range []struct {
 		name   string
 		parent string

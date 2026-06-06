@@ -2,7 +2,6 @@ package move_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ import (
 
 func seedForMove(t *testing.T, a *app.App) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, tc := range []struct {
 		name   string
 		parent string
@@ -47,7 +46,7 @@ func TestRunMove_HappyPath(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
 
-	entities, err := a.ListEntities(context.Background())
+	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	var found bool
 	for _, e := range entities {

@@ -2,7 +2,6 @@ package status_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ import (
 
 func seedForStatus(t *testing.T, a *app.App) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, tc := range []struct {
 		name   string
 		parent string
@@ -46,7 +45,7 @@ func TestRunStatus_HappyPath(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
 
-	entities, err := a.ListEntities(context.Background())
+	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	for _, e := range entities {
 		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {

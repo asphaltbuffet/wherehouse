@@ -2,7 +2,6 @@ package add_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ import (
 
 func TestRunAdd_HappyPath(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	// Pre-create parents so add can resolve the parent path
 	for _, tc := range []struct {
 		name   string
