@@ -2,26 +2,20 @@ package importcmd_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	importcmd "github.com/asphaltbuffet/wherehouse/cmd/import"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
-
-func newTestRoot(a *app.App) *cobra.Command {
-	root := &cobra.Command{Use: "wherehouse", SilenceUsage: true, SilenceErrors: true}
-	root.PersistentFlags().CountP("quiet", "q", "")
-	root.AddCommand(importcmd.NewImportCmd(a))
-	return root
-}
 
 func makeNDJSON(events []app.ExportResult) string {
 	var buf bytes.Buffer
@@ -91,15 +85,17 @@ func TestRunImport_MalformedJSON_ReturnsError(t *testing.T) {
 
 func TestRunImport_QuietFlag_SuppressesSummary(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	root := newTestRoot(a)
-	root.SetIn(bytes.NewBufferString(makeNDJSON(oneCreatedEvent())))
+	cmd := importcmd.NewImportCmd(a)
+	cmd.SetContext(
+		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithQuiet())),
+	)
+	cmd.SetIn(bytes.NewBufferString(makeNDJSON(oneCreatedEvent())))
 	var stderr bytes.Buffer
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&stderr)
-	root.SetArgs([]string{"import", "-q"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
 
-	require.NoError(t, root.Execute())
-	assert.Empty(t, stderr.String(), "summary should be suppressed with --quiet")
+	require.NoError(t, cmd.Execute())
+	assert.Empty(t, stderr.String(), "summary should be suppressed with quiet config")
 }
 
 func TestRunImport_LongLine_ParsesWithoutScannerOverflow(t *testing.T) {
@@ -133,47 +129,47 @@ func TestRunImport_NonEmptyDB_NoReplace_ReturnsError(t *testing.T) {
 func TestRunImport_ReplaceWithoutYes_ReturnsError(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedOne(t, a)
-	root := newTestRoot(a)
-	root.SetIn(bytes.NewBufferString(""))
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"import", "--replace"})
+	cmd := importcmd.NewImportCmd(a)
+	cmd.SetIn(bytes.NewBufferString(""))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--replace"})
 
-	err := root.Execute()
+	err := cmd.Execute()
 	require.Error(t, err)
 }
 
 func TestRunImport_ReplaceAndYes_Succeeds(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedOne(t, a)
-	root := newTestRoot(a)
-	root.SetIn(bytes.NewBufferString(makeNDJSON(oneCreatedEvent())))
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"import", "--replace", "--yes"})
+	cmd := importcmd.NewImportCmd(a)
+	cmd.SetIn(bytes.NewBufferString(makeNDJSON(oneCreatedEvent())))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--replace", "--yes"})
 
-	require.NoError(t, root.Execute())
+	require.NoError(t, cmd.Execute())
 }
 
 func TestRunImport_YesWithoutReplace_AcceptedSilently(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	root := newTestRoot(a)
-	root.SetIn(bytes.NewBufferString(""))
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"import", "--yes"})
+	cmd := importcmd.NewImportCmd(a)
+	cmd.SetIn(bytes.NewBufferString(""))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--yes"})
 
-	require.NoError(t, root.Execute())
+	require.NoError(t, cmd.Execute())
 }
 
 func TestRunImport_ContinueFlag_ExitsZero(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	root := newTestRoot(a)
-	root.SetIn(bytes.NewBufferString(makeNDJSON(oneCreatedEvent())))
+	cmd := importcmd.NewImportCmd(a)
+	cmd.SetIn(bytes.NewBufferString(makeNDJSON(oneCreatedEvent())))
 	var stderr bytes.Buffer
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&stderr)
-	root.SetArgs([]string{"import", "--continue"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"--continue"})
 
-	require.NoError(t, root.Execute(), "exit must be 0 with --continue")
+	require.NoError(t, cmd.Execute(), "exit must be 0 with --continue")
 }

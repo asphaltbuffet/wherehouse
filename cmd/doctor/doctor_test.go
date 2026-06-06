@@ -105,3 +105,18 @@ func TestRunDoctor_JSON_NoRebuild_OmitsKey(t *testing.T) {
 	result := unmarshalDoctorResult(t, out.Bytes())
 	assert.Nil(t, result.Rebuilt)
 }
+
+func TestRunDoctor_Quiet_SuppressesOK(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	cmd := doctor.NewDoctorCmd(a)
+	cmd.SetContext(
+		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithQuiet())),
+	)
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	require.NoError(t, cmd.Execute())
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, stderr.String())
+}

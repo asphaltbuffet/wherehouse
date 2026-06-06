@@ -4,5 +4,5 @@
 //   - Database connection management (OpenDatabase)
 //   - Output formatting with lipgloss styling (OutputWriter)
 //   - User identity resolution (GetActorUserID)
-//   - Flag handling utilities (IsQuietMode)
+//   - Config and flag context utilities (GetConfig, MustGetConfig)
 package cli

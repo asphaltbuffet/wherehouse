@@ -18,3 +18,8 @@ func TestNewTestConfig_WithJSON(t *testing.T) {
 	cfg := apptesting.NewTestConfig(t, apptesting.WithJSON())
 	assert.True(t, cfg.IsJSON())
 }
+
+func TestNewTestConfig_WithQuiet(t *testing.T) {
+	cfg := apptesting.NewTestConfig(t, apptesting.WithQuiet())
+	assert.True(t, cfg.IsQuiet())
+}

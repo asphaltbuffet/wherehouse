@@ -2,25 +2,19 @@ package export_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	export "github.com/asphaltbuffet/wherehouse/cmd/export"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
-
-func newTestRoot(a *app.App) *cobra.Command {
-	root := &cobra.Command{Use: "wherehouse", SilenceUsage: true, SilenceErrors: true}
-	root.PersistentFlags().CountP("quiet", "q", "")
-	root.AddCommand(export.NewExportCmd(a))
-	return root
-}
 
 func seedOne(t *testing.T, a *app.App) {
 	t.Helper()
@@ -127,12 +121,14 @@ func TestRunExport_PayloadRoundTrip(t *testing.T) {
 
 func TestRunExport_ZeroEvents_QuietSuppressesWarning(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	root := newTestRoot(a)
+	cmd := export.NewExportCmd(a)
+	cmd.SetContext(
+		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithQuiet())),
+	)
 	var stdout, stderr bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetErr(&stderr)
-	root.SetArgs([]string{"export", "-q"})
-	require.NoError(t, root.Execute())
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	require.NoError(t, cmd.Execute())
 	assert.Empty(t, stdout.String())
 	assert.Empty(t, stderr.String())
 }
@@ -141,12 +137,11 @@ func TestRunExport_NoFlags_OutputsNDJSON(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedOne(t, a)
 
-	root := newTestRoot(a)
+	cmd := export.NewExportCmd(a)
 	var stdout bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"export"})
-	require.NoError(t, root.Execute())
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
 	lines := splitLines(stdout.String())
 	require.Len(t, lines, 1)
 	var result app.ExportResult

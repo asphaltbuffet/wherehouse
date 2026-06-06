@@ -8,6 +8,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
 // NewDefaultExportCmd returns the export command wired to the real database.
@@ -43,13 +44,19 @@ Examples:
 }
 
 func runExport(cmd *cobra.Command, _ []string, a *app.App) error {
-	events, err := a.GetAllEvents(cmd.Context())
+	ctx := cmd.Context()
+	events, err := a.GetAllEvents(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to export events: %w", err)
 	}
 
+	cfg, ok := cli.GetConfig(ctx)
+	if !ok {
+		cfg = config.GetDefaults()
+	}
+
 	if len(events) == 0 {
-		if !cli.IsQuietMode(cmd) {
+		if !cfg.IsQuiet() {
 			fmt.Fprintln(cmd.ErrOrStderr(), "warning: no events found")
 		}
 		return nil

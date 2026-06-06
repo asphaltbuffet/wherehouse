@@ -16,6 +16,13 @@ func WithJSON() ConfigOption {
 	}
 }
 
+// WithQuiet sets quiet mode on the test config.
+func WithQuiet() ConfigOption {
+	return func(cfg *config.Config) {
+		cfg.Output.Quiet = 1
+	}
+}
+
 // NewTestConfig returns a default Config with the given options applied.
 func NewTestConfig(t *testing.T, opts ...ConfigOption) *config.Config {
 	t.Helper()

@@ -2,6 +2,7 @@ package add_test
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -65,4 +67,19 @@ func TestRunAdd_PropagatesAppError(t *testing.T) {
 
 	err := cmd.Execute()
 	require.Error(t, err)
+}
+
+func TestRunAdd_Quiet_SuppressesSuccess(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	cmd := add.NewAddCmd(a)
+	cmd.SetContext(
+		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithQuiet())),
+	)
+	cmd.SetArgs([]string{"Garage", "--type", "place"})
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	require.NoError(t, cmd.Execute())
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, stderr.String())
 }
