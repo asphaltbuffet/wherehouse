@@ -19,7 +19,6 @@ import (
 
 func newTestRoot(a *app.App) *cobra.Command {
 	root := &cobra.Command{Use: "wherehouse", SilenceUsage: true, SilenceErrors: true}
-	root.PersistentFlags().Bool("json", false, "")
 	root.PersistentFlags().CountP("quiet", "q", "")
 	root.AddCommand(importcmd.NewImportCmd(a))
 	return root

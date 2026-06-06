@@ -1,7 +1,6 @@
 package tag
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -51,26 +50,21 @@ Examples:
 	}
 	cmd.Flags().StringArrayP("add", "a", nil, "Tag to add (repeatable)")
 	cmd.Flags().StringArrayP("remove", "r", nil, "Tag to remove (repeatable)")
-	cmd.Flags().Bool("json", false, "emit JSON output instead of human-readable text")
 	return cmd
 }
 
 func runTag(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	path := args[0]
 
 	addFlags, _ := cmd.Flags().GetStringArray("add")
 	removeFlags, _ := cmd.Flags().GetStringArray("remove")
 
-	jsonFlag, _ := cmd.Flags().GetBool("json")
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
 		cfg = config.GetDefaults()
 	}
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonFlag || cfg.IsJSON(), cfg.IsQuiet())
+	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.IsJSON(), cfg.IsQuiet())
 
 	isMutation := len(addFlags) > 0 || len(removeFlags) > 0
 

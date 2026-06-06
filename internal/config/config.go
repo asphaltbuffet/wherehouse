@@ -15,9 +15,11 @@ type configKeyType int
 // ConfigKey provides a unique context key for config.
 const ConfigKey configKeyType = iota
 
+// OutputFormatJSON is the canonical value for JSON output mode.
+// OutputFormatHuman is the canonical value for human-readable output mode.
 const (
-	outputFormatJSON  = "json"
-	outputFormatHuman = "human"
+	OutputFormatJSON  = "json"
+	OutputFormatHuman = "human"
 )
 
 // Config represents the complete wherehouse configuration.
@@ -128,7 +130,7 @@ func (c *Config) QuietLevel() int {
 // IsJSON returns true if JSON output format is active.
 // Corresponds to the user passing --json or setting output.default_format = "json" in config.
 func (c *Config) IsJSON() bool {
-	return c.Output.DefaultFormat == outputFormatJSON
+	return c.Output.DefaultFormat == OutputFormatJSON
 }
 
 // GetCurrentUsername returns the current OS username.

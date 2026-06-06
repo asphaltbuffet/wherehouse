@@ -18,7 +18,6 @@ import (
 
 func newTestRoot(a *app.App) *cobra.Command {
 	root := &cobra.Command{Use: "wherehouse", SilenceUsage: true, SilenceErrors: true}
-	root.PersistentFlags().Bool("json", false, "")
 	root.PersistentFlags().CountP("quiet", "q", "")
 	root.AddCommand(export.NewExportCmd(a))
 	return root
@@ -139,7 +138,7 @@ func TestRunExport_ZeroEvents_QuietSuppressesWarning(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func TestRunExport_JsonFlagIsNoOp(t *testing.T) {
+func TestRunExport_NoFlags_OutputsNDJSON(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedOne(t, a)
 
@@ -147,7 +146,7 @@ func TestRunExport_JsonFlagIsNoOp(t *testing.T) {
 	var stdout bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"export", "--json"})
+	root.SetArgs([]string{"export"})
 	require.NoError(t, root.Execute())
 	lines := splitLines(stdout.String())
 	require.Len(t, lines, 1)

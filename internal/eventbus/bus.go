@@ -222,11 +222,11 @@ func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
 
 	var count int
 	err = b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		if truncErr := b.store.TruncateEntitiesTx(ctx, tx); truncErr != nil {
-			return fmt.Errorf("truncate entities: %w", truncErr)
-		}
 		if truncErr := b.store.TruncateTagsTx(ctx, tx); truncErr != nil {
 			return fmt.Errorf("truncate tags: %w", truncErr)
+		}
+		if truncErr := b.store.TruncateEntitiesTx(ctx, tx); truncErr != nil {
+			return fmt.Errorf("truncate entities: %w", truncErr)
 		}
 		for _, ev := range events {
 			if applyErr := b.applyEventProjectionOnlyTx(ctx, tx, ev); applyErr != nil {
