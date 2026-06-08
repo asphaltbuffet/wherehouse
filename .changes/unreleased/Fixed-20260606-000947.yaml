@@ -1,5 +1,0 @@
-kind: Fixed
-body: Consistent '--quiet' behavior and testing
-time: 2026-06-06T00:09:47.057595325-04:00
-custom:
-    Issue: '#229'
