@@ -296,6 +296,22 @@ func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventor
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
+func (b *Bus) handleEntityTagAdded(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityTagAddedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityTagAdded: unmarshal: %w", err)
+	}
+	return b.store.InsertTagTx(ctx, tx, p.EntityID, p.Tag)
+}
+
+func (b *Bus) handleEntityTagRemoved(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityTagRemovedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityTagRemoved: unmarshal: %w", err)
+	}
+	return b.store.DeleteTagTx(ctx, tx, p.EntityID, p.Tag)
+}
+
 // propagatePathChangesTx emits entity.path_changed derived events for all descendants
 // and updates each projection within the same transaction.
 //

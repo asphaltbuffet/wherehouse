@@ -22,6 +22,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/cmd/status"
+	"github.com/asphaltbuffet/wherehouse/cmd/tag"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
@@ -78,6 +79,7 @@ Examples:
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 	rootCmd.AddCommand(serve.NewDefaultServeCmd())
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())
+	rootCmd.AddCommand(tag.NewDefaultTagCmd())
 	rootCmd.AddCommand(doctor.NewDefaultDoctorCmd())
 
 	// hidden internal commands — not shown in help output

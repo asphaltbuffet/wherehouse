@@ -186,7 +186,7 @@ func parseConfigValue(key, value string) (any, error) {
 	case "user.default_identity":
 		return value, nil
 	case "output.default_format":
-		if value != outputFormatHuman && value != outputFormatJSON {
+		if value != OutputFormatHuman && value != OutputFormatJSON {
 			return nil, fmt.Errorf("output.default_format must be 'human' or 'json', got %q", value)
 		}
 		return value, nil

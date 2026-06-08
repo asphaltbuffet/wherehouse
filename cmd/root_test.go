@@ -191,7 +191,7 @@ func TestInitConfig_DefaultsApplied(t *testing.T) {
 	cmd := GetRootCmd()
 
 	testCmd := &cobra.Command{}
-	testCmd.SetContext(context.Background())
+	testCmd.SetContext(t.Context())
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
@@ -214,7 +214,7 @@ func TestInitConfig_FallsBackToDefaultsWithoutFlags(t *testing.T) {
 	cmd := GetRootCmd()
 
 	testCmd := &cobra.Command{}
-	testCmd.SetContext(context.Background())
+	testCmd.SetContext(t.Context())
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
@@ -247,7 +247,7 @@ default_identity = "envuser"
 	cmd := GetRootCmd()
 
 	testCmd := &cobra.Command{}
-	testCmd.SetContext(context.Background())
+	testCmd.SetContext(t.Context())
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
@@ -267,7 +267,7 @@ func TestInitConfig_ReturnsNilError(t *testing.T) {
 	cmd := GetRootCmd()
 
 	testCmd := &cobra.Command{}
-	testCmd.SetContext(context.Background())
+	testCmd.SetContext(t.Context())
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
 	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 

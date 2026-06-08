@@ -2,7 +2,6 @@ package history_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ import (
 
 func TestRunHistory_HappyPath(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
 		EntityType:  inventory.EntityTypePlace,

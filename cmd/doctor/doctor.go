@@ -85,7 +85,6 @@ Examples:
 	}
 	cmd.Flags().Bool("rebuild", false, "rebuild projection from event log after checks")
 	cmd.Flags().BoolP("force", "f", false, "force rebuild even when issues are found (requires --rebuild)")
-	cmd.Flags().Bool("json", false, "emit a single JSON object instead of human-readable output")
 	return cmd
 }
 
@@ -142,13 +141,12 @@ func runDoctor(cmd *cobra.Command, _ []string, configIssues []app.DoctorIssue, a
 	ctx := cmd.Context()
 	rebuild, _ := cmd.Flags().GetBool("rebuild")
 	force, _ := cmd.Flags().GetBool("force")
-	jsonMode, _ := cmd.Flags().GetBool("json")
 
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
 		cfg = config.GetDefaults()
 	}
-	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode || cfg.IsJSON(), cfg.IsQuiet())
+	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.IsJSON(), cfg.IsQuiet())
 
 	allIssues, err := collectIssues(ctx, configIssues, a)
 	if err != nil {
@@ -164,7 +162,7 @@ func runDoctor(cmd *cobra.Command, _ []string, configIssues []app.DoctorIssue, a
 		replayCount = &count
 	}
 
-	return emitResult(out, allIssues, replayCount, jsonMode)
+	return emitResult(out, allIssues, replayCount)
 }
 
 func collectIssues(ctx context.Context, configIssues []app.DoctorIssue, a *app.App) ([]app.DoctorIssue, error) {
@@ -180,10 +178,10 @@ func collectIssues(ctx context.Context, configIssues []app.DoctorIssue, a *app.A
 	return append(all, checks...), nil
 }
 
-func emitResult(out *cli.OutputWriter, allIssues []app.DoctorIssue, replayCount *int, jsonMode bool) error {
+func emitResult(out *cli.OutputWriter, allIssues []app.DoctorIssue, replayCount *int) error {
 	hasIssues := len(allIssues) > 0
 
-	if jsonMode {
+	if out.IsJSON() {
 		issues := make([]issueResult, len(allIssues))
 		for i, issue := range allIssues {
 			issues[i] = issueResult{Kind: issue.Kind.String(), EventID: issue.EventID, Description: issue.Description}

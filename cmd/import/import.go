@@ -13,6 +13,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
 // NewDefaultImportCmd returns the import command wired to the real database.
@@ -86,7 +87,12 @@ func runImport(cmd *cobra.Command, a *app.App) error {
 		return fmt.Errorf("import failed: %w", err)
 	}
 
-	if !cli.IsQuietMode(cmd) {
+	cfg, ok := cli.GetConfig(ctx)
+	if !ok {
+		cfg = config.GetDefaults()
+	}
+
+	if !cfg.IsQuiet() {
 		out := cmd.ErrOrStderr()
 		fmt.Fprintf(out, "Replayed: %d, Failed: %d, Warnings: %d\n",
 			result.Replayed, result.Failed, result.WarningCount)

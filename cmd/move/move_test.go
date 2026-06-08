@@ -11,12 +11,13 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func seedForMove(t *testing.T, a *app.App) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, tc := range []struct {
 		name   string
 		parent string
@@ -47,7 +48,7 @@ func TestRunMove_HappyPath(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
 
-	entities, err := a.ListEntities(context.Background())
+	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	var found bool
 	for _, e := range entities {
@@ -69,4 +70,20 @@ func TestRunMove_PropagatesError(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	err := cmd.Execute()
 	require.Error(t, err)
+}
+
+func TestRunMove_Quiet_SuppressesSuccess(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForMove(t, a)
+	cmd := move.NewMoveCmd(a)
+	cmd.SetContext(
+		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithQuiet())),
+	)
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--to", "Workshop"})
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	require.NoError(t, cmd.Execute())
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, stderr.String())
 }

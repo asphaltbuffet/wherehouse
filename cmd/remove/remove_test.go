@@ -11,12 +11,13 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func seedForRemove(t *testing.T, a *app.App) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, tc := range []struct {
 		name   string
 		parent string
@@ -46,7 +47,7 @@ func TestRunRemove_HappyPath(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
 
-	entities, err := a.ListEntities(context.Background())
+	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	for _, e := range entities {
 		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
@@ -66,7 +67,7 @@ func TestRunRemove_WithNote(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 
 	// Verify entity is removed (note stored on event, not on projection)
-	entities, err := a.ListEntities(context.Background())
+	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	for _, e := range entities {
 		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
@@ -84,4 +85,20 @@ func TestRunRemove_PropagatesError(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	err := cmd.Execute()
 	require.Error(t, err)
+}
+
+func TestRunRemove_Quiet_SuppressesSuccess(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForRemove(t, a)
+	cmd := remove.NewRemoveCmd(a)
+	cmd.SetContext(
+		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithQuiet())),
+	)
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	require.NoError(t, cmd.Execute())
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, stderr.String())
 }

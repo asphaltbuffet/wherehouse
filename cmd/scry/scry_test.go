@@ -2,7 +2,6 @@ package scry_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ import (
 
 func TestRunScry_NoArg_ListsAll(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	_, err := a.CreateEntity(context.Background(), app.CreateEntityRequest{
+	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
 		DisplayName: "Garage",
 		EntityType:  inventory.EntityTypePlace,
 		ActorID:     "test",
@@ -33,7 +32,7 @@ func TestRunScry_NoArg_ListsAll(t *testing.T) {
 
 func TestRunScry_WithArg_CallsFindEntities(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
 		EntityType:  inventory.EntityTypePlace,
@@ -69,7 +68,7 @@ func TestRunScry_EmptyDB_NoOutput(t *testing.T) {
 
 func TestRunScry_WithArg_Verbose_ShowsDistance(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
 		EntityType:  inventory.EntityTypePlace,
@@ -88,7 +87,7 @@ func TestRunScry_WithArg_Verbose_ShowsDistance(t *testing.T) {
 
 func TestRunScry_NoArg_Verbose_NoDistance(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
 		EntityType:  inventory.EntityTypePlace,

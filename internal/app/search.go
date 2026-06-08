@@ -15,6 +15,16 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 		return nil, fmt.Errorf("find entities: %w", err)
 	}
 
+	ids := make([]string, len(all))
+	for i, e := range all {
+		ids[i] = e.EntityID
+	}
+
+	tagsByID, err := a.store.GetTagsByEntities(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("find entities tags: %w", err)
+	}
+
 	query := strings.ToLower(req.Query)
 	var results []FindResult
 
@@ -24,7 +34,7 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 			continue
 		}
 		results = append(results, FindResult{
-			Entity:   entityToResult(e),
+			Entity:   entityToResult(e, tagsByID[e.EntityID]),
 			Distance: levenshtein(query, name),
 		})
 	}
