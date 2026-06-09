@@ -1,5 +1,0 @@
-kind: Changed
-body: Bump codecov/codecov-action from 6 to 7
-time: 2026-06-08T23:02:36.604209502-04:00
-custom:
-    Issue: '#231'
