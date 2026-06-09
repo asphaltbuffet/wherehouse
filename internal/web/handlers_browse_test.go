@@ -15,8 +15,7 @@ import (
 func TestHandleIndex(t *testing.T) {
 	fake := &fakeApp{entities: []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Garage", CanonicalName: "garage",
-			FullPathDisplay: "Garage",
-			EntityType:      inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
 	}}
 	ts := newTestServer(t, fake)
 	defer ts.Close()
@@ -72,7 +71,6 @@ func TestHandleSearch_WithResults(t *testing.T) {
 			EntityID:        "id1",
 			DisplayName:     "Hammer",
 			FullPathDisplay: "Garage:Toolbox:Hammer",
-			EntityType:      inventory.EntityTypeLeaf,
 			Status:          inventory.EntityStatusOk,
 		}, Distance: 0},
 	}
@@ -95,7 +93,6 @@ func TestHandleSearch_HTMXFragment(t *testing.T) {
 			EntityID:        "id1",
 			DisplayName:     "Hammer",
 			FullPathDisplay: "Garage:Toolbox:Hammer",
-			EntityType:      inventory.EntityTypeLeaf,
 			Status:          inventory.EntityStatusOk,
 		}},
 	}

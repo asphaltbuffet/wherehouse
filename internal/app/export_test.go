@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func TestGetAllEvents_TracesBullet(t *testing.T) {
@@ -17,7 +16,7 @@ func TestGetAllEvents_TracesBullet(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Box", EntityType: inventory.EntityTypeContainer, ActorID: "alice",
+		DisplayName: "Box", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -36,7 +35,7 @@ func TestGetAllEvents_PayloadRoundTrips(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Shelf", EntityType: inventory.EntityTypeContainer, ActorID: "bob",
+		DisplayName: "Shelf", ActorID: "bob",
 	})
 	require.NoError(t, err)
 
@@ -62,7 +61,7 @@ func TestGetAllEvents_NilFieldsPreserved(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Bin", EntityType: inventory.EntityTypeContainer, ActorID: "carol",
+		DisplayName: "Bin", ActorID: "carol",
 	})
 	require.NoError(t, err)
 
@@ -79,12 +78,12 @@ func TestGetAllEvents_OrderPreserved(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Alpha", EntityType: inventory.EntityTypeContainer, ActorID: "dave",
+		DisplayName: "Alpha", ActorID: "dave",
 	})
 	require.NoError(t, err)
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Beta", EntityType: inventory.EntityTypeContainer, ActorID: "dave",
+		DisplayName: "Beta", ActorID: "dave",
 	})
 	require.NoError(t, err)
 

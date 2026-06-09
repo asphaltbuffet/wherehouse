@@ -23,15 +23,13 @@ func seedThree(t *testing.T, a *app.App) {
 	for _, tc := range []struct {
 		name   string
 		parent string
-		et     inventory.EntityType
 	}{
-		{"Garage", "", inventory.EntityTypePlace},
-		{"Toolbox", "Garage", inventory.EntityTypeContainer},
-		{"Wrench", "Garage:Toolbox", inventory.EntityTypeLeaf},
+		{"Garage", ""},
+		{"Toolbox", "Garage"},
+		{"Wrench", "Garage:Toolbox"},
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: tc.name,
-			EntityType:  tc.et,
 			ParentPath:  tc.parent,
 			ActorID:     "test",
 		})
@@ -97,7 +95,6 @@ func TestRunList_FilterPrunesUnrelatedBranches(t *testing.T) {
 	seedThree(t, a)
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Drill",
-		EntityType:  inventory.EntityTypeLeaf,
 		ParentPath:  "Garage:Toolbox",
 		ActorID:     "test",
 	})

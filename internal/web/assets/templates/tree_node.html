@@ -13,10 +13,10 @@
     <span class="chevron{{if not .HasChildren}} chevron-hidden{{end}}" aria-hidden="true">
       <svg viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>
     </span>
-    <span aria-hidden="true">{{entityTypeIcon .EntityType}}</span>
+    {{if .Locked}}<span aria-hidden="true">🔒</span>{{end}}
     <span id="tree-label-{{.EntityID}}">{{.DisplayName}}</span>
     {{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}">{{if $cls}}{{.Status}}{{end}}</span>
-    {{if ne .EntityType 3}}
+    {{if not .Discrete}}
     <button class="add-btn"
             type="button"
             data-parent-id="{{.EntityID}}"

@@ -47,7 +47,7 @@ func TestReplayEvent_ReturnsNewDBAssignedID(t *testing.T) {
 	ctx := context.Background()
 
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
-		EntityID: "r1", DisplayName: "Replay Room", EntityType: "place",
+		EntityID: "r1", DisplayName: "Replay Room", Locked: true,
 	})
 	ev := &inventory.Event{
 		EventType:    inventory.EntityCreatedEvent,
@@ -68,7 +68,7 @@ func TestReplayEvent_PreservesOriginalTimestamp(t *testing.T) {
 
 	const originalTS = "2020-06-15T12:00:00Z"
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
-		EntityID: "r2", DisplayName: "Time Capsule", EntityType: "place",
+		EntityID: "r2", DisplayName: "Time Capsule", Locked: true,
 	})
 	ev := &inventory.Event{
 		EventType:    inventory.EntityCreatedEvent,
@@ -115,7 +115,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 	ctx := context.Background()
 
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
-		EntityID: "r3", DisplayName: "Projected Room", EntityType: "place",
+		EntityID: "r3", DisplayName: "Projected Room", Locked: true,
 	})
 	ev := &inventory.Event{
 		EventType:    inventory.EntityCreatedEvent,

@@ -12,7 +12,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func seedForRename(t *testing.T, a *app.App) {
@@ -21,16 +20,13 @@ func seedForRename(t *testing.T, a *app.App) {
 	for _, tc := range []struct {
 		name   string
 		parent string
-		et     inventory.EntityType
 	}{
-		{"Garage", "", inventory.EntityTypePlace},
-		{"OldName", "Garage", inventory.EntityTypeContainer},
+		{"Garage", ""},
+		{"OldName", "Garage"},
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: tc.name,
-			EntityType:  tc.et,
-			ParentPath:  tc.parent,
-			ActorID:     "test",
+			DisplayName: tc.name, ParentPath: tc.parent,
+			ActorID: "test",
 		})
 		require.NoError(t, err)
 	}

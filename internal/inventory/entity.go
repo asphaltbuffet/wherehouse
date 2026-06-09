@@ -7,7 +7,8 @@ type Entity struct {
 	EntityID          string
 	DisplayName       string
 	CanonicalName     string
-	EntityType        EntityType
+	Locked            bool
+	Discrete          bool
 	ParentID          *string
 	FullPathDisplay   string
 	FullPathCanonical string

@@ -15,13 +15,11 @@ func TestToListItems_JSONContract(t *testing.T) {
 	t.Run("no tags", func(t *testing.T) {
 		results := []app.EntityResult{
 			{
-				EntityID:        "abc1234567",
-				DisplayName:     "Toolbox",
-				CanonicalName:   "toolbox",
-				EntityType:      inventory.EntityTypeContainer,
-				FullPathDisplay: "Garage:Toolbox",
-				Status:          inventory.EntityStatusOk,
-				HasChildren:     true,
+				EntityID:      "abc1234567",
+				DisplayName:   "Toolbox",
+				CanonicalName: "toolbox", FullPathDisplay: "Garage:Toolbox",
+				Status:      inventory.EntityStatusOk,
+				HasChildren: true,
 			},
 		}
 
@@ -31,7 +29,8 @@ func TestToListItems_JSONContract(t *testing.T) {
 		assert.JSONEq(t, `[{
 			"entity_id": "abc1234567",
 			"path": "Garage:Toolbox",
-			"type": "container",
+			"locked": false,
+			"discrete": false,
 			"status": "ok",
 			"tags": []
 		}]`, string(b))
@@ -40,13 +39,11 @@ func TestToListItems_JSONContract(t *testing.T) {
 	t.Run("with tags", func(t *testing.T) {
 		results := []app.EntityResult{
 			{
-				EntityID:        "def9876543",
-				DisplayName:     "Drill",
-				CanonicalName:   "drill",
-				EntityType:      inventory.EntityTypeLeaf,
-				FullPathDisplay: "Garage:Drill",
-				Status:          inventory.EntityStatusMissing,
-				Tags:            []string{"dewalt", "20v"},
+				EntityID:      "def9876543",
+				DisplayName:   "Drill",
+				CanonicalName: "drill", FullPathDisplay: "Garage:Drill",
+				Status: inventory.EntityStatusMissing,
+				Tags:   []string{"dewalt", "20v"},
 			},
 		}
 
@@ -56,7 +53,8 @@ func TestToListItems_JSONContract(t *testing.T) {
 		assert.JSONEq(t, `[{
 			"entity_id": "def9876543",
 			"path": "Garage:Drill",
-			"type": "leaf",
+			"locked": false,
+			"discrete": false,
 			"status": "missing",
 			"tags": ["dewalt", "20v"]
 		}]`, string(b))
@@ -72,12 +70,10 @@ func TestToScryItems_JSONContract(t *testing.T) {
 		results := []app.FindResult{
 			{
 				Entity: app.EntityResult{
-					EntityID:        "xyz9876543",
-					DisplayName:     "Hammer",
-					CanonicalName:   "hammer",
-					EntityType:      inventory.EntityTypeLeaf,
-					FullPathDisplay: "Garage:Toolbox:Hammer",
-					Status:          inventory.EntityStatusOk,
+					EntityID:      "xyz9876543",
+					DisplayName:   "Hammer",
+					CanonicalName: "hammer", FullPathDisplay: "Garage:Toolbox:Hammer",
+					Status: inventory.EntityStatusOk,
 				},
 				Distance: 0,
 			},
@@ -89,9 +85,9 @@ func TestToScryItems_JSONContract(t *testing.T) {
 		assert.JSONEq(t, `[{
 			"entity_id": "xyz9876543",
 			"path": "Garage:Toolbox:Hammer",
-			"type": "leaf",
-			"status": "ok",
-			"distance": null
+			"locked": false,
+			"discrete": false,
+			"status": "ok"
 		}]`, string(b))
 	})
 
@@ -99,12 +95,10 @@ func TestToScryItems_JSONContract(t *testing.T) {
 		results := []app.FindResult{
 			{
 				Entity: app.EntityResult{
-					EntityID:        "xyz9876543",
-					DisplayName:     "Hammer",
-					CanonicalName:   "hammer",
-					EntityType:      inventory.EntityTypeLeaf,
-					FullPathDisplay: "Garage:Toolbox:Hammer",
-					Status:          inventory.EntityStatusOk,
+					EntityID:      "xyz9876543",
+					DisplayName:   "Hammer",
+					CanonicalName: "hammer", FullPathDisplay: "Garage:Toolbox:Hammer",
+					Status: inventory.EntityStatusOk,
 				},
 				Distance: 0,
 			},
@@ -116,7 +110,8 @@ func TestToScryItems_JSONContract(t *testing.T) {
 		assert.JSONEq(t, `[{
 			"entity_id": "xyz9876543",
 			"path": "Garage:Toolbox:Hammer",
-			"type": "leaf",
+			"locked": false,
+			"discrete": false,
 			"status": "ok",
 			"distance": 0
 		}]`, string(b))
@@ -126,12 +121,10 @@ func TestToScryItems_JSONContract(t *testing.T) {
 		results := []app.FindResult{
 			{
 				Entity: app.EntityResult{
-					EntityID:        "abc1234567",
-					DisplayName:     "Hamster",
-					CanonicalName:   "hamster",
-					EntityType:      inventory.EntityTypeLeaf,
-					FullPathDisplay: "Garage:Toolbox:Hamster",
-					Status:          inventory.EntityStatusOk,
+					EntityID:      "abc1234567",
+					DisplayName:   "Hamster",
+					CanonicalName: "hamster", FullPathDisplay: "Garage:Toolbox:Hamster",
+					Status: inventory.EntityStatusOk,
 				},
 				Distance: 3,
 			},
@@ -143,7 +136,8 @@ func TestToScryItems_JSONContract(t *testing.T) {
 		assert.JSONEq(t, `[{
 			"entity_id": "abc1234567",
 			"path": "Garage:Toolbox:Hamster",
-			"type": "leaf",
+			"locked": false,
+			"discrete": false,
 			"status": "ok",
 			"distance": 3
 		}]`, string(b))
@@ -176,12 +170,10 @@ func TestToHistoryItems_JSONContract(t *testing.T) {
 
 func TestToAddOutputs_JSONContract(t *testing.T) {
 	result := app.EntityResult{
-		EntityID:        "add1234567",
-		DisplayName:     "Wrench",
-		CanonicalName:   "wrench",
-		EntityType:      inventory.EntityTypeLeaf,
-		FullPathDisplay: "Garage:Toolbox:Wrench",
-		Status:          inventory.EntityStatusOk,
+		EntityID:      "add1234567",
+		DisplayName:   "Wrench",
+		CanonicalName: "wrench", FullPathDisplay: "Garage:Toolbox:Wrench",
+		Status: inventory.EntityStatusOk,
 	}
 
 	b, err := json.Marshal(app.ToAddOutputs([]app.EntityResult{result}))
@@ -196,12 +188,10 @@ func TestToAddOutputs_JSONContract(t *testing.T) {
 
 func TestToMoveOutput_JSONContract(t *testing.T) {
 	result := app.EntityResult{
-		EntityID:        "mov1234567",
-		DisplayName:     "Wrench",
-		CanonicalName:   "wrench",
-		EntityType:      inventory.EntityTypeLeaf,
-		FullPathDisplay: "Shed:Wrench",
-		Status:          inventory.EntityStatusOk,
+		EntityID:      "mov1234567",
+		DisplayName:   "Wrench",
+		CanonicalName: "wrench", FullPathDisplay: "Shed:Wrench",
+		Status: inventory.EntityStatusOk,
 	}
 
 	b, err := json.Marshal(app.ToMoveOutput(result))

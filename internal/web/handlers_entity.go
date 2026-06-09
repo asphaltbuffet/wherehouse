@@ -18,8 +18,8 @@ type detailData struct {
 	Entity         app.EntityResult
 	DateAdded      string
 	History        []app.HistoryResult
-	CanAddChild    bool // false when EntityType == EntityTypeLeaf
-	CanMarkMissing bool // false when EntityType == EntityTypePlace
+	CanAddChild    bool
+	CanMarkMissing bool
 	IsMissing      bool // true when Status == EntityStatusMissing
 	Breadcrumbs    []Breadcrumb
 	Error          string // populated by edit POST handlers; rendered inline above the detail dl
@@ -112,8 +112,8 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		Entity:         entity,
 		DateAdded:      dateAdded,
 		History:        history,
-		CanAddChild:    entity.EntityType != inventory.EntityTypeLeaf,
-		CanMarkMissing: entity.EntityType != inventory.EntityTypePlace && editable,
+		CanAddChild:    !entity.Discrete,
+		CanMarkMissing: !entity.Locked && editable,
 		IsMissing:      entity.Status == inventory.EntityStatusMissing,
 		Breadcrumbs:    BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
 	}, nil

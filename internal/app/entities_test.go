@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
@@ -24,19 +23,47 @@ func openTestApp(t *testing.T) *app.App {
 	return app.New(s)
 }
 
-func TestCreateEntity_RootPlace(t *testing.T) {
+func TestCreateEntity_Root(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
 	result, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Garage", result.DisplayName)
 	assert.Equal(t, "Garage", result.FullPathDisplay)
-	assert.Equal(t, inventory.EntityTypePlace, result.EntityType)
+	assert.False(t, result.Locked)
+	assert.False(t, result.Discrete)
+}
+
+func TestCreateEntity_Locked(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	result, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage",
+		Locked:      true,
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Locked)
+	assert.False(t, result.Discrete)
+}
+
+func TestCreateEntity_Discrete(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	result, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box of Nails",
+		Discrete:    true,
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Locked)
+	assert.True(t, result.Discrete)
 }
 
 func TestCreateEntity_NestedPath(t *testing.T) {
@@ -45,14 +72,12 @@ func TestCreateEntity_NestedPath(t *testing.T) {
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
 	result, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Toolbox",
-		EntityType:  inventory.EntityTypeContainer,
 		ParentPath:  "Garage",
 		ActorID:     "alice",
 	})
@@ -60,32 +85,120 @@ func TestCreateEntity_NestedPath(t *testing.T) {
 	assert.Equal(t, "Garage:Toolbox", result.FullPathDisplay)
 }
 
-func TestCreateEntity_PlaceInNonPlace_Error(t *testing.T) {
+func TestCreateEntity_DiscreteParent_Error(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box of Nails",
+		Discrete:    true,
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Nail",
+		ParentPath:  "Box of Nails",
+		ActorID:     "alice",
+	})
+	assert.ErrorContains(t, err, "discrete")
+}
+
+func TestReparentEntity_Locked_Error(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
+		Locked:      true,
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Office",
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityPath:    "Garage",
+		NewParentPath: "Office",
+		ActorID:       "alice",
+	})
+	assert.ErrorContains(t, err, "locked")
+}
+
+func TestReparentEntity_IntoDiscrete_Error(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box of Nails",
+		Discrete:    true,
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Wrench",
-		EntityType:  inventory.EntityTypeLeaf,
-		ParentPath:  "Garage",
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityPath:    "Wrench",
+		NewParentPath: "Box of Nails",
+		ActorID:       "alice",
+	})
+	assert.ErrorContains(t, err, "discrete")
+}
+
+func TestReparentEntity_LockedChildMovesWithParent(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage",
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Zone",
-		EntityType:  inventory.EntityTypePlace,
-		ParentPath:  "Garage:Wrench",
+		DisplayName: "File Cabinet",
+		ParentPath:  "Garage",
 		ActorID:     "alice",
 	})
-	assert.Error(t, err)
+	require.NoError(t, err)
+
+	// Top Drawer is locked — cannot be directly moved, but moves with parent.
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Top Drawer",
+		Locked:      true,
+		ParentPath:  "Garage:File Cabinet",
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Office",
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	// Moving File Cabinet (not locked) to Office should also move Top Drawer.
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityPath:    "Garage:File Cabinet",
+		NewParentPath: "Office",
+		ActorID:       "alice",
+	})
+	require.NoError(t, err)
+
+	// Top Drawer should now be under Office:File Cabinet.
+	drawer, err := a.GetEntityByPath(ctx, "Office:File Cabinet:Top Drawer")
+	require.NoError(t, err)
+	assert.Equal(t, "Office:File Cabinet:Top Drawer", drawer.FullPathDisplay)
+	assert.True(t, drawer.Locked)
 }
 
 func TestGetEntity_ByPath(t *testing.T) {
@@ -94,7 +207,6 @@ func TestGetEntity_ByPath(t *testing.T) {
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
@@ -108,24 +220,21 @@ func TestGetEntityByPath_Disambiguation(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
-	// Create two places with the same name at different paths.
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Shelf", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Shelf", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
-	garageID := "Garage"
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Shelf", EntityType: inventory.EntityTypePlace, ParentPath: garageID, ActorID: "alice",
+		DisplayName: "Shelf", ParentPath: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
-	// "Shelf" (root-level) and "Garage:Shelf" both exist.
 	result, err := a.GetEntityByPath(ctx, "Garage:Shelf")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage:Shelf", result.FullPathDisplay)
@@ -140,7 +249,7 @@ func TestRemoveEntity_ThenMutate_Error(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -149,7 +258,6 @@ func TestRemoveEntity_ThenMutate_Error(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Attempting to rename a removed entity should fail.
 	_, err = a.RenameEntity(ctx, app.RenameEntityRequest{
 		EntityPath: "Garage", NewName: "Workshop", ActorID: "alice",
 	})
@@ -163,7 +271,6 @@ func TestListEntities(t *testing.T) {
 	for _, name := range []string{"Garage", "Basement", "Kitchen"} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: name,
-			EntityType:  inventory.EntityTypePlace,
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
@@ -181,14 +288,12 @@ func TestApp_GetChildren(t *testing.T) {
 
 		parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Parent",
-			EntityType:  inventory.EntityTypePlace,
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		child1, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Child1",
-			EntityType:  inventory.EntityTypePlace,
 			ParentPath:  "Parent",
 			ActorID:     "alice",
 		})
@@ -196,7 +301,6 @@ func TestApp_GetChildren(t *testing.T) {
 
 		child2, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Child2",
-			EntityType:  inventory.EntityTypePlace,
 			ParentPath:  "Parent",
 			ActorID:     "alice",
 		})
@@ -216,14 +320,12 @@ func TestApp_GetChildren(t *testing.T) {
 
 		parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Parent",
-			EntityType:  inventory.EntityTypePlace,
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		active, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Active",
-			EntityType:  inventory.EntityTypePlace,
 			ParentPath:  "Parent",
 			ActorID:     "alice",
 		})
@@ -231,7 +333,6 @@ func TestApp_GetChildren(t *testing.T) {
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Removed",
-			EntityType:  inventory.EntityTypePlace,
 			ParentPath:  "Parent",
 			ActorID:     "alice",
 		})
@@ -255,7 +356,6 @@ func TestApp_GetChildren(t *testing.T) {
 
 		parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Lonely",
-			EntityType:  inventory.EntityTypePlace,
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
@@ -271,14 +371,12 @@ func TestApp_GetChildren(t *testing.T) {
 
 		gp, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "GP",
-			EntityType:  inventory.EntityTypePlace,
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Mid",
-			EntityType:  inventory.EntityTypeContainer,
 			ParentPath:  "GP",
 			ActorID:     "alice",
 		})
@@ -286,7 +384,6 @@ func TestApp_GetChildren(t *testing.T) {
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Leaf",
-			EntityType:  inventory.EntityTypeLeaf,
 			ParentPath:  "GP:Mid",
 			ActorID:     "alice",
 		})
@@ -304,14 +401,12 @@ func TestApp_GetChildren(t *testing.T) {
 
 		gp, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "GP",
-			EntityType:  inventory.EntityTypePlace,
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Mid",
-			EntityType:  inventory.EntityTypeContainer,
 			ParentPath:  "GP",
 			ActorID:     "alice",
 		})
@@ -319,7 +414,6 @@ func TestApp_GetChildren(t *testing.T) {
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Leaf",
-			EntityType:  inventory.EntityTypeLeaf,
 			ParentPath:  "GP:Mid",
 			ActorID:     "alice",
 		})

@@ -17,7 +17,7 @@ func TestEntity_Fields(t *testing.T) {
 		EntityID:          "abc123",
 		DisplayName:       "Garage",
 		CanonicalName:     "garage",
-		EntityType:        inventory.EntityTypePlace,
+		Locked:            true,
 		FullPathDisplay:   "Garage",
 		FullPathCanonical: "garage",
 		Status:            inventory.EntityStatusOk,
@@ -27,7 +27,7 @@ func TestEntity_Fields(t *testing.T) {
 	assert.Equal(t, "abc123", e.EntityID)
 	assert.Equal(t, "Garage", e.DisplayName)
 	assert.Equal(t, "garage", e.CanonicalName)
-	assert.Equal(t, inventory.EntityTypePlace, e.EntityType)
+	assert.True(t, e.Locked)
 	assert.Equal(t, "Garage", e.FullPathDisplay)
 	assert.Equal(t, "garage", e.FullPathCanonical)
 	assert.Equal(t, inventory.EntityStatusOk, e.Status)

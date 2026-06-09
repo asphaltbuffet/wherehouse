@@ -119,11 +119,14 @@ func formatLabel(e app.EntityResult, isMatch, verbose bool, s *styles.Styles) st
 		b.WriteString("  ")
 	}
 
-	switch e.EntityType {
-	case inventory.EntityTypePlace, inventory.EntityTypeContainer:
-		b.WriteString(s.AccentBold().Render(e.DisplayName))
-	case inventory.EntityTypeLeaf:
+	if e.Discrete {
 		b.WriteString(s.AccentText().Render(e.DisplayName))
+	} else {
+		b.WriteString(s.AccentBold().Render(e.DisplayName))
+	}
+
+	if e.Locked {
+		b.WriteString(" 🔒")
 	}
 
 	if verbose {

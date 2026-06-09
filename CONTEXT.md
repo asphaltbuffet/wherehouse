@@ -10,17 +10,15 @@ It is a CLI-first, event-sourced inventory tracking system. Small, deterministic
 
 ### Entity
 
-The single unified domain type. Everything in the inventory — a storage place, a container, a physical item — is an `Entity`. Entities are distinguished by their `EntityType`. This is **not** split into separate "item" and "location" types.
+The single unified domain type. Everything in the inventory — a storage place, a container, a physical item — is an `Entity`. Entities have no type classification; they are distinguished only by their position in the hierarchy and their mutable attributes (`locked`, `discrete`). This is **not** split into separate "item" and "location" types.
 
-### EntityType
+### locked
 
-The three values that classify an entity:
+A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` (its location is fixed by assertion). Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
 
-| Value | String | Meaning |
-|---|---|---|
-| `EntityTypePlace` | `"place"` | A top-level storage place (e.g. Garage, Basement) |
-| `EntityTypeContainer` | `"container"` | A container within a place (e.g. Toolbox, Drawer) |
-| `EntityTypeLeaf` | `"leaf"` | A tracked physical object with no children |
+### discrete
+
+A mutable boolean attribute on an entity. When `true`, the entity may not have children added to it (via `add` or `move`). Acts as a guard rail against accidental nesting — for example, a "Box of Nails" that should be tracked as a single unit. Defaults to `false` at creation. Can be cleared when sub-tracking is needed (e.g. pulling individual items out of a box). Toggled via `EntityDiscreteSetEvent` / `EntityDiscreteClearedEvent`.
 
 ### EntityStatus
 
@@ -46,7 +44,7 @@ Optional free-text annotation on an `Event`. Canonically human-typed and used in
 
 ### EventType
 
-The six event types currently implemented:
+The event types currently implemented:
 
 | Constant | Meaning |
 |---|---|
@@ -58,6 +56,10 @@ The six event types currently implemented:
 | `EntityRemovedEvent` | Entity was soft-deleted |
 | `EntityTagAddedEvent` | A tag was applied to an entity |
 | `EntityTagRemovedEvent` | A tag was removed from an entity |
+| `EntityLockedEvent` | Entity's `locked` flag set to `true` |
+| `EntityUnlockedEvent` | Entity's `locked` flag set to `false` |
+| `EntityDiscreteSetEvent` | Entity's `discrete` flag set to `true` |
+| `EntityDiscreteClearedEvent` | Entity's `discrete` flag set to `false` |
 
 ### Projection
 
@@ -118,6 +120,8 @@ The top-level verdict of a `doctor` run. `true` when no `DoctorIssue`s were foun
 | Avoid | Use instead | Why |
 |---|---|---|
 | "item" / "location" (as separate types) | "entity" | The model is unified; there is no separate item or location type |
+| "type" (for entity classification) | "locked", "discrete" | `EntityType` was removed; entities have no type, only mutable attributes |
+| "place", "container", "leaf" (as entity types) | "entity" with `locked`/`discrete` attributes | These type values no longer exist |
 | "undo" | There is no undo | Corrections create new events |
 | "delete" (for soft removal) | "remove" | `EntityRemovedEvent` is a status change, not a physical deletion |
 | "project" | — | Not implemented |
@@ -131,7 +135,7 @@ The top-level verdict of a `doctor` run. `true` when no `DoctorIssue`s were foun
 - Replay order is strictly by `event_id ASC`. Timestamps do not determine order.
 - Every `ORDER BY` that could tie must include `event_id ASC` as a tiebreaker.
 - All projection tables (`entities_current`, `entity_tags`) must be fully rebuildable by replaying the event stream. `TruncateAndReplay` truncates all projection tables before replaying.
-- Entity canonical names are not globally unique across all types — but uniqueness within a parent is enforced at the application layer.
+- Entity canonical names are not globally unique and uniqueness within a parent is not currently enforced.
 - Path propagation is recursive: reparenting an entity triggers `EntityPathChangedEvent` for all descendants.
 - `EntityRemovedEvent` sets `status = "removed"`. Removed entities remain in `entities_current` (soft delete).
 - No silent repair. No auto-retry beyond the `WithRetry` helper for SQLite locking.

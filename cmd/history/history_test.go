@@ -10,7 +10,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func TestRunHistory_HappyPath(t *testing.T) {
@@ -18,13 +17,11 @@ func TestRunHistory_HappyPath(t *testing.T) {
 	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
 		ActorID:     "test",
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Wrench",
-		EntityType:  inventory.EntityTypeLeaf,
 		ParentPath:  "Garage",
 		ActorID:     "test",
 	})

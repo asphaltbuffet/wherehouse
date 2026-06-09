@@ -21,7 +21,6 @@ func TestInsertEntity(t *testing.T) {
 		EntityID:          "e1",
 		DisplayName:       "Garage",
 		CanonicalName:     "garage",
-		EntityType:        inventory.EntityTypePlace,
 		ParentID:          nil,
 		FullPathDisplay:   "Garage",
 		FullPathCanonical: "garage",
@@ -39,7 +38,8 @@ func TestInsertEntity(t *testing.T) {
 	got, err := s.GetEntity(ctx, "e1")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage", got.DisplayName)
-	assert.Equal(t, inventory.EntityTypePlace, got.EntityType)
+	assert.False(t, got.Locked)
+	assert.False(t, got.Discrete)
 }
 
 func TestGetEntity_NotFound(t *testing.T) {
@@ -56,7 +56,7 @@ func TestGetEntitiesByCanonicalName(t *testing.T) {
 
 	e := &inventory.Entity{
 		EntityID: "e1", DisplayName: "Garage", CanonicalName: "garage",
-		EntityType: inventory.EntityTypePlace, FullPathDisplay: "Garage",
+		FullPathDisplay:   "Garage",
 		FullPathCanonical: "garage", Status: inventory.EntityStatusOk,
 		LastEventID: 1, UpdatedAt: time.Now(),
 	}
@@ -76,11 +76,9 @@ func TestTruncateEntitiesTx(t *testing.T) {
 
 	insert := func(id, name string) {
 		e := &inventory.Entity{
-			EntityID:          id,
-			DisplayName:       name,
-			CanonicalName:     strings.ToLower(name),
-			EntityType:        inventory.EntityTypePlace,
-			FullPathDisplay:   name,
+			EntityID:      id,
+			DisplayName:   name,
+			CanonicalName: strings.ToLower(name), FullPathDisplay: name,
 			FullPathCanonical: strings.ToLower(name),
 			Status:            inventory.EntityStatusOk,
 			LastEventID:       1,

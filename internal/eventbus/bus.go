@@ -68,6 +68,22 @@ func (b *Bus) registerAll() {
 		payloadFactory: func() any { return &EntityTagRemovedPayload{} },
 		applyFn:        b.handleEntityTagRemoved,
 	}
+	b.registry[inventory.EntityLockedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityLockedPayload{} },
+		applyFn:        b.handleEntityLocked,
+	}
+	b.registry[inventory.EntityUnlockedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityUnlockedPayload{} },
+		applyFn:        b.handleEntityUnlocked,
+	}
+	b.registry[inventory.EntityDiscreteSetEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityDiscreteSetPayload{} },
+		applyFn:        b.handleEntityDiscreteSet,
+	}
+	b.registry[inventory.EntityDiscreteClearedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityDiscreteClearedPayload{} },
+		applyFn:        b.handleEntityDiscreteCleared,
+	}
 }
 
 // PayloadFactories returns the live registry map of payload factory functions,

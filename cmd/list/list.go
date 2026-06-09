@@ -38,18 +38,15 @@ func buildListCmd() *cobra.Command {
 		Short: "List entities in the inventory",
 		Long: `List entities in the inventory.
 
-Use --under to restrict to children of a specific entity path, --type to filter
-by entity type, and --status to filter by lifecycle status.
+Use --under to restrict to children of a specific entity path, and --status to filter by lifecycle status.
 
 Examples:
   wherehouse list                                    # All entities
   wherehouse list --under "Garage:Toolbox"           # Under a specific path
-  wherehouse list --type container                   # Containers only
   wherehouse list --status missing`,
 		Args: cobra.NoArgs,
 	}
 	cmd.Flags().String("under", "", "Restrict to entities under this path (e.g. Garage:Toolbox)")
-	cmd.Flags().String("type", "", "Filter by type: place, container, or leaf")
 	cmd.Flags().String("status", "", "Filter by status: ok, borrowed, missing, loaned, removed")
 	cmd.Flags().BoolP("verbose", "v", false, "Show entity ID and tags for each entity")
 	return cmd
@@ -58,7 +55,6 @@ Examples:
 func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	ctx := cmd.Context()
 	underPath, _ := cmd.Flags().GetString("under")
-	typeFilter, _ := cmd.Flags().GetString("type")
 	statusFilter, _ := cmd.Flags().GetString("status")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
@@ -77,7 +73,7 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 		return fmt.Errorf("list failed: %w", err)
 	}
 
-	matched := filterEntities(all, underParsed, typeFilter, statusFilter)
+	matched := filterEntities(all, underParsed, statusFilter)
 
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
@@ -90,14 +86,10 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	})
 }
 
-func filterEntities(all []app.EntityResult, under entitypath.Path, typeFilter, statusFilter string) []app.EntityResult {
+func filterEntities(all []app.EntityResult, under entitypath.Path, statusFilter string) []app.EntityResult {
 	var out []app.EntityResult
 
 	for _, e := range all {
-		if typeFilter != "" && e.EntityType.String() != typeFilter {
-			continue
-		}
-
 		if statusFilter != "" && e.Status.String() != statusFilter {
 			continue
 		}

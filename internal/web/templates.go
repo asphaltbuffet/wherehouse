@@ -16,8 +16,7 @@ func parseTemplates(fsys fs.FS) (*template.Template, error) {
 	}
 
 	funcMap := template.FuncMap{
-		"entityTypeIcon": entityTypeIcon,
-		"statusClass":    statusClass,
+		"statusClass": statusClass,
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(sub, "*.html")
@@ -25,19 +24,6 @@ func parseTemplates(fsys fs.FS) (*template.Template, error) {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return tmpl, nil
-}
-
-func entityTypeIcon(t inventory.EntityType) string {
-	switch t {
-	case inventory.EntityTypePlace:
-		return "📍"
-	case inventory.EntityTypeContainer:
-		return "🪣"
-	case inventory.EntityTypeLeaf:
-		return "🏷️"
-	default:
-		return "•"
-	}
 }
 
 func statusClass(s inventory.EntityStatus) string {

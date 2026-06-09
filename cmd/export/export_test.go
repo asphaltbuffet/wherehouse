@@ -13,15 +13,12 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func seedOne(t *testing.T, a *app.App) {
 	t.Helper()
 	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
-		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
-		ActorID:     "test",
+		DisplayName: "Garage", ActorID: "test",
 	})
 	require.NoError(t, err)
 }
@@ -63,17 +60,14 @@ func TestRunExport_MultipleEvents_OrderedByEventID(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		parent string
-		et     inventory.EntityType
 	}{
-		{"Garage", "", inventory.EntityTypePlace},
-		{"Toolbox", "Garage", inventory.EntityTypeContainer},
-		{"Wrench", "Garage:Toolbox", inventory.EntityTypeLeaf},
+		{"Garage", ""},
+		{"Toolbox", "Garage"},
+		{"Wrench", "Garage:Toolbox"},
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: tc.name,
-			EntityType:  tc.et,
-			ParentPath:  tc.parent,
-			ActorID:     "test",
+			DisplayName: tc.name, ParentPath: tc.parent,
+			ActorID: "test",
 		})
 		require.NoError(t, err)
 	}

@@ -14,17 +14,16 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func seedForTagCmd(t *testing.T, a *app.App) {
 	t.Helper()
 	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(t.Context(), app.CreateEntityRequest{
-		DisplayName: "Wrench", EntityType: inventory.EntityTypeLeaf, ParentPath: "Garage", ActorID: "alice",
+		DisplayName: "Wrench", ParentPath: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 }

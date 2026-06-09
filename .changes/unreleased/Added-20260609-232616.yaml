@@ -1,0 +1,5 @@
+kind: Added
+body: Entites may now be 'locked' and/or 'discrete'; flags added to appropriate commands
+time: 2026-06-09T23:26:16.698641969-04:00
+custom:
+    Issue: ""

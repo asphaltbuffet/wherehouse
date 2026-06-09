@@ -14,7 +14,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func makeNDJSON(events []app.ExportResult) string {
@@ -41,9 +40,7 @@ func oneCreatedEvent() []app.ExportResult {
 func seedOne(t *testing.T, a *app.App) {
 	t.Helper()
 	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
-		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
-		ActorID:     "test",
+		DisplayName: "Garage", ActorID: "test",
 	})
 	require.NoError(t, err)
 }
