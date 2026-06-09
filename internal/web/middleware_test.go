@@ -16,7 +16,7 @@ import (
 func TestCSRF_RejectsPOSTWithoutHxRequest(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()
@@ -34,7 +34,7 @@ func TestCSRF_RejectsPOSTWithoutHxRequest(t *testing.T) {
 func TestCSRF_RejectsCrossOriginPOST(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()
@@ -68,7 +68,7 @@ func TestSearch_NonHTMXRendersFullShell(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Garage", CanonicalName: "garage",
 			FullPathDisplay: "Garage",
-			EntityType:      inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			Status:          inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()
@@ -100,7 +100,7 @@ func TestSearch_RejectsOverlyLongQuery(t *testing.T) {
 func TestLimitBody_RejectsOversizedPOST(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()

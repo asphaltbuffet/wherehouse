@@ -50,7 +50,8 @@ func NewAddCmd(a *app.App) *cobra.Command {
 			return runAdd(cmd, args, a)
 		},
 	}
-	cmd.Flags().StringP("type", "t", "container", "Entity type: place, container, or leaf")
+	cmd.Flags().Bool("locked", false, "Lock the entity (prevent direct reparenting)")
+	cmd.Flags().Bool("discrete", false, "Mark the entity as discrete (no children allowed)")
 	cmd.Flags().Bool("allow-duplicates", false, "Allow duplicate names within the batch")
 	return cmd
 }
@@ -58,12 +59,8 @@ func NewAddCmd(a *app.App) *cobra.Command {
 func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 
-	typeFlag, _ := cmd.Flags().GetString("type")
-	entityType, err := inventory.ParseEntityType(typeFlag)
-	if err != nil {
-		return err
-	}
-
+	locked, _ := cmd.Flags().GetBool("locked")
+	discrete, _ := cmd.Flags().GetBool("discrete")
 	allowDupes, _ := cmd.Flags().GetBool("allow-duplicates")
 
 	if !allowDupes {
@@ -93,7 +90,8 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 		}
 		reqs = append(reqs, app.CreateEntityRequest{
 			DisplayName: name,
-			EntityType:  entityType,
+			Locked:      locked,
+			Discrete:    discrete,
 			ParentPath:  p.Dir().String(),
 			ActorID:     cli.GetActorUserID(ctx),
 		})
@@ -115,7 +113,7 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 	}
 
 	for _, result := range results {
-		out.Success(fmt.Sprintf("Added %q (%s) ID: %s", result.FullPathDisplay, entityType, result.EntityID))
+		out.Success(fmt.Sprintf("Added %q ID: %s", result.FullPathDisplay, result.EntityID))
 	}
 	return nil
 }

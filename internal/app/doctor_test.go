@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
@@ -29,7 +28,7 @@ func TestValidateEventLog_CleanLog(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -44,7 +43,8 @@ func TestValidateEventLog_UnknownEventType(t *testing.T) {
 	ctx := context.Background()
 
 	entityID := "e1"
-	_, err := s.DB().ExecContext(ctx,
+	_, err := s.DB().ExecContext(
+		ctx,
 		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		 VALUES (?, ?, ?, ?, NULL, ?)`,
 		"entity.unknown_future", "2026-01-01T00:00:00Z", "alice", `{}`, &entityID,
@@ -80,7 +80,8 @@ func TestValidateEventLog_MalformedPayload(t *testing.T) {
 			ctx := context.Background()
 
 			entityID := "e1"
-			_, err := s.DB().ExecContext(ctx,
+			_, err := s.DB().ExecContext(
+				ctx,
 				`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 				VALUES (?, ?, ?, ?, NULL, ?)`,
 				tc.eventType, "2026-01-01T00:00:00Z", "alice", `not-json`, &entityID,
@@ -101,7 +102,8 @@ func TestValidateEventLog_MissingEntityID(t *testing.T) {
 	a, s := openTestAppWithStore(t)
 	ctx := context.Background()
 
-	_, err := s.DB().ExecContext(ctx,
+	_, err := s.DB().ExecContext(
+		ctx,
 		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		 VALUES (?, ?, ?, ?, NULL, NULL)`,
 		"entity.renamed", "2026-01-01T00:00:00Z", "alice",
@@ -122,7 +124,8 @@ func TestValidateEventLog_EntityCreated_MissingDisplayName(t *testing.T) {
 	ctx := context.Background()
 
 	entityID := "e1"
-	_, err := s.DB().ExecContext(ctx,
+	_, err := s.DB().ExecContext(
+		ctx,
 		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		 VALUES (?, ?, ?, ?, NULL, ?)`,
 		"entity.created", "2026-01-01T00:00:00Z", "alice",
@@ -137,24 +140,24 @@ func TestValidateEventLog_EntityCreated_MissingDisplayName(t *testing.T) {
 	assert.Contains(t, issues[0].Description, "display_name")
 }
 
-func TestValidateEventLog_EntityCreated_InvalidEntityType(t *testing.T) {
+func TestValidateEventLog_EntityCreated_LegacyEntityType_NoIssue(t *testing.T) {
+	// Old events with entity_type in the payload are tolerated; the field is ignored for validation.
 	a, s := openTestAppWithStore(t)
 	ctx := context.Background()
 
 	entityID := "e1"
-	_, err := s.DB().ExecContext(ctx,
+	_, err := s.DB().ExecContext(
+		ctx,
 		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		 VALUES (?, ?, ?, ?, NULL, ?)`,
 		"entity.created", "2026-01-01T00:00:00Z", "alice",
-		`{"entity_id":"e1","display_name":"Garage","entity_type":"not_a_type"}`, &entityID,
+		`{"entity_id":"e1","display_name":"Garage","entity_type":"place"}`, &entityID,
 	)
 	require.NoError(t, err)
 
 	issues, err := a.ValidateEventLog(ctx)
 	require.NoError(t, err)
-	require.Len(t, issues, 1)
-	assert.Equal(t, app.DoctorKindEventLog, issues[0].Kind)
-	assert.Contains(t, issues[0].Description, "entity_type")
+	assert.Empty(t, issues)
 }
 
 func TestCheckProjectionConsistency_CleanState(t *testing.T) {
@@ -162,7 +165,7 @@ func TestCheckProjectionConsistency_CleanState(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -177,12 +180,13 @@ func TestCheckProjectionConsistency_PhantomRow(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a projection row with no corresponding event log entry.
-	_, err := s.DB().ExecContext(ctx,
-		`INSERT INTO entities_current (entity_id, display_name, canonical_name, entity_type,
+	_, err := s.DB().ExecContext(
+		ctx,
+		`INSERT INTO entities_current (entity_id, display_name, canonical_name, locked, discrete,
 		 parent_id, full_path_display, full_path_canonical, depth, status, status_context,
 		 last_event_id, updated_at)
-		 VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)`,
-		"phantom1", "Ghost", "ghost", "place", "Ghost", "ghost", 0, "ok", 99, "2026-01-01T00:00:00Z",
+		 VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)`,
+		"phantom1", "Ghost", "ghost", 1, 0, "Ghost", "ghost", 0, "ok", 99, "2026-01-01T00:00:00Z",
 	)
 	require.NoError(t, err)
 
@@ -199,7 +203,8 @@ func TestCheckProjectionConsistency_MissingRow(t *testing.T) {
 
 	entityID := "missing1"
 	// Insert a created event with no corresponding projection row.
-	_, err := s.DB().ExecContext(ctx,
+	_, err := s.DB().ExecContext(
+		ctx,
 		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		 VALUES (?, ?, ?, ?, NULL, ?)`,
 		"entity.created", "2026-01-01T00:00:00Z", "alice",
@@ -220,12 +225,13 @@ func TestCheckProjectionConsistency_StaleLastEventID(t *testing.T) {
 
 	// Create entity normally so projection exists.
 	res, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Shelf", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Shelf", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
 	// Append a second event for the same entity (rename-like), bypassing normal app flow.
-	_, err = s.DB().ExecContext(ctx,
+	_, err = s.DB().ExecContext(
+		ctx,
 		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		 VALUES (?, ?, ?, ?, NULL, ?)`,
 		"entity.renamed", "2026-01-01T01:00:00Z", "alice",
@@ -246,12 +252,12 @@ func TestTruncateAndReplay_ReturnsCountAndProjectionIntact(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Shelf", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Shelf", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -285,7 +291,8 @@ func TestValidateEventLog_AllPayloadTypes_Valid(t *testing.T) {
 
 	entityID := "e1"
 	for _, r := range rows {
-		_, err := s.DB().ExecContext(ctx,
+		_, err := s.DB().ExecContext(
+			ctx,
 			`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 			VALUES (?, ?, ?, ?, NULL, ?)`,
 			r.eventType, "2026-01-01T00:00:00Z", "alice", r.payload, &entityID,
@@ -343,7 +350,8 @@ func TestValidateEventLog_OrphanedRemove(t *testing.T) {
 
 			for _, ev := range tc.events {
 				entityID := ev.entityID
-				_, err := s.DB().ExecContext(ctx,
+				_, err := s.DB().ExecContext(
+					ctx,
 					`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 					VALUES (?, ?, ?, ?, NULL, ?)`,
 					ev.eventType, "2026-01-01T00:00:00Z", "alice", payloads[ev.eventType], &entityID,

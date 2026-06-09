@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func TestFindEntities_ExactMatch(t *testing.T) {
@@ -17,7 +16,7 @@ func TestFindEntities_ExactMatch(t *testing.T) {
 
 	for _, name := range []string{"Garage", "Basement", "Kitchen"} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: name, EntityType: inventory.EntityTypePlace, ActorID: "alice",
+			DisplayName: name, ActorID: "alice",
 		})
 		require.NoError(t, err)
 	}

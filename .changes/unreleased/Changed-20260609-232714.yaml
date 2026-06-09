@@ -1,0 +1,5 @@
+kind: Changed
+body: Icons in list output are based on 'locked' instead of type
+time: 2026-06-09T23:27:14.954724723-04:00
+custom:
+    Issue: ""

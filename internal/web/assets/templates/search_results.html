@@ -11,7 +11,7 @@
             hx-swap="innerHTML"
             hx-push-url="true"
             tabindex="0">
-          <span aria-hidden="true">{{entityTypeIcon .Entity.EntityType}}</span>
+          {{if .Entity.Locked}}<span aria-hidden="true">🔒</span>{{end}}
           <div>
             <div class="sr-name">{{.Entity.DisplayName}}</div>
             <div class="sr-path">{{.Entity.FullPathDisplay}}</div>

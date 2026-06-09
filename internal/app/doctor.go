@@ -113,13 +113,6 @@ func validateSingleEvent(
 				Description: fmt.Sprintf("entity.created event %d missing display_name", id),
 			})
 		}
-		if _, typeErr := inventory.ParseEntityType(p.EntityType); typeErr != nil {
-			return append(issues, DoctorIssue{
-				Kind:        DoctorKindEventLog,
-				EventID:     &id,
-				Description: fmt.Sprintf("entity.created event %d invalid entity_type %q", id, p.EntityType),
-			})
-		}
 	}
 
 	return issues

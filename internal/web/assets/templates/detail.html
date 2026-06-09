@@ -12,7 +12,8 @@
                 hx-get="/entities/{{.Entity.EntityID}}/edit/name"
                 hx-target="closest dd" hx-swap="outerHTML">Edit</button>
       </dd>
-      <dt>Type</dt>      <dd>{{.Entity.EntityType}}</dd>
+      {{if .Entity.Locked}}<dt>Locked</dt><dd>yes</dd>{{end}}
+      {{if .Entity.Discrete}}<dt>Discrete</dt><dd>yes</dd>{{end}}
       <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
       <dt>Status</dt>    <dd>{{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}</dd>
       <dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd>
@@ -28,7 +29,7 @@
       </button>
       {{else}}
       <button class="btn-ghost detail-action-btn" disabled aria-disabled="true"
-              title="Leaf items cannot have children">
+              title="Discrete entities cannot have children">
         Add child
       </button>
       {{end}}

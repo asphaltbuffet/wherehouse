@@ -16,11 +16,9 @@ func seedTagEntity(t *testing.T, s *store.Store) string {
 	t.Helper()
 	ctx := context.Background()
 	e := &inventory.Entity{
-		EntityID:          "e-tag-1",
-		DisplayName:       "Wrench",
-		CanonicalName:     "wrench",
-		EntityType:        inventory.EntityTypeLeaf,
-		FullPathDisplay:   "Wrench",
+		EntityID:      "e-tag-1",
+		DisplayName:   "Wrench",
+		CanonicalName: "wrench", FullPathDisplay: "Wrench",
 		FullPathCanonical: "wrench",
 		Depth:             0,
 		Status:            inventory.EntityStatusOk,

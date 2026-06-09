@@ -16,6 +16,10 @@ func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) (Entity
 		return EntityResult{}, fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
 	}
 
+	if entity.Locked && req.Status == inventory.EntityStatusMissing {
+		return EntityResult{}, fmt.Errorf("cannot mark %q as missing: entity is locked", entity.FullPathDisplay)
+	}
+
 	var statusContext *string
 	if req.StatusContext != "" {
 		statusContext = &req.StatusContext

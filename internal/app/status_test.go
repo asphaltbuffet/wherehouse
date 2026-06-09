@@ -16,12 +16,12 @@ func TestChangeStatus_Missing(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Wrench", EntityType: inventory.EntityTypeLeaf, ParentPath: "Garage", ActorID: "alice",
+		DisplayName: "Wrench", ParentPath: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -34,4 +34,21 @@ func TestChangeStatus_Missing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, inventory.EntityStatusMissing, result.Status)
 	assert.Equal(t, "lost at job site", result.StatusContext)
+}
+
+func TestChangeStatus_LockedEntity_MissingForbidden(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage", Locked: true, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+		EntityPath: "Garage",
+		Status:     inventory.EntityStatusMissing,
+		ActorID:    "alice",
+	})
+	assert.ErrorContains(t, err, "locked")
 }

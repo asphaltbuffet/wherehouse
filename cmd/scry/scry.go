@@ -79,11 +79,11 @@ func runScry(cmd *cobra.Command, args []string, a *app.App) error {
 		var b strings.Builder
 		for _, r := range results {
 			if len(args) == 1 && verbose {
-				fmt.Fprintf(&b, "%s  %s  [%s] (%s) dist:%d\n",
-					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.EntityType, r.Entity.Status, r.Distance)
+				fmt.Fprintf(&b, "%s  %s  [%s] dist:%d\n",
+					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.Status, r.Distance)
 			} else {
-				fmt.Fprintf(&b, "%s  %s  [%s] (%s)\n",
-					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.EntityType, r.Entity.Status)
+				fmt.Fprintf(&b, "%s  %s  [%s]\n",
+					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.Status)
 			}
 		}
 		return b.String()

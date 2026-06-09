@@ -30,7 +30,7 @@ func TestHandleEntityDetail_Found(t *testing.T) {
 	}
 	entities := []app.EntityResult{
 		{EntityID: "xyz", DisplayName: "Hammer", CanonicalName: "garage:toolbox:hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities, history: history})
 	defer ts.Close()
@@ -47,7 +47,7 @@ func TestHandleEntityDetail_Found(t *testing.T) {
 	assert.Contains(t, bs, "alice")
 	assert.Contains(t, bs, `class="detail-actions"`)
 	assert.Contains(t, bs, `Mark missing`)
-	assert.Contains(t, bs, `title="Leaf items cannot have children"`)
+	assert.Contains(t, bs, `Add child`)
 	assert.NotContains(t, bs, `hx-get="/entities/xyz/edit/status"`)
 }
 
@@ -162,11 +162,11 @@ func TestHandleEditName_EmptyName(t *testing.T) {
 func TestBuildDetailData_Breadcrumbs(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "g1", DisplayName: "Garage", FullPathDisplay: "Garage",
-			EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 		{EntityID: "t1", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox",
-			EntityType: inventory.EntityTypeContainer, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 		{EntityID: "h1", DisplayName: "Hammer", FullPathDisplay: "Garage:Toolbox:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 	}
 	srv, err := web.New(web.Config{App: &fakeApp{entities: entities}, Bind: "127.0.0.1", Port: 0, Output: io.Discard})
 	require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestBuildDetailData_Breadcrumbs(t *testing.T) {
 func TestHandleToggleMissing_OkToMissing(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()
@@ -204,7 +204,7 @@ func TestHandleToggleMissing_OkToMissing(t *testing.T) {
 func TestHandleToggleMissing_MissingToOk(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusMissing},
+			Status: inventory.EntityStatusMissing},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()
@@ -218,10 +218,11 @@ func TestHandleToggleMissing_MissingToOk(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func TestHandleToggleMissing_PlaceForbidden(t *testing.T) {
+func TestHandleToggleMissing_LockedEntity_Forbidden(t *testing.T) {
+	// locked entities cannot be marked missing — their location is fixed by assertion.
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Garage", FullPathDisplay: "Garage",
-			EntityType: inventory.EntityTypePlace, Status: inventory.EntityStatusOk},
+			Locked: true, Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()
@@ -251,7 +252,7 @@ func TestHandleToggleMissing_NotFound(t *testing.T) {
 func TestHandleToggleMissing_BorrowedForbidden(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusBorrowed},
+			Status: inventory.EntityStatusBorrowed},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities})
 	defer ts.Close()
@@ -268,7 +269,7 @@ func TestHandleToggleMissing_BorrowedForbidden(t *testing.T) {
 func TestHandleToggleMissing_AppError(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			EntityType: inventory.EntityTypeLeaf, Status: inventory.EntityStatusOk},
+			Status: inventory.EntityStatusOk},
 	}
 	ts := newTestServer(t, &fakeApp{entities: entities, statusErr: errTest})
 	defer ts.Close()

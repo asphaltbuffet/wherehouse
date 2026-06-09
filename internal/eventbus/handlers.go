@@ -17,15 +17,15 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 		return fmt.Errorf("handleEntityCreated: unmarshal: %w", err)
 	}
 
-	entityType, err := inventory.ParseEntityType(p.EntityType)
-	if err != nil {
-		return fmt.Errorf("handleEntityCreated: %w", err)
+	locked := p.Locked
+	discrete := p.Discrete
+	// Legacy migration: old events carry entity_type instead of locked/discrete flags.
+	// "place" → locked=true; "leaf" → discrete=true; "container" maps to zero values — no explicit case needed.
+	if p.LegacyEntityType == "place" {
+		locked = true
 	}
-
-	if entityType == inventory.EntityTypePlace && p.ParentID != nil {
-		if err = validatePlaceParentTx(ctx, tx, *p.ParentID); err != nil {
-			return fmt.Errorf("handleEntityCreated: %w", err)
-		}
+	if p.LegacyEntityType == "leaf" {
+		discrete = true
 	}
 
 	canonicalName := inventory.CanonicalizeString(p.DisplayName)
@@ -44,7 +44,8 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 		EntityID:          p.EntityID,
 		DisplayName:       p.DisplayName,
 		CanonicalName:     canonicalName,
-		EntityType:        entityType,
+		Locked:            locked,
+		Discrete:          discrete,
 		ParentID:          p.ParentID,
 		FullPathDisplay:   fullPathDisplay,
 		FullPathCanonical: fullPathCanonical,
@@ -310,6 +311,66 @@ func (b *Bus) handleEntityTagRemoved(ctx context.Context, tx store.Tx, ev *inven
 		return fmt.Errorf("handleEntityTagRemoved: unmarshal: %w", err)
 	}
 	return b.store.DeleteTagTx(ctx, tx, p.EntityID, p.Tag)
+}
+
+func (b *Bus) handleEntityLocked(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityLockedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityLocked: unmarshal: %w", err)
+	}
+	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return fmt.Errorf("handleEntityLocked: get entity: %w", err)
+	}
+	entity.Locked = true
+	entity.LastEventID = ev.EventID
+	entity.UpdatedAt = time.Now().UTC()
+	return b.store.UpdateEntityTx(ctx, tx, entity)
+}
+
+func (b *Bus) handleEntityUnlocked(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityUnlockedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityUnlocked: unmarshal: %w", err)
+	}
+	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return fmt.Errorf("handleEntityUnlocked: get entity: %w", err)
+	}
+	entity.Locked = false
+	entity.LastEventID = ev.EventID
+	entity.UpdatedAt = time.Now().UTC()
+	return b.store.UpdateEntityTx(ctx, tx, entity)
+}
+
+func (b *Bus) handleEntityDiscreteSet(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityDiscreteSetPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityDiscreteSet: unmarshal: %w", err)
+	}
+	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return fmt.Errorf("handleEntityDiscreteSet: get entity: %w", err)
+	}
+	entity.Discrete = true
+	entity.LastEventID = ev.EventID
+	entity.UpdatedAt = time.Now().UTC()
+	return b.store.UpdateEntityTx(ctx, tx, entity)
+}
+
+func (b *Bus) handleEntityDiscreteCleared(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityDiscreteClearedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityDiscreteCleared: unmarshal: %w", err)
+	}
+	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	if err != nil {
+		return fmt.Errorf("handleEntityDiscreteCleared: get entity: %w", err)
+	}
+	entity.Discrete = false
+	entity.LastEventID = ev.EventID
+	entity.UpdatedAt = time.Now().UTC()
+	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
 // propagatePathChangesTx emits entity.path_changed derived events for all descendants

@@ -4,8 +4,12 @@ package eventbus
 type EntityCreatedPayload struct {
 	EntityID    string  `json:"entity_id"`
 	DisplayName string  `json:"display_name"`
-	EntityType  string  `json:"entity_type"`
+	Locked      bool    `json:"locked"`
+	Discrete    bool    `json:"discrete"`
 	ParentID    *string `json:"parent_id,omitempty"`
+	// LegacyEntityType is only populated when replaying old events that predate ADR 0018.
+	// It is used to migrate place entities to locked=true during projection rebuild.
+	LegacyEntityType string `json:"entity_type,omitempty"`
 }
 
 // EntityRenamedPayload is the JSON payload for an EntityRenamedEvent.
@@ -50,4 +54,24 @@ type EntityTagAddedPayload struct {
 type EntityTagRemovedPayload struct {
 	EntityID string `json:"entity_id"`
 	Tag      string `json:"tag"`
+}
+
+// EntityLockedPayload is the JSON payload for an EntityLockedEvent.
+type EntityLockedPayload struct {
+	EntityID string `json:"entity_id"`
+}
+
+// EntityUnlockedPayload is the JSON payload for an EntityUnlockedEvent.
+type EntityUnlockedPayload struct {
+	EntityID string `json:"entity_id"`
+}
+
+// EntityDiscreteSetPayload is the JSON payload for an EntityDiscreteSetEvent.
+type EntityDiscreteSetPayload struct {
+	EntityID string `json:"entity_id"`
+}
+
+// EntityDiscreteClearedPayload is the JSON payload for an EntityDiscreteClearedEvent.
+type EntityDiscreteClearedPayload struct {
+	EntityID string `json:"entity_id"`
 }

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
@@ -67,12 +66,6 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 		return
 	}
 
-	entityType, err := inventory.ParseEntityType(r.FormValue("entity_type"))
-	if err != nil {
-		http.Error(w, "invalid entity_type", http.StatusBadRequest)
-		return
-	}
-
 	actor := strings.TrimSpace(r.FormValue("user"))
 	if actor == "" {
 		actor = "webui"
@@ -80,7 +73,6 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 
 	created, err := s.cfg.App.CreateEntity(r.Context(), app.CreateEntityRequest{
 		DisplayName: displayName,
-		EntityType:  entityType,
 		ParentPath:  parentPath,
 		ActorID:     actor,
 	})

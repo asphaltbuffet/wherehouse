@@ -1,0 +1,5 @@
+kind: Removed
+body: Entities no longer have types; '--type' was removed from associated commands
+time: 2026-06-09T23:25:24.250333886-04:00
+custom:
+    Issue: ""

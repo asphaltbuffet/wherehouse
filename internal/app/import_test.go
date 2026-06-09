@@ -190,23 +190,21 @@ func seedReparentScenario(t *testing.T) (*app.App, []app.ExportResult) {
 
 	gp1, err := a.CreateEntity(
 		ctx,
-		app.CreateEntityRequest{DisplayName: "GP1", EntityType: inventory.EntityTypePlace, ActorID: "alice"},
+		app.CreateEntityRequest{DisplayName: "GP1", ActorID: "alice"},
 	)
 	require.NoError(t, err)
 
 	gp2, err := a.CreateEntity(
 		ctx,
-		app.CreateEntityRequest{DisplayName: "GP2", EntityType: inventory.EntityTypePlace, ActorID: "alice"},
+		app.CreateEntityRequest{DisplayName: "GP2", ActorID: "alice"},
 	)
 	require.NoError(t, err)
 
 	parent, err := a.CreateEntity(
 		ctx,
 		app.CreateEntityRequest{
-			DisplayName: "Parent",
-			EntityType:  inventory.EntityTypeContainer,
-			ActorID:     "alice",
-			ParentPath:  gp1.FullPathDisplay,
+			DisplayName: "Parent", ActorID: "alice",
+			ParentPath: gp1.FullPathDisplay,
 		},
 	)
 	require.NoError(t, err)
@@ -214,10 +212,8 @@ func seedReparentScenario(t *testing.T) (*app.App, []app.ExportResult) {
 	_, err = a.CreateEntity(
 		ctx,
 		app.CreateEntityRequest{
-			DisplayName: "Child",
-			EntityType:  inventory.EntityTypeContainer,
-			ActorID:     "alice",
-			ParentPath:  parent.FullPathDisplay,
+			DisplayName: "Child", ActorID: "alice",
+			ParentPath: parent.FullPathDisplay,
 		},
 	)
 	require.NoError(t, err)

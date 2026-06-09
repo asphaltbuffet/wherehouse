@@ -12,7 +12,8 @@ type EntityResult struct {
 	EntityID        string
 	DisplayName     string
 	CanonicalName   string
-	EntityType      inventory.EntityType
+	Locked          bool
+	Discrete        bool
 	FullPathDisplay string
 	Status          inventory.EntityStatus
 	StatusContext   string
@@ -45,7 +46,8 @@ func entityToResult(e *inventory.Entity, tags []string) EntityResult {
 		EntityID:        e.EntityID,
 		DisplayName:     e.DisplayName,
 		CanonicalName:   e.CanonicalName,
-		EntityType:      e.EntityType,
+		Locked:          e.Locked,
+		Discrete:        e.Discrete,
 		FullPathDisplay: e.FullPathDisplay,
 		Status:          e.Status,
 		StatusContext:   statusCtx,

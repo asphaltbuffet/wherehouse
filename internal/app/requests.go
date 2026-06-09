@@ -5,7 +5,8 @@ import "github.com/asphaltbuffet/wherehouse/internal/inventory"
 // CreateEntityRequest is the input for creating a new entity.
 type CreateEntityRequest struct {
 	DisplayName string
-	EntityType  inventory.EntityType
+	Locked      bool
+	Discrete    bool
 	// ParentPath is a colon-separated path, e.g. "Garage:Toolbox". Empty means root-level.
 	ParentPath string
 	ActorID    string

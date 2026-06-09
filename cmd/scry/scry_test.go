@@ -10,15 +10,12 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 func TestRunScry_NoArg_ListsAll(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
-		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
-		ActorID:     "test",
+		DisplayName: "Garage", ActorID: "test",
 	})
 	require.NoError(t, err)
 
@@ -34,16 +31,12 @@ func TestRunScry_WithArg_CallsFindEntities(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
-		ActorID:     "test",
+		DisplayName: "Garage", ActorID: "test",
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Toolbox",
-		EntityType:  inventory.EntityTypeContainer,
-		ParentPath:  "Garage",
-		ActorID:     "test",
+		DisplayName: "Toolbox", ParentPath: "Garage",
+		ActorID: "test",
 	})
 	require.NoError(t, err)
 
@@ -70,9 +63,7 @@ func TestRunScry_WithArg_Verbose_ShowsDistance(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
-		ActorID:     "test",
+		DisplayName: "Garage", ActorID: "test",
 	})
 	require.NoError(t, err)
 
@@ -89,9 +80,7 @@ func TestRunScry_NoArg_Verbose_NoDistance(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage",
-		EntityType:  inventory.EntityTypePlace,
-		ActorID:     "test",
+		DisplayName: "Garage", ActorID: "test",
 	})
 	require.NoError(t, err)
 

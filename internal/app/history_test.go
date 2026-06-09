@@ -16,7 +16,7 @@ func TestGetHistory_ByPath(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Garage", EntityType: inventory.EntityTypePlace, ActorID: "alice",
+		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 

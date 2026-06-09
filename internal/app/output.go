@@ -11,7 +11,8 @@ import "github.com/asphaltbuffet/wherehouse/internal/inventory"
 type ListItem struct {
 	EntityID string                 `json:"entity_id"`
 	Path     string                 `json:"path"`
-	Type     inventory.EntityType   `json:"type"`
+	Locked   bool                   `json:"locked"`
+	Discrete bool                   `json:"discrete"`
 	Status   inventory.EntityStatus `json:"status"`
 	Tags     []string               `json:"tags"`
 }
@@ -27,7 +28,8 @@ func ToListItems(results []EntityResult) []ListItem {
 		items[i] = ListItem{
 			EntityID: e.EntityID,
 			Path:     e.FullPathDisplay,
-			Type:     e.EntityType,
+			Locked:   e.Locked,
+			Discrete: e.Discrete,
 			Status:   e.Status,
 			Tags:     tags,
 		}
@@ -41,9 +43,10 @@ func ToListItems(results []EntityResult) []ListItem {
 type ScryItem struct {
 	EntityID string                 `json:"entity_id"`
 	Path     string                 `json:"path"`
-	Type     inventory.EntityType   `json:"type"`
+	Locked   bool                   `json:"locked"`
+	Discrete bool                   `json:"discrete"`
 	Status   inventory.EntityStatus `json:"status"`
-	Distance *int                   `json:"distance"`
+	Distance *int                   `json:"distance,omitempty"`
 }
 
 // ToScryItems projects entity results into the `scry` output shape. Callers
@@ -60,7 +63,8 @@ func ToScryItems(results []FindResult, searched bool) []ScryItem {
 		items[i] = ScryItem{
 			EntityID: r.Entity.EntityID,
 			Path:     r.Entity.FullPathDisplay,
-			Type:     r.Entity.EntityType,
+			Locked:   r.Entity.Locked,
+			Discrete: r.Entity.Discrete,
 			Status:   r.Entity.Status,
 			Distance: dist,
 		}

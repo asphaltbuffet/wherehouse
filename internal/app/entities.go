@@ -62,12 +62,19 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 		return EntityResult{}, fmt.Errorf("resolve entity path %q: %w", req.EntityPath, err)
 	}
 
+	if entity.Locked {
+		return EntityResult{}, fmt.Errorf("cannot move %q: entity is locked", entity.FullPathDisplay)
+	}
+
 	var newParentID *string
 	if req.NewParentPath != "" {
 		var parentEntity *inventory.Entity
 		parentEntity, err = a.resolveEntityPath(ctx, req.NewParentPath)
 		if err != nil {
 			return EntityResult{}, fmt.Errorf("resolve new parent path %q: %w", req.NewParentPath, err)
+		}
+		if parentEntity.Discrete {
+			return EntityResult{}, fmt.Errorf("cannot move into %q: entity is discrete", parentEntity.FullPathDisplay)
 		}
 		newParentID = &parentEntity.EntityID
 	}
@@ -284,6 +291,9 @@ func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntit
 		if err != nil {
 			return EntityResult{}, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
 		}
+		if parent.Discrete {
+			return EntityResult{}, fmt.Errorf("cannot add child to %q: entity is discrete", parent.FullPathDisplay)
+		}
 		parentID = &parent.EntityID
 	}
 
@@ -295,7 +305,8 @@ func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntit
 	payload := eventbus.EntityCreatedPayload{
 		EntityID:    entityID,
 		DisplayName: req.DisplayName,
-		EntityType:  req.EntityType.String(),
+		Locked:      req.Locked,
+		Discrete:    req.Discrete,
 		ParentID:    parentID,
 	}
 
