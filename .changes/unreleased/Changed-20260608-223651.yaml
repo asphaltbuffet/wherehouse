@@ -1,0 +1,5 @@
+kind: Changed
+body: '''list'' output is now formatted as a tree instead of a flat list'
+time: 2026-06-08T22:36:51.92567257-04:00
+custom:
+    Issue: '#233'

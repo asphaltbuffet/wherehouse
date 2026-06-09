@@ -2,7 +2,6 @@ package listcmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -52,6 +51,7 @@ Examples:
 	cmd.Flags().String("under", "", "Restrict to entities under this path (e.g. Garage:Toolbox)")
 	cmd.Flags().String("type", "", "Filter by type: place, container, or leaf")
 	cmd.Flags().String("status", "", "Filter by status: ok, borrowed, missing, loaned, removed")
+	cmd.Flags().BoolP("verbose", "v", false, "Show entity ID and tags for each entity")
 	return cmd
 }
 
@@ -60,6 +60,7 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	underPath, _ := cmd.Flags().GetString("under")
 	typeFilter, _ := cmd.Flags().GetString("type")
 	statusFilter, _ := cmd.Flags().GetString("status")
+	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	var underParsed entitypath.Path
 	if underPath != "" {
@@ -76,7 +77,7 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 		return fmt.Errorf("list failed: %w", err)
 	}
 
-	entities := filterEntities(all, underParsed, typeFilter, statusFilter)
+	matched := filterEntities(all, underParsed, typeFilter, statusFilter)
 
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
@@ -84,13 +85,8 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
-	return out.Render(app.ToListItems(entities), func() string {
-		var b strings.Builder
-		for _, e := range entities {
-			fmt.Fprintf(&b, "%s  %s  [%s] (%s)\n",
-				e.EntityID, e.FullPathDisplay, e.EntityType, e.Status)
-		}
-		return b.String()
+	return out.Render(app.ToListItems(matched), func() string {
+		return buildTree(all, matched, verbose)
 	})
 }
 
@@ -112,7 +108,7 @@ func filterEntities(all []app.EntityResult, under entitypath.Path, typeFilter, s
 				continue
 			}
 
-			if !under.IsAncestor(ep) {
+			if !ep.HasPrefix(under) {
 				continue
 			}
 		}
