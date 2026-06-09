@@ -174,7 +174,7 @@ func TestToHistoryItems_JSONContract(t *testing.T) {
 	}]`, string(b))
 }
 
-func TestToAddOutput_JSONContract(t *testing.T) {
+func TestToAddOutputs_JSONContract(t *testing.T) {
 	result := app.EntityResult{
 		EntityID:        "add1234567",
 		DisplayName:     "Wrench",
@@ -184,14 +184,14 @@ func TestToAddOutput_JSONContract(t *testing.T) {
 		Status:          inventory.EntityStatusOk,
 	}
 
-	b, err := json.Marshal(app.ToAddOutput(result))
+	b, err := json.Marshal(app.ToAddOutputs([]app.EntityResult{result}))
 	require.NoError(t, err)
 
-	// Pins the current `wherehouse add --json` shape.
-	assert.JSONEq(t, `{
+	// Pins the current `wherehouse add --json` shape (always an array).
+	assert.JSONEq(t, `[{
 		"entity_id": "add1234567",
 		"path": "Garage:Toolbox:Wrench"
-	}`, string(b))
+	}]`, string(b))
 }
 
 func TestToMoveOutput_JSONContract(t *testing.T) {

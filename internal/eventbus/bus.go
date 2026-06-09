@@ -90,6 +90,15 @@ func (b *Bus) Dispatch(
 	payload json.RawMessage,
 	note *string,
 ) (int64, error) {
+	return b.writeEvent(ctx, b.buildEvent(eventType, actorUserID, payload, note), b.applyEventTx)
+}
+
+func (b *Bus) buildEvent(
+	eventType inventory.EventType,
+	actorUserID string,
+	payload json.RawMessage,
+	note *string,
+) *inventory.Event {
 	var entityID *string
 	var m map[string]any
 	if json.Unmarshal(payload, &m) == nil {
@@ -97,8 +106,7 @@ func (b *Bus) Dispatch(
 			entityID = &id
 		}
 	}
-
-	ev := &inventory.Event{
+	return &inventory.Event{
 		EventType:    eventType,
 		TimestampUTC: time.Now().UTC().Format(time.RFC3339),
 		ActorUserID:  actorUserID,
@@ -106,7 +114,19 @@ func (b *Bus) Dispatch(
 		Note:         note,
 		EntityID:     entityID,
 	}
-	return b.writeEvent(ctx, ev, b.applyEventTx)
+}
+
+// DispatchInTx writes and applies a single event within a caller-owned transaction.
+func (b *Bus) DispatchInTx(
+	ctx context.Context,
+	tx store.Tx,
+	eventType inventory.EventType,
+	actorUserID string,
+	payload json.RawMessage,
+	note *string,
+) (int64, error) {
+	ev := b.buildEvent(eventType, actorUserID, payload, note)
+	return b.writeEventInTx(ctx, tx, ev, b.applyEventTx)
 }
 
 // ReplayEvent inserts a fully-populated event using its original TimestampUTC
@@ -157,29 +177,38 @@ func (b *Bus) writeEvent(
 ) (int64, error) {
 	var eventID int64
 	err := b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		const q = `
-            INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
-            VALUES (?, ?, ?, ?, ?, ?)`
-		result, err := tx.ExecContext(ctx, q,
-			ev.EventType, ev.TimestampUTC, ev.ActorUserID,
-			string(ev.Payload), ev.Note, ev.EntityID)
-		if err != nil {
-			return fmt.Errorf("insert event: %w", err)
-		}
-		id, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("get event ID: %w", err)
-		}
-		eventID = id
-
-		inserted := *ev
-		inserted.EventID = eventID
-		return applyFn(ctx, tx, &inserted)
+		var err error
+		eventID, err = b.writeEventInTx(ctx, tx, ev, applyFn)
+		return err
 	})
 	if err != nil {
 		return 0, err
 	}
 	return eventID, nil
+}
+
+func (b *Bus) writeEventInTx(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+	applyFn func(context.Context, store.Tx, *inventory.Event) error,
+) (int64, error) {
+	const q = `
+            INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+            VALUES (?, ?, ?, ?, ?, ?)`
+	result, err := tx.ExecContext(ctx, q,
+		ev.EventType, ev.TimestampUTC, ev.ActorUserID,
+		string(ev.Payload), ev.Note, ev.EntityID)
+	if err != nil {
+		return 0, fmt.Errorf("insert event: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("get event ID: %w", err)
+	}
+	inserted := *ev
+	inserted.EventID = id
+	return id, applyFn(ctx, tx, &inserted)
 }
 
 func (b *Bus) applyEventTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
