@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
@@ -14,47 +15,11 @@ import (
 
 // CreateEntity creates a new entity, resolving ParentPath to a parent entity ID if provided.
 func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (EntityResult, error) {
-	var parentID *string
-
-	if req.ParentPath != "" {
-		parent, err := a.resolveEntityPath(ctx, req.ParentPath)
-		if err != nil {
-			return EntityResult{}, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
-		}
-		parentID = &parent.EntityID
-	}
-
-	entityID, err := nanoid.New()
+	results, err := a.CreateEntities(ctx, []CreateEntityRequest{req})
 	if err != nil {
-		return EntityResult{}, fmt.Errorf("generate entity ID: %w", err)
+		return EntityResult{}, err
 	}
-	payload := eventbus.EntityCreatedPayload{
-		EntityID:    entityID,
-		DisplayName: req.DisplayName,
-		EntityType:  req.EntityType.String(),
-		ParentID:    parentID,
-	}
-
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("marshal payload: %w", err)
-	}
-
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
-	if _, err = a.bus.Dispatch(ctx, inventory.EntityCreatedEvent, req.ActorID, raw, note); err != nil {
-		return EntityResult{}, fmt.Errorf("create entity: %w", err)
-	}
-
-	entity, err := a.store.GetEntity(ctx, entityID)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("get created entity: %w", err)
-	}
-
-	return a.entityWithTags(ctx, entity)
+	return results[0], nil
 }
 
 // RenameEntity renames an entity resolved by its current path.
@@ -235,6 +200,21 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 // resolveEntityPath looks up an entity by its colon-separated display path.
 // Returns store.ErrNotFound if no match exists.
 func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.Entity, error) {
+	return a.resolveEntityPathWith(path, func(canonical string) ([]*inventory.Entity, error) {
+		return a.store.GetEntitiesByCanonicalName(ctx, canonical)
+	})
+}
+
+func (a *App) resolveEntityPathTx(ctx context.Context, tx store.Tx, path string) (*inventory.Entity, error) {
+	return a.resolveEntityPathWith(path, func(canonical string) ([]*inventory.Entity, error) {
+		return a.store.GetEntitiesByCanonicalNameTx(ctx, tx, canonical)
+	})
+}
+
+func (a *App) resolveEntityPathWith(
+	path string,
+	fetch func(canonical string) ([]*inventory.Entity, error),
+) (*inventory.Entity, error) {
 	p, err := entitypath.Parse(path)
 	if err != nil {
 		return nil, fmt.Errorf("parse path %q: %w", path, err)
@@ -257,7 +237,7 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 	canonicalPath := p2.String()
 	canonicalLeaf := canonicalSegments[len(canonicalSegments)-1]
 
-	candidates, err := a.store.GetEntitiesByCanonicalName(ctx, canonicalLeaf)
+	candidates, err := fetch(canonicalLeaf)
 	if err != nil {
 		return nil, fmt.Errorf("lookup %q: %w", canonicalLeaf, err)
 	}
@@ -269,4 +249,74 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 	}
 
 	return nil, fmt.Errorf("%w: %q", store.ErrNotFound, path)
+}
+
+// CreateEntities creates all requested entities in a single transaction; all succeed or all fail.
+func (a *App) CreateEntities(ctx context.Context, reqs []CreateEntityRequest) ([]EntityResult, error) {
+	if len(reqs) == 0 {
+		return nil, errors.New("CreateEntities: at least one request required")
+	}
+
+	results := make([]EntityResult, len(reqs))
+
+	err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		for i, req := range reqs {
+			result, err := a.createEntityInTx(ctx, tx, req)
+			if err != nil {
+				return err
+			}
+			results[i] = result
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntityRequest) (EntityResult, error) {
+	var parentID *string
+
+	if req.ParentPath != "" {
+		parent, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
+		if err != nil {
+			return EntityResult{}, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
+		}
+		parentID = &parent.EntityID
+	}
+
+	entityID, err := nanoid.New()
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("generate entity ID: %w", err)
+	}
+
+	payload := eventbus.EntityCreatedPayload{
+		EntityID:    entityID,
+		DisplayName: req.DisplayName,
+		EntityType:  req.EntityType.String(),
+		ParentID:    parentID,
+	}
+
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("marshal payload: %w", err)
+	}
+
+	var note *string
+	if req.Note != "" {
+		note = &req.Note
+	}
+
+	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityCreatedEvent, req.ActorID, raw, note); err != nil {
+		return EntityResult{}, fmt.Errorf("create entity %q: %w", req.DisplayName, err)
+	}
+
+	entity, err := a.store.GetEntityTx(ctx, tx, entityID)
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("get created entity %q: %w", entityID, err)
+	}
+
+	return entityToResult(entity, nil), nil
 }

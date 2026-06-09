@@ -15,16 +15,17 @@ import (
 // NewDefaultAddCmd returns the add command wired to a real database opened from context config.
 func NewDefaultAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add <name>",
-		Short: "Add an entity to the inventory",
-		Long: `Add a new entity. By default, entities are containers (movable, can hold things).
+		Use:   "add <path> [path...]",
+		Short: "Add one or more entities to the inventory",
+		Long: `Add one or more entities. By default, entities are containers (movable, can hold things).
 Use --type place for immovable locations like rooms or shelves.
 
 Examples:
-  wherehouse add "Toolbox"                           # Add a container
-  wherehouse add "Garage" --type place               # Add a place
-  wherehouse add "Garage:Toolbox:Wrench"             # Add nested by path`,
-		Args: cobra.ExactArgs(1),
+  wherehouse add "Toolbox"                                         # Add a container
+  wherehouse add "Garage" --type place                             # Add a place
+  wherehouse add "Garage:Toolbox:Wrench"                           # Add nested by path
+  wherehouse add "Basement:Game Shelf:"{Sorry,Monopoly,Chess}      # Add multiple via shell expansion`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, a, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {
@@ -35,30 +36,27 @@ Examples:
 		},
 	}
 	cmd.Flags().StringP("type", "t", "container", "Entity type: place, container, or leaf")
+	cmd.Flags().Bool("allow-duplicates", false, "Allow duplicate names within the batch")
 	return cmd
 }
 
 // NewAddCmd returns the add command wired to the provided addApp (for testing).
 func NewAddCmd(a *app.App) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add <name>",
-		Short: "Add an entity to the inventory",
-		Args:  cobra.ExactArgs(1),
+		Use:   "add <path> [path...]",
+		Short: "Add one or more entities to the inventory",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAdd(cmd, args, a)
 		},
 	}
 	cmd.Flags().StringP("type", "t", "container", "Entity type: place, container, or leaf")
+	cmd.Flags().Bool("allow-duplicates", false, "Allow duplicate names within the batch")
 	return cmd
 }
 
 func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
-
-	p, err := entitypath.Parse(args[0])
-	if err != nil {
-		return fmt.Errorf("failed to add %q: %w", args[0], err)
-	}
 
 	typeFlag, _ := cmd.Flags().GetString("type")
 	entityType, err := inventory.ParseEntityType(typeFlag)
@@ -66,18 +64,42 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 		return err
 	}
 
-	name := p.Base()
-	if name == "" {
-		return fmt.Errorf("cannot determine entity name from %q", args[0])
-	}
-	parentPath := p.Dir().String()
+	allowDupes, _ := cmd.Flags().GetBool("allow-duplicates")
 
-	result, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: name,
-		EntityType:  entityType,
-		ParentPath:  parentPath,
-		ActorID:     cli.GetActorUserID(ctx),
-	})
+	if !allowDupes {
+		seen := make(map[string]struct{}, len(args))
+		for _, arg := range args {
+			p, parseErr := entitypath.Parse(arg)
+			if parseErr != nil {
+				return fmt.Errorf("failed to add %q: %w", arg, parseErr)
+			}
+			key := inventory.CanonicalizeString(p.Dir().String()) + ":" + inventory.CanonicalizeString(p.Base())
+			if _, exists := seen[key]; exists {
+				return fmt.Errorf("duplicate name %q in batch (use --allow-duplicates to override)", p.Base())
+			}
+			seen[key] = struct{}{}
+		}
+	}
+
+	reqs := make([]app.CreateEntityRequest, 0, len(args))
+	for _, arg := range args {
+		p, parseErr := entitypath.Parse(arg)
+		if parseErr != nil {
+			return fmt.Errorf("failed to add %q: %w", arg, parseErr)
+		}
+		name := p.Base()
+		if name == "" {
+			return fmt.Errorf("cannot determine entity name from %q", arg)
+		}
+		reqs = append(reqs, app.CreateEntityRequest{
+			DisplayName: name,
+			EntityType:  entityType,
+			ParentPath:  p.Dir().String(),
+			ActorID:     cli.GetActorUserID(ctx),
+		})
+	}
+
+	results, err := a.CreateEntities(ctx, reqs)
 	if err != nil {
 		return err
 	}
@@ -89,10 +111,11 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 
 	if out.IsJSON() {
-		return out.JSON(app.ToAddOutput(result))
+		return out.JSON(app.ToAddOutputs(results))
 	}
 
-	out.Success(fmt.Sprintf("Added %q (%s) at path %s", p, entityType, result.FullPathDisplay))
-	out.KeyValue("ID", result.EntityID)
+	for _, result := range results {
+		out.Success(fmt.Sprintf("Added %q (%s) ID: %s", result.FullPathDisplay, entityType, result.EntityID))
+	}
 	return nil
 }

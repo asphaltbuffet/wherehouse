@@ -97,12 +97,16 @@ type AddOutput struct {
 	Path     string `json:"path"`
 }
 
-// ToAddOutput projects a created entity result into the `add` output shape.
-func ToAddOutput(result EntityResult) AddOutput {
-	return AddOutput{
-		EntityID: result.EntityID,
-		Path:     result.FullPathDisplay,
+// ToAddOutputs projects created entity results into the `add` output shape.
+func ToAddOutputs(results []EntityResult) []AddOutput {
+	out := make([]AddOutput, len(results))
+	for i, r := range results {
+		out[i] = AddOutput{
+			EntityID: r.EntityID,
+			Path:     r.FullPathDisplay,
+		}
 	}
+	return out
 }
 
 // MoveOutput is the `move` command's JSON output shape. It reports the entity's

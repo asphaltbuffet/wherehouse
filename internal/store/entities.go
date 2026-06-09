@@ -96,6 +96,25 @@ func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string
 	return scanEntities(rows)
 }
 
+// GetEntitiesByCanonicalNameTx queries entities_current by canonical name within an existing transaction.
+func (s *Store) GetEntitiesByCanonicalNameTx(
+	ctx context.Context, tx Tx, canonical string,
+) ([]*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, entity_type,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE canonical_name = ? AND status != 'removed'
+		ORDER BY full_path_canonical ASC, entity_id ASC`
+
+	rows, err := tx.QueryContext(ctx, query, canonical)
+	if err != nil {
+		return nil, fmt.Errorf("query by canonical name %q: %w", canonical, err)
+	}
+	defer rows.Close()
+	return scanEntities(rows)
+}
+
 // ChildRow is the result of GetChildren: the entity plus whether it has non-removed children of its own.
 type ChildRow struct {
 	Entity      *inventory.Entity
