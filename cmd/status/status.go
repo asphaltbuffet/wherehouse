@@ -62,12 +62,14 @@ func runStatus(cmd *cobra.Command, args []string, a *app.App) error {
 		return err
 	}
 
-	if err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	result, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
 		EntityPath:    path,
 		Status:        newStatus,
 		StatusContext: noteFlag,
+		Note:          noteFlag,
 		ActorID:       cli.GetActorUserID(ctx),
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to update status of %q: %w", path, err)
 	}
 
@@ -77,11 +79,11 @@ func runStatus(cmd *cobra.Command, args []string, a *app.App) error {
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 	if out.IsJSON() {
-		return out.JSON(app.ToStatusOutput(path, newStatus, noteFlag))
+		return out.JSON(app.ToStatusOutput(result))
 	}
-	msg := fmt.Sprintf("Status of %q set to %s", path, newStatus)
-	if noteFlag != "" {
-		msg += fmt.Sprintf(" (%s)", noteFlag)
+	msg := fmt.Sprintf("Status of %q set to %s", result.FullPathDisplay, result.Status)
+	if result.StatusContext != "" {
+		msg += fmt.Sprintf(" (%s)", result.StatusContext)
 	}
 	out.Success(msg)
 	return nil

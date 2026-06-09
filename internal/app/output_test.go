@@ -218,7 +218,11 @@ func TestToMoveOutput_JSONContract(t *testing.T) {
 }
 
 func TestToStatusOutput_WithNote(t *testing.T) {
-	b, err := json.Marshal(app.ToStatusOutput("Garage:Bike", inventory.EntityStatusLoaned, "to Alex"))
+	b, err := json.Marshal(app.ToStatusOutput(app.EntityResult{
+		FullPathDisplay: "Garage:Bike",
+		Status:          inventory.EntityStatusLoaned,
+		StatusContext:   "to Alex",
+	}))
 	require.NoError(t, err)
 
 	assert.JSONEq(t, `{
@@ -229,7 +233,10 @@ func TestToStatusOutput_WithNote(t *testing.T) {
 }
 
 func TestToStatusOutput_NoNoteOmitsContext(t *testing.T) {
-	b, err := json.Marshal(app.ToStatusOutput("Garage:Bike", inventory.EntityStatusMissing, ""))
+	b, err := json.Marshal(app.ToStatusOutput(app.EntityResult{
+		FullPathDisplay: "Garage:Bike",
+		Status:          inventory.EntityStatusMissing,
+	}))
 	require.NoError(t, err)
 
 	// status_context is omitted entirely when there is no note.

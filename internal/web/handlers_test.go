@@ -70,8 +70,8 @@ func (f *fakeApp) RenameEntity(_ context.Context, _ app.RenameEntityRequest) (ap
 	return f.renameResult, f.renameErr
 }
 
-func (f *fakeApp) ChangeStatus(_ context.Context, _ app.ChangeStatusRequest) error {
-	return f.statusErr
+func (f *fakeApp) ChangeStatus(_ context.Context, _ app.ChangeStatusRequest) (app.EntityResult, error) {
+	return app.EntityResult{}, f.statusErr
 }
 
 func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {

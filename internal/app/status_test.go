@@ -25,15 +25,12 @@ func TestChangeStatus_Missing(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	result, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
 		EntityPath:    "Garage:Wrench",
 		Status:        inventory.EntityStatusMissing,
 		StatusContext: "lost at job site",
 		ActorID:       "alice",
 	})
-	require.NoError(t, err)
-
-	result, err := a.GetEntityByPath(ctx, "Garage:Wrench")
 	require.NoError(t, err)
 	assert.Equal(t, inventory.EntityStatusMissing, result.Status)
 	assert.Equal(t, "lost at job site", result.StatusContext)
