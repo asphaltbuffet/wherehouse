@@ -253,7 +253,7 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 		target = inventory.EntityStatusOk
 	}
 
-	err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
+	_, err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
 		EntityPath: data.Entity.FullPathDisplay,
 		Status:     target,
 		ActorID:    "webui",

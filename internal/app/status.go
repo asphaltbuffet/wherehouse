@@ -10,10 +10,10 @@ import (
 )
 
 // ChangeStatus records a status-change event for the entity at the given path.
-func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) error {
+func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) (EntityResult, error) {
 	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
 	if err != nil {
-		return fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return EntityResult{}, fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
 	}
 
 	var statusContext *string
@@ -28,7 +28,7 @@ func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) error {
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
+		return EntityResult{}, fmt.Errorf("marshal payload: %w", err)
 	}
 
 	var note *string
@@ -37,8 +37,13 @@ func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) error {
 	}
 
 	if _, err = a.bus.Dispatch(ctx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note); err != nil {
-		return fmt.Errorf("change status: %w", err)
+		return EntityResult{}, fmt.Errorf("change status: %w", err)
 	}
 
-	return nil
+	result, err := a.GetEntityByID(ctx, entity.EntityID)
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("get updated entity: %w", err)
+	}
+
+	return result, nil
 }

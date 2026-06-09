@@ -76,11 +76,12 @@ func TestRunList_ShowsStatusBadge(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	seedThree(t, a)
-	require.NoError(t, a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
 		EntityPath: "Garage:Toolbox:Wrench",
 		Status:     inventory.EntityStatusMissing,
 		ActorID:    "test",
-	}))
+	})
+	require.NoError(t, err)
 
 	out := runCmd(t, a)
 
@@ -101,11 +102,12 @@ func TestRunList_FilterPrunesUnrelatedBranches(t *testing.T) {
 		ActorID:     "test",
 	})
 	require.NoError(t, err)
-	require.NoError(t, a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
 		EntityPath: "Garage:Toolbox:Drill",
 		Status:     inventory.EntityStatusMissing,
 		ActorID:    "test",
-	}))
+	})
+	require.NoError(t, err)
 
 	out := runCmd(t, a, "--status", "missing")
 
@@ -118,11 +120,12 @@ func TestRunList_FilterKeepsAncestor(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	seedThree(t, a)
-	require.NoError(t, a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
 		EntityPath: "Garage:Toolbox:Wrench",
 		Status:     inventory.EntityStatusMissing,
 		ActorID:    "test",
-	}))
+	})
+	require.NoError(t, err)
 
 	out := runCmd(t, a, "--status", "missing")
 
