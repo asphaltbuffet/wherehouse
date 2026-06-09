@@ -13,17 +13,23 @@ type ListItem struct {
 	Path     string                 `json:"path"`
 	Type     inventory.EntityType   `json:"type"`
 	Status   inventory.EntityStatus `json:"status"`
+	Tags     []string               `json:"tags"`
 }
 
 // ToListItems projects entity results into the `list` output shape.
 func ToListItems(results []EntityResult) []ListItem {
 	items := make([]ListItem, len(results))
 	for i, e := range results {
+		tags := e.Tags
+		if tags == nil {
+			tags = []string{}
+		}
 		items[i] = ListItem{
 			EntityID: e.EntityID,
 			Path:     e.FullPathDisplay,
 			Type:     e.EntityType,
 			Status:   e.Status,
+			Tags:     tags,
 		}
 	}
 	return items

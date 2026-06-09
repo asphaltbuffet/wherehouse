@@ -2,6 +2,8 @@ package listcmd_test
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +12,7 @@ import (
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -36,54 +39,175 @@ func seedThree(t *testing.T, a *app.App) {
 	}
 }
 
-func TestRunList_ReturnsAll(t *testing.T) {
-	a := apptesting.OpenApp(t)
-	seedThree(t, a)
-
+func runCmd(t *testing.T, a *app.App, args ...string) string {
+	t.Helper()
 	cmd := listcmd.NewListCmd(a)
+	cmd.SetArgs(args)
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, stdout.String(), "Garage")
-	assert.Contains(t, stdout.String(), "Garage:Toolbox")
+	return stdout.String()
 }
 
-func TestRunList_FilterByType(t *testing.T) {
+// TestRunList_RendersTree: default output uses leaf DisplayName only, not full path.
+func TestRunList_RendersTree(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedThree(t, a)
 
-	cmd := listcmd.NewListCmd(a)
-	cmd.SetArgs([]string{"--type", "container"})
-	var stdout bytes.Buffer
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&bytes.Buffer{})
-	require.NoError(t, cmd.Execute())
-	assert.NotContains(t, stdout.String(), "place")
-	assert.Contains(t, stdout.String(), "Garage:Toolbox")
+	out := runCmd(t, a)
+
+	assert.Contains(t, out, "Garage")
+	assert.Contains(t, out, "Toolbox")
+	assert.Contains(t, out, "Wrench")
+	// Full colon-paths must not appear in tree output.
+	assert.NotContains(t, out, "Garage:Toolbox")
+	assert.NotContains(t, out, "Garage:Toolbox:Wrench")
 }
 
-func TestRunList_FilterByUnderPath(t *testing.T) {
-	a := apptesting.OpenApp(t)
-	seedThree(t, a)
-
-	cmd := listcmd.NewListCmd(a)
-	cmd.SetArgs([]string{"--under", "Garage:Toolbox"})
-	var stdout bytes.Buffer
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&bytes.Buffer{})
-	require.NoError(t, cmd.Execute())
-	assert.NotContains(t, stdout.String(), "Garage\n")
-	assert.NotContains(t, stdout.String(), "Garage:Toolbox\n")
-	assert.Contains(t, stdout.String(), "Garage:Toolbox:Wrench")
-}
-
+// TestRunList_EmptyDB_ReturnsNoOutput: empty inventory produces no output.
 func TestRunList_EmptyDB_ReturnsNoOutput(t *testing.T) {
 	a := apptesting.OpenApp(t)
+	assert.Empty(t, runCmd(t, a))
+}
+
+// TestRunList_ShowsStatusBadge: non-ok status appears as [STATUS], ok is silent.
+func TestRunList_ShowsStatusBadge(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	seedThree(t, a)
+	require.NoError(t, a.ChangeStatus(ctx, app.ChangeStatusRequest{
+		EntityPath: "Garage:Toolbox:Wrench",
+		Status:     inventory.EntityStatusMissing,
+		ActorID:    "test",
+	}))
+
+	out := runCmd(t, a)
+
+	assert.Contains(t, out, "[MISSING]")
+	assert.NotContains(t, out, "[OK]")
+}
+
+// TestRunList_FilterPrunesUnrelatedBranches: filtering removes branches with no matches.
+func TestRunList_FilterPrunesUnrelatedBranches(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	// Garage:Toolbox:Wrench (leaf, ok) + Garage:Toolbox:Drill (leaf, missing)
+	seedThree(t, a)
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Drill",
+		EntityType:  inventory.EntityTypeLeaf,
+		ParentPath:  "Garage:Toolbox",
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+	require.NoError(t, a.ChangeStatus(ctx, app.ChangeStatusRequest{
+		EntityPath: "Garage:Toolbox:Drill",
+		Status:     inventory.EntityStatusMissing,
+		ActorID:    "test",
+	}))
+
+	out := runCmd(t, a, "--status", "missing")
+
+	assert.Contains(t, out, "Drill")
+	assert.NotContains(t, out, "Wrench")
+}
+
+// TestRunList_FilterKeepsAncestor: ancestor of a match is shown even if it doesn't match.
+func TestRunList_FilterKeepsAncestor(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	seedThree(t, a)
+	require.NoError(t, a.ChangeStatus(ctx, app.ChangeStatusRequest{
+		EntityPath: "Garage:Toolbox:Wrench",
+		Status:     inventory.EntityStatusMissing,
+		ActorID:    "test",
+	}))
+
+	out := runCmd(t, a, "--status", "missing")
+
+	// Wrench matched; Garage and Toolbox are ancestors and must appear as scaffolding.
+	assert.Contains(t, out, "Wrench")
+	assert.Contains(t, out, "Toolbox")
+	assert.Contains(t, out, "Garage")
+}
+
+// TestRunList_UnderIncludesRoot: --under X includes X itself in output (not just its descendants).
+func TestRunList_UnderIncludesRoot(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedThree(t, a)
+
+	out := runCmd(t, a, "--under", "Garage:Toolbox")
+
+	// Toolbox is the scoped root — it must appear (not just its children).
+	assert.Contains(t, out, "Toolbox")
+	assert.Contains(t, out, "Wrench")
+}
+
+// TestRunList_VerboseShowsIDAndTags: --verbose prepends entity ID and shows tags.
+func TestRunList_VerboseShowsIDAndTags(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	seedThree(t, a)
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityPath: "Garage:Toolbox:Wrench",
+		ActorID:    "test",
+		Add:        []string{"dewalt"},
+	}))
+
+	out := runCmd(t, a, "--verbose")
+
+	assert.Contains(t, out, "#dewalt")
+}
+
+// TestRunList_NoTagsWithoutVerbose: tags are absent from non-verbose output.
+func TestRunList_NoTagsWithoutVerbose(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	seedThree(t, a)
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityPath: "Garage:Toolbox:Wrench",
+		ActorID:    "test",
+		Add:        []string{"dewalt"},
+	}))
+
+	out := runCmd(t, a)
+
+	assert.NotContains(t, out, "#dewalt")
+}
+
+// TestRunList_JSONIncludesTags: --json output includes tags field.
+func TestRunList_JSONIncludesTags(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	seedThree(t, a)
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityPath: "Garage:Toolbox:Wrench",
+		ActorID:    "test",
+		Add:        []string{"dewalt"},
+	}))
+
 	cmd := listcmd.NewListCmd(a)
+	cmd.SetContext(context.WithValue(ctx, config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithJSON())))
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Empty(t, stdout.String())
+
+	var items []map[string]any
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &items))
+
+	var wrench map[string]any
+	for _, item := range items {
+		if item["path"] == "Garage:Toolbox:Wrench" {
+			wrench = item
+			break
+		}
+	}
+	require.NotNil(t, wrench, "Wrench not found in JSON output")
+
+	tags, ok := wrench["tags"].([]any)
+	require.True(t, ok, "tags field must be an array")
+	require.Len(t, tags, 1)
+	assert.Equal(t, "dewalt", tags[0])
 }

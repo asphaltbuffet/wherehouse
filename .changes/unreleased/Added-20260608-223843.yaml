@@ -1,0 +1,5 @@
+kind: Added
+body: '''list'' JSON output includes ''tag'' information'
+time: 2026-06-08T22:38:43.109768597-04:00
+custom:
+    Issue: '#233'

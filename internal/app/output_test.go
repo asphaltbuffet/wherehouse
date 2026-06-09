@@ -12,30 +12,55 @@ import (
 )
 
 func TestToListItems_JSONContract(t *testing.T) {
-	results := []app.EntityResult{
-		{
-			EntityID:        "abc1234567",
-			DisplayName:     "Toolbox",
-			CanonicalName:   "toolbox",
-			EntityType:      inventory.EntityTypeContainer,
-			FullPathDisplay: "Garage:Toolbox",
-			Status:          inventory.EntityStatusOk,
-			HasChildren:     true,
-		},
-	}
+	t.Run("no tags", func(t *testing.T) {
+		results := []app.EntityResult{
+			{
+				EntityID:        "abc1234567",
+				DisplayName:     "Toolbox",
+				CanonicalName:   "toolbox",
+				EntityType:      inventory.EntityTypeContainer,
+				FullPathDisplay: "Garage:Toolbox",
+				Status:          inventory.EntityStatusOk,
+				HasChildren:     true,
+			},
+		}
 
-	items := app.ToListItems(results)
+		b, err := json.Marshal(app.ToListItems(results))
+		require.NoError(t, err)
 
-	b, err := json.Marshal(items)
-	require.NoError(t, err)
+		assert.JSONEq(t, `[{
+			"entity_id": "abc1234567",
+			"path": "Garage:Toolbox",
+			"type": "container",
+			"status": "ok",
+			"tags": []
+		}]`, string(b))
+	})
 
-	// Pins the current `wherehouse list --json` wire format.
-	assert.JSONEq(t, `[{
-		"entity_id": "abc1234567",
-		"path": "Garage:Toolbox",
-		"type": "container",
-		"status": "ok"
-	}]`, string(b))
+	t.Run("with tags", func(t *testing.T) {
+		results := []app.EntityResult{
+			{
+				EntityID:        "def9876543",
+				DisplayName:     "Drill",
+				CanonicalName:   "drill",
+				EntityType:      inventory.EntityTypeLeaf,
+				FullPathDisplay: "Garage:Drill",
+				Status:          inventory.EntityStatusMissing,
+				Tags:            []string{"dewalt", "20v"},
+			},
+		}
+
+		b, err := json.Marshal(app.ToListItems(results))
+		require.NoError(t, err)
+
+		assert.JSONEq(t, `[{
+			"entity_id": "def9876543",
+			"path": "Garage:Drill",
+			"type": "leaf",
+			"status": "missing",
+			"tags": ["dewalt", "20v"]
+		}]`, string(b))
+	})
 }
 
 func TestToListItems_Empty(t *testing.T) {
