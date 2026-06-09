@@ -1,0 +1,5 @@
+kind: Changed
+body: Bump golang.org/x/sync from 0.20.0 to 0.21.0
+time: 2026-06-08T23:08:07.654316438-04:00
+custom:
+    Issue: ""

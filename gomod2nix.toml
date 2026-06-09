@@ -8,8 +8,8 @@ schema = 3
     version = "v0.4.3"
     hash = "sha256-y+QDUxGOKhugEMQLRUTZYT2C+wKqYHnMLJ44jbh7+JA="
   [mod."github.com/charmbracelet/ultraviolet"]
-    version = "v0.0.0-20260601155805-6cf7526a1b3f"
-    hash = "sha256-G8Fc+CpColDz4XaPmAMXTT3X0wXF3ZVhrkMRtTVxLhI="
+    version = "v0.0.0-20260608091853-35bcb7319efa"
+    hash = "sha256-2B5IktzT4KUjWX2GpfJ7j3idXbxNAwUtyNRKAXhxebg="
   [mod."github.com/charmbracelet/x/ansi"]
     version = "v0.11.7"
     hash = "sha256-q8BZJq4K7NE5ETocN9/G/EoV0dUyD703ONSfHiUYzWQ="
@@ -131,14 +131,14 @@ schema = 3
     version = "v0.0.0-20260218203240-3dfff04db8fa"
     hash = "sha256-vsit1x+iQymfiWhINdZgd4wQhMoWMp3tqcjbDjcV0oY="
   [mod."golang.org/x/sync"]
-    version = "v0.20.0"
-    hash = "sha256-ybcjhCfK6lroUM0yswUvWooW8MOQZBXyiSqoxG6Uy0Y="
+    version = "v0.21.0"
+    hash = "sha256-2n7PVb1krz7UpnXYGVmCrxV0fZBnjQdVVt6eVudEPYY="
   [mod."golang.org/x/sys"]
-    version = "v0.45.0"
-    hash = "sha256-hkBoNazrDA67ER6sWhb+EKxx9nJ24+nz3zGy+zT5Hvw="
+    version = "v0.46.0"
+    hash = "sha256-NzRXMSEk6upeudJvUEPVnw6clJ3d8UdC/vdfANWAc8g="
   [mod."golang.org/x/text"]
-    version = "v0.37.0"
-    hash = "sha256-8XDOnlPIybcDRy89fkjG5VqtIt5Ku+LmaqYhgKl7i1E="
+    version = "v0.38.0"
+    hash = "sha256-PzREcn7yzTAJ0WBvyYL/2/r+tfoeKTY/E5HVXi/CJsU="
   [mod."gopkg.in/check.v1"]
     version = "v1.0.0-20190902080502-41f04d3bba15"
     hash = "sha256-Xl5gjoqU26M+Yxm6Xok5VHVpYT5hItwsN7d2Wj9L020="
@@ -149,8 +149,8 @@ schema = 3
     version = "v3.0.1"
     hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
   [mod."modernc.org/libc"]
-    version = "v1.72.5"
-    hash = "sha256-cydq6kiFj4DGytqJkzqL817lJifI2lGCLrG0J9IXchw="
+    version = "v1.73.0"
+    hash = "sha256-9bTlx02RMI/k3XoxUBdZOwAeofjFZ9YX/3JAMznwMFU="
   [mod."modernc.org/mathutil"]
     version = "v1.7.1"
     hash = "sha256-COZ5rF2GhQVR1r6a0DanJ8qwQ94JSKdQxTMWrDzE0Cc="
@@ -158,5 +158,5 @@ schema = 3
     version = "v1.11.0"
     hash = "sha256-MkybF8vvrxXS5j7O8w3skwTo0aMo1yjWS0K440rYcHM="
   [mod."modernc.org/sqlite"]
-    version = "v1.51.0"
-    hash = "sha256-rnxjwdV89PgD8cfobWqHzco4JlqFk+mHG5kv/MUAsF4="
+    version = "v1.52.0"
+    hash = "sha256-Y3TfO3AKxTIE2p00llUdXf8p9X5uw+EpSrwCAtO3Dyc="
