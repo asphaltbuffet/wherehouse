@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/store"
 	"github.com/asphaltbuffet/wherehouse/internal/web"
 )
 
@@ -42,7 +41,7 @@ func (f *fakeApp) GetEntityByID(_ context.Context, entityID string) (app.EntityR
 			return e, nil
 		}
 	}
-	return app.EntityResult{}, store.ErrNotFound
+	return app.EntityResult{}, app.ErrNotFound
 }
 
 func (f *fakeApp) GetChildren(_ context.Context, parentID string) ([]app.EntityResult, error) {
