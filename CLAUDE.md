@@ -131,6 +131,7 @@ All styles live as private fields on the `Styles` struct in `internal/styles/sty
 ## Code Conventions
 
 - Go 1.25, no CGo
+- **Never redeclare a persistent flag as a local flag.** Persistent flags (`--quiet`/`-q`, `--json`, `--db`, `--as`, `--config`, `--no-config`) are defined on the root command and flow into the config via context. Read them via `cfg.IsQuiet()`, `cfg.IsJSON()`, etc. — never via `cmd.Flags().BoolP("quiet", ...)`.
 - `testify/assert` for non-fatal assertions, `testify/require` for preconditions
 - Wrap errors: `fmt.Errorf("context: %w", err)`
 - All DB operations use transactions via `ExecInTransaction` and `WithRetry` helpers

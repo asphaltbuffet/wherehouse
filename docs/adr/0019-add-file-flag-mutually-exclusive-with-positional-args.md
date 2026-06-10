@@ -1,0 +1,3 @@
+# add --file is mutually exclusive with positional args and per-entity flags
+
+The `add` command's `--file` flag accepts a CSV file of entities to bulk-create. It is mutually exclusive with positional path arguments and with the `--locked` and `--discrete` flags. We chose mutual exclusion over allowing mixed input because the per-entity flags only make sense for positional args (every row in the file carries its own `locked`/`discrete` values), and mixing the two input modes would require a precedence rule that is confusing to document and easy to misuse. A user who wants both modes should run two separate `add` invocations.
