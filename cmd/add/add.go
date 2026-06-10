@@ -140,12 +140,12 @@ func runAddFile(cmd *cobra.Command, a *app.App, filePath string) error {
 	}
 	defer f.Close()
 
-	rows, err := app.ParseBulkCSV(f)
+	allowDupes, _ := cmd.Flags().GetBool("allow-duplicates")
+
+	rows, err := app.ParseBulkCSV(f, allowDupes)
 	if err != nil {
 		return fmt.Errorf("parse %q: %w", filePath, err)
 	}
-
-	allowDupes, _ := cmd.Flags().GetBool("allow-duplicates")
 	createParents, _ := cmd.Flags().GetBool("create-parents")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 

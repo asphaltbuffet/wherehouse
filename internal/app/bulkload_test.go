@@ -13,7 +13,7 @@ import (
 
 func TestParseCSV_HappyPath(t *testing.T) {
 	input := strings.NewReader("Garage:Toolbox:Screwdriver,false,true,tool craftsman\n")
-	rows, err := app.ParseBulkCSV(input)
+	rows, err := app.ParseBulkCSV(input, false)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "Garage:Toolbox:Screwdriver", rows[0].Path)
@@ -24,7 +24,7 @@ func TestParseCSV_HappyPath(t *testing.T) {
 
 func TestParseCSV_CommentsSkipped(t *testing.T) {
 	input := strings.NewReader("# this is a comment\nGarage,false,false,\n# another comment\n")
-	rows, err := app.ParseBulkCSV(input)
+	rows, err := app.ParseBulkCSV(input, false)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "Garage", rows[0].Path)
@@ -46,7 +46,7 @@ func TestParseCSV_TrailingColumnsOptional(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rows, err := app.ParseBulkCSV(strings.NewReader(tc.line + "\n"))
+			rows, err := app.ParseBulkCSV(strings.NewReader(tc.line+"\n"), false)
 			require.NoError(t, err)
 			require.Len(t, rows, 1)
 			assert.Equal(t, tc.wantLock, rows[0].Locked)
@@ -58,7 +58,7 @@ func TestParseCSV_TrailingColumnsOptional(t *testing.T) {
 
 func TestParseCSV_InvalidBooleanHardError(t *testing.T) {
 	input := strings.NewReader("Garage:Toolbox,yes,false,\n")
-	_, err := app.ParseBulkCSV(input)
+	_, err := app.ParseBulkCSV(input, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "line 1")
 	assert.Contains(t, err.Error(), `"locked"`)
@@ -67,7 +67,7 @@ func TestParseCSV_InvalidBooleanHardError(t *testing.T) {
 
 func TestParseCSV_WithinFileDedup_FirstWins(t *testing.T) {
 	input := strings.NewReader("Garage,false,false,first\nGarage,true,true,second\n")
-	rows, err := app.ParseBulkCSV(input)
+	rows, err := app.ParseBulkCSV(input, false)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.False(t, rows[0].Locked, "first-wins: locked should be false")
@@ -170,6 +170,13 @@ func TestBulkAddEntities_CreateParents_ExistingParentWarns(t *testing.T) {
 	assert.NotEmpty(t, result.Warnings, "should warn that Garage already exists")
 }
 
+func TestParseCSV_WithinFileDedup_AllowDuplicates_BothRowsPass(t *testing.T) {
+	input := strings.NewReader("Widget,false,false,\nWidget,false,false,\n")
+	rows, err := app.ParseBulkCSV(input, true)
+	require.NoError(t, err)
+	assert.Len(t, rows, 2, "allowDuplicates=true should pass both rows through")
+}
+
 func TestBulkAddEntities_DiscreteParent_HardError(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
@@ -179,6 +186,25 @@ func TestBulkAddEntities_DiscreteParent_HardError(t *testing.T) {
 
 	rows := []app.BulkAddRow{{Path: "Box:Nail"}}
 	_, err = a.BulkAddEntities(ctx, rows, app.BulkAddOptions{ActorID: "test", CreateParents: true})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "discrete")
+}
+
+func TestBulkAddEntities_DiscreteDirectParent_HardError(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+
+	// Garage exists and is not discrete; Box is discrete.
+	// Adding Box:Nail should fail because Box (direct parent) is discrete.
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "test"})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box", ParentPath: "Garage", Discrete: true, ActorID: "test",
+	})
+	require.NoError(t, err)
+
+	rows := []app.BulkAddRow{{Path: "Garage:Box:Nail"}}
+	_, err = a.BulkAddEntities(ctx, rows, app.BulkAddOptions{ActorID: "test"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "discrete")
 }
