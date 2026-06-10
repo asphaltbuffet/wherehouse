@@ -125,6 +125,40 @@ func TestEntityLifecycle_StatusChange(t *testing.T) {
 	assert.Equal(t, "left at job site", *entity.StatusContext)
 }
 
+func TestEntityCreated_LegacyEntityType_Place_SetsLocked(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	ctx := context.Background()
+
+	p := eventbus.EntityCreatedPayload{EntityID: "p1", DisplayName: "Garage", LegacyEntityType: "place"}
+	raw, err := json.Marshal(p)
+	require.NoError(t, err)
+	_, err = b.Dispatch(ctx, inventory.EntityCreatedEvent, "test", raw, nil)
+	require.NoError(t, err)
+
+	entity, err := s.GetEntity(ctx, "p1")
+	require.NoError(t, err)
+	assert.True(t, entity.Locked, "legacy place entity_type should set locked=true")
+	assert.False(t, entity.Discrete)
+}
+
+func TestEntityCreated_LegacyEntityType_Leaf_SetsDiscrete(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	ctx := context.Background()
+
+	p := eventbus.EntityCreatedPayload{EntityID: "l1", DisplayName: "Wrench", LegacyEntityType: "leaf"}
+	raw, err := json.Marshal(p)
+	require.NoError(t, err)
+	_, err = b.Dispatch(ctx, inventory.EntityCreatedEvent, "test", raw, nil)
+	require.NoError(t, err)
+
+	entity, err := s.GetEntity(ctx, "l1")
+	require.NoError(t, err)
+	assert.True(t, entity.Discrete, "legacy leaf entity_type should set discrete=true")
+	assert.False(t, entity.Locked)
+}
+
 func TestTruncateAndReplay_RebuildsProjection(t *testing.T) {
 	s := openTestStore(t)
 	b := eventbus.New(s)
