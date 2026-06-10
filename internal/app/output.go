@@ -166,3 +166,34 @@ func ToTagOutput(path string, tags []string) TagOutput {
 	}
 	return TagOutput{Path: path, Tags: tags}
 }
+
+// BulkAddOutput is the JSON shape for a bulk-add operation.
+type BulkAddOutput struct {
+	Created  []AddOutput `json:"created"`
+	Skipped  []BulkSkip  `json:"skipped"`
+	Warnings []string    `json:"warnings"`
+}
+
+// ToBulkAddOutput converts a BulkAddResult to its JSON output shape.
+func ToBulkAddOutput(r BulkAddResult) BulkAddOutput {
+	created := make([]AddOutput, len(r.Created))
+	for i, e := range r.Created {
+		created[i] = AddOutput{EntityID: e.EntityID, Path: e.FullPathDisplay}
+	}
+
+	skipped := r.Skipped
+	if skipped == nil {
+		skipped = []BulkSkip{}
+	}
+
+	warnings := r.Warnings
+	if warnings == nil {
+		warnings = []string{}
+	}
+
+	return BulkAddOutput{
+		Created:  created,
+		Skipped:  skipped,
+		Warnings: warnings,
+	}
+}
