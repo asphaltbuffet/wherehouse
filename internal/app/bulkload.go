@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bufio"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -44,16 +43,16 @@ type BulkSkip struct {
 }
 
 // ParseBulkCSV reads r as a CSV stream and returns the parsed rows.
-// Lines whose first non-whitespace character is '#' are treated as comments and skipped.
+// Lines beginning with '#' (no leading whitespace) are treated as comments and skipped.
 // Column order: path, locked, discrete, tags (trailing columns are optional).
-func ParseBulkCSV(r io.Reader) ([]BulkAddRow, error) {
-	filtered := filterComments(r)
-	cr := csv.NewReader(filtered)
+// When allowDuplicates is false, within-file duplicate paths are silently deduplicated (first-wins).
+func ParseBulkCSV(r io.Reader, allowDuplicates bool) ([]BulkAddRow, error) {
+	cr := csv.NewReader(r)
 	cr.FieldsPerRecord = -1 // variable columns
+	cr.Comment = '#'
 
 	var rows []BulkAddRow
 	seen := make(map[string]struct{})
-	lineNum := 0
 
 	for {
 		record, err := cr.Read()
@@ -63,23 +62,24 @@ func ParseBulkCSV(r io.Reader) ([]BulkAddRow, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse CSV: %w", err)
 		}
-		lineNum++
 
 		if len(record) == 0 || (len(record) == 1 && strings.TrimSpace(record[0]) == "") {
 			continue
 		}
 
-		row, parseErr := parseBulkRow(record, lineNum)
+		line, _ := cr.FieldPos(0)
+		row, parseErr := parseBulkRow(record, line)
 		if parseErr != nil {
 			return nil, parseErr
 		}
 
-		// Within-file dedup: first-wins by canonical path key.
-		key := canonicalPathKey(row.Path)
-		if _, exists := seen[key]; exists {
-			continue
+		if !allowDuplicates {
+			key := canonicalPathKey(row.Path)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
 		}
-		seen[key] = struct{}{}
 		rows = append(rows, row)
 	}
 
@@ -150,27 +150,6 @@ func canonicalPathKey(path string) string {
 		canonical[i] = inventory.CanonicalizeString(s)
 	}
 	return strings.Join(canonical, ":")
-}
-
-// filterComments returns a reader that strips lines beginning with '#'.
-func filterComments(r io.Reader) io.Reader {
-	pr, pw := io.Pipe()
-	go func() {
-		sc := bufio.NewScanner(r)
-		for sc.Scan() {
-			line := sc.Text()
-			if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "#") {
-				continue
-			}
-			_, err := fmt.Fprintln(pw, line)
-			if err != nil {
-				_ = pw.CloseWithError(err)
-				return
-			}
-		}
-		_ = pw.CloseWithError(sc.Err())
-	}()
-	return pr
 }
 
 // BulkAddEntities creates entities from rows in a single transaction.
@@ -280,11 +259,9 @@ func (a *App) ensureAncestors(
 			return nil, nil, fmt.Errorf("build ancestor path: %w", pathErr)
 		}
 
-		existing, resolveErr := a.resolveEntityPathTx(ctx, tx, ancestorPath.String())
+		_, resolveErr := a.resolveEntityPathTx(ctx, tx, ancestorPath.String())
 		if resolveErr == nil {
-			if existing.Discrete {
-				return nil, nil, fmt.Errorf("cannot add child to %q: entity is discrete", existing.FullPathDisplay)
-			}
+			// discrete enforcement is handled by createEntityInTx on the direct parent.
 			if opts.CreateParents {
 				warnings = append(warnings, fmt.Sprintf("parent %q already exists", ancestorPath.String()))
 			}
