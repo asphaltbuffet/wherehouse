@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 type addFormData struct {
@@ -38,7 +37,7 @@ func (s *Server) handleAddItem(w http.ResponseWriter, r *http.Request) {
 
 	parent, err := s.cfg.App.GetEntityByID(r.Context(), parentID)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+		if errors.Is(err, app.ErrNotFound) {
 			http.Error(w, "parent entity not found", http.StatusNotFound)
 			return
 		}

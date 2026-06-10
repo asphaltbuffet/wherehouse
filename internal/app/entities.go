@@ -140,11 +140,14 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 }
 
 // GetEntityByID retrieves an entity by its stable ID.
-// Returns store.ErrNotFound if the entity does not exist; the returned
+// Returns ErrNotFound if the entity does not exist; the returned
 // EntityResult has HasChildren=false (callers needing it should use ListEntities).
 func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult, error) {
 	entity, err := a.store.GetEntity(ctx, entityID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, ErrNotFound)
+		}
 		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
 	}
 	return a.entityWithTags(ctx, entity)
@@ -205,7 +208,7 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 }
 
 // resolveEntityPath looks up an entity by its colon-separated display path.
-// Returns store.ErrNotFound if no match exists.
+// Returns ErrNotFound if no match exists.
 func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.Entity, error) {
 	return a.resolveEntityPathWith(path, func(canonical string) ([]*inventory.Entity, error) {
 		return a.store.GetEntitiesByCanonicalName(ctx, canonical)
@@ -229,7 +232,7 @@ func (a *App) resolveEntityPathWith(
 
 	segments := p.Segments()
 	if len(segments) == 0 {
-		return nil, fmt.Errorf("parse path %q: %w", path, store.ErrNotFound)
+		return nil, fmt.Errorf("parse path %q: %w", path, ErrNotFound)
 	}
 
 	canonicalSegments := make([]string, len(segments))
@@ -255,7 +258,7 @@ func (a *App) resolveEntityPathWith(
 		}
 	}
 
-	return nil, fmt.Errorf("%w: %q", store.ErrNotFound, path)
+	return nil, fmt.Errorf("%w: %q", ErrNotFound, path)
 }
 
 // CreateEntities creates all requested entities in a single transaction; all succeed or all fail.

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/store"
 	versioncmd "github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
@@ -45,7 +44,7 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
 	if _, err := s.cfg.App.GetEntityByID(r.Context(), entityID); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+		if errors.Is(err, app.ErrNotFound) {
 			http.Error(w, "entity not found", http.StatusNotFound)
 			return
 		}

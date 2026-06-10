@@ -10,7 +10,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
-	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 // detailData is the view model for the entity detail pane.
@@ -69,7 +68,7 @@ func BreadcrumbsForEntity(entities []app.EntityResult, fullPath string) []Breadc
 func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailData, error) {
 	entity, err := s.cfg.App.GetEntityByID(ctx, entityID)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+		if errors.Is(err, app.ErrNotFound) {
 			return detailData{}, nil // caller checks Entity.EntityID == ""
 		}
 		return detailData{}, fmt.Errorf("get entity: %w", err)
