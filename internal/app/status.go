@@ -138,6 +138,41 @@ func (a *App) MarkLoaned(ctx context.Context, reqs []ChangeStatusRequest) ([]Ent
 	return a.markStatusBatch(ctx, "MarkLoaned", reqs, a.markLoanInTx)
 }
 
+// MarkReturned sets the status of all specified entities to ok in a single atomic transaction.
+func (a *App) MarkReturned(ctx context.Context, reqs []ChangeStatusRequest) ([]EntityResult, error) {
+	return a.markStatusBatch(ctx, "MarkReturned", reqs, a.markReturnInTx)
+}
+
+//nolint:dupl // intentionally parallel to markFoundInTx; kept separate for independent evolution
+func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
+	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+	}
+
+	payload := eventbus.EntityStatusChangedPayload{
+		EntityID: entity.EntityID,
+		Status:   inventory.EntityStatusOk.String(),
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal payload: %w", err)
+	}
+
+	var note *string
+	if req.Note != "" {
+		note = &req.Note
+	}
+
+	if _, err = a.bus.DispatchInTx(
+		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
+	); err != nil {
+		return "", fmt.Errorf("mark returned %q: %w", req.EntityPath, err)
+	}
+
+	return entity.EntityID, nil
+}
+
 func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
 	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
 	if err != nil {
@@ -177,6 +212,7 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 	return entity.EntityID, nil
 }
 
+//nolint:dupl // intentionally parallel to markReturnInTx; kept separate for independent evolution
 func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
 	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
 	if err != nil {

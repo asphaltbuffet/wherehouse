@@ -22,6 +22,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/cmd/rename"
+	returncmd "github.com/asphaltbuffet/wherehouse/cmd/return"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/cmd/status"
@@ -82,6 +83,7 @@ Examples:
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
 	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
 	rootCmd.AddCommand(rename.NewDefaultRenameCmd())
+	rootCmd.AddCommand(returncmd.NewDefaultReturnCmd())
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 	rootCmd.AddCommand(serve.NewDefaultServeCmd())
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())
