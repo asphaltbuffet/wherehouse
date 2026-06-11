@@ -44,7 +44,7 @@ Examples:
   wherehouse move "Garage:Toolbox" --to "Basement"`,
 		Args: cobra.ExactArgs(1),
 	}
-	cmd.Flags().StringP("to", "t", "", "Destination parent path (REQUIRED)")
+	cmd.Flags().StringP("to", "t", "", "Destination parent path")
 	_ = cmd.MarkFlagRequired("to")
 	return cmd
 }

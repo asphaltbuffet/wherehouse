@@ -1,0 +1,5 @@
+kind: Changed
+body: Status-transition commands (lost, found, loan, return) now reject illegal source statuses instead of performing no-op changes; loan --to is required.
+time: 2026-06-11T21:00:00.000000000-04:00
+custom:
+    Issue: '#215'

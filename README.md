@@ -11,10 +11,11 @@
 ## Quick Example
 
 ```bash
-# Add locations (places are immovable; containers can hold things and be moved)
-wherehouse add "Garage" --type place
-wherehouse add "Toolbox" --type container
-wherehouse add "Garage:Toolbox:10mm socket" --type leaf
+# Add entities. --locked pins a place so it can't be reparented;
+# --discrete marks a terminal item that holds nothing else.
+wherehouse add "Garage" --locked
+wherehouse add "Garage:Toolbox"
+wherehouse add "Garage:Toolbox:10mm socket" --discrete
 
 # Search by name
 wherehouse scry "socket"
@@ -120,23 +121,25 @@ The database is created automatically on first use at `~/.local/share/wherehouse
 
 ### 2. Add Entities
 
-Entities have three types:
+Everything is an `Entity` — there is no separate "place", "container", or "item"
+type. Entities are distinguished by their position in the hierarchy and two optional
+attributes:
 
-| Type | Description |
+| Attribute | Effect |
 |---|---|
-| `place` | Immovable location (room, building, shelf) |
-| `container` | Movable holder (box, toolbox, bag) |
-| `leaf` | Individual item that holds nothing |
+| `--locked` | Pins the entity so it cannot be directly reparented (use for fixed places like a room or shelf) |
+| `--discrete` | Marks a terminal item that holds nothing — adding children to it is blocked (use for a single tracked item) |
+
+A plain `add` with neither flag creates a movable holder (e.g. a box or toolbox).
 
 ```bash
 # Build a hierarchy
-wherehouse add "Garage" --type place
-wherehouse add "Toolbox" --type container
-wherehouse add "Garage:Toolbox" --type container   # nested path creates under Toolbox
+wherehouse add "Garage" --locked
+wherehouse add "Garage:Toolbox"                    # nested path creates under Garage
 
 # Add individual items
-wherehouse add "Garage:Toolbox:10mm socket" --type leaf
-wherehouse add "Garage:Toolbox:Ratchet" --type leaf
+wherehouse add "Garage:Toolbox:10mm socket" --discrete
+wherehouse add "Garage:Toolbox:Ratchet" --discrete
 ```
 
 Paths are colon-separated from the root. Providing a nested path like `Garage:Toolbox:Wrench` will add `Wrench` under the existing `Garage:Toolbox` entity.
@@ -165,7 +168,7 @@ wherehouse move "Garage:Toolbox" --to "Basement"
 wherehouse move "Garage:Toolbox:Ratchet" --to "Garage:Pegboard"
 ```
 
-Only `container` and `leaf` entities are movable. `place` entities cannot be moved.
+Locked entities (`--locked`) cannot be directly reparented; everything else is movable.
 
 ### 5. View History
 
@@ -179,17 +182,26 @@ wherehouse history "Basement:Toolbox" --json
 
 ### 6. Track Status
 
+Status is read-only; each transition has its own intent-driven command.
+
 ```bash
-# Mark something as missing
-wherehouse status "Basement:Toolbox:10mm socket" --set missing
+# Show the current status of an entity (read-only)
+wherehouse status "Basement:Toolbox:10mm socket"
 
-# Mark it found again
-wherehouse status "Basement:Toolbox:10mm socket" --set ok
+# Mark something as missing (only ok entities can be marked missing)
+wherehouse lost "Basement:Toolbox:10mm socket"
 
-# Record a loan with a note
-wherehouse status "Garage:Ladder" --set loaned --note "lent to Bob"
+# Recover a missing entity
+wherehouse found "Basement:Toolbox:10mm socket"
 
-# Valid statuses: ok, missing, borrowed, loaned, removed
+# Lend something out (recipient required)
+wherehouse loan "Garage:Ladder" --to "Bob" --note "lent for the weekend"
+
+# Bring a loaned (or borrowed) entity back
+wherehouse return "Garage:Ladder"
+
+# Track an externally-owned item brought into the inventory
+wherehouse borrow "Garage:Alice's Drill" --from "Alice"
 ```
 
 ### 7. List Entities
@@ -201,8 +213,7 @@ wherehouse list
 # List under a specific path
 wherehouse list --under "Garage:Toolbox"
 
-# Filter by type or status
-wherehouse list --type container
+# Filter by status
 wherehouse list --status missing
 ```
 
@@ -270,14 +281,21 @@ Open `http://localhost:8080` in your browser. From the UI you can browse the ful
 wherehouse <command> [flags]
 
 Entity Management:
-  add <path>           Add an entity (--type place|container|leaf)
+  add <path>           Add an entity (--locked, --discrete, --create-parents)
   move <path>          Move an entity to a new parent (--to <dest>)
   rename <path>        Rename an entity (--to <new-name>)
   remove <path>        Remove an entity from the inventory
-  status <path>        Change entity status (--set ok|missing|borrowed|loaned|removed)
-  list                 List entities (--under, --type, --status filters)
+  list                 List entities (--under, --status filters)
   scry [<name>]        Search entities by name, or list all
   history <path>       Show full event timeline for an entity
+
+Status:
+  status <path>        Show the current status of an entity (read-only)
+  lost <path>...       Mark entities as missing (from ok)
+  found <path>...      Recover missing entities (to ok)
+  loan <path>...       Lend entities out (--to <recipient>)
+  return <path>...     Bring loaned/borrowed entities back
+  borrow <path>...     Track externally-owned items (--from <lender>)
   export               Export all events as NDJSON to stdout
   doctor               Check inventory health (--rebuild, --rebuild --force)
 

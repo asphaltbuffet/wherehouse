@@ -46,6 +46,7 @@ Examples:
 		Args: cobra.MinimumNArgs(1),
 	}
 	cmd.Flags().StringP("to", "t", "", "Who the entity is loaned to")
+	_ = cmd.MarkFlagRequired("to")
 	cmd.Flags().StringP("note", "n", "", "Optional note for the event")
 	return cmd
 }

@@ -32,7 +32,9 @@ The lifecycle state of an entity. Valid values:
 | `EntityStatusLoaned` | `"loaned"` | An existing inventory entity given out to someone else (the entity already exists; no new entity is created) |
 | `EntityStatusRemoved` | `"removed"` | Soft-deleted from the inventory |
 
-Status changes may carry an optional `StatusContext` (free-text, e.g. borrower name).
+Status changes may carry an optional `StatusContext` (free-text, e.g. borrower name). For `loaned`, the recipient (`loan --to`) is **required**, mirroring `borrow --from`.
+
+Each status is reached by exactly one intent-driven command (`lost`, `found`, `loan`, `return`, `borrow`), and each command rejects illegal source statuses rather than performing a no-op transition. The full legal transition table is recorded in [ADR 0024](docs/adr/0024-status-transition-commands-enforce-source-preconditions.md).
 
 ### Event
 
@@ -136,7 +138,7 @@ The top-level verdict of a `doctor` run. `true` when no `DoctorIssue`s were foun
 - Replay order is strictly by `event_id ASC`. Timestamps do not determine order.
 - Every `ORDER BY` that could tie must include `event_id ASC` as a tiebreaker.
 - All projection tables (`entities_current`, `entity_tags`) must be fully rebuildable by replaying the event stream. `TruncateAndReplay` truncates all projection tables before replaying.
-- Entity canonical names are not globally unique and uniqueness within a parent is not currently enforced.
+- Entity canonical names are not globally unique and uniqueness within a parent is not currently enforced. **This is under active redesign** — the quantity-vs-distinct-entity tension and resolver-ambiguity consequences are tracked in [issue #241](https://github.com/asphaltbuffet/wherehouse/issues/241).
 - Path propagation is recursive: reparenting an entity triggers `EntityPathChangedEvent` for all descendants.
 - `EntityRemovedEvent` sets `status = "removed"`. Removed entities remain in `entities_current` (soft delete).
 - No silent repair. No auto-retry beyond the `WithRetry` helper for SQLite locking.

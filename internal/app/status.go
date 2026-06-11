@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -66,6 +65,20 @@ func (a *App) markStatusBatch(
 	reqs []ChangeStatusRequest,
 	inTx func(context.Context, store.Tx, ChangeStatusRequest) (string, error),
 ) ([]EntityResult, error) {
+	return execBatch(ctx, a, caller, reqs, inTx)
+}
+
+// execBatch runs inTx for every request inside a single transaction, then fetches the
+// resulting entities by ID. The post-commit fetch uses AnyStatus because a transition
+// may move an entity to removed (e.g. returning a borrowed entity). On any per-request
+// error the whole transaction rolls back and no entities are changed.
+func execBatch[T any](
+	ctx context.Context,
+	a *App,
+	caller string,
+	reqs []T,
+	inTx func(context.Context, store.Tx, T) (string, error),
+) ([]EntityResult, error) {
 	if len(reqs) == 0 {
 		return nil, fmt.Errorf("%s: at least one request required", caller)
 	}
@@ -87,7 +100,6 @@ func (a *App) markStatusBatch(
 
 	results := make([]EntityResult, len(entityIDs))
 	for i, id := range entityIDs {
-		// Use AnyStatus fetch because markReturnInTx may transition borrowed→removed.
 		result, err := a.GetEntityByIDAnyStatus(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("get updated entity: %w", err)
@@ -107,8 +119,11 @@ func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 	if entity.Locked {
 		return "", fmt.Errorf("cannot mark %q as missing: entity is locked", entity.FullPathDisplay)
 	}
-	if entity.Status == inventory.EntityStatusBorrowed {
-		return "", fmt.Errorf("cannot mark %q as missing: entity is borrowed", entity.FullPathDisplay)
+	if entity.Status != inventory.EntityStatusOk {
+		return "", fmt.Errorf(
+			"cannot mark %q as missing: entity is %s (only ok entities can be marked missing)",
+			entity.FullPathDisplay, entity.Status,
+		)
 	}
 
 	payload := eventbus.EntityStatusChangedPayload{
@@ -155,6 +170,13 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
 	}
 
+	if entity.Status != inventory.EntityStatusLoaned && entity.Status != inventory.EntityStatusBorrowed {
+		return "", fmt.Errorf(
+			"cannot return %q: entity is %s (only loaned or borrowed entities can be returned)",
+			entity.FullPathDisplay, entity.Status,
+		)
+	}
+
 	// Borrowed entities are removed from inventory when returned, not reset to ok.
 	targetStatus := inventory.EntityStatusOk
 	if entity.Status == inventory.EntityStatusBorrowed {
@@ -193,8 +215,11 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 	if entity.Locked {
 		return "", fmt.Errorf("cannot loan %q: entity is locked", entity.FullPathDisplay)
 	}
-	if entity.Status == inventory.EntityStatusBorrowed {
-		return "", fmt.Errorf("cannot loan %q: entity is borrowed", entity.FullPathDisplay)
+	if entity.Status != inventory.EntityStatusOk && entity.Status != inventory.EntityStatusMissing {
+		return "", fmt.Errorf(
+			"cannot loan %q: entity is %s (only ok or missing entities can be loaned)",
+			entity.FullPathDisplay, entity.Status,
+		)
 	}
 
 	var statusContext *string
@@ -228,35 +253,7 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 
 // BorrowEntities creates new entities in borrowed status in a single atomic transaction.
 func (a *App) BorrowEntities(ctx context.Context, reqs []BorrowEntityRequest) ([]EntityResult, error) {
-	if len(reqs) == 0 {
-		return nil, errors.New("BorrowEntities: at least one request required")
-	}
-
-	entityIDs := make([]string, len(reqs))
-
-	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		for i, req := range reqs {
-			id, err := a.borrowEntityInTx(ctx, tx, req)
-			if err != nil {
-				return err
-			}
-			entityIDs[i] = id
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	results := make([]EntityResult, len(entityIDs))
-	for i, id := range entityIDs {
-		result, err := a.GetEntityByIDAnyStatus(ctx, id)
-		if err != nil {
-			return nil, fmt.Errorf("get borrowed entity: %w", err)
-		}
-		results[i] = result
-	}
-
-	return results, nil
+	return execBatch(ctx, a, "BorrowEntities", reqs, a.borrowEntityInTx)
 }
 
 func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntityRequest) (string, error) {
@@ -311,8 +308,12 @@ func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRe
 		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
 	}
 
-	if entity.Status == inventory.EntityStatusBorrowed {
-		return "", fmt.Errorf("cannot mark %q as found: entity is borrowed", entity.FullPathDisplay)
+	if entity.Status != inventory.EntityStatusMissing {
+		return "", fmt.Errorf(
+			"cannot mark %q as found: entity is %s (only missing entities can be found; "+
+				"use 'return' for loaned or borrowed)",
+			entity.FullPathDisplay, entity.Status,
+		)
 	}
 
 	payload := eventbus.EntityStatusChangedPayload{

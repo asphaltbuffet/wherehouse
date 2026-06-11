@@ -146,26 +146,10 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 // LookupEntityStatus returns all entities ever at the given path (any status, including removed),
 // ranked by last_event_id DESC (most recent first). Returns ErrNotFound when no entity matches.
 func (a *App) LookupEntityStatus(ctx context.Context, path string) ([]EntityResult, error) {
-	p, err := entitypath.Parse(path)
+	canonicalPath, canonicalLeaf, err := canonicalizePath(path)
 	if err != nil {
-		return nil, fmt.Errorf("parse path %q: %w", path, err)
+		return nil, err
 	}
-
-	segments := p.Segments()
-	if len(segments) == 0 {
-		return nil, fmt.Errorf("parse path %q: %w", path, ErrNotFound)
-	}
-
-	canonicalSegments := make([]string, len(segments))
-	for i, seg := range segments {
-		canonicalSegments[i] = inventory.CanonicalizeString(seg)
-	}
-	cp, err := entitypath.New(canonicalSegments...)
-	if err != nil {
-		return nil, fmt.Errorf("build canonical path: %w", err)
-	}
-	canonicalPath := cp.String()
-	canonicalLeaf := canonicalSegments[len(canonicalSegments)-1]
 
 	candidates, err := a.store.GetEntitiesByCanonicalNameAnyStatus(ctx, canonicalLeaf)
 	if err != nil {
@@ -284,31 +268,40 @@ func (a *App) resolveEntityPathTx(ctx context.Context, tx store.Tx, path string)
 	})
 }
 
-func (a *App) resolveEntityPathWith(
-	path string,
-	fetch func(canonical string) ([]*inventory.Entity, error),
-) (*inventory.Entity, error) {
+// canonicalizePath parses a display path and returns its full canonical path and
+// canonical leaf segment. An empty path resolves to ErrNotFound. Both the resolver
+// and LookupEntityStatus use this so the two cannot disagree on what a path means.
+func canonicalizePath(path string) (string, string, error) {
 	p, err := entitypath.Parse(path)
 	if err != nil {
-		return nil, fmt.Errorf("parse path %q: %w", path, err)
+		return "", "", fmt.Errorf("parse path %q: %w", path, err)
 	}
 
 	segments := p.Segments()
 	if len(segments) == 0 {
-		return nil, fmt.Errorf("parse path %q: %w", path, ErrNotFound)
+		return "", "", fmt.Errorf("parse path %q: %w", path, ErrNotFound)
 	}
 
 	canonicalSegments := make([]string, len(segments))
 	for i, seg := range segments {
 		canonicalSegments[i] = inventory.CanonicalizeString(seg)
 	}
-	p2, err := entitypath.New(canonicalSegments...)
+	cp, err := entitypath.New(canonicalSegments...)
 	if err != nil {
-		return nil, fmt.Errorf("build canonical path: %w", err)
+		return "", "", fmt.Errorf("build canonical path: %w", err)
 	}
 
-	canonicalPath := p2.String()
-	canonicalLeaf := canonicalSegments[len(canonicalSegments)-1]
+	return cp.String(), canonicalSegments[len(canonicalSegments)-1], nil
+}
+
+func (a *App) resolveEntityPathWith(
+	path string,
+	fetch func(canonical string) ([]*inventory.Entity, error),
+) (*inventory.Entity, error) {
+	canonicalPath, canonicalLeaf, err := canonicalizePath(path)
+	if err != nil {
+		return nil, err
+	}
 
 	candidates, err := fetch(canonicalLeaf)
 	if err != nil {

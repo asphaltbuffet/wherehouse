@@ -33,21 +33,22 @@ func seedForLoan(t *testing.T, a *app.App) {
 	}
 }
 
-func TestRunLoan_SinglePath(t *testing.T) {
+func TestRunLoan_ToRequired(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedForLoan(t, a)
 
 	cmd := loan.NewLoanCmd(a)
-	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"}) // missing --to
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	require.NoError(t, cmd.Execute())
+	require.Error(t, cmd.Execute())
 
+	// Entity must remain ok — the missing recipient should block the loan.
 	entities, err := a.ListEntities(t.Context())
 	require.NoError(t, err)
 	for _, e := range entities {
 		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
-			assert.Equal(t, inventory.EntityStatusLoaned, e.Status)
+			assert.Equal(t, inventory.EntityStatusOk, e.Status)
 		}
 	}
 }
