@@ -28,7 +28,7 @@ The lifecycle state of an entity. Valid values:
 |---|---|---|
 | `EntityStatusOk` | `"ok"` | Normal, at its location |
 | `EntityStatusMissing` | `"missing"` | Location unknown |
-| `EntityStatusBorrowed` | `"borrowed"` | An external item brought into the inventory temporarily (a new entity is created to represent it) |
+| `EntityStatusBorrowed` | `"borrowed"` | An external item brought into the inventory temporarily (a new entity is created to represent it). `borrowed` is a terminal status — the only valid transition is `return`, which sets the entity to `removed`. All other status changes (including `ok`, `missing`, `loaned`) and direct `remove` are blocked. |
 | `EntityStatusLoaned` | `"loaned"` | An existing inventory entity given out to someone else (the entity already exists; no new entity is created) |
 | `EntityStatusRemoved` | `"removed"` | Soft-deleted from the inventory |
 

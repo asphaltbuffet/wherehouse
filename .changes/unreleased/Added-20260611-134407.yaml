@@ -1,0 +1,5 @@
+kind: Added
+body: '''borrowed'' items can be removed from tracking with ''return'' subcommand'
+time: 2026-06-11T13:44:07.689215427-04:00
+custom:
+    Issue: '#215'

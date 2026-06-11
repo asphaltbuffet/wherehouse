@@ -297,6 +297,37 @@ func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventor
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
+func (b *Bus) handleEntityBorrowed(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	var p EntityBorrowedPayload
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return fmt.Errorf("handleEntityBorrowed: unmarshal: %w", err)
+	}
+
+	canonicalName := inventory.CanonicalizeString(p.DisplayName)
+	fullPathDisplay, fullPathCanonical, depth, err := b.store.ComputeEntityPathTx(
+		ctx, tx, p.DisplayName, canonicalName, p.ParentID,
+	)
+	if err != nil {
+		return fmt.Errorf("handleEntityBorrowed: %w", err)
+	}
+
+	entity := &inventory.Entity{
+		EntityID:          p.EntityID,
+		DisplayName:       p.DisplayName,
+		CanonicalName:     canonicalName,
+		ParentID:          p.ParentID,
+		FullPathDisplay:   fullPathDisplay,
+		FullPathCanonical: fullPathCanonical,
+		Depth:             depth,
+		Status:            inventory.EntityStatusBorrowed,
+		StatusContext:     p.StatusContext,
+		LastEventID:       ev.EventID,
+		UpdatedAt:         time.Now().UTC(),
+	}
+
+	return b.store.InsertEntityTx(ctx, tx, entity)
+}
+
 func (b *Bus) handleEntityTagAdded(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
 	var p EntityTagAddedPayload
 	if err := json.Unmarshal(ev.Payload, &p); err != nil {

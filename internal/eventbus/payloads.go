@@ -75,3 +75,11 @@ type EntityDiscreteSetPayload struct {
 type EntityDiscreteClearedPayload struct {
 	EntityID string `json:"entity_id"`
 }
+
+// EntityBorrowedPayload is the JSON payload for an EntityBorrowedEvent.
+type EntityBorrowedPayload struct {
+	EntityID      string  `json:"entity_id"`
+	DisplayName   string  `json:"display_name"`
+	ParentID      *string `json:"parent_id,omitempty"`
+	StatusContext *string `json:"status_context,omitempty"`
+}

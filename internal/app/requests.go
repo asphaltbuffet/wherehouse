@@ -45,6 +45,15 @@ type ChangeStatusRequest struct {
 	Note          string
 }
 
+// BorrowEntityRequest is the input for borrowing an external entity into the inventory.
+type BorrowEntityRequest struct {
+	DisplayName   string
+	ParentPath    string
+	StatusContext string // lender name, stored in --from flag
+	ActorID       string
+	Note          string
+}
+
 // GetHistoryRequest is the input for retrieving an entity's event history.
 type GetHistoryRequest struct {
 	EntityPath  string

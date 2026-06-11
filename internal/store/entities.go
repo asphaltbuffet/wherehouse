@@ -76,6 +76,25 @@ func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Enti
 	return e, nil
 }
 
+// GetEntityAnyStatus retrieves a single entity by ID regardless of status, including removed entities.
+func (s *Store) GetEntityAnyStatus(ctx context.Context, entityID string) (*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, locked, discrete,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE entity_id = ?`
+
+	row := s.db.QueryRowContext(ctx, query, entityID)
+	e, err := scanEntity(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get entity %s: %w", entityID, err)
+	}
+	return e, nil
+}
+
 // GetEntitiesByCanonicalName retrieves all entities with a given canonical name,
 // ordered by full_path_canonical ASC, entity_id ASC.
 // GetEntitiesByCanonicalName retrieves all non-removed entities with a given canonical name,

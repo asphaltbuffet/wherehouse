@@ -23,6 +23,7 @@ const (
 	EntityUnlockedEvent                             // entity.unlocked
 	EntityDiscreteSetEvent                          // entity.discrete_set
 	EntityDiscreteClearedEvent                      // entity.discrete_cleared
+	EntityBorrowedEvent                             // entity.borrowed
 )
 
 var eventTypeByName = map[string]EventType{
@@ -38,6 +39,7 @@ var eventTypeByName = map[string]EventType{
 	EntityUnlockedEvent.String():        EntityUnlockedEvent,
 	EntityDiscreteSetEvent.String():     EntityDiscreteSetEvent,
 	EntityDiscreteClearedEvent.String(): EntityDiscreteClearedEvent,
+	EntityBorrowedEvent.String():        EntityBorrowedEvent,
 }
 
 // ParseEventType converts a string to an EventType, returning an error for unknown values.

@@ -112,6 +112,10 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 		return fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
 	}
 
+	if entity.Status == inventory.EntityStatusBorrowed {
+		return fmt.Errorf("cannot remove %q: entity is borrowed — use 'return' instead", entity.FullPathDisplay)
+	}
+
 	payload := eventbus.EntityRemovedPayload{EntityID: entity.EntityID}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -144,6 +148,18 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 // EntityResult has HasChildren=false (callers needing it should use ListEntities).
 func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult, error) {
 	entity, err := a.store.GetEntity(ctx, entityID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, ErrNotFound)
+		}
+		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
+	}
+	return a.entityWithTags(ctx, entity)
+}
+
+// GetEntityByIDAnyStatus retrieves an entity by ID regardless of status, including removed entities.
+func (a *App) GetEntityByIDAnyStatus(ctx context.Context, entityID string) (EntityResult, error) {
+	entity, err := a.store.GetEntityAnyStatus(ctx, entityID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, ErrNotFound)

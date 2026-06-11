@@ -79,7 +79,11 @@ func runReturn(cmd *cobra.Command, args []string, a *app.App) error {
 	}
 
 	for _, result := range results {
-		out.Success(fmt.Sprintf("%q marked as returned", result.FullPathDisplay))
+		if result.Status == inventory.EntityStatusRemoved {
+			out.Success(fmt.Sprintf("%q returned and removed from inventory", result.FullPathDisplay))
+		} else {
+			out.Success(fmt.Sprintf("%q marked as returned", result.FullPathDisplay))
+		}
 	}
 	return nil
 }

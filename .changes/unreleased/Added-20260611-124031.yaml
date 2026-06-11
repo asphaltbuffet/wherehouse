@@ -1,0 +1,5 @@
+kind: Added
+body: Allow creation of an entity with 'borrow' subcommand
+time: 2026-06-11T12:40:31.68601561-04:00
+custom:
+    Issue: '#215'
