@@ -1,0 +1,5 @@
+kind: Added
+body: Entities can be marked as 'missing' with 'lost' subcommand
+time: 2026-06-11T00:21:07.396271853-04:00
+custom:
+    Issue: '#215'

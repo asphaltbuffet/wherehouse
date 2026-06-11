@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 // ChangeStatus records a status-change event for the entity at the given path.
@@ -50,4 +52,70 @@ func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) (Entity
 	}
 
 	return result, nil
+}
+
+// MarkLost sets the status of all specified entities to missing in a single atomic transaction.
+func (a *App) MarkLost(ctx context.Context, reqs []ChangeStatusRequest) ([]EntityResult, error) {
+	if len(reqs) == 0 {
+		return nil, errors.New("MarkLost: at least one request required")
+	}
+
+	entityIDs := make([]string, len(reqs))
+
+	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		for i, req := range reqs {
+			id, err := a.markLostInTx(ctx, tx, req)
+			if err != nil {
+				return err
+			}
+			entityIDs[i] = id
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	results := make([]EntityResult, len(entityIDs))
+	for i, id := range entityIDs {
+		result, err := a.GetEntityByID(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("get updated entity: %w", err)
+		}
+		results[i] = result
+	}
+
+	return results, nil
+}
+
+func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
+	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+	}
+
+	if entity.Locked {
+		return "", fmt.Errorf("cannot mark %q as missing: entity is locked", entity.FullPathDisplay)
+	}
+
+	payload := eventbus.EntityStatusChangedPayload{
+		EntityID: entity.EntityID,
+		Status:   inventory.EntityStatusMissing.String(),
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal payload: %w", err)
+	}
+
+	var note *string
+	if req.Note != "" {
+		note = &req.Note
+	}
+
+	if _, err = a.bus.DispatchInTx(
+		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
+	); err != nil {
+		return "", fmt.Errorf("mark lost %q: %w", req.EntityPath, err)
+	}
+
+	return entity.EntityID, nil
 }

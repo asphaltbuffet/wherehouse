@@ -15,6 +15,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	importcmd "github.com/asphaltbuffet/wherehouse/cmd/import"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
+	"github.com/asphaltbuffet/wherehouse/cmd/lost"
 	"github.com/asphaltbuffet/wherehouse/cmd/man"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
@@ -73,6 +74,7 @@ Examples:
 	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
 	rootCmd.AddCommand(importcmd.NewDefaultImportCmd())
 	rootCmd.AddCommand(listcmd.NewDefaultListCmd())
+	rootCmd.AddCommand(lost.NewDefaultLostCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
 	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
 	rootCmd.AddCommand(rename.NewDefaultRenameCmd())
