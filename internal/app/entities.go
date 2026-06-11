@@ -143,6 +143,53 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 	return a.entityWithTags(ctx, entity)
 }
 
+// LookupEntityStatus returns all entities ever at the given path (any status, including removed),
+// ranked by last_event_id DESC (most recent first). Returns ErrNotFound when no entity matches.
+func (a *App) LookupEntityStatus(ctx context.Context, path string) ([]EntityResult, error) {
+	p, err := entitypath.Parse(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse path %q: %w", path, err)
+	}
+
+	segments := p.Segments()
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("parse path %q: %w", path, ErrNotFound)
+	}
+
+	canonicalSegments := make([]string, len(segments))
+	for i, seg := range segments {
+		canonicalSegments[i] = inventory.CanonicalizeString(seg)
+	}
+	cp, err := entitypath.New(canonicalSegments...)
+	if err != nil {
+		return nil, fmt.Errorf("build canonical path: %w", err)
+	}
+	canonicalPath := cp.String()
+	canonicalLeaf := canonicalSegments[len(canonicalSegments)-1]
+
+	candidates, err := a.store.GetEntitiesByCanonicalNameAnyStatus(ctx, canonicalLeaf)
+	if err != nil {
+		return nil, fmt.Errorf("lookup %q: %w", canonicalLeaf, err)
+	}
+
+	var matches []EntityResult
+	for _, e := range candidates {
+		if e.FullPathCanonical == canonicalPath {
+			var r EntityResult
+			r, err = a.entityWithTags(ctx, e)
+			if err != nil {
+				return nil, err
+			}
+			matches = append(matches, r)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("%w: %q", ErrNotFound, path)
+	}
+	return matches, nil
+}
+
 // GetEntityByID retrieves an entity by its stable ID.
 // Returns ErrNotFound if the entity does not exist; the returned
 // EntityResult has HasChildren=false (callers needing it should use ListEntities).

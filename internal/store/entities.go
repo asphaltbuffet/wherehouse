@@ -115,6 +115,26 @@ func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string
 	return scanEntities(rows)
 }
 
+// GetEntitiesByCanonicalNameAnyStatus retrieves all entities with a given canonical name,
+// including removed entities, ordered by last_event_id DESC.
+func (s *Store) GetEntitiesByCanonicalNameAnyStatus(
+	ctx context.Context, canonical string,
+) ([]*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, locked, discrete,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE canonical_name = ?
+		ORDER BY full_path_canonical ASC, last_event_id DESC`
+
+	rows, err := s.db.QueryContext(ctx, query, canonical)
+	if err != nil {
+		return nil, fmt.Errorf("query by canonical name %q: %w", canonical, err)
+	}
+	defer rows.Close()
+	return scanEntities(rows)
+}
+
 // GetEntitiesByCanonicalNameTx queries entities_current by canonical name within an existing transaction.
 func (s *Store) GetEntitiesByCanonicalNameTx(
 	ctx context.Context, tx Tx, canonical string,

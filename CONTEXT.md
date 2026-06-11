@@ -60,6 +60,7 @@ The event types currently implemented:
 | `EntityUnlockedEvent` | Entity's `locked` flag set to `false` |
 | `EntityDiscreteSetEvent` | Entity's `discrete` flag set to `true` |
 | `EntityDiscreteClearedEvent` | Entity's `discrete` flag set to `false` |
+| `EntityBorrowedEvent` | A new entity was created directly in `borrowed` status (atomic; no preceding `EntityCreatedEvent`) |
 
 ### Projection
 

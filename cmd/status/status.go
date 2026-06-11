@@ -2,13 +2,13 @@ package status
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 // NewDefaultStatusCmd returns a status command that opens the database from context configuration at runtime.
@@ -33,44 +33,28 @@ func NewStatusCmd(a *app.App) *cobra.Command {
 }
 
 func buildStatusCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "status <path>",
-		Short: "Change the status of an entity",
-		Long: `Change the lifecycle status of an entity identified by its full path.
+		Short: "Show the status of an entity",
+		Long: `Show the lifecycle status of an entity identified by its full path.
 
-Valid statuses: ok, borrowed, missing, loaned, removed
+Includes removed entities. If multiple entities have shared the same path
+(e.g. after a remove and re-add), all are shown ranked most-recent first.
 
 Examples:
-  wherehouse status "Garage:Toolbox:Wrench" --set borrowed --note "loaned to Bob"
-  wherehouse status "Garage:Toolbox:Wrench" --set ok`,
+  wherehouse status "Garage:Toolbox:Wrench"
+  wherehouse status "Garage:Toolbox:Wrench" --json`,
 		Args: cobra.ExactArgs(1),
 	}
-	cmd.Flags().StringP("set", "s", "", "New status value (REQUIRED): ok, borrowed, missing, loaned, removed")
-	_ = cmd.MarkFlagRequired("set")
-	cmd.Flags().StringP("note", "n", "", "Optional context note for the status change")
-	return cmd
 }
 
 func runStatus(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
 	path := args[0]
-	setFlag, _ := cmd.Flags().GetString("set")
-	noteFlag, _ := cmd.Flags().GetString("note")
 
-	newStatus, err := inventory.ParseEntityStatus(setFlag)
+	results, err := a.LookupEntityStatus(ctx, path)
 	if err != nil {
-		return err
-	}
-
-	result, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
-		EntityPath:    path,
-		Status:        newStatus,
-		StatusContext: noteFlag,
-		Note:          noteFlag,
-		ActorID:       cli.GetActorUserID(ctx),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update status of %q: %w", path, err)
+		return fmt.Errorf("status %q: %w", path, err)
 	}
 
 	cfg, ok := cli.GetConfig(ctx)
@@ -78,13 +62,16 @@ func runStatus(cmd *cobra.Command, args []string, a *app.App) error {
 		cfg = config.GetDefaults()
 	}
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
-	if out.IsJSON() {
-		return out.JSON(app.ToStatusOutput(result))
-	}
-	msg := fmt.Sprintf("Status of %q set to %s", result.FullPathDisplay, result.Status)
-	if result.StatusContext != "" {
-		msg += fmt.Sprintf(" (%s)", result.StatusContext)
-	}
-	out.Success(msg)
-	return nil
+
+	return out.Render(app.ToStatusOutputs(results), func() string {
+		var sb strings.Builder
+		for _, r := range results {
+			line := fmt.Sprintf("%s: %s", r.FullPathDisplay, r.Status)
+			if r.StatusContext != "" {
+				line += fmt.Sprintf(" (%s)", r.StatusContext)
+			}
+			sb.WriteString(line + "\n")
+		}
+		return strings.TrimRight(sb.String(), "\n")
+	})
 }
