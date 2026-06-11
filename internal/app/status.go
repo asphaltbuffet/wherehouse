@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -56,15 +55,24 @@ func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) (Entity
 
 // MarkLost sets the status of all specified entities to missing in a single atomic transaction.
 func (a *App) MarkLost(ctx context.Context, reqs []ChangeStatusRequest) ([]EntityResult, error) {
+	return a.markStatusBatch(ctx, "MarkLost", reqs, a.markLostInTx)
+}
+
+func (a *App) markStatusBatch(
+	ctx context.Context,
+	caller string,
+	reqs []ChangeStatusRequest,
+	inTx func(context.Context, store.Tx, ChangeStatusRequest) (string, error),
+) ([]EntityResult, error) {
 	if len(reqs) == 0 {
-		return nil, errors.New("MarkLost: at least one request required")
+		return nil, fmt.Errorf("%s: at least one request required", caller)
 	}
 
 	entityIDs := make([]string, len(reqs))
 
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		for i, req := range reqs {
-			id, err := a.markLostInTx(ctx, tx, req)
+			id, err := inTx(ctx, tx, req)
 			if err != nil {
 				return err
 			}
@@ -115,6 +123,40 @@ func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
 	); err != nil {
 		return "", fmt.Errorf("mark lost %q: %w", req.EntityPath, err)
+	}
+
+	return entity.EntityID, nil
+}
+
+// MarkFound sets the status of all specified entities to ok in a single atomic transaction.
+func (a *App) MarkFound(ctx context.Context, reqs []ChangeStatusRequest) ([]EntityResult, error) {
+	return a.markStatusBatch(ctx, "MarkFound", reqs, a.markFoundInTx)
+}
+
+func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
+	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+	}
+
+	payload := eventbus.EntityStatusChangedPayload{
+		EntityID: entity.EntityID,
+		Status:   inventory.EntityStatusOk.String(),
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal payload: %w", err)
+	}
+
+	var note *string
+	if req.Note != "" {
+		note = &req.Note
+	}
+
+	if _, err = a.bus.DispatchInTx(
+		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
+	); err != nil {
+		return "", fmt.Errorf("mark found %q: %w", req.EntityPath, err)
 	}
 
 	return entity.EntityID, nil
