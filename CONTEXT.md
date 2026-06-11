@@ -14,7 +14,7 @@ The single unified domain type. Everything in the inventory — a storage place,
 
 ### locked
 
-A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` (its location is fixed by assertion). Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
+A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
 
 ### discrete
 
@@ -28,8 +28,8 @@ The lifecycle state of an entity. Valid values:
 |---|---|---|
 | `EntityStatusOk` | `"ok"` | Normal, at its location |
 | `EntityStatusMissing` | `"missing"` | Location unknown |
-| `EntityStatusBorrowed` | `"borrowed"` | Lent to someone temporarily |
-| `EntityStatusLoaned` | `"loaned"` | Out on loan |
+| `EntityStatusBorrowed` | `"borrowed"` | An external item brought into the inventory temporarily (a new entity is created to represent it) |
+| `EntityStatusLoaned` | `"loaned"` | An existing inventory entity given out to someone else (the entity already exists; no new entity is created) |
 | `EntityStatusRemoved` | `"removed"` | Soft-deleted from the inventory |
 
 Status changes may carry an optional `StatusContext` (free-text, e.g. borrower name).

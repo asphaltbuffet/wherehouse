@@ -133,6 +133,50 @@ func (a *App) MarkFound(ctx context.Context, reqs []ChangeStatusRequest) ([]Enti
 	return a.markStatusBatch(ctx, "MarkFound", reqs, a.markFoundInTx)
 }
 
+// MarkLoaned sets the status of all specified entities to loaned in a single atomic transaction.
+func (a *App) MarkLoaned(ctx context.Context, reqs []ChangeStatusRequest) ([]EntityResult, error) {
+	return a.markStatusBatch(ctx, "MarkLoaned", reqs, a.markLoanInTx)
+}
+
+func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
+	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+	}
+
+	if entity.Locked {
+		return "", fmt.Errorf("cannot loan %q: entity is locked", entity.FullPathDisplay)
+	}
+
+	var statusContext *string
+	if req.StatusContext != "" {
+		statusContext = &req.StatusContext
+	}
+
+	payload := eventbus.EntityStatusChangedPayload{
+		EntityID:      entity.EntityID,
+		Status:        inventory.EntityStatusLoaned.String(),
+		StatusContext: statusContext,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal payload: %w", err)
+	}
+
+	var note *string
+	if req.Note != "" {
+		note = &req.Note
+	}
+
+	if _, err = a.bus.DispatchInTx(
+		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
+	); err != nil {
+		return "", fmt.Errorf("mark loaned %q: %w", req.EntityPath, err)
+	}
+
+	return entity.EntityID, nil
+}
+
 func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
 	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
 	if err != nil {
