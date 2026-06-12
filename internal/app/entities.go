@@ -254,6 +254,31 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 	return results, nil
 }
 
+// GetRootEntities returns all non-removed entities at the root of the hierarchy (no parent).
+func (a *App) GetRootEntities(ctx context.Context) ([]EntityResult, error) {
+	rows, err := a.store.GetRootEntities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get root entities: %w", err)
+	}
+
+	ids := make([]string, len(rows))
+	for i, row := range rows {
+		ids[i] = row.Entity.EntityID
+	}
+
+	tagsByID, err := a.store.GetTagsByEntities(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get root entities tags: %w", err)
+	}
+
+	results := make([]EntityResult, len(rows))
+	for i, row := range rows {
+		results[i] = entityToResult(row.Entity, tagsByID[row.Entity.EntityID])
+		results[i].HasChildren = row.HasChildren
+	}
+	return results, nil
+}
+
 // resolveEntityPath looks up an entity by its colon-separated display path.
 // Returns ErrNotFound if no match exists.
 func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.Entity, error) {

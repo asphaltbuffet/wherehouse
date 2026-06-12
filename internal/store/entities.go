@@ -183,6 +183,28 @@ func (s *Store) GetChildren(ctx context.Context, parentID string) ([]ChildRow, e
 	return scanChildRows(rows)
 }
 
+// GetRootEntities returns all non-removed entities at depth 0 (no parent), ordered by display_name ASC, entity_id ASC.
+func (s *Store) GetRootEntities(ctx context.Context) ([]ChildRow, error) {
+	const query = `
+		SELECT ec.entity_id, ec.display_name, ec.canonical_name, ec.locked, ec.discrete,
+		       ec.parent_id, ec.full_path_display, ec.full_path_canonical,
+		       ec.depth, ec.status, ec.status_context, ec.last_event_id, ec.updated_at,
+		       EXISTS (
+		           SELECT 1 FROM entities_current c
+		           WHERE c.parent_id = ec.entity_id AND c.status != 'removed'
+		       ) AS has_children
+		FROM entities_current ec
+		WHERE ec.parent_id IS NULL AND ec.status != 'removed'
+		ORDER BY ec.display_name ASC, ec.entity_id ASC`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("get root entities: %w", err)
+	}
+	defer rows.Close()
+	return scanChildRows(rows)
+}
+
 // GetDescendants retrieves all descendants using path prefix matching,
 // ordered by depth ASC, display_name ASC, entity_id ASC.
 // GetDescendants retrieves all non-removed descendants using path prefix matching,

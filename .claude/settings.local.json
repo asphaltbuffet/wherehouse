@@ -56,7 +56,8 @@
       "mcp__plugin_claude-code-home-manager_serena__insert_before_symbol",
       "mcp__plugin_github_github__pull_request_read",
       "mcp__plugin_github_github__list_pull_requests",
-      "WebSearch"
+      "WebSearch",
+      "mcp__plugin_claude-code-home-manager_context7__resolve-library-id"
     ]
   },
   "enableAllProjectMcpServers": true,

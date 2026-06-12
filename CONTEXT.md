@@ -138,7 +138,7 @@ The top-level verdict of a `doctor` run. `true` when no `DoctorIssue`s were foun
 - Replay order is strictly by `event_id ASC`. Timestamps do not determine order.
 - Every `ORDER BY` that could tie must include `event_id ASC` as a tiebreaker.
 - All projection tables (`entities_current`, `entity_tags`) must be fully rebuildable by replaying the event stream. `TruncateAndReplay` truncates all projection tables before replaying.
-- Entity canonical names are not globally unique and uniqueness within a parent is not currently enforced. **This is under active redesign** — the quantity-vs-distinct-entity tension and resolver-ambiguity consequences are tracked in [issue #241](https://github.com/asphaltbuffet/wherehouse/issues/241).
+- Entity canonical names are not globally unique and uniqueness within a parent is not enforced. Multiple entities may share a name (e.g. three identical "10mm socket" entities in the same drawer) — each is distinct by `entity_id` and has its own history and status. Disambiguation between same-name entities is a UI concern, not a data model concern.
 - Path propagation is recursive: reparenting an entity triggers `EntityPathChangedEvent` for all descendants.
 - `EntityRemovedEvent` sets `status = "removed"`. Removed entities remain in `entities_current` (soft delete).
 - No silent repair. No auto-retry beyond the `WithRetry` helper for SQLite locking.
