@@ -48,7 +48,7 @@ Examples:
   wherehouse rename "Garage:Toolbox:Wrench" --to "Pipe Wrench"`,
 		Args: cobra.ExactArgs(1),
 	}
-	cmd.Flags().StringP("to", "t", "", "New display name (REQUIRED)")
+	cmd.Flags().StringP("to", "t", "", "New display name")
 	_ = cmd.MarkFlagRequired("to")
 	return cmd
 }

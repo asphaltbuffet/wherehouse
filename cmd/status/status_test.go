@@ -3,6 +3,7 @@ package status_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,58 +35,91 @@ func seedForStatus(t *testing.T, a *app.App) {
 	}
 }
 
-func TestRunStatus_HappyPath(t *testing.T) {
+func TestRunStatus_ShowsCurrentStatus(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedForStatus(t, a)
 
+	var stdout bytes.Buffer
 	cmd := status.NewStatusCmd(a)
-	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--set", "borrowed", "--note", "loaned to Bob"})
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-	require.NoError(t, cmd.Execute())
-
-	entities, err := a.ListEntities(t.Context())
-	require.NoError(t, err)
-	for _, e := range entities {
-		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
-			assert.Equal(t, inventory.EntityStatusBorrowed, e.Status)
-		}
-	}
-}
-
-func TestRunStatus_InvalidStatus(t *testing.T) {
-	a := apptesting.OpenApp(t)
-	cmd := status.NewStatusCmd(a)
-	cmd.SetArgs([]string{"Garage:Wrench", "--set", "invalid-status"})
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-	err := cmd.Execute()
-	require.Error(t, err)
-}
-
-func TestRunStatus_PropagatesError(t *testing.T) {
-	a := apptesting.OpenApp(t)
-	// No entities — path not found
-	cmd := status.NewStatusCmd(a)
-	cmd.SetArgs([]string{"Garage:Missing", "--set", "ok"})
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-	err := cmd.Execute()
-	require.Error(t, err)
-}
-
-func TestRunStatus_Quiet_SuppressesSuccess(t *testing.T) {
-	a := apptesting.OpenApp(t)
-	seedForStatus(t, a)
-	cmd := status.NewStatusCmd(a)
-	cmd.SetContext(
-		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithQuiet())),
-	)
-	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--set", "missing"})
-	var stdout, stderr bytes.Buffer
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
 	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
+	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
-	assert.Empty(t, stdout.String())
-	assert.Empty(t, stderr.String())
+
+	assert.Contains(t, stdout.String(), "ok")
+}
+
+func TestRunStatus_ShowsRemovedEntity(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForStatus(t, a)
+	err := a.RemoveEntity(t.Context(), app.RemoveEntityRequest{
+		EntityPath: "Garage:Toolbox:Wrench", ActorID: "test",
+	})
+	require.NoError(t, err)
+
+	var stdout bytes.Buffer
+	cmd := status.NewStatusCmd(a)
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	assert.Contains(t, stdout.String(), "removed")
+}
+
+func TestRunStatus_MultipleMatches_RankedByEventID(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForStatus(t, a)
+
+	// Remove the wrench, then re-add it — two entities ever at this path
+	err := a.RemoveEntity(t.Context(), app.RemoveEntityRequest{
+		EntityPath: "Garage:Toolbox:Wrench", ActorID: "test",
+	})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(t.Context(), app.CreateEntityRequest{
+		DisplayName: "Wrench", ParentPath: "Garage:Toolbox", ActorID: "test",
+	})
+	require.NoError(t, err)
+
+	var stdout bytes.Buffer
+	cmd := status.NewStatusCmd(a)
+	cmd.SetContext(context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithJSON())))
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	var results []app.StatusOutput
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &results))
+	require.Len(t, results, 2)
+	assert.Equal(t, inventory.EntityStatusOk, results[0].Status)
+	assert.Equal(t, inventory.EntityStatusRemoved, results[1].Status)
+}
+
+func TestRunStatus_NotFound_ReturnsError(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	cmd := status.NewStatusCmd(a)
+	cmd.SetArgs([]string{"Garage:NoSuchThing"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	require.Error(t, cmd.Execute())
+}
+
+func TestRunStatus_JSON(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForStatus(t, a)
+
+	var stdout bytes.Buffer
+	cmd := status.NewStatusCmd(a)
+	cmd.SetContext(context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithJSON())))
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	var results []app.StatusOutput
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &results))
+	require.Len(t, results, 1)
+	assert.Equal(t, "Garage:Toolbox:Wrench", results[0].Path)
+	assert.Equal(t, inventory.EntityStatusOk, results[0].Status)
 }

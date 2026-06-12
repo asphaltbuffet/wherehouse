@@ -1,0 +1,5 @@
+kind: Added
+body: '''missing'' entities can be marked ''ok'' with the ''found'' subcommand'
+time: 2026-06-11T00:32:28.8565446-04:00
+custom:
+    Issue: '#215'

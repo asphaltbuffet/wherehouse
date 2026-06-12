@@ -14,7 +14,7 @@ The single unified domain type. Everything in the inventory — a storage place,
 
 ### locked
 
-A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` (its location is fixed by assertion). Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
+A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
 
 ### discrete
 
@@ -28,11 +28,13 @@ The lifecycle state of an entity. Valid values:
 |---|---|---|
 | `EntityStatusOk` | `"ok"` | Normal, at its location |
 | `EntityStatusMissing` | `"missing"` | Location unknown |
-| `EntityStatusBorrowed` | `"borrowed"` | Lent to someone temporarily |
-| `EntityStatusLoaned` | `"loaned"` | Out on loan |
+| `EntityStatusBorrowed` | `"borrowed"` | An external item brought into the inventory temporarily (a new entity is created to represent it). `borrowed` is a terminal status — the only valid transition is `return`, which sets the entity to `removed`. All other status changes (including `ok`, `missing`, `loaned`) and direct `remove` are blocked. |
+| `EntityStatusLoaned` | `"loaned"` | An existing inventory entity given out to someone else (the entity already exists; no new entity is created) |
 | `EntityStatusRemoved` | `"removed"` | Soft-deleted from the inventory |
 
-Status changes may carry an optional `StatusContext` (free-text, e.g. borrower name).
+Status changes may carry an optional `StatusContext` (free-text, e.g. borrower name). For `loaned`, the recipient (`loan --to`) is **required**, mirroring `borrow --from`.
+
+Each status is reached by exactly one intent-driven command (`lost`, `found`, `loan`, `return`, `borrow`), and each command rejects illegal source statuses rather than performing a no-op transition. The full legal transition table is recorded in [ADR 0024](docs/adr/0024-status-transition-commands-enforce-source-preconditions.md).
 
 ### Event
 
@@ -60,6 +62,7 @@ The event types currently implemented:
 | `EntityUnlockedEvent` | Entity's `locked` flag set to `false` |
 | `EntityDiscreteSetEvent` | Entity's `discrete` flag set to `true` |
 | `EntityDiscreteClearedEvent` | Entity's `discrete` flag set to `false` |
+| `EntityBorrowedEvent` | A new entity was created directly in `borrowed` status (atomic; no preceding `EntityCreatedEvent`) |
 
 ### Projection
 
@@ -135,7 +138,7 @@ The top-level verdict of a `doctor` run. `true` when no `DoctorIssue`s were foun
 - Replay order is strictly by `event_id ASC`. Timestamps do not determine order.
 - Every `ORDER BY` that could tie must include `event_id ASC` as a tiebreaker.
 - All projection tables (`entities_current`, `entity_tags`) must be fully rebuildable by replaying the event stream. `TruncateAndReplay` truncates all projection tables before replaying.
-- Entity canonical names are not globally unique and uniqueness within a parent is not currently enforced.
+- Entity canonical names are not globally unique and uniqueness within a parent is not currently enforced. **This is under active redesign** — the quantity-vs-distinct-entity tension and resolver-ambiguity consequences are tracked in [issue #241](https://github.com/asphaltbuffet/wherehouse/issues/241).
 - Path propagation is recursive: reparenting an entity triggers `EntityPathChangedEvent` for all descendants.
 - `EntityRemovedEvent` sets `status = "removed"`. Removed entities remain in `entities_current` (soft delete).
 - No silent repair. No auto-retry beyond the `WithRetry` helper for SQLite locking.

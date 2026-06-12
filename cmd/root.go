@@ -9,16 +9,21 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
+	"github.com/asphaltbuffet/wherehouse/cmd/borrow"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/cmd/doctor"
 	"github.com/asphaltbuffet/wherehouse/cmd/export"
+	"github.com/asphaltbuffet/wherehouse/cmd/found"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	importcmd "github.com/asphaltbuffet/wherehouse/cmd/import"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
+	"github.com/asphaltbuffet/wherehouse/cmd/loan"
+	"github.com/asphaltbuffet/wherehouse/cmd/lost"
 	"github.com/asphaltbuffet/wherehouse/cmd/man"
 	"github.com/asphaltbuffet/wherehouse/cmd/move"
 	"github.com/asphaltbuffet/wherehouse/cmd/remove"
 	"github.com/asphaltbuffet/wherehouse/cmd/rename"
+	returncmd "github.com/asphaltbuffet/wherehouse/cmd/return"
 	"github.com/asphaltbuffet/wherehouse/cmd/scry"
 	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/cmd/status"
@@ -69,13 +74,18 @@ Examples:
 
 	rootCmd.AddCommand(configpkg.NewConfigCmd())
 	rootCmd.AddCommand(add.NewDefaultAddCmd())
+	rootCmd.AddCommand(borrow.NewDefaultBorrowCmd())
 	rootCmd.AddCommand(export.NewDefaultExportCmd())
+	rootCmd.AddCommand(found.NewDefaultFoundCmd())
 	rootCmd.AddCommand(history.NewDefaultHistoryCmd())
 	rootCmd.AddCommand(importcmd.NewDefaultImportCmd())
 	rootCmd.AddCommand(listcmd.NewDefaultListCmd())
+	rootCmd.AddCommand(loan.NewDefaultLoanCmd())
+	rootCmd.AddCommand(lost.NewDefaultLostCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
 	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
 	rootCmd.AddCommand(rename.NewDefaultRenameCmd())
+	rootCmd.AddCommand(returncmd.NewDefaultReturnCmd())
 	rootCmd.AddCommand(scry.NewDefaultScryCmd())
 	rootCmd.AddCommand(serve.NewDefaultServeCmd())
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())

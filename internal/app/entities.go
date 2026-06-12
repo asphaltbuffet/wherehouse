@@ -112,6 +112,10 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 		return fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
 	}
 
+	if entity.Status == inventory.EntityStatusBorrowed {
+		return fmt.Errorf("cannot remove %q: entity is borrowed — use 'return' instead", entity.FullPathDisplay)
+	}
+
 	payload := eventbus.EntityRemovedPayload{EntityID: entity.EntityID}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -139,11 +143,54 @@ func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, e
 	return a.entityWithTags(ctx, entity)
 }
 
+// LookupEntityStatus returns all entities ever at the given path (any status, including removed),
+// ranked by last_event_id DESC (most recent first). Returns ErrNotFound when no entity matches.
+func (a *App) LookupEntityStatus(ctx context.Context, path string) ([]EntityResult, error) {
+	canonicalPath, canonicalLeaf, err := canonicalizePath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	candidates, err := a.store.GetEntitiesByCanonicalNameAnyStatus(ctx, canonicalLeaf)
+	if err != nil {
+		return nil, fmt.Errorf("lookup %q: %w", canonicalLeaf, err)
+	}
+
+	var matches []EntityResult
+	for _, e := range candidates {
+		if e.FullPathCanonical == canonicalPath {
+			var r EntityResult
+			r, err = a.entityWithTags(ctx, e)
+			if err != nil {
+				return nil, err
+			}
+			matches = append(matches, r)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("%w: %q", ErrNotFound, path)
+	}
+	return matches, nil
+}
+
 // GetEntityByID retrieves an entity by its stable ID.
 // Returns ErrNotFound if the entity does not exist; the returned
 // EntityResult has HasChildren=false (callers needing it should use ListEntities).
 func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult, error) {
 	entity, err := a.store.GetEntity(ctx, entityID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, ErrNotFound)
+		}
+		return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
+	}
+	return a.entityWithTags(ctx, entity)
+}
+
+// GetEntityByIDAnyStatus retrieves an entity by ID regardless of status, including removed entities.
+func (a *App) GetEntityByIDAnyStatus(ctx context.Context, entityID string) (EntityResult, error) {
+	entity, err := a.store.GetEntityAnyStatus(ctx, entityID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, ErrNotFound)
@@ -221,31 +268,40 @@ func (a *App) resolveEntityPathTx(ctx context.Context, tx store.Tx, path string)
 	})
 }
 
-func (a *App) resolveEntityPathWith(
-	path string,
-	fetch func(canonical string) ([]*inventory.Entity, error),
-) (*inventory.Entity, error) {
+// canonicalizePath parses a display path and returns its full canonical path and
+// canonical leaf segment. An empty path resolves to ErrNotFound. Both the resolver
+// and LookupEntityStatus use this so the two cannot disagree on what a path means.
+func canonicalizePath(path string) (string, string, error) {
 	p, err := entitypath.Parse(path)
 	if err != nil {
-		return nil, fmt.Errorf("parse path %q: %w", path, err)
+		return "", "", fmt.Errorf("parse path %q: %w", path, err)
 	}
 
 	segments := p.Segments()
 	if len(segments) == 0 {
-		return nil, fmt.Errorf("parse path %q: %w", path, ErrNotFound)
+		return "", "", fmt.Errorf("parse path %q: %w", path, ErrNotFound)
 	}
 
 	canonicalSegments := make([]string, len(segments))
 	for i, seg := range segments {
 		canonicalSegments[i] = inventory.CanonicalizeString(seg)
 	}
-	p2, err := entitypath.New(canonicalSegments...)
+	cp, err := entitypath.New(canonicalSegments...)
 	if err != nil {
-		return nil, fmt.Errorf("build canonical path: %w", err)
+		return "", "", fmt.Errorf("build canonical path: %w", err)
 	}
 
-	canonicalPath := p2.String()
-	canonicalLeaf := canonicalSegments[len(canonicalSegments)-1]
+	return cp.String(), canonicalSegments[len(canonicalSegments)-1], nil
+}
+
+func (a *App) resolveEntityPathWith(
+	path string,
+	fetch func(canonical string) ([]*inventory.Entity, error),
+) (*inventory.Entity, error) {
+	canonicalPath, canonicalLeaf, err := canonicalizePath(path)
+	if err != nil {
+		return nil, err
+	}
 
 	candidates, err := fetch(canonicalLeaf)
 	if err != nil {

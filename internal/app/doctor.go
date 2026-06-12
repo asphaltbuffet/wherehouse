@@ -41,7 +41,7 @@ func validateEventLog(events []store.RawEvent, factories map[inventory.EventType
 		// or otherwise-flagged events are still counted for orphan detection.
 		if parseErr == nil && ev.EntityID != nil && *ev.EntityID != "" {
 			switch et { //nolint:exhaustive // only created/removed affect orphan tracking
-			case inventory.EntityCreatedEvent:
+			case inventory.EntityCreatedEvent, inventory.EntityBorrowedEvent:
 				createdIDs[*ev.EntityID] = true
 			case inventory.EntityRemovedEvent:
 				if _, seen := removedIDs[*ev.EntityID]; !seen {
@@ -185,7 +185,7 @@ func buildProjectionSets(events []store.RawEvent) (map[string]bool, map[string]i
 			continue
 		}
 		switch et { //nolint:exhaustive // only created/removed affect the expected-present set
-		case inventory.EntityCreatedEvent:
+		case inventory.EntityCreatedEvent, inventory.EntityBorrowedEvent:
 			created[id] = true
 		case inventory.EntityRemovedEvent:
 			removed[id] = true

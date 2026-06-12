@@ -153,6 +153,15 @@ func ToStatusOutput(result EntityResult) StatusOutput {
 	}
 }
 
+// ToStatusOutputs converts a slice of EntityResult to a slice of StatusOutput for JSON serialization.
+func ToStatusOutputs(results []EntityResult) []StatusOutput {
+	out := make([]StatusOutput, len(results))
+	for i, r := range results {
+		out[i] = ToStatusOutput(r)
+	}
+	return out
+}
+
 // TagOutput is the --json output shape for the tag command.
 type TagOutput struct {
 	Path string   `json:"path"`

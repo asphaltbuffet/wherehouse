@@ -1,0 +1,5 @@
+kind: Removed
+body: Entity status may no longer be set via 'status' command - changed to read-only by removing '--set' flag.
+time: 2026-06-11T15:36:58.882990247-04:00
+custom:
+    Issue: '#215'

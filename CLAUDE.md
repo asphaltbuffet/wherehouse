@@ -153,6 +153,20 @@ All styles live as private fields on the `Styles` struct in `internal/styles/sty
 - No `git` commands — use `jj` equivalents
 - `jj describe <change-id> -m "message"` renames any commit; `jj log --no-graph -r 'trunk()..@'` reviews full branch history
 
+### `sd` patterns — newline limitation
+
+`sd` does **not** match across newlines. A pattern like `'foo,\n'` silently matches nothing (exits 0, no change). Always write patterns that match within a single line:
+
+```bash
+# Wrong — \n never matches, silent no-op
+sd 'EntityType:\s+inventory\.EntityType\w+,\n' '' file.go
+
+# Right — omit the \n; accept that a blank line may remain
+sd 'EntityType:\s+inventory\.EntityType\w+,' '' file.go
+```
+
+If you need to remove an entire line (including the newline), use the `Edit` tool instead of `sd`.
+
 ## Agent skills
 
 ### Issue tracker
@@ -167,6 +181,20 @@ Custom label vocabulary in use (e.g. `to_triage`, `ready_afk`). See `docs/agents
 
 Single-context repo: one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
 
-### Serena MCP gotcha
+### Serena MCP — what to use and what to avoid
 
-`find_symbol` requires `name_path_pattern` (not `name_path`) — passing the wrong key causes a validation error.
+**Use for navigation (reliable):**
+- `find_symbol` — locate a named function/type/struct; requires `name_path_pattern` (not `name_path`) as the key
+- `get_symbols_overview` — understand what's in a file before reading it
+- `find_referencing_symbols` — find callers/importers
+
+**Use for editing only in the narrow case below:**
+- `replace_symbol_body` — only for top-level named functions or types (not closures, not function literals assigned to variables); will fail with `No symbol matching` for anything Serena doesn't index as a standalone symbol
+
+**Never use:**
+- `replace_content` — semantically identical to `Edit` but less reliable (breaks when needle diverges from actual file content); always use `Edit` instead
+- `insert_after_symbol` / `insert_before_symbol` — fragile; prefer `Edit` for inserting code
+
+**Common errors to avoid:**
+- Passing a directory (`internal/app`, `cmd/status`) as `relative_path` — must be a file path like `internal/app/entities.go`
+- Using `replace_symbol_body` on closure-assigned functions or functions defined inside other functions — these are not indexed as top-level symbols

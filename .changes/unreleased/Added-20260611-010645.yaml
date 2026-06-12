@@ -1,0 +1,5 @@
+kind: Added
+body: '''loaned'' entities may be marked ''ok'' with ''return'' subcommand'
+time: 2026-06-11T01:06:45.945098161-04:00
+custom:
+    Issue: '#215'

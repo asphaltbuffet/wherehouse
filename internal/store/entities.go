@@ -76,6 +76,25 @@ func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Enti
 	return e, nil
 }
 
+// GetEntityAnyStatus retrieves a single entity by ID regardless of status, including removed entities.
+func (s *Store) GetEntityAnyStatus(ctx context.Context, entityID string) (*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, locked, discrete,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE entity_id = ?`
+
+	row := s.db.QueryRowContext(ctx, query, entityID)
+	e, err := scanEntity(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get entity %s: %w", entityID, err)
+	}
+	return e, nil
+}
+
 // GetEntitiesByCanonicalName retrieves all entities with a given canonical name,
 // ordered by full_path_canonical ASC, entity_id ASC.
 // GetEntitiesByCanonicalName retrieves all non-removed entities with a given canonical name,
@@ -87,6 +106,26 @@ func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string
 		       depth, status, status_context, last_event_id, updated_at
 		FROM entities_current WHERE canonical_name = ? AND status != 'removed'
 		ORDER BY full_path_canonical ASC, entity_id ASC`
+
+	rows, err := s.db.QueryContext(ctx, query, canonical)
+	if err != nil {
+		return nil, fmt.Errorf("query by canonical name %q: %w", canonical, err)
+	}
+	defer rows.Close()
+	return scanEntities(rows)
+}
+
+// GetEntitiesByCanonicalNameAnyStatus retrieves all entities with a given canonical name,
+// including removed entities, ordered by last_event_id DESC.
+func (s *Store) GetEntitiesByCanonicalNameAnyStatus(
+	ctx context.Context, canonical string,
+) ([]*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, locked, discrete,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE canonical_name = ?
+		ORDER BY full_path_canonical ASC, last_event_id DESC`
 
 	rows, err := s.db.QueryContext(ctx, query, canonical)
 	if err != nil {
