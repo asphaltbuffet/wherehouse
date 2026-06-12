@@ -116,6 +116,10 @@ A typed iota enum classifying which layer a `DoctorIssue` belongs to: `config`, 
 
 The top-level verdict of a `doctor` run. `true` when no `DoctorIssue`s were found across all checks; `false` otherwise. Exposed as `healthy` in `--json` output. Determines exit code regardless of output mode.
 
+### WherehouseName
+
+A user-assigned display label for a database file, stored in `schema_metadata` under the key `"display_name"`. Independent of the filename. Set via `wherehouse db name <display name>`; cleared via `wherehouse db name --clear`. Never parsed as a path or entity name. When unset, displays as `(unnamed)`. Max 255 characters; newlines are rejected.
+
 ---
 
 ## Terms to avoid
