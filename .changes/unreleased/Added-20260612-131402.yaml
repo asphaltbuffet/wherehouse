@@ -1,0 +1,5 @@
+kind: Added
+body: TUI available by running application without a subcommand
+time: 2026-06-12T13:14:02.05073272-04:00
+custom:
+    Issue: '#149'

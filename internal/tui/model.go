@@ -13,8 +13,22 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/styles"
 	versioncmd "github.com/asphaltbuffet/wherehouse/internal/version"
+)
+
+const keyEsc = "esc"
+
+// tuiMode controls which sub-model is active.
+type tuiMode int
+
+const (
+	modeBrowse  tuiMode = iota // two-pane navigator (default)
+	modeForm                   // text-input form for add/loan/borrow
+	modeConfirm                // y/n prompt for lost/found/return
+	modeHistory                // scrollable event timeline
+	modeScry                   // inventory-wide search
 )
 
 // borderWidth is the total horizontal space consumed by a single rounded border (left + right).
@@ -52,6 +66,14 @@ type keyMap struct {
 	Filter   key.Binding
 	Help     key.Binding
 	Quit     key.Binding
+	Add      key.Binding
+	Loan     key.Binding
+	Borrow   key.Binding
+	Lost     key.Binding
+	Return   key.Binding
+	Found    key.Binding
+	History  key.Binding
+	Scry     key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -84,20 +106,54 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("q", "Q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
 		),
+		Add: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "add"),
+		),
+		Loan: key.NewBinding(
+			key.WithKeys("L"),
+			key.WithHelp("L", "loan"),
+		),
+		Borrow: key.NewBinding(
+			key.WithKeys("b"),
+			key.WithHelp("b", "borrow"),
+		),
+		Lost: key.NewBinding(
+			key.WithKeys("x"),
+			key.WithHelp("x", "lost"),
+		),
+		Return: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "return"),
+		),
+		Found: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "found"),
+		),
+		History: key.NewBinding(
+			key.WithKeys("H"),
+			key.WithHelp("H", "history"),
+		),
+		Scry: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "scry"),
+		),
 	}
 }
 
 // ShortHelp implements help.KeyMap.
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.DrillIn, k.DrillOut, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.DrillIn, k.DrillOut, k.Scry, k.History, k.Help, k.Quit}
 }
 
 // FullHelp implements help.KeyMap.
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down},
-		{k.DrillIn, k.DrillOut},
-		{k.Filter, k.Help, k.Quit},
+		{k.DrillIn, k.DrillOut, k.Filter},
+		{k.Add, k.Loan, k.Borrow},
+		{k.Lost, k.Return, k.Found},
+		{k.History, k.Scry, k.Help, k.Quit},
 	}
 }
 
@@ -144,6 +200,12 @@ type Model struct {
 	termWidth   int
 	termHeight  int
 	err         error
+	mode        tuiMode
+	errMsg      string // transient detail-pane error, cleared on next action
+	form        formModel
+	confirm     confirmModel
+	history     historyModel
+	scry        scryModel
 }
 
 // New creates a new TUI model.
@@ -181,6 +243,24 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles all incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Route messages to active sub-model; fall through for modeBrowse.
+	switch m.mode {
+	case modeBrowse:
+		// handled below
+	case modeForm:
+		return m.updateForm(msg)
+	case modeConfirm:
+		return m.updateConfirm(msg)
+	case modeHistory:
+		return m.updateHistory(msg)
+	case modeScry:
+		return m.updateScry(msg)
+	}
+
+	return m.updateBrowse(msg)
+}
+
+func (m Model) updateBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case rootsLoadedMsg:
 		if msg.err != nil {
@@ -189,10 +269,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pathStack = nil
 		m.parentStack = nil
-		m.list.SetItems(toListItems(msg.items))
-		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-		m.list.ResetFilter()
-		m.list.ResetSelected()
+		m = m.loadLevel(msg.items, "")
 		return m, nil
 
 	case childrenLoadedMsg:
@@ -202,10 +279,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pathStack = append(m.pathStack, msg.parentPath)
 		m.parentStack = append(m.parentStack, msg.parentID)
-		m.list.SetItems(toListItems(msg.items))
-		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-		m.list.ResetFilter()
-		m.list.ResetSelected()
+		m = m.loadLevel(msg.items, "")
 		return m, nil
 
 	case levelRestoredMsg:
@@ -215,26 +289,170 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pathStack = msg.pathStack
 		m.parentStack = msg.parentStack
-		m.list.SetItems(toListItems(msg.items))
-		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-		m.list.ResetFilter()
-		m.list.ResetSelected()
+		m = m.loadLevel(msg.items, "")
+		return m, nil
+
+	case childRefreshMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("refresh failed: %v", msg.err)
+			return m, nil
+		}
+		m = m.loadLevel(msg.items, msg.targetEntityID)
+		return m, nil
+
+	case scryNavigatedMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("navigate failed: %v", msg.err)
+			return m, nil
+		}
+		m.mode = modeBrowse
+		m.pathStack = msg.pathStack
+		m.parentStack = msg.parentStack
+		m = m.loadLevel(msg.items, msg.targetEntityID)
 		return m, nil
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
 	case tea.WindowSizeMsg:
-		m.termWidth = msg.Width
-		m.termHeight = msg.Height
-		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-		m.help.SetWidth(msg.Width)
-		return m, nil
+		return m.handleWindowSize(msg), nil
 	}
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
+}
+
+func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
+	m.termWidth = msg.Width
+	m.termHeight = msg.Height
+	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+	m.help.SetWidth(msg.Width)
+	return m
+}
+
+// loadLevel replaces the list contents and positions cursor on targetEntityID (or top if empty).
+func (m Model) loadLevel(entities []app.EntityResult, targetEntityID string) Model {
+	m.list.SetItems(toListItems(entities))
+	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+	m.list.ResetFilter()
+	selectByID(&m.list, targetEntityID)
+	return m
+}
+
+func (m Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		if msg.String() == keyEsc {
+			m.mode = modeBrowse
+			return m, nil
+		}
+	case actionDoneMsg:
+		if msg.err != nil {
+			m.form.err = msg.err
+			return m, nil
+		}
+		m.mode = modeBrowse
+		return m, m.refreshCmd(msg.result.EntityID)
+	}
+	var cmd tea.Cmd
+	m.form, cmd = m.form.Update(msg)
+	return m, cmd
+}
+
+func (m Model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case confirmCancelledMsg:
+		m.mode = modeBrowse
+		return m, nil
+	case actionDoneMsg:
+		m.mode = modeBrowse
+		if msg.err != nil {
+			m.errMsg = msg.err.Error()
+			return m, nil
+		}
+		return m, m.refreshCmd(msg.result.EntityID)
+	case tea.KeyPressMsg:
+		s := msg.String()
+		if s == "n" || s == keyEsc {
+			m.mode = modeBrowse
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.confirm, cmd = m.confirm.Update(msg)
+	return m, cmd
+}
+
+func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case historyCancelledMsg:
+		m.mode = modeBrowse
+		return m, nil
+	case tea.KeyPressMsg:
+		s := msg.String()
+		if s == "q" || s == keyEsc {
+			m.mode = modeBrowse
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.history, cmd = m.history.Update(msg)
+	return m, cmd
+}
+
+func (m Model) updateScry(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case scryCancelledMsg:
+		m.mode = modeBrowse
+		return m, nil
+	case scryNavigatedMsg:
+		return m.updateBrowse(msg)
+	case tea.KeyPressMsg:
+		if msg.String() == keyEsc {
+			m.mode = modeBrowse
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.scry, cmd = m.scry.Update(msg)
+	return m, cmd
+}
+
+// refreshCmd reloads the current level after a mutation.
+func (m Model) refreshCmd(targetEntityID string) tea.Cmd {
+	var parentID string
+	if len(m.parentStack) > 0 {
+		parentID = m.parentStack[len(m.parentStack)-1]
+	}
+	a := m.app
+	id := targetEntityID
+	if parentID == "" {
+		return func() tea.Msg {
+			items, err := a.GetRootEntities(context.Background())
+			return childRefreshMsg{items: items, targetEntityID: id, err: err}
+		}
+	}
+	return func() tea.Msg {
+		items, err := a.GetChildren(context.Background(), parentID)
+		return childRefreshMsg{items: items, targetEntityID: id, err: err}
+	}
+}
+
+// selectByID scans the current list for the entity with the given ID and selects it.
+// Falls back to ResetSelected if not found (e.g. entity was removed).
+func selectByID(l *list.Model, entityID string) {
+	if entityID == "" {
+		l.ResetSelected()
+		return
+	}
+	for i, it := range l.Items() {
+		if it, ok := it.(item); ok && it.result.EntityID == entityID {
+			l.Select(i)
+			return
+		}
+	}
+	l.ResetSelected()
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -243,6 +461,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
+	}
+
+	// Navigation keys clear any transient error.
+	if key.Matches(msg, m.keys.Up, m.keys.Down, m.keys.DrillIn, m.keys.DrillOut) {
+		m.errMsg = ""
 	}
 
 	switch {
@@ -259,11 +482,156 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.DrillOut):
 		return m.drillUp()
+
+	case key.Matches(msg, m.keys.Add):
+		return m.openAdd()
+
+	case key.Matches(msg, m.keys.Loan):
+		return m.openLoan()
+
+	case key.Matches(msg, m.keys.Borrow):
+		return m.openBorrow()
+
+	case key.Matches(msg, m.keys.Lost):
+		return m.openLost()
+
+	case key.Matches(msg, m.keys.Return):
+		return m.openReturn()
+
+	case key.Matches(msg, m.keys.Found):
+		return m.openFound()
+
+	case key.Matches(msg, m.keys.History):
+		return m.openHistory()
+
+	case key.Matches(msg, m.keys.Scry):
+		return m.openScry()
 	}
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
+}
+
+// selectedItem returns the currently highlighted item, if any.
+func (m Model) selectedItem() (item, bool) {
+	sel, ok := m.list.SelectedItem().(item)
+	return sel, ok
+}
+
+// gateError sets errMsg and returns the model unchanged (no mode switch).
+func (m Model) gateError(msg string) (tea.Model, tea.Cmd) {
+	m.errMsg = msg
+	return m, nil
+}
+
+func (m Model) openAdd() (tea.Model, tea.Cmd) {
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m.gateError("no entity selected")
+	}
+	if sel.result.Discrete {
+		return m.gateError("cannot add: entity is discrete (no children allowed)")
+	}
+	m.errMsg = ""
+	m.form = newFormModel(formAdd, sel.result, m.app, m.st)
+	m.mode = modeForm
+	return m, nil
+}
+
+func (m Model) openLoan() (tea.Model, tea.Cmd) {
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m.gateError("no entity selected")
+	}
+	r := sel.result
+	if r.Locked {
+		return m.gateError("cannot loan: entity is locked")
+	}
+	if r.Status != inventory.EntityStatusOk && r.Status != inventory.EntityStatusMissing {
+		return m.gateError("cannot loan: entity must be ok or missing (is " + r.Status.String() + ")")
+	}
+	m.errMsg = ""
+	m.form = newFormModel(formLoan, r, m.app, m.st)
+	m.mode = modeForm
+	return m, nil
+}
+
+func (m Model) openBorrow() (tea.Model, tea.Cmd) {
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m.gateError("no entity selected")
+	}
+	m.errMsg = ""
+	m.form = newFormModel(formBorrow, sel.result, m.app, m.st)
+	m.mode = modeForm
+	return m, nil
+}
+
+func (m Model) openLost() (tea.Model, tea.Cmd) {
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m.gateError("no entity selected")
+	}
+	r := sel.result
+	if r.Locked {
+		return m.gateError("cannot mark lost: entity is locked")
+	}
+	if r.Status != inventory.EntityStatusOk {
+		return m.gateError("cannot mark lost: entity must be ok (is " + r.Status.String() + ")")
+	}
+	m.errMsg = ""
+	m.confirm = newConfirmModel(confirmLost, r, m.app, m.st)
+	m.mode = modeConfirm
+	return m, nil
+}
+
+func (m Model) openReturn() (tea.Model, tea.Cmd) {
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m.gateError("no entity selected")
+	}
+	r := sel.result
+	if r.Status != inventory.EntityStatusLoaned && r.Status != inventory.EntityStatusBorrowed {
+		return m.gateError("cannot return: entity must be loaned or borrowed (is " + r.Status.String() + ")")
+	}
+	m.errMsg = ""
+	m.confirm = newConfirmModel(confirmReturn, r, m.app, m.st)
+	m.mode = modeConfirm
+	return m, nil
+}
+
+func (m Model) openFound() (tea.Model, tea.Cmd) {
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m.gateError("no entity selected")
+	}
+	r := sel.result
+	if r.Status != inventory.EntityStatusMissing {
+		return m.gateError("cannot mark found: entity must be missing (is " + r.Status.String() + ")")
+	}
+	m.errMsg = ""
+	m.confirm = newConfirmModel(confirmFound, r, m.app, m.st)
+	m.mode = modeConfirm
+	return m, nil
+}
+
+func (m Model) openHistory() (tea.Model, tea.Cmd) {
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m.gateError("no entity selected")
+	}
+	m.errMsg = ""
+	m.history = newHistoryModel(sel.result, m.app, m.st)
+	m.mode = modeHistory
+	return m, m.history.loadCmd()
+}
+
+func (m Model) openScry() (tea.Model, tea.Cmd) {
+	m.errMsg = ""
+	m.scry = newScryModel(m.app, m.st)
+	m.mode = modeScry
+	return m, nil
 }
 
 // View renders the full TUI.
@@ -274,11 +642,24 @@ func (m Model) View() tea.View {
 		return v
 	}
 
-	header := m.renderHeader()
-	body := lipgloss.JoinHorizontal(lipgloss.Top, m.renderNavPane(), m.renderDetailPane())
-	helpBar := m.renderHelp()
+	var content string
+	switch m.mode {
+	case modeBrowse:
+		header := m.renderHeader()
+		body := lipgloss.JoinHorizontal(lipgloss.Top, m.renderNavPane(), m.renderDetailPane())
+		helpBar := m.renderHelp()
+		content = lipgloss.JoinVertical(lipgloss.Left, header, body, helpBar)
+	case modeForm:
+		content = m.form.View(m.termWidth)
+	case modeConfirm:
+		content = m.confirm.View(m.termWidth)
+	case modeHistory:
+		content = m.history.View(m.termWidth, m.termHeight)
+	case modeScry:
+		content = m.scry.View(m.termWidth, m.termHeight)
+	}
 
-	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, header, body, helpBar))
+	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
 }
@@ -296,6 +677,30 @@ func (m Model) ItemCount() int { return len(m.list.Items()) }
 
 // CursorIndex returns the index of the currently highlighted item.
 func (m Model) CursorIndex() int { return m.list.Index() }
+
+// Mode returns the current mode name for test assertions.
+func (m Model) Mode() string {
+	switch m.mode {
+	case modeBrowse:
+		return "browse"
+	case modeForm:
+		return "form"
+	case modeConfirm:
+		return "confirm"
+	case modeHistory:
+		return "history"
+	case modeScry:
+		return "scry"
+	default:
+		return "browse"
+	}
+}
+
+// ErrMsg returns the current transient error message.
+func (m Model) ErrMsg() string { return m.errMsg }
+
+// FormKind returns the active form kind name for test assertions.
+func (m Model) FormKind() string { return m.form.kindName() }
 
 // --- layout helpers ---
 
@@ -368,12 +773,17 @@ func (m Model) renderDetailPane() string {
 }
 
 func (m Model) buildDetailContent() string {
+	var prefix string
+	if m.errMsg != "" {
+		prefix = m.st.DangerText().Render(m.errMsg) + "\n\n"
+	}
+
 	sel, ok := m.list.SelectedItem().(item)
 	if !ok || m.list.IsFiltered() && m.list.SelectedItem() == nil {
-		return m.st.TUIDetailValue().Render("—")
+		return prefix + m.st.TUIDetailValue().Render("—")
 	}
 	if !ok {
-		return m.st.TUIDetailValue().Render("no selection")
+		return prefix + m.st.TUIDetailValue().Render("no selection")
 	}
 
 	r := sel.result
@@ -425,7 +835,7 @@ func (m Model) buildDetailContent() string {
 		lines = append(lines, row(label("note"), val(r.StatusContext)))
 	}
 
-	return strings.Join(lines, "\n")
+	return prefix + strings.Join(lines, "\n")
 }
 
 func (m Model) renderHelp() string {
