@@ -8,9 +8,10 @@ type CreateEntityRequest struct {
 	Locked      bool
 	Discrete    bool
 	// ParentPath is a colon-separated path, e.g. "Garage:Toolbox". Empty means root-level.
-	ParentPath string
-	ActorID    string
-	Note       string
+	ParentPath    string
+	ActorID       string
+	Note          string
+	CreateParents bool
 }
 
 // RenameEntityRequest is the input for renaming an entity.

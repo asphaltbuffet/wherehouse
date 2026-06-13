@@ -368,17 +368,9 @@ func (a *App) CreateEntities(ctx context.Context, reqs []CreateEntityRequest) ([
 }
 
 func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntityRequest) (EntityResult, error) {
-	var parentID *string
-
-	if req.ParentPath != "" {
-		parent, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
-		if err != nil {
-			return EntityResult{}, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
-		}
-		if parent.Discrete {
-			return EntityResult{}, fmt.Errorf("cannot add child to %q: entity is discrete", parent.FullPathDisplay)
-		}
-		parentID = &parent.EntityID
+	parentID, err := a.resolveParentID(ctx, tx, req)
+	if err != nil {
+		return EntityResult{}, err
 	}
 
 	entityID, err := nanoid.New()
@@ -414,4 +406,32 @@ func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntit
 	}
 
 	return entityToResult(entity, nil), nil
+}
+
+func (a *App) resolveParentID(ctx context.Context, tx store.Tx, req CreateEntityRequest) (*string, error) {
+	if req.ParentPath == "" {
+		return nil, nil //nolint:nilnil // nil *string is the correct "no parent" sentinel
+	}
+
+	if req.CreateParents {
+		p, err := entitypath.Parse(req.ParentPath + ":" + req.DisplayName)
+		if err != nil {
+			return nil, fmt.Errorf("parse full path: %w", err)
+		}
+		if _, _, err = a.ensureAncestors(ctx, tx, p.Segments(), BulkAddOptions{
+			CreateParents: true,
+			ActorID:       req.ActorID,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	parent, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
+	}
+	if parent.Discrete {
+		return nil, fmt.Errorf("cannot add child to %q: entity is discrete", parent.FullPathDisplay)
+	}
+	return &parent.EntityID, nil
 }

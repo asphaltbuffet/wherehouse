@@ -249,6 +249,83 @@ func TestRunAdd_File_CreateParents_CreatesAncestors(t *testing.T) {
 	assert.True(t, paths["Garage:Toolbox:Wrench"])
 }
 
+func TestRunAdd_CreateParents_CreatesAncestors(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+
+	cmd := add.NewAddCmd(a)
+	cmd.SetArgs([]string{"Dining Area:Buffet", "--create-parents"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	entities, err := a.ListEntities(ctx)
+	require.NoError(t, err)
+	paths := make(map[string]bool)
+	for _, e := range entities {
+		paths[e.FullPathDisplay] = true
+	}
+	assert.True(t, paths["Dining Area"], "parent should be created")
+	assert.True(t, paths["Dining Area:Buffet"], "leaf should be created")
+}
+
+func TestRunAdd_CreateParents_ThreeLevels(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+
+	cmd := add.NewAddCmd(a)
+	cmd.SetArgs([]string{"A:B:C", "--create-parents"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	entities, err := a.ListEntities(ctx)
+	require.NoError(t, err)
+	paths := make(map[string]bool)
+	for _, e := range entities {
+		paths[e.FullPathDisplay] = true
+	}
+	assert.True(t, paths["A"])
+	assert.True(t, paths["A:B"])
+	assert.True(t, paths["A:B:C"])
+}
+
+func TestRunAdd_CreateParents_ExistingParent(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "test"})
+	require.NoError(t, err)
+
+	cmd := add.NewAddCmd(a)
+	cmd.SetArgs([]string{"Garage:Toolbox", "--create-parents"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	entities, err := a.ListEntities(ctx)
+	require.NoError(t, err)
+	paths := make(map[string]bool)
+	for _, e := range entities {
+		paths[e.FullPathDisplay] = true
+	}
+	assert.True(t, paths["Garage"])
+	assert.True(t, paths["Garage:Toolbox"])
+}
+
+func TestRunAdd_WithoutCreateParents_MissingParentErrors(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	cmd := add.NewAddCmd(a)
+	cmd.SetArgs([]string{"Dining Area:Buffet"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
 // writeTempCSV writes content to a temp file and returns the path.
 func writeTempCSV(t *testing.T, content string) string {
 	t.Helper()

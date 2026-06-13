@@ -1,0 +1,5 @@
+kind: Fixed
+body: '`--create-parents` actually creates missing ancestors'
+time: 2026-06-12T23:15:34.333119832-04:00
+custom:
+    Issue: ""
