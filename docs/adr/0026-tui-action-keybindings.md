@@ -14,6 +14,7 @@ The TUI uses `h`/`j`/`k`/`l` for vim-style navigation (back/down/up/open). When 
 | `f` | found | selection is `missing` |
 | `H` | history | selection exists (ungated) |
 | `s` | scry | always (no selection required) |
+| `d` | toggle detail pane | selection exists |
 
 `/` remains the bubbles/list local filter (current level only). `s` opens the inventory-wide Levenshtein search (`scry`). These are intentionally distinct — `/` filters what is already visible; `s` searches the whole inventory.
 

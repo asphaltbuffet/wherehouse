@@ -74,6 +74,7 @@ type keyMap struct {
 	Found    key.Binding
 	History  key.Binding
 	Scry     key.Binding
+	Detail   key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -138,12 +139,16 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("s"),
 			key.WithHelp("s", "scry"),
 		),
+		Detail: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "detail"),
+		),
 	}
 }
 
 // ShortHelp implements help.KeyMap.
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.DrillIn, k.DrillOut, k.Scry, k.History, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.DrillIn, k.DrillOut, k.Scry, k.Detail, k.Help, k.Quit}
 }
 
 // FullHelp implements help.KeyMap.
@@ -153,7 +158,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.DrillIn, k.DrillOut, k.Filter},
 		{k.Add, k.Loan, k.Borrow},
 		{k.Lost, k.Return, k.Found},
-		{k.History, k.Scry, k.Help, k.Quit},
+		{k.History, k.Scry, k.Detail, k.Help, k.Quit},
 	}
 }
 
@@ -202,6 +207,7 @@ type Model struct {
 	err         error
 	mode        tuiMode
 	errMsg      string // transient detail-pane error, cleared on next action
+	showDetail  bool
 	form        formModel
 	confirm     confirmModel
 	history     historyModel
@@ -506,6 +512,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Scry):
 		return m.openScry()
+
+	case key.Matches(msg, m.keys.Detail):
+		if _, ok := m.selectedItem(); !ok {
+			return m, nil
+		}
+		m.showDetail = !m.showDetail
+		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -646,7 +660,12 @@ func (m Model) View() tea.View {
 	switch m.mode {
 	case modeBrowse:
 		header := m.renderHeader()
-		body := lipgloss.JoinHorizontal(lipgloss.Top, m.renderNavPane(), m.renderDetailPane())
+		var body string
+		if m.showDetail {
+			body = lipgloss.JoinHorizontal(lipgloss.Top, m.renderNavPane(), m.renderDetailPane())
+		} else {
+			body = m.renderNavPane()
+		}
 		helpBar := m.renderHelp()
 		content = lipgloss.JoinVertical(lipgloss.Left, header, body, helpBar)
 	case modeForm:
@@ -705,6 +724,9 @@ func (m Model) FormKind() string { return m.form.kindName() }
 // --- layout helpers ---
 
 func (m Model) navPaneWidth() int {
+	if !m.showDetail {
+		return m.termWidth
+	}
 	w := max(int(float64(m.termWidth)*navWidthRatio), navPaneMinWidth)
 	return w
 }
