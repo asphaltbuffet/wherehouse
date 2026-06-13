@@ -12,9 +12,10 @@ The TUI uses `h`/`j`/`k`/`l` for vim-style navigation (back/down/up/open). When 
 | `x` | lost | selection is `ok`, not `locked` |
 | `r` | return | selection is `loaned` or `borrowed` |
 | `f` | found | selection is `missing` |
-| `H` | history | selection exists (ungated) |
+| `H` | toggle history in right pane (hides if already showing) | selection exists |
 | `s` | scry | always (no selection required) |
-| `d` | toggle detail pane | selection exists |
+| `d` | toggle detail in right pane (hides if already showing) | selection exists |
+| `pgup` / `pgdn` | scroll history pane | no-op when history not visible |
 
 `/` remains the bubbles/list local filter (current level only). `s` opens the inventory-wide Levenshtein search (`scry`). These are intentionally distinct — `/` filters what is already visible; `s` searches the whole inventory.
 

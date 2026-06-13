@@ -577,7 +577,7 @@ func TestModel_HistoryRendersEvents(t *testing.T) {
 	// Open history and execute the load command.
 	afterOpen, loadCmd := m.Update(keyMsg("H"))
 	m2 := afterOpen.(tui.Model)
-	require.Equal(t, "history", m2.Mode())
+	require.Equal(t, "history", m2.RightPane())
 
 	histMsg := loadCmd()
 	afterLoad, _ := m2.Update(histMsg)
@@ -586,12 +586,13 @@ func TestModel_HistoryRendersEvents(t *testing.T) {
 	view := m3.View().Content
 	assert.Contains(t, view, "alice", "rendered history should include actor name")
 	assert.Contains(t, view, "2026-05-26T02:40:58Z", "rendered history should include timestamp")
+	assert.Contains(t, view, "entity.created", "rendered history should include event type")
 }
 
-func TestModel_HistoryMode(t *testing.T) {
+func TestModel_HistoryPane(t *testing.T) {
 	entity := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusOk, false)
 
-	t.Run("H opens modeHistory and fires load cmd", func(t *testing.T) {
+	t.Run("H opens history right pane and fires load cmd", func(t *testing.T) {
 		f := &fakeTUIApp{
 			roots:   []app.EntityResult{entity},
 			history: []app.HistoryResult{{EventID: 1, ActorUserID: "alice"}},
@@ -601,16 +602,17 @@ func TestModel_HistoryMode(t *testing.T) {
 		updated, loadCmd := m.Update(keyMsg("H"))
 		m2 := updated.(tui.Model)
 
-		assert.Equal(t, "history", m2.Mode())
+		assert.Equal(t, "history", m2.RightPane())
+		assert.Equal(t, "browse", m2.Mode())
 		require.NotNil(t, loadCmd)
 
-		// Execute load cmd.
+		// Execute load cmd — still in browse mode, history pane open.
 		histMsg := loadCmd()
 		updated2, _ := m2.Update(histMsg)
-		assert.Equal(t, "history", updated2.(tui.Model).Mode())
+		assert.Equal(t, "history", updated2.(tui.Model).RightPane())
 	})
 
-	t.Run("esc from history returns to browse", func(t *testing.T) {
+	t.Run("H again hides history pane", func(t *testing.T) {
 		f := &fakeTUIApp{
 			roots:   []app.EntityResult{entity},
 			history: []app.HistoryResult{},
@@ -618,11 +620,12 @@ func TestModel_HistoryMode(t *testing.T) {
 		m := loadedModelFake(t, f)
 
 		updated, loadCmd := m.Update(keyMsg("H"))
-		require.Equal(t, "history", updated.(tui.Model).Mode())
+		require.Equal(t, "history", updated.(tui.Model).RightPane())
 		histMsg := loadCmd()
 		updated2, _ := updated.(tui.Model).Update(histMsg)
 
-		updated3, _ := updated2.(tui.Model).Update(keyMsg("esc"))
+		updated3, _ := updated2.(tui.Model).Update(keyMsg("H"))
+		assert.Equal(t, "hidden", updated3.(tui.Model).RightPane())
 		assert.Equal(t, "browse", updated3.(tui.Model).Mode())
 	})
 }

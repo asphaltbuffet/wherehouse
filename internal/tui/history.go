@@ -7,7 +7,6 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/styles"
@@ -26,12 +25,13 @@ type historyModel struct {
 	err      error
 }
 
-func newHistoryModel(entity app.EntityResult, a App, st *styles.Styles, width, height int) historyModel {
+func newHistoryModel(entity app.EntityResult, a App, st *styles.Styles, paneWidth, paneHeight int) historyModel {
+	vpHeight := max(0, paneHeight-historyUIOverhead)
 	return historyModel{
 		entity:   entity,
 		appRef:   a,
 		st:       st,
-		viewport: viewport.New(viewport.WithWidth(width), viewport.WithHeight(height-historyUIOverhead)),
+		viewport: viewport.New(viewport.WithWidth(paneWidth), viewport.WithHeight(vpHeight)),
 	}
 }
 
@@ -59,28 +59,15 @@ func (h historyModel) Update(msg tea.Msg) (historyModel, tea.Cmd) {
 		return h, nil
 
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "q", "esc":
-			return h, func() tea.Msg { return historyCancelledMsg{} }
-		}
 		var cmd tea.Cmd
 		h.viewport, cmd = h.viewport.Update(msg)
 		return h, cmd
-
-	case tea.WindowSizeMsg:
-		h.viewport = viewport.New(viewport.WithWidth(msg.Width), viewport.WithHeight(msg.Height-historyUIOverhead))
-		if h.ready {
-			h.viewport.SetContent(h.renderContent())
-		}
-		return h, nil
 	}
 
 	var cmd tea.Cmd
 	h.viewport, cmd = h.viewport.Update(msg)
 	return h, cmd
 }
-
-type historyCancelledMsg struct{}
 
 func (h historyModel) renderContent() string {
 	if h.err != nil {
@@ -91,28 +78,22 @@ func (h historyModel) renderContent() string {
 	}
 	var sb strings.Builder
 	for _, ev := range h.items {
-		line := fmt.Sprintf("%s  %-30s  %s",
+		sb.WriteString(fmt.Sprintf("%s  %s\n  %s",
 			ev.TimestampUTC,
 			ev.EventType.String(),
 			ev.ActorUserID,
-		)
+		))
 		if ev.Note != "" {
-			line += "  " + ev.Note
+			sb.WriteString("  " + ev.Note)
 		}
-		sb.WriteString(line)
-		sb.WriteString("\n")
+		sb.WriteString("\n\n")
 	}
 	return sb.String()
 }
 
-func (h historyModel) View(width, height int) string {
-	title := h.st.TUIDetailLabel().Render("history: " + h.entity.FullPathDisplay)
-	help := h.st.Muted().Render("[q/esc] back")
-	content := h.viewport.View()
+func (h historyModel) viewportView() string {
 	if h.err != nil {
-		content = h.st.DangerText().Render(h.err.Error())
+		return h.st.DangerText().Render(h.err.Error())
 	}
-	return lipgloss.NewStyle().Width(width).Height(height).Render(
-		strings.Join([]string{title, content, help}, "\n"),
-	)
+	return h.viewport.View()
 }
