@@ -26,11 +26,12 @@ type historyModel struct {
 	err      error
 }
 
-func newHistoryModel(entity app.EntityResult, a App, st *styles.Styles) historyModel {
+func newHistoryModel(entity app.EntityResult, a App, st *styles.Styles, width, height int) historyModel {
 	return historyModel{
-		entity: entity,
-		appRef: a,
-		st:     st,
+		entity:   entity,
+		appRef:   a,
+		st:       st,
+		viewport: viewport.New(viewport.WithWidth(width), viewport.WithHeight(height-historyUIOverhead)),
 	}
 }
 

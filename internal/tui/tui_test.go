@@ -555,6 +555,39 @@ func TestModel_FormMode(t *testing.T) {
 	})
 }
 
+func TestModel_HistoryRendersEvents(t *testing.T) {
+	entity := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusOk, false)
+	f := &fakeTUIApp{
+		roots: []app.EntityResult{entity},
+		history: []app.HistoryResult{
+			{
+				EventID:      34,
+				ActorUserID:  "alice",
+				EventType:    inventory.EntityCreatedEvent,
+				TimestampUTC: "2026-05-26T02:40:58Z",
+			},
+		},
+	}
+	m := loadedModelFake(t, f)
+
+	// Size the terminal so the viewport has non-zero dimensions.
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = sized.(tui.Model)
+
+	// Open history and execute the load command.
+	afterOpen, loadCmd := m.Update(keyMsg("H"))
+	m2 := afterOpen.(tui.Model)
+	require.Equal(t, "history", m2.Mode())
+
+	histMsg := loadCmd()
+	afterLoad, _ := m2.Update(histMsg)
+	m3 := afterLoad.(tui.Model)
+
+	view := m3.View().Content
+	assert.Contains(t, view, "alice", "rendered history should include actor name")
+	assert.Contains(t, view, "2026-05-26T02:40:58Z", "rendered history should include timestamp")
+}
+
 func TestModel_HistoryMode(t *testing.T) {
 	entity := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusOk, false)
 

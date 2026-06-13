@@ -622,7 +622,7 @@ func (m Model) openHistory() (tea.Model, tea.Cmd) {
 		return m.gateError("no entity selected")
 	}
 	m.errMsg = ""
-	m.history = newHistoryModel(sel.result, m.app, m.st)
+	m.history = newHistoryModel(sel.result, m.app, m.st, m.termWidth, m.termHeight)
 	m.mode = modeHistory
 	return m, m.history.loadCmd()
 }
