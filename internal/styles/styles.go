@@ -34,6 +34,15 @@ type Styles struct {
 
 	bold lipgloss.Style
 	base lipgloss.Style
+
+	// TUI layout styles.
+	tuiNavBorder    lipgloss.Style
+	tuiDetailBorder lipgloss.Style
+	tuiHeader       lipgloss.Style
+	tuiSelected     lipgloss.Style
+	tuiCrumb        lipgloss.Style
+	tuiDetailLabel  lipgloss.Style
+	tuiDetailValue  lipgloss.Style
 }
 
 // Colorblind-safe palette (Wong) with adaptive light/dark variants.
@@ -108,6 +117,30 @@ func DefaultStyles() *Styles {
 
 		bold: lipgloss.NewStyle().Bold(true),
 		base: lipgloss.NewStyle(),
+
+		tuiNavBorder: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(adaptive(lipgloss.Color("#0072B2"), lipgloss.Color("#56B4E9"))),
+		tuiDetailBorder: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(adaptive(lipgloss.Color("#AA4499"), lipgloss.Color("#CC79A7"))),
+		tuiHeader: lipgloss.NewStyle().
+			Foreground(adaptive(lipgloss.Color("#FFFFFF"), lipgloss.Color("#E5E7EB"))).
+			Background(adaptive(lipgloss.Color("#0072B2"), lipgloss.Color("#1E3A5F"))).
+			Bold(true).
+			Padding(0, 1),
+		tuiSelected: lipgloss.NewStyle().
+			Foreground(adaptive(lipgloss.Color("#1F2937"), lipgloss.Color("#0F172A"))).
+			Background(adaptive(lipgloss.Color("#D55E00"), lipgloss.Color("#E69F00"))).
+			Bold(true),
+		tuiCrumb: lipgloss.NewStyle().
+			Foreground(adaptive(lipgloss.Color("#0072B2"), lipgloss.Color("#56B4E9"))).
+			Bold(true),
+		tuiDetailLabel: lipgloss.NewStyle().
+			Foreground(adaptive(lipgloss.Color("#AA4499"), lipgloss.Color("#CC79A7"))).
+			Bold(true),
+		tuiDetailValue: lipgloss.NewStyle().
+			Foreground(adaptive(lipgloss.Color("#1F2937"), lipgloss.Color("#E5E7EB"))),
 	}
 }
 
@@ -244,6 +277,29 @@ func (s *Styles) LocationStyle(key string) lipgloss.Style {
 		return s.fgAccentBold
 	}
 }
+
+// --- TUI layout styles ---
+
+// TUINavBorder is the rounded-border style for the navigation pane.
+func (s *Styles) TUINavBorder() lipgloss.Style { return s.tuiNavBorder }
+
+// TUIDetailBorder is the rounded-border style for the detail pane.
+func (s *Styles) TUIDetailBorder() lipgloss.Style { return s.tuiDetailBorder }
+
+// TUIHeader is the header bar style (application title row).
+func (s *Styles) TUIHeader() lipgloss.Style { return s.tuiHeader }
+
+// TUISelected is the style for the focused/selected list item.
+func (s *Styles) TUISelected() lipgloss.Style { return s.tuiSelected }
+
+// TUICrumb is the style for breadcrumb path segments.
+func (s *Styles) TUICrumb() lipgloss.Style { return s.tuiCrumb }
+
+// TUIDetailLabel is the style for detail-pane field labels.
+func (s *Styles) TUIDetailLabel() lipgloss.Style { return s.tuiDetailLabel }
+
+// TUIDetailValue is the style for detail-pane field values.
+func (s *Styles) TUIDetailValue() lipgloss.Style { return s.tuiDetailValue }
 
 // EventStyle is a style based on event type.
 func (s *Styles) EventStyle(key string) lipgloss.Style {

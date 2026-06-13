@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
@@ -19,6 +20,7 @@ type EntityResult struct {
 	StatusContext   string
 	HasChildren     bool
 	Tags            []string
+	UpdatedAt       time.Time
 }
 
 // HistoryResult is the output representation of a single history event.
@@ -52,6 +54,7 @@ func entityToResult(e *inventory.Entity, tags []string) EntityResult {
 		Status:          e.Status,
 		StatusContext:   statusCtx,
 		Tags:            tags,
+		UpdatedAt:       e.UpdatedAt,
 	}
 }
 

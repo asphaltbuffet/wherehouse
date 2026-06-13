@@ -28,6 +28,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/cmd/status"
 	"github.com/asphaltbuffet/wherehouse/cmd/tag"
+	tuicmd "github.com/asphaltbuffet/wherehouse/cmd/tui"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
@@ -58,7 +59,7 @@ Examples:
 		SilenceUsage:      true,
 		SilenceErrors:     true,
 		PersistentPreRunE: initConfig,
-		// RunE is nil - displays help by default when no subcommands exist
+		RunE:              tuicmd.NewDefaultTUICmd().RunE,
 	}
 
 	// Add persistent flags for configuration
