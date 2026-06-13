@@ -35,6 +35,7 @@ type confirmModel struct {
 func newConfirmModel(kind confirmKind, entity app.EntityResult, a App, st *styles.Styles) confirmModel {
 	note := textinput.New()
 	note.Placeholder = notePlaceholder
+	note.Focus()
 	return confirmModel{
 		kind:   kind,
 		entity: entity,
@@ -62,9 +63,9 @@ func (c confirmModel) Update(msg tea.Msg) (confirmModel, tea.Cmd) {
 		return c, nil
 	}
 	switch kMsg.String() {
-	case "y", "enter":
+	case "enter":
 		return c, c.submitCmd()
-	case "n", "esc":
+	case "esc":
 		return c, func() tea.Msg { return confirmCancelledMsg{} }
 	}
 	// All other printable chars feed the note input.
@@ -140,7 +141,7 @@ func (c confirmModel) submitCmd() tea.Cmd {
 func (c confirmModel) View(width int) string {
 	prompt := fmt.Sprintf("mark %q as %s?", c.entity.FullPathDisplay, c.targetStatusLabel())
 	noteView := c.note.View()
-	help := c.st.Muted().Render("[y/enter] confirm  [n/esc] cancel")
+	help := c.st.Muted().Render("[enter] confirm  [esc] cancel")
 	content := strings.Join([]string{prompt, noteView, help}, "\n")
 	return lipgloss.NewStyle().Width(width).Render(content)
 }

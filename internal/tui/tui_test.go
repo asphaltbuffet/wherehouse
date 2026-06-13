@@ -16,25 +16,26 @@ import (
 
 // fakeTUIApp implements tui.App with controllable return values.
 type fakeTUIApp struct {
-	roots       []app.EntityResult
-	children    map[string][]app.EntityResult
-	err         error
-	created     []app.EntityResult
-	createErr   error
-	loaned      []app.EntityResult
-	loanErr     error
-	borrowed    []app.EntityResult
-	borrowErr   error
-	lost        []app.EntityResult
-	lostErr     error
-	returned    []app.EntityResult
-	returnErr   error
-	found       []app.EntityResult
-	foundErr    error
-	history     []app.HistoryResult
-	historyErr  error
-	findResults []app.FindResult
-	findErr     error
+	roots        []app.EntityResult
+	children     map[string][]app.EntityResult
+	err          error
+	created      []app.EntityResult
+	createErr    error
+	loaned       []app.EntityResult
+	loanErr      error
+	borrowed     []app.EntityResult
+	borrowErr    error
+	lost         []app.EntityResult
+	lostErr      error
+	lastLostReqs []app.ChangeStatusRequest
+	returned     []app.EntityResult
+	returnErr    error
+	found        []app.EntityResult
+	foundErr     error
+	history      []app.HistoryResult
+	historyErr   error
+	findResults  []app.FindResult
+	findErr      error
 }
 
 func (f *fakeTUIApp) GetRootEntities(_ context.Context) ([]app.EntityResult, error) {
@@ -60,7 +61,8 @@ func (f *fakeTUIApp) BorrowEntities(_ context.Context, _ []app.BorrowEntityReque
 	return f.borrowed, f.borrowErr
 }
 
-func (f *fakeTUIApp) MarkLost(_ context.Context, _ []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+func (f *fakeTUIApp) MarkLost(_ context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	f.lastLostReqs = reqs
 	return f.lost, f.lostErr
 }
 
@@ -452,7 +454,7 @@ func TestModel_ConfirmMode(t *testing.T) {
 		assert.Nil(t, cmd)
 	})
 
-	t.Run("n cancels confirm and returns to browse", func(t *testing.T) {
+	t.Run("n goes into note field, does not cancel", func(t *testing.T) {
 		f := &fakeTUIApp{roots: []app.EntityResult{okEntity}}
 		m := loadedModelFake(t, f)
 
@@ -460,7 +462,8 @@ func TestModel_ConfirmMode(t *testing.T) {
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
 		updated2, _ := updated.(tui.Model).Update(keyMsg("n"))
-		assert.Equal(t, "browse", updated2.(tui.Model).Mode())
+		assert.Equal(t, "confirm", updated2.(tui.Model).Mode())
+		assert.Equal(t, "n", updated2.(tui.Model).ConfirmNote())
 	})
 
 	t.Run("esc cancels confirm and returns to browse", func(t *testing.T) {
@@ -474,7 +477,56 @@ func TestModel_ConfirmMode(t *testing.T) {
 		assert.Equal(t, "browse", updated2.(tui.Model).Mode())
 	})
 
-	t.Run("y submits lost and refreshes list", func(t *testing.T) {
+	t.Run("typing a letter puts it in the note field", func(t *testing.T) {
+		f := &fakeTUIApp{roots: []app.EntityResult{okEntity}}
+		m := loadedModelFake(t, f)
+
+		// Open confirm.
+		updated, _ := m.Update(keyMsg("x"))
+		require.Equal(t, "confirm", updated.(tui.Model).Mode())
+
+		// Type a character — must land in the note field.
+		updated2, _ := updated.(tui.Model).Update(keyMsg("g"))
+		assert.Equal(t, "g", updated2.(tui.Model).ConfirmNote())
+	})
+
+	t.Run("y goes into note field, does not submit", func(t *testing.T) {
+		f := &fakeTUIApp{roots: []app.EntityResult{okEntity}}
+		m := loadedModelFake(t, f)
+
+		updated, _ := m.Update(keyMsg("x"))
+		require.Equal(t, "confirm", updated.(tui.Model).Mode())
+
+		updated2, _ := updated.(tui.Model).Update(keyMsg("y"))
+		assert.Equal(t, "confirm", updated2.(tui.Model).Mode())
+		assert.Equal(t, "y", updated2.(tui.Model).ConfirmNote())
+	})
+
+	t.Run("enter submits note content to app", func(t *testing.T) {
+		refreshed := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusMissing, false)
+		f := &fakeTUIApp{
+			roots: []app.EntityResult{okEntity},
+			lost:  []app.EntityResult{refreshed},
+		}
+		m := loadedModelFake(t, f)
+
+		// Open confirm and type a note.
+		updated, _ := m.Update(keyMsg("x"))
+		require.Equal(t, "confirm", updated.(tui.Model).Mode())
+		updated, _ = updated.(tui.Model).Update(keyMsg("m"))
+		updated, _ = updated.(tui.Model).Update(keyMsg("i"))
+		updated, _ = updated.(tui.Model).Update(keyMsg("a"))
+
+		// Submit — note must reach the app call.
+		_, submitCmd := updated.(tui.Model).Update(keyMsg("enter"))
+		require.NotNil(t, submitCmd)
+		submitCmd() // execute to trigger MarkLost on the fake
+
+		require.Len(t, f.lastLostReqs, 1)
+		assert.Equal(t, "mia", f.lastLostReqs[0].Note)
+	})
+
+	t.Run("enter submits lost and refreshes list", func(t *testing.T) {
 		refreshed := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusMissing, false)
 		f := &fakeTUIApp{
 			roots: []app.EntityResult{okEntity},
@@ -486,8 +538,8 @@ func TestModel_ConfirmMode(t *testing.T) {
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
-		// Press y — fires submitCmd.
-		updated2, submitCmd := updated.(tui.Model).Update(keyMsg("y"))
+		// Press enter — fires submitCmd.
+		updated2, submitCmd := updated.(tui.Model).Update(keyMsg("enter"))
 		require.NotNil(t, submitCmd)
 
 		// Execute submitCmd → actionDoneMsg.

@@ -416,8 +416,7 @@ func (m Model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.refreshCmd(msg.result.EntityID)
 	case tea.KeyPressMsg:
-		s := msg.String()
-		if s == "n" || s == keyEsc {
+		if msg.String() == keyEsc {
 			m.mode = modeBrowse
 			return m, nil
 		}
@@ -789,6 +788,9 @@ func (m Model) ErrMsg() string { return m.errMsg }
 
 // FormKind returns the active form kind name for test assertions.
 func (m Model) FormKind() string { return m.form.kindName() }
+
+// ConfirmNote returns the current note field value in modeConfirm for test assertions.
+func (m Model) ConfirmNote() string { return m.confirm.note.Value() }
 
 // --- layout helpers ---
 
