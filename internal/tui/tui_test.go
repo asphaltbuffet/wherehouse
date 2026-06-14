@@ -86,6 +86,31 @@ func keyMsg(k string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Text: k}
 }
 
+// feedBatch executes cmd and feeds all resulting messages back into m.
+// Handles both single-message cmds and tea.BatchMsg transparently.
+func feedBatch(t *testing.T, m tui.Model, cmd tea.Cmd) tui.Model {
+	t.Helper()
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	switch msg := msg.(type) {
+	case tea.BatchMsg:
+		for _, c := range msg {
+			if c == nil {
+				continue
+			}
+			inner := c()
+			updated, _ := m.Update(inner)
+			m = updated.(tui.Model)
+		}
+	default:
+		updated, _ := m.Update(msg)
+		m = updated.(tui.Model)
+	}
+	return m
+}
+
 func entityResult(id, name, path string, hasChildren bool) app.EntityResult {
 	return app.EntityResult{
 		EntityID:        id,
@@ -703,6 +728,59 @@ func TestModel_ScryMode(t *testing.T) {
 		updated2, _ := updated.(tui.Model).Update(keyMsg("esc"))
 		assert.Equal(t, "browse", updated2.(tui.Model).Mode())
 	})
+}
+
+func TestModel_ScryShowsResults(t *testing.T) {
+	drillBit := entityResult("e1", "Drill Bit", "Garage:Drill Bit", false)
+	f := &fakeTUIApp{
+		roots:       []app.EntityResult{drillBit},
+		findResults: []app.FindResult{{Entity: drillBit, Distance: 0}},
+	}
+	m := loadedModelFake(t, f)
+
+	// Size the terminal so the scry list has non-zero dimensions.
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = sized.(tui.Model)
+
+	// Open scry.
+	inScry, _ := m.Update(keyMsg("s"))
+	m = inScry.(tui.Model)
+	require.Equal(t, "scry", m.Mode())
+
+	// Type "d" to trigger a search; feed all resulting messages back.
+	_, batchCmd := m.Update(keyMsg("d"))
+	require.NotNil(t, batchCmd)
+	m = feedBatch(t, m, batchCmd)
+
+	// The entity path must be visible in the rendered view.
+	assert.Contains(t, m.View().Content, "Garage:Drill Bit")
+}
+
+func TestModel_ScryNavigate(t *testing.T) {
+	drillBit := entityResult("e1", "Drill Bit", "Garage:Drill Bit", false)
+	f := &fakeTUIApp{
+		roots:       []app.EntityResult{drillBit},
+		findResults: []app.FindResult{{Entity: drillBit, Distance: 0}},
+	}
+	m := loadedModelFake(t, f)
+
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = sized.(tui.Model)
+
+	inScry, _ := m.Update(keyMsg("s"))
+	m = inScry.(tui.Model)
+
+	// Trigger search and load results.
+	_, batchCmd := m.Update(keyMsg("d"))
+	m = feedBatch(t, m, batchCmd)
+
+	// Press enter — must fire a navigate cmd and eventually return to browse.
+	afterEnter, navigateCmd := m.Update(keyMsg("enter"))
+	require.NotNil(t, navigateCmd, "enter with results should return a navigate cmd")
+
+	navigateMsg := navigateCmd()
+	afterNavigate, _ := afterEnter.(tui.Model).Update(navigateMsg)
+	assert.Equal(t, "browse", afterNavigate.(tui.Model).Mode())
 }
 
 func TestModel_ScryEnterNoResults(t *testing.T) {

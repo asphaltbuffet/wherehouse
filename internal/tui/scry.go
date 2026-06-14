@@ -45,6 +45,7 @@ func newScryModel(a App, st *styles.Styles) scryModel {
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
 	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
 	l.DisableQuitKeybindings()
 
 	return scryModel{

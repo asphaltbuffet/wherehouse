@@ -700,6 +700,7 @@ func (m Model) openHistory() (tea.Model, tea.Cmd) {
 func (m Model) openScry() (tea.Model, tea.Cmd) {
 	m.errMsg = ""
 	m.scry = newScryModel(m.app, m.st)
+	m.scry.results.SetSize(m.termWidth, m.termHeight-scryUIOverhead)
 	m.mode = modeScry
 	return m, nil
 }
