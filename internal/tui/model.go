@@ -7,12 +7,10 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/styles"
 	versioncmd "github.com/asphaltbuffet/wherehouse/internal/version"
@@ -24,7 +22,7 @@ const keyEsc = "esc"
 type tuiMode int
 
 const (
-	modeBrowse  tuiMode = iota // two-pane navigator (default)
+	modeBrowse  tuiMode = iota // tree navigator (default)
 	modeForm                   // text-input form for add/loan/borrow
 	modeConfirm                // y/n prompt for lost/found/return
 	modeScry                   // inventory-wide search
@@ -39,39 +37,21 @@ const (
 	rightPaneHistory                      // entity event history
 )
 
-// borderWidth is the total horizontal space consumed by a single rounded border (left + right).
-const borderWidth = 2
-
-// borderHeight is the total vertical space consumed by a single rounded border (top + bottom).
-const borderHeight = 2
-
-// headerHeight is the number of terminal rows used by the application header bar.
-const headerHeight = 1
-
-// helpHeightShort is the number of rows the collapsed help bar occupies.
-const helpHeightShort = 1
-
-// crumbHeight is the number of rows used by the breadcrumb line inside the nav pane border.
-const crumbHeight = 1
-
-// listViewOverhead is the number of extra lines bubbles/list View() renders beyond SetSize height.
-// The list pads items to fill PerPage slots then wraps in lipgloss.Height(N), which in
-// lipgloss v2 counts trailing newlines as extra rows, producing height+3 total lines.
-const listViewOverhead = 3
-
-// navWidthRatio is the fraction of terminal width given to the navigation pane.
-const navWidthRatio = 0.60
-
-// navPaneMinWidth is the minimum number of columns for the navigation pane.
-const navPaneMinWidth = 20
+const (
+	borderWidth     = 2
+	borderHeight    = 2
+	headerHeight    = 1
+	helpHeightShort = 1
+	navWidthRatio   = 0.60
+	navPaneMinWidth = 20
+)
 
 // keyMap defines all keybindings exposed to the help bubble.
 type keyMap struct {
 	Up       key.Binding
 	Down     key.Binding
-	DrillIn  key.Binding
-	DrillOut key.Binding
-	Filter   key.Binding
+	Expand   key.Binding
+	Collapse key.Binding
 	Help     key.Binding
 	Quit     key.Binding
 	Add      key.Binding
@@ -97,17 +77,13 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("j", "down"),
 			key.WithHelp("j/↓", "down"),
 		),
-		DrillIn: key.NewBinding(
+		Expand: key.NewBinding(
 			key.WithKeys("l", "right", "enter"),
-			key.WithHelp("l/→", "open"),
+			key.WithHelp("l/→", "expand"),
 		),
-		DrillOut: key.NewBinding(
+		Collapse: key.NewBinding(
 			key.WithKeys("h", "left"),
-			key.WithHelp("h/←", "back"),
-		),
-		Filter: key.NewBinding(
-			key.WithKeys("/"),
-			key.WithHelp("/", "filter"),
+			key.WithHelp("h/←", "collapse"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
@@ -166,104 +142,57 @@ func defaultKeyMap() keyMap {
 
 // ShortHelp implements help.KeyMap.
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.DrillIn, k.DrillOut, k.Scry, k.Detail, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Expand, k.Collapse, k.Scry, k.Detail, k.Help, k.Quit}
 }
 
 // FullHelp implements help.KeyMap.
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down},
-		{k.DrillIn, k.DrillOut, k.Filter},
+		{k.Expand, k.Collapse},
 		{k.Add, k.Loan, k.Borrow},
 		{k.Lost, k.Return, k.Found},
 		{k.History, k.Scry, k.Detail, k.Help, k.Quit},
 	}
 }
 
-// item wraps app.EntityResult to satisfy bubbles/list.Item.
-type item struct {
-	result app.EntityResult
-}
-
-func (i item) FilterValue() string { return i.result.DisplayName }
-func (i item) Title() string       { return i.result.DisplayName }
-func (i item) Description() string { return "" }
-
-// rootsLoadedMsg carries the result of the initial root entity fetch.
-type rootsLoadedMsg struct {
-	items []app.EntityResult
-	err   error
-}
-
-// childrenLoadedMsg carries the result of a drill-down fetch.
-type childrenLoadedMsg struct {
-	parentID   string
-	parentPath string
-	items      []app.EntityResult
-	err        error
-}
-
-// levelRestoredMsg carries the result of a drill-up reload.
-type levelRestoredMsg struct {
-	pathStack   []string
-	parentStack []string
-	items       []app.EntityResult
-	err         error
-}
-
 // Model is the bubbletea model for the TUI.
 type Model struct {
-	app         App
-	list        list.Model
-	help        help.Model
-	keys        keyMap
-	st          *styles.Styles
-	pathStack   []string // FullPathDisplay values, empty = at root
-	parentStack []string // entity IDs of ancestors, for navigating back
-	termWidth   int
-	termHeight  int
-	err         error
-	mode        tuiMode
-	errMsg      string        // transient detail-pane error, cleared on next action
-	rightPane   rightPaneKind // what the right pane shows (hidden by default)
-	form        formModel
-	confirm     confirmModel
-	history     historyModel
-	scry        scryModel
+	app        App
+	tree       treeModel
+	nodes      []treeNode // all loaded nodes; superset of visible
+	visible    []int      // indices into nodes currently shown
+	cursor     int        // index into visible
+	help       help.Model
+	keys       keyMap
+	st         *styles.Styles
+	termWidth  int
+	termHeight int
+	err        error
+	mode       tuiMode
+	errMsg     string
+	rightPane  rightPaneKind
+	form       formModel
+	confirm    confirmModel
+	history    historyModel
+	scry       scryModel
 }
 
-// New creates a new TUI model.
+// New constructs a TUI Model backed by the given App.
 func New(a App) Model {
 	st := styles.DefaultStyles()
-	d := newDelegate(st)
-	l := list.New(nil, d, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowFilter(false)
-	l.SetShowStatusBar(false)
-	l.SetShowPagination(false)
-	l.SetFilteringEnabled(true)
-	l.DisableQuitKeybindings()
-	l.SetShowHelp(false)
-
-	// Strip keys we've claimed at the Model level so the list never intercepts them.
-	km := l.KeyMap
-	km.NextPage = key.NewBinding(key.WithKeys("right", "l"))
-	km.PrevPage = key.NewBinding(key.WithKeys("left", "h"))
-	l.KeyMap = km
-
 	h := help.New()
 	h.ShowAll = false
-
 	return Model{
 		app:  a,
-		list: l,
+		tree: newTreeModel(st),
 		help: h,
 		keys: defaultKeyMap(),
 		st:   st,
 	}
 }
 
-// Init loads root entities on startup.
+// Init implements tea.Model; fires the initial root entity load.
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
 		entities, err := m.app.GetRootEntities(context.Background())
@@ -271,29 +200,174 @@ func (m Model) Init() tea.Cmd {
 	}
 }
 
-// Update handles all incoming messages.
+// --- Update ---
+
+// Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Route messages to active sub-model; fall through for modeBrowse.
 	switch m.mode {
 	case modeBrowse:
-		// handled below
+		return m.updateBrowse(msg)
 	case modeForm:
 		return m.updateForm(msg)
 	case modeConfirm:
 		return m.updateConfirm(msg)
 	case modeScry:
 		return m.updateScry(msg)
+	default:
+		return m.updateBrowse(msg)
 	}
-
-	return m.updateBrowse(msg)
 }
 
+//nolint:gocognit,gocyclo,cyclop,funlen // message dispatch hub; length is inherent to handling all browse-mode messages
 func (m Model) updateBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if result, cmd, handled := m.handleLevelMsg(msg); handled {
-		return result, cmd
-	}
-
 	switch msg := msg.(type) {
+	case rootsLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		m.nodes = make([]treeNode, len(msg.items))
+		for i, r := range msg.items {
+			m.nodes[i] = treeNodeFromResult(r, 0, "")
+		}
+		m.visible = rebuildVisible(m.nodes)
+		m.cursor = 0
+		m = m.syncTree()
+		var hCmd tea.Cmd
+		m, hCmd = m.reloadHistoryCmd()
+		return m, hCmd
+
+	case treeExpandedMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("load failed: %v", msg.err)
+			return m, nil
+		}
+		children := make([]treeNode, len(msg.items))
+		for i, r := range msg.items {
+			children[i] = treeNodeFromResult(r, msg.depth+1, msg.parentID)
+		}
+		if pi := findNodeIndex(m.nodes, msg.parentID); pi >= 0 {
+			m.nodes[pi].loaded = true
+			m.nodes[pi].expanded = true
+		}
+		m.nodes = spliceChildren(m.nodes, msg.parentID, children)
+		m.visible = rebuildVisible(m.nodes)
+		m.cursor = setCursorToEntity(m.visible, m.nodes, msg.parentID, m.cursor)
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+		m = m.syncTree()
+		var hCmd tea.Cmd
+		m, hCmd = m.reloadHistoryCmd()
+		return m, hCmd
+
+	case treeRefreshMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("refresh failed: %v", msg.err)
+			return m, nil
+		}
+		if msg.parentID == "" {
+			m = m.handleRootRefresh(msg.items, msg.targetEntityID)
+			m = m.syncTree()
+			var hCmd tea.Cmd
+			m, hCmd = m.reloadHistoryCmd()
+			return m, hCmd
+		}
+		children := make([]treeNode, len(msg.items))
+		depth := 0
+		if pi := findNodeIndex(m.nodes, msg.parentID); pi >= 0 {
+			depth = m.nodes[pi].depth
+			m.nodes[pi].loaded = true
+		}
+		for i, r := range msg.items {
+			children[i] = treeNodeFromResult(r, depth+1, msg.parentID)
+		}
+		m.nodes = spliceChildren(m.nodes, msg.parentID, children)
+		m.visible = rebuildVisible(m.nodes)
+		if msg.targetEntityID != "" {
+			m.cursor = setCursorToEntity(m.visible, m.nodes, msg.targetEntityID, m.cursor)
+		}
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+		m = m.syncTree()
+		var hCmd tea.Cmd
+		m, hCmd = m.reloadHistoryCmd()
+		return m, hCmd
+
+	case treeRevealMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("navigate failed: %v", msg.err)
+			return m, nil
+		}
+		children := make([]treeNode, len(msg.items))
+		for i, r := range msg.items {
+			children[i] = treeNodeFromResult(r, msg.depth+1, msg.parentID)
+		}
+		if pi := findNodeIndex(m.nodes, msg.parentID); pi >= 0 {
+			m.nodes[pi].loaded = true
+			m.nodes[pi].expanded = true
+		}
+		m.nodes = spliceChildren(m.nodes, msg.parentID, children)
+		if len(msg.remainingPath) > 0 {
+			nextID := msg.remainingPath[0]
+			rest := msg.remainingPath[1:]
+			nextDepth := msg.depth + 1
+			if ni := findNodeIndex(m.nodes, nextID); ni >= 0 && !m.nodes[ni].loaded {
+				a := m.app
+				return m, func() tea.Msg {
+					items, err := a.GetChildren(context.Background(), nextID)
+					return treeRevealMsg{
+						parentID:       nextID,
+						depth:          nextDepth,
+						items:          items,
+						remainingPath:  rest,
+						targetEntityID: msg.targetEntityID,
+						err:            err,
+					}
+				}
+			}
+			if ni := findNodeIndex(m.nodes, nextID); ni >= 0 {
+				m.nodes[ni].expanded = true
+			}
+			m.visible = rebuildVisible(m.nodes)
+			nextChildren := childrenOf(m.nodes, nextID)
+			nextMsg := treeRevealMsg{
+				parentID:       nextID,
+				depth:          nextDepth,
+				items:          nodeResultSlice(nextChildren),
+				remainingPath:  rest,
+				targetEntityID: msg.targetEntityID,
+			}
+			return m.updateBrowse(nextMsg)
+		}
+		m.mode = modeBrowse
+		m.visible = rebuildVisible(m.nodes)
+		m.cursor = setCursorToEntity(m.visible, m.nodes, msg.targetEntityID, m.cursor)
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+		m = m.syncTree()
+		var hCmd tea.Cmd
+		m, hCmd = m.reloadHistoryCmd()
+		return m, hCmd
+
+	case scryNavigatedMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("navigate failed: %v", msg.err)
+			return m, nil
+		}
+		m.mode = modeBrowse
+		if newCursor := setCursorToEntity(m.visible, m.nodes, msg.targetEntityID, -1); newCursor >= 0 {
+			m.cursor = newCursor
+			m = m.syncTree()
+			var hCmd tea.Cmd
+			m, hCmd = m.reloadHistoryCmd()
+			return m, hCmd
+		}
+		if findNodeIndex(m.nodes, msg.targetEntityID) >= 0 {
+			return m.revealNode(msg.targetEntityID)
+		}
+		if len(msg.ancestorIDs) > 0 {
+			return m.revealViaAncestors(msg.targetEntityID, msg.ancestorIDs)
+		}
+		m = m.syncTree()
+		return m, nil
+
 	case historyLoadedMsg:
 		if msg.gen != m.history.gen {
 			return m, nil
@@ -309,106 +383,22 @@ func (m Model) updateBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleWindowSize(msg), nil
 	}
 
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
-}
-
-func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	var histCmd tea.Cmd
-	switch msg := msg.(type) {
-	case rootsLoadedMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, tea.Quit, true
-		}
-		m.pathStack = nil
-		m.parentStack = nil
-		m = m.loadLevel(msg.items, "")
-		m, histCmd = m.reloadHistoryCmd()
-		return m, histCmd, true
-
-	case childrenLoadedMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, tea.Quit, true
-		}
-		m.pathStack = append(m.pathStack, msg.parentPath)
-		m.parentStack = append(m.parentStack, msg.parentID)
-		m = m.loadLevel(msg.items, "")
-		m, histCmd = m.reloadHistoryCmd()
-		return m, histCmd, true
-
-	case levelRestoredMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, tea.Quit, true
-		}
-		m.pathStack = msg.pathStack
-		m.parentStack = msg.parentStack
-		m = m.loadLevel(msg.items, "")
-		m, histCmd = m.reloadHistoryCmd()
-		return m, histCmd, true
-
-	case childRefreshMsg:
-		if msg.err != nil {
-			m.errMsg = fmt.Sprintf("refresh failed: %v", msg.err)
-			return m, nil, true
-		}
-		m = m.loadLevel(msg.items, msg.targetEntityID)
-		m, histCmd = m.reloadHistoryCmd()
-		return m, histCmd, true
-
-	case scryNavigatedMsg:
-		if msg.err != nil {
-			m.errMsg = fmt.Sprintf("navigate failed: %v", msg.err)
-			return m, nil, true
-		}
-		m.mode = modeBrowse
-		m.pathStack = msg.pathStack
-		m.parentStack = msg.parentStack
-		m = m.loadLevel(msg.items, msg.targetEntityID)
-		m, histCmd = m.reloadHistoryCmd()
-		return m, histCmd, true
-	}
-
-	return m, nil, false
-}
-
-func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
-	m.termWidth = msg.Width
-	m.termHeight = msg.Height
-	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-	m.help.SetWidth(msg.Width)
-	if m.rightPane == rightPaneHistory {
-		m.history = m.history.Resize(m.detailPaneWidth(), m.paneHeight())
-	}
-	return m
-}
-
-// loadLevel replaces the list contents and positions cursor on targetEntityID (or top if empty).
-func (m Model) loadLevel(entities []app.EntityResult, targetEntityID string) Model {
-	m.list.SetItems(toListItems(entities))
-	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-	m.list.ResetFilter()
-	selectByID(&m.list, targetEntityID)
-	return m
+	return m, nil
 }
 
 func (m Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyPressMsg:
-		if msg.String() == keyEsc {
+	if kMsg, ok := msg.(tea.KeyPressMsg); ok && kMsg.String() == keyEsc {
+		m.mode = modeBrowse
+		return m, nil
+	}
+	if done, ok := msg.(actionDoneMsg); ok {
+		if done.err != nil {
+			m.errMsg = done.err.Error()
 			m.mode = modeBrowse
 			return m, nil
 		}
-	case actionDoneMsg:
-		if msg.err != nil {
-			m.form.err = msg.err
-			return m, nil
-		}
 		m.mode = modeBrowse
-		return m, m.refreshCmd(msg.result.EntityID)
+		return m, m.refreshCmd(done.result.EntityID, done.result.FullPathDisplay)
 	}
 	var cmd tea.Cmd
 	m.form, cmd = m.form.Update(msg)
@@ -418,15 +408,17 @@ func (m Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case confirmCancelledMsg:
+		_ = msg
 		m.mode = modeBrowse
 		return m, nil
 	case actionDoneMsg:
-		m.mode = modeBrowse
 		if msg.err != nil {
 			m.errMsg = msg.err.Error()
+			m.mode = modeBrowse
 			return m, nil
 		}
-		return m, m.refreshCmd(msg.result.EntityID)
+		m.mode = modeBrowse
+		return m, m.refreshCmd(msg.result.EntityID, msg.result.FullPathDisplay)
 	}
 	var cmd tea.Cmd
 	m.confirm, cmd = m.confirm.Update(msg)
@@ -451,52 +443,20 @@ func (m Model) updateScry(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// refreshCmd reloads the current level after a mutation.
-func (m Model) refreshCmd(targetEntityID string) tea.Cmd {
-	var parentID string
-	if len(m.parentStack) > 0 {
-		parentID = m.parentStack[len(m.parentStack)-1]
+func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
+	m.termWidth = msg.Width
+	m.termHeight = msg.Height
+	m.tree = m.tree.SetSize(m.navPaneInnerWidth(), m.treeHeight())
+	m.help.SetWidth(msg.Width)
+	if m.rightPane == rightPaneHistory {
+		m.history = m.history.Resize(m.detailPaneWidth(), m.paneHeight())
 	}
-	a := m.app
-	id := targetEntityID
-	if parentID == "" {
-		return func() tea.Msg {
-			items, err := a.GetRootEntities(context.Background())
-			return childRefreshMsg{items: items, targetEntityID: id, err: err}
-		}
-	}
-	return func() tea.Msg {
-		items, err := a.GetChildren(context.Background(), parentID)
-		return childRefreshMsg{items: items, targetEntityID: id, err: err}
-	}
-}
-
-// selectByID scans the current list for the entity with the given ID and selects it.
-// Falls back to ResetSelected if not found (e.g. entity was removed).
-func selectByID(l *list.Model, entityID string) {
-	if entityID == "" {
-		l.ResetSelected()
-		return
-	}
-	for i, it := range l.Items() {
-		if it, ok := it.(item); ok && it.result.EntityID == entityID {
-			l.Select(i)
-			return
-		}
-	}
-	l.ResetSelected()
+	m = m.syncTree()
+	return m
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	// Delegate all input to the list while filtering.
-	if m.list.SettingFilter() {
-		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
-		return m, cmd
-	}
-
-	// Navigation keys clear any transient error.
-	if key.Matches(msg, m.keys.Up, m.keys.Down, m.keys.DrillIn, m.keys.DrillOut) {
+	if key.Matches(msg, m.keys.Up, m.keys.Down, m.keys.Expand, m.keys.Collapse) {
 		m.errMsg = ""
 	}
 
@@ -506,7 +466,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
-		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+		m.tree = m.tree.SetSize(m.navPaneInnerWidth(), m.treeHeight())
 		return m, nil
 
 	case key.Matches(msg, m.keys.PgUp), key.Matches(msg, m.keys.PgDown):
@@ -517,118 +477,320 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.history, cmd = m.history.Update(msg)
 		return m, cmd
 
-	case key.Matches(msg, m.keys.DrillIn):
-		return m.drillDown()
+	case key.Matches(msg, m.keys.Expand):
+		return m.handleExpand()
 
-	case key.Matches(msg, m.keys.DrillOut):
-		return m.drillUp()
+	case key.Matches(msg, m.keys.Collapse):
+		return m.handleCollapse()
 
-	case key.Matches(msg, m.keys.Up), key.Matches(msg, m.keys.Down):
-		return m.handleNavKey(msg)
+	case key.Matches(msg, m.keys.Up):
+		m.cursor = clampCursor(m.cursor-1, len(m.visible))
+		m = m.syncTree()
+		var hCmd tea.Cmd
+		m, hCmd = m.reloadHistoryCmd()
+		return m, hCmd
+
+	case key.Matches(msg, m.keys.Down):
+		m.cursor = clampCursor(m.cursor+1, len(m.visible))
+		m = m.syncTree()
+		var hCmd tea.Cmd
+		m, hCmd = m.reloadHistoryCmd()
+		return m, hCmd
 
 	case key.Matches(msg, m.keys.Add):
 		return m.openAdd()
-
 	case key.Matches(msg, m.keys.Loan):
 		return m.openLoan()
-
 	case key.Matches(msg, m.keys.Borrow):
 		return m.openBorrow()
-
 	case key.Matches(msg, m.keys.Lost):
 		return m.openLost()
-
 	case key.Matches(msg, m.keys.Return):
 		return m.openReturn()
-
 	case key.Matches(msg, m.keys.Found):
 		return m.openFound()
-
 	case key.Matches(msg, m.keys.History):
 		return m.openHistory()
-
 	case key.Matches(msg, m.keys.Scry):
 		return m.openScry()
-
 	case key.Matches(msg, m.keys.Detail):
 		return m.toggleDetail()
 	}
 
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
-}
-
-// selectedItem returns the currently highlighted item, if any.
-func (m Model) selectedItem() (item, bool) {
-	sel, ok := m.list.SelectedItem().(item)
-	return sel, ok
-}
-
-func (m Model) toggleDetail() (tea.Model, tea.Cmd) {
-	if _, ok := m.selectedItem(); !ok {
-		return m, nil
-	}
-	if m.rightPane == rightPaneDetail {
-		m.rightPane = rightPaneHidden
-	} else {
-		m.rightPane = rightPaneDetail
-	}
-	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
 	return m, nil
 }
 
-func (m Model) handleNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	var listCmd tea.Cmd
-	m.list, listCmd = m.list.Update(msg)
-	m, histCmd := m.reloadHistoryCmd()
-	if histCmd != nil {
-		return m, tea.Batch(listCmd, histCmd)
+// handleExpand: l/→/enter — expand if collapsed, collapse if expanded, no-op on leaf.
+func (m Model) handleExpand() (tea.Model, tea.Cmd) {
+	if len(m.visible) == 0 {
+		return m, nil
 	}
-	return m, listCmd
+	ni := m.visible[m.cursor]
+	n := m.nodes[ni]
+
+	if !n.hasChildren {
+		return m, nil
+	}
+	if n.expanded {
+		// Already expanded → collapse.
+		m.nodes[ni].expanded = false
+		m.visible = rebuildVisible(m.nodes)
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+		m = m.syncTree()
+		return m, nil
+	}
+	// Collapsed → expand. Lazy-load if needed.
+	if !n.loaded {
+		a := m.app
+		id := n.result.EntityID
+		depth := n.depth
+		return m, func() tea.Msg {
+			items, err := a.GetChildren(context.Background(), id)
+			return treeExpandedMsg{parentID: id, depth: depth, items: items, err: err}
+		}
+	}
+	// Already loaded — just expand.
+	m.nodes[ni].expanded = true
+	m.visible = rebuildVisible(m.nodes)
+	m = m.syncTree()
+	return m, nil
 }
 
-// reloadHistoryCmd reinitialises the history model for the current selection
-// and returns the updated Model and a loadCmd. Returns (m, nil) when the
-// history pane is not open or no entity is selected.
+// handleCollapse: h/← — collapse if expanded, move to parent if collapsed/leaf.
+func (m Model) handleCollapse() (tea.Model, tea.Cmd) {
+	if len(m.visible) == 0 {
+		return m, nil
+	}
+	ni := m.visible[m.cursor]
+	n := m.nodes[ni]
+
+	if n.expanded {
+		m.nodes[ni].expanded = false
+		m.visible = rebuildVisible(m.nodes)
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+		m = m.syncTree()
+		var hCmd tea.Cmd
+		m, hCmd = m.reloadHistoryCmd()
+		return m, hCmd
+	}
+	// Move cursor to parent.
+	if n.parentID == "" {
+		return m, nil
+	}
+	m.cursor = setCursorToEntity(m.visible, m.nodes, n.parentID, m.cursor)
+	m = m.syncTree()
+	var hCmd tea.Cmd
+	m, hCmd = m.reloadHistoryCmd()
+	return m, hCmd
+}
+
+// refreshCmd reloads the parent of the given entity and returns a treeRefreshMsg.
+// parentPath is used to find the parent node by FullPathDisplay when parentID is unknown.
+func (m Model) refreshCmd(entityID, entityFullPath string) tea.Cmd {
+	// Determine parentID from the target node's parentID field.
+	if ni := findNodeIndex(m.nodes, entityID); ni >= 0 {
+		parentID := m.nodes[ni].parentID
+		a := m.app
+		id := entityID
+		if parentID == "" {
+			return func() tea.Msg {
+				items, err := a.GetRootEntities(context.Background())
+				// Roots don't have a single parentID; use empty string sentinel.
+				return treeRefreshMsg{parentID: "", items: items, targetEntityID: id, err: err}
+			}
+		}
+		return func() tea.Msg {
+			items, err := a.GetChildren(context.Background(), parentID)
+			return treeRefreshMsg{parentID: parentID, items: items, targetEntityID: id, err: err}
+		}
+	}
+	// Entity not yet in nodes (just created) — find parent by path.
+	// Parent path is entityFullPath without the last segment.
+	parts := strings.Split(entityFullPath, ":")
+	a := m.app
+	id := entityID
+	if len(parts) <= 1 {
+		return func() tea.Msg {
+			items, err := a.GetRootEntities(context.Background())
+			return treeRefreshMsg{parentID: "", items: items, targetEntityID: id, err: err}
+		}
+	}
+	parentPath := strings.Join(parts[:len(parts)-1], ":")
+	if pi := findNodeIndexByPath(m.nodes, parentPath); pi >= 0 {
+		parentID := m.nodes[pi].result.EntityID
+		return func() tea.Msg {
+			items, err := a.GetChildren(context.Background(), parentID)
+			return treeRefreshMsg{parentID: parentID, items: items, targetEntityID: id, err: err}
+		}
+	}
+	// Parent unknown — reload roots as best effort.
+	return func() tea.Msg {
+		items, err := a.GetRootEntities(context.Background())
+		return treeRefreshMsg{parentID: "", items: items, targetEntityID: id, err: err}
+	}
+}
+
+// treeRefreshMsg with empty parentID means roots; handle that in updateBrowse.
+// Override: when parentID is "" treat as root splice.
+func (m Model) handleRootRefresh(items []app.EntityResult, targetEntityID string) Model {
+	newRoots := make([]treeNode, len(items))
+	for i, r := range items {
+		if existing := findNodeIndex(m.nodes, r.EntityID); existing >= 0 {
+			n := m.nodes[existing]
+			n.result = r
+			n.hasChildren = r.HasChildren
+			newRoots[i] = n
+		} else {
+			newRoots[i] = treeNodeFromResult(r, 0, "")
+		}
+	}
+	var nonRoots []treeNode
+	for _, n := range m.nodes {
+		if n.depth > 0 {
+			nonRoots = append(nonRoots, n)
+		}
+	}
+	combined := make([]treeNode, 0, len(newRoots)+len(nonRoots))
+	combined = append(combined, newRoots...)
+	combined = append(combined, nonRoots...)
+	m.nodes = combined
+	m.visible = rebuildVisible(m.nodes)
+	if targetEntityID != "" {
+		m.cursor = setCursorToEntity(m.visible, m.nodes, targetEntityID, m.cursor)
+	}
+	m.cursor = clampCursor(m.cursor, len(m.visible))
+	return m
+}
+
+// revealNode expands all loaded ancestor nodes to make entityID visible.
+func (m Model) revealNode(entityID string) (tea.Model, tea.Cmd) {
+	ni := findNodeIndex(m.nodes, entityID)
+	if ni < 0 {
+		return m, nil
+	}
+	// Walk ancestors upward and expand each.
+	pid := m.nodes[ni].parentID
+	for pid != "" {
+		if pi := findNodeIndex(m.nodes, pid); pi >= 0 {
+			m.nodes[pi].expanded = true
+			pid = m.nodes[pi].parentID
+		} else {
+			break
+		}
+	}
+	m.visible = rebuildVisible(m.nodes)
+	m.cursor = setCursorToEntity(m.visible, m.nodes, entityID, m.cursor)
+	m.cursor = clampCursor(m.cursor, len(m.visible))
+	m = m.syncTree()
+	m2, cmd := m.reloadHistoryCmd()
+	return m2, cmd
+}
+
+// revealViaAncestors fires GetChildren for each unloaded ancestor in order.
+func (m Model) revealViaAncestors(targetEntityID string, ancestorIDs []string) (tea.Model, tea.Cmd) {
+	if len(ancestorIDs) == 0 {
+		return m.revealNode(targetEntityID)
+	}
+	firstID := ancestorIDs[0]
+	rest := ancestorIDs[1:]
+	firstDepth := 0
+	// Determine depth of first ancestor (it must be a root or already loaded).
+	if ni := findNodeIndex(m.nodes, firstID); ni >= 0 {
+		firstDepth = m.nodes[ni].depth
+		if !m.nodes[ni].loaded {
+			a := m.app
+			return m, func() tea.Msg {
+				items, err := a.GetChildren(context.Background(), firstID)
+				return treeRevealMsg{
+					parentID:       firstID,
+					depth:          firstDepth,
+					items:          items,
+					remainingPath:  rest,
+					targetEntityID: targetEntityID,
+					err:            err,
+				}
+			}
+		}
+		m.nodes[ni].expanded = true
+	}
+	m.visible = rebuildVisible(m.nodes)
+	m = m.syncTree()
+	return m.revealViaAncestors(targetEntityID, rest)
+}
+
+// childrenOf returns all direct children of parentID from nodes.
+func childrenOf(nodes []treeNode, parentID string) []treeNode {
+	var out []treeNode
+	for _, n := range nodes {
+		if n.parentID == parentID {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// nodeResultSlice extracts EntityResult from a slice of treeNodes.
+func nodeResultSlice(nodes []treeNode) []app.EntityResult {
+	out := make([]app.EntityResult, len(nodes))
+	for i, n := range nodes {
+		out[i] = n.result
+	}
+	return out
+}
+
+// syncTree updates the treeModel's cursor, visible slice, and re-renders.
+func (m Model) syncTree() Model {
+	m.tree.cursor = m.cursor
+	m.tree.visible = m.visible
+	m.tree = m.tree.render(m.nodes)
+	m.tree = m.tree.scrollToCursor()
+	return m
+}
+
 func (m Model) reloadHistoryCmd() (Model, tea.Cmd) {
 	if m.rightPane != rightPaneHistory {
 		return m, nil
 	}
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m, nil
 	}
-	m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
+	m.history = newHistoryModel(r, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
 	return m, m.history.loadCmd()
 }
 
-// gateError sets errMsg and returns the model unchanged (no mode switch).
 func (m Model) gateError(msg string) (tea.Model, tea.Cmd) {
 	m.errMsg = msg
 	return m, nil
 }
 
+// selectedResult returns the app.EntityResult for the currently focused node.
+func (m Model) selectedResult() (app.EntityResult, bool) {
+	if len(m.visible) == 0 || m.cursor < 0 || m.cursor >= len(m.visible) {
+		return app.EntityResult{}, false
+	}
+	return m.nodes[m.visible[m.cursor]].result, true
+}
+
 func (m Model) openAdd() (tea.Model, tea.Cmd) {
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m.gateError("no entity selected")
 	}
-	if sel.result.Discrete {
+	if r.Discrete {
 		return m.gateError("cannot add: entity is discrete (no children allowed)")
 	}
 	m.errMsg = ""
-	m.form = newFormModel(formAdd, sel.result, m.app, m.st)
+	m.form = newFormModel(formAdd, r, m.app, m.st)
 	m.mode = modeForm
 	return m, nil
 }
 
 func (m Model) openLoan() (tea.Model, tea.Cmd) {
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m.gateError("no entity selected")
 	}
-	r := sel.result
 	if r.Locked {
 		return m.gateError("cannot loan: entity is locked")
 	}
@@ -642,22 +804,21 @@ func (m Model) openLoan() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openBorrow() (tea.Model, tea.Cmd) {
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m.gateError("no entity selected")
 	}
 	m.errMsg = ""
-	m.form = newFormModel(formBorrow, sel.result, m.app, m.st)
+	m.form = newFormModel(formBorrow, r, m.app, m.st)
 	m.mode = modeForm
 	return m, nil
 }
 
 func (m Model) openLost() (tea.Model, tea.Cmd) {
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m.gateError("no entity selected")
 	}
-	r := sel.result
 	if r.Locked {
 		return m.gateError("cannot mark lost: entity is locked")
 	}
@@ -671,11 +832,10 @@ func (m Model) openLost() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openReturn() (tea.Model, tea.Cmd) {
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m.gateError("no entity selected")
 	}
-	r := sel.result
 	if r.Status != inventory.EntityStatusLoaned && r.Status != inventory.EntityStatusBorrowed {
 		return m.gateError("cannot return: entity must be loaned or borrowed (is " + r.Status.String() + ")")
 	}
@@ -686,11 +846,10 @@ func (m Model) openReturn() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openFound() (tea.Model, tea.Cmd) {
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m.gateError("no entity selected")
 	}
-	r := sel.result
 	if r.Status != inventory.EntityStatusMissing {
 		return m.gateError("cannot mark found: entity must be missing (is " + r.Status.String() + ")")
 	}
@@ -701,19 +860,19 @@ func (m Model) openFound() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openHistory() (tea.Model, tea.Cmd) {
-	sel, ok := m.selectedItem()
+	r, ok := m.selectedResult()
 	if !ok {
 		return m.gateError("no entity selected")
 	}
 	if m.rightPane == rightPaneHistory {
 		m.rightPane = rightPaneHidden
-		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+		m.tree = m.tree.SetSize(m.navPaneInnerWidth(), m.treeHeight())
 		return m, nil
 	}
 	m.errMsg = ""
 	m.rightPane = rightPaneHistory
-	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-	m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
+	m.tree = m.tree.SetSize(m.navPaneInnerWidth(), m.treeHeight())
+	m.history = newHistoryModel(r, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
 	return m, m.history.loadCmd()
 }
 
@@ -725,7 +884,22 @@ func (m Model) openScry() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the full TUI.
+func (m Model) toggleDetail() (tea.Model, tea.Cmd) {
+	if _, ok := m.selectedResult(); !ok {
+		return m, nil
+	}
+	if m.rightPane == rightPaneDetail {
+		m.rightPane = rightPaneHidden
+	} else {
+		m.rightPane = rightPaneDetail
+	}
+	m.tree = m.tree.SetSize(m.navPaneInnerWidth(), m.treeHeight())
+	return m, nil
+}
+
+// --- View ---
+
+// View implements tea.Model.
 func (m Model) View() tea.View {
 	if m.err != nil {
 		v := tea.NewView(fmt.Sprintf("error: %v\n", m.err))
@@ -761,19 +935,22 @@ func (m Model) View() tea.View {
 	return v
 }
 
-// CurrentPath returns the breadcrumb string for the current navigation level.
+// --- exported accessors for tests ---
+
+// CurrentPath returns the FullPathDisplay of the currently focused entity, or "wherehouse" at root with no selection.
 func (m Model) CurrentPath() string {
-	if len(m.pathStack) == 0 {
+	r, ok := m.selectedResult()
+	if !ok {
 		return "wherehouse"
 	}
-	return m.pathStack[len(m.pathStack)-1]
+	return r.FullPathDisplay
 }
 
-// ItemCount returns the number of items currently displayed.
-func (m Model) ItemCount() int { return len(m.list.Items()) }
+// ItemCount returns the number of currently visible nodes.
+func (m Model) ItemCount() int { return len(m.visible) }
 
 // CursorIndex returns the index of the currently highlighted item.
-func (m Model) CursorIndex() int { return m.list.Index() }
+func (m Model) CursorIndex() int { return m.cursor }
 
 // RightPane returns the current right pane state: "hidden", "detail", or "history".
 func (m Model) RightPane() string {
@@ -784,8 +961,9 @@ func (m Model) RightPane() string {
 		return "history"
 	case rightPaneHidden:
 		return "hidden"
+	default:
+		return "hidden"
 	}
-	return "hidden"
 }
 
 // Mode returns the current mode name for test assertions.
@@ -819,8 +997,7 @@ func (m Model) navPaneWidth() int {
 	if m.rightPane == rightPaneHidden {
 		return m.termWidth
 	}
-	w := max(int(float64(m.termWidth)*navWidthRatio), navPaneMinWidth)
-	return w
+	return max(int(float64(m.termWidth)*navWidthRatio), navPaneMinWidth)
 }
 
 func (m Model) navPaneInnerWidth() int {
@@ -837,7 +1014,6 @@ func (m Model) detailPaneInnerWidth() int {
 
 func (m Model) helpHeight() int {
 	if m.help.ShowAll {
-		// FullHelp renders len(groups) rows + 1 for the short-help fallback line.
 		return len(m.keys.FullHelp()) + 1
 	}
 	return helpHeightShort
@@ -847,8 +1023,8 @@ func (m Model) paneHeight() int {
 	return max(0, m.termHeight-headerHeight-m.helpHeight())
 }
 
-func (m Model) listHeight() int {
-	return max(0, m.paneHeight()-borderHeight-crumbHeight-listViewOverhead)
+func (m Model) treeHeight() int {
+	return max(0, m.paneHeight()-borderHeight)
 }
 
 func (m Model) renderHeader() string {
@@ -857,25 +1033,10 @@ func (m Model) renderHeader() string {
 }
 
 func (m Model) renderNavPane() string {
-	crumbText := "wherehouse"
-	if len(m.pathStack) > 0 {
-		crumbs := make([]string, len(m.pathStack))
-		for i, p := range m.pathStack {
-			if parsed, err := entitypath.Parse(p); err == nil {
-				crumbs[i] = parsed.Base()
-			} else {
-				crumbs[i] = p
-			}
-		}
-		crumbText = strings.Join(crumbs, " › ")
-	}
-	crumb := m.st.TUICrumb().Render(crumbText)
-	inner := lipgloss.JoinVertical(lipgloss.Left, crumb, m.list.View())
-
 	return m.st.TUINavBorder().
 		Width(m.navPaneWidth()).
 		Height(m.paneHeight()).
-		Render(inner)
+		Render(m.tree.View())
 }
 
 func (m Model) renderDetailPane() string {
@@ -901,32 +1062,20 @@ func (m Model) buildDetailContent() string {
 		prefix = m.st.DangerText().Render(m.errMsg) + "\n\n"
 	}
 
-	sel, ok := m.list.SelectedItem().(item)
-	if !ok || m.list.IsFiltered() && m.list.SelectedItem() == nil {
-		return prefix + m.st.TUIDetailValue().Render("—")
-	}
+	r, ok := m.selectedResult()
 	if !ok {
 		return prefix + m.st.TUIDetailValue().Render("no selection")
 	}
 
-	r := sel.result
 	w := m.detailPaneInnerWidth()
 
-	label := func(s string) string {
-		return m.st.TUIDetailLabel().Render(s + ":")
-	}
-	val := func(s string) string {
-		return m.st.TUIDetailValue().Render(s)
-	}
-	row := func(l, v string) string {
-		return lipgloss.JoinHorizontal(lipgloss.Top, l, " ", v)
-	}
+	label := func(s string) string { return m.st.TUIDetailLabel().Render(s + ":") }
+	val := func(s string) string { return m.st.TUIDetailValue().Render(s) }
+	row := func(l, v string) string { return lipgloss.JoinHorizontal(lipgloss.Top, l, " ", v) }
 
 	var lines []string
-
 	lines = append(lines, m.st.TUICrumb().Width(w).Render(r.DisplayName))
 	lines = append(lines, "")
-
 	lines = append(lines, row(label("status"), statusDisplay(r, m.st)))
 
 	if !r.UpdatedAt.IsZero() {
@@ -965,10 +1114,9 @@ func (m Model) renderHelp() string {
 	return m.help.View(m.keys)
 }
 
-// statusDisplay renders a colored status string for the detail pane.
 func statusDisplay(r app.EntityResult, st *styles.Styles) string {
 	s := r.Status.String()
-	switch r.Status.String() {
+	switch s {
 	case "ok":
 		return st.SuccessText().Render(s)
 	case "missing":
@@ -978,46 +1126,4 @@ func statusDisplay(r app.EntityResult, st *styles.Styles) string {
 	default:
 		return st.Muted().Render(s)
 	}
-}
-
-func (m Model) drillDown() (tea.Model, tea.Cmd) {
-	selected, ok := m.list.SelectedItem().(item)
-	if !ok || !selected.result.HasChildren {
-		return m, nil
-	}
-	id := selected.result.EntityID
-	path := selected.result.FullPathDisplay
-	return m, func() tea.Msg {
-		children, err := m.app.GetChildren(context.Background(), id)
-		return childrenLoadedMsg{parentID: id, parentPath: path, items: children, err: err}
-	}
-}
-
-func (m Model) drillUp() (tea.Model, tea.Cmd) {
-	if len(m.pathStack) == 0 {
-		return m, nil
-	}
-	newLen := len(m.pathStack) - 1
-	targetPath := append([]string(nil), m.pathStack[:newLen]...)
-	targetParent := append([]string(nil), m.parentStack[:newLen]...)
-
-	if len(targetParent) == 0 {
-		return m, func() tea.Msg {
-			entities, err := m.app.GetRootEntities(context.Background())
-			return rootsLoadedMsg{items: entities, err: err}
-		}
-	}
-	parentID := targetParent[len(targetParent)-1]
-	return m, func() tea.Msg {
-		children, err := m.app.GetChildren(context.Background(), parentID)
-		return levelRestoredMsg{pathStack: targetPath, parentStack: targetParent, items: children, err: err}
-	}
-}
-
-func toListItems(entities []app.EntityResult) []list.Item {
-	items := make([]list.Item, len(entities))
-	for i, e := range entities {
-		items[i] = item{result: e}
-	}
-	return items
 }

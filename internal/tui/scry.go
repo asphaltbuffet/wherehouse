@@ -113,15 +113,10 @@ type scryCancelledMsg struct{}
 // EntityResult does not carry parentID, so we always reload from root and let the
 // Update handler position the cursor by ID. Deep navigation is a future improvement
 // once EntityResult exposes parentID.
-func (s scryModel) navigateCmd(entity app.EntityResult, a App) tea.Cmd {
+func (s scryModel) navigateCmd(entity app.EntityResult, _ App) tea.Cmd {
 	return func() tea.Msg {
-		roots, err := a.GetRootEntities(context.Background())
 		return scryNavigatedMsg{
-			items:          roots,
 			targetEntityID: entity.EntityID,
-			pathStack:      nil,
-			parentStack:    nil,
-			err:            err,
 		}
 	}
 }

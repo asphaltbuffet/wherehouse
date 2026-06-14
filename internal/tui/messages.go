@@ -8,10 +8,35 @@ type actionDoneMsg struct {
 	err    error
 }
 
-// childRefreshMsg triggers a reload of the current level after a mutation,
-// optionally repositioning the cursor on targetEntityID.
-type childRefreshMsg struct {
+// rootsLoadedMsg carries the result of the initial root entity fetch.
+type rootsLoadedMsg struct {
+	items []app.EntityResult
+	err   error
+}
+
+// treeExpandedMsg carries children loaded when a node is expanded.
+type treeExpandedMsg struct {
+	parentID string
+	depth    int
+	items    []app.EntityResult
+	err      error
+}
+
+// treeRefreshMsg carries reloaded children for a parent after a mutation.
+type treeRefreshMsg struct {
+	parentID       string
 	items          []app.EntityResult
+	targetEntityID string
+	err            error
+}
+
+// treeRevealMsg carries one level of children needed to reveal a scry result.
+// When remainingPath is empty the target has been reached.
+type treeRevealMsg struct {
+	parentID       string
+	depth          int
+	items          []app.EntityResult
+	remainingPath  []string // entity IDs still to expand toward the target
 	targetEntityID string
 	err            error
 }
@@ -30,11 +55,9 @@ type scryResultsMsg struct {
 	err   error
 }
 
-// scryNavigatedMsg triggers browse-tree navigation to a scry result's position.
+// scryNavigatedMsg triggers tree reveal navigation to a scry result.
 type scryNavigatedMsg struct {
-	items          []app.EntityResult
 	targetEntityID string
-	pathStack      []string
-	parentStack    []string
+	ancestorIDs    []string // ordered root→parent, excluding the target itself
 	err            error
 }

@@ -146,6 +146,20 @@ func loadedModelFake(t *testing.T, f *fakeTUIApp) tui.Model {
 	return updated.(tui.Model)
 }
 
+// expandNode presses l on the current cursor position and waits for the
+// treeExpandedMsg to come back, returning the settled model.
+func expandNode(t *testing.T, m tui.Model) tui.Model {
+	t.Helper()
+	updated, cmd := m.Update(keyMsg("l"))
+	m = updated.(tui.Model)
+	if cmd != nil {
+		childMsg := cmd()
+		updated2, _ := m.Update(childMsg)
+		m = updated2.(tui.Model)
+	}
+	return m
+}
+
 func TestModel_InitLoadsRootEntities(t *testing.T) {
 	roots := []app.EntityResult{
 		entityResult("e1", "Garage", "Garage", true),
@@ -155,21 +169,20 @@ func TestModel_InitLoadsRootEntities(t *testing.T) {
 
 	m := tui.New(f)
 
-	// Init returns a Cmd that fetches root entities; simulate receiving the result.
 	initCmd := m.Init()
 	require.NotNil(t, initCmd)
 
-	// Execute the command to get the message it produces.
 	msg := initCmd()
 
 	updatedModel, _ := m.Update(msg)
 	updated := updatedModel.(tui.Model)
 
 	assert.Equal(t, 2, updated.ItemCount())
-	assert.Equal(t, "wherehouse", updated.CurrentPath())
+	// At root with cursor on first entity.
+	assert.Equal(t, "Garage", updated.CurrentPath())
 }
 
-func TestModel_DrillDown(t *testing.T) {
+func TestModel_ExpandCollapse(t *testing.T) {
 	children := []app.EntityResult{
 		entityResult("e10", "Toolbox", "Garage:Toolbox", false),
 		entityResult("e11", "Ladder", "Garage:Ladder", false),
@@ -183,20 +196,27 @@ func TestModel_DrillDown(t *testing.T) {
 		children: map[string][]app.EntityResult{"e1": children},
 	}
 
-	t.Run("l on entity with children loads children and updates path", func(t *testing.T) {
+	t.Run("l on entity with children expands it and shows children", func(t *testing.T) {
 		m := loadedModelFake(t, f)
+		// Cursor on Garage (index 0, HasChildren=true).
+		m = expandNode(t, m)
 
-		// Press l to drill into Garage (index 0, HasChildren=true).
-		drillCmd := func() tea.Model {
-			updated, cmd := m.Update(keyMsg("l"))
-			require.NotNil(t, cmd)
-			childMsg := cmd()
-			updated, _ = updated.(tui.Model).Update(childMsg)
-			return updated
-		}()
+		// Visible: Garage, Toolbox, Ladder, Shelf = 4 items.
+		assert.Equal(t, 4, m.ItemCount())
+		// Cursor remains on Garage.
+		assert.Equal(t, "Garage", m.CurrentPath())
+	})
 
-		assert.Equal(t, "Garage", drillCmd.(tui.Model).CurrentPath())
-		assert.Equal(t, 2, drillCmd.(tui.Model).ItemCount())
+	t.Run("l on already-expanded node collapses it", func(t *testing.T) {
+		m := loadedModelFake(t, f)
+		m = expandNode(t, m)
+		require.Equal(t, 4, m.ItemCount())
+
+		// Press l again — collapses Garage, children hidden.
+		updated, cmd := m.Update(keyMsg("l"))
+		m = updated.(tui.Model)
+		assert.Nil(t, cmd)
+		assert.Equal(t, 2, m.ItemCount())
 	})
 
 	t.Run("l on childless entity is no-op", func(t *testing.T) {
@@ -207,110 +227,68 @@ func TestModel_DrillDown(t *testing.T) {
 
 		updated2, cmd := m2.Update(keyMsg("l"))
 		assert.Nil(t, cmd)
-		assert.Equal(t, "wherehouse", updated2.(tui.Model).CurrentPath())
 		assert.Equal(t, 2, updated2.(tui.Model).ItemCount())
 	})
 }
 
-func TestModel_DrillUp(t *testing.T) {
-	grandchildren := []app.EntityResult{
-		entityResult("e20", "Office", "Basement:Office", false),
-	}
+func TestModel_CollapseNavigation(t *testing.T) {
 	children := []app.EntityResult{
 		entityResult("e10", "Toolbox", "Garage:Toolbox", false),
-		entityResult("e11", "Basement", "Basement", true),
 	}
 	roots := []app.EntityResult{
 		entityResult("e1", "Garage", "Garage", true),
-		entityResult("e2", "Basement", "Basement", true),
-		entityResult("e3", "Shelf", "Shelf", false),
+		entityResult("e2", "Shelf", "Shelf", false),
 	}
 	f := &fakeTUIApp{
-		roots: roots,
-		children: map[string][]app.EntityResult{
-			"e1":  children,
-			"e11": grandchildren,
-		},
+		roots:    roots,
+		children: map[string][]app.EntityResult{"e1": children},
 	}
 
-	t.Run("h after single drill-down returns to root", func(t *testing.T) {
+	t.Run("h on expanded node collapses it", func(t *testing.T) {
 		m := loadedModelFake(t, f)
+		m = expandNode(t, m)
+		require.Equal(t, 3, m.ItemCount())
 
-		// Drill down into Garage (index 0).
-		_, cmd := m.Update(keyMsg("l"))
-		drilled, _ := m.Update(cmd())
-		require.Equal(t, "Garage", drilled.(tui.Model).CurrentPath())
-
-		// Drill up.
-		_, upCmd := drilled.(tui.Model).Update(keyMsg("h"))
-		require.NotNil(t, upCmd)
-		back, _ := drilled.(tui.Model).Update(upCmd())
-
-		assert.Equal(t, "wherehouse", back.(tui.Model).CurrentPath())
-		assert.Equal(t, 3, back.(tui.Model).ItemCount())
-	})
-
-	t.Run("h after two drill-downs returns to intermediate level not root", func(t *testing.T) {
-		m := loadedModelFake(t, f)
-
-		// Drill into Garage children.
-		_, cmd := m.Update(keyMsg("l"))
-		depth1, _ := m.Update(cmd())
-		require.Equal(t, "Garage", depth1.(tui.Model).CurrentPath())
-
-		// Select the Basement child (index 1) and drill in.
-		depth1, _ = depth1.(tui.Model).Update(keyMsg("j"))
-		_, cmd2 := depth1.(tui.Model).Update(keyMsg("l"))
-		depth2, _ := depth1.(tui.Model).Update(cmd2())
-		require.Equal(t, "Basement", depth2.(tui.Model).CurrentPath())
-
-		// Press h — must go back to Garage children, not root.
-		_, upCmd := depth2.(tui.Model).Update(keyMsg("h"))
-		require.NotNil(t, upCmd)
-		back, _ := depth2.(tui.Model).Update(upCmd())
-
-		assert.Equal(t, "Garage", back.(tui.Model).CurrentPath())
-		assert.Equal(t, 2, back.(tui.Model).ItemCount())
-	})
-
-	t.Run("h twice from two levels deep reaches root", func(t *testing.T) {
-		m := loadedModelFake(t, f)
-
-		// Drill Garage → Basement child.
-		_, cmd := m.Update(keyMsg("l"))
-		depth1, _ := m.Update(cmd())
-		depth1, _ = depth1.(tui.Model).Update(keyMsg("j"))
-		_, cmd2 := depth1.(tui.Model).Update(keyMsg("l"))
-		depth2, _ := depth1.(tui.Model).Update(cmd2())
-
-		// First h → back to Garage.
-		_, upCmd := depth2.(tui.Model).Update(keyMsg("h"))
-		mid, _ := depth2.(tui.Model).Update(upCmd())
-		require.Equal(t, "Garage", mid.(tui.Model).CurrentPath())
-
-		// Second h → back to root.
-		_, upCmd2 := mid.(tui.Model).Update(keyMsg("h"))
-		require.NotNil(t, upCmd2)
-		root, _ := mid.(tui.Model).Update(upCmd2())
-		assert.Equal(t, "wherehouse", root.(tui.Model).CurrentPath())
-		assert.Equal(t, 3, root.(tui.Model).ItemCount())
-	})
-
-	t.Run("h at root is no-op", func(t *testing.T) {
-		m := loadedModelFake(t, f)
 		updated, cmd := m.Update(keyMsg("h"))
+		m2 := updated.(tui.Model)
 		assert.Nil(t, cmd)
-		assert.Equal(t, "wherehouse", updated.(tui.Model).CurrentPath())
+		assert.Equal(t, 2, m2.ItemCount())
+		assert.Equal(t, "Garage", m2.CurrentPath())
+	})
+
+	t.Run("h on collapsed child moves cursor to parent", func(t *testing.T) {
+		m := loadedModelFake(t, f)
+		// Expand Garage, move cursor to Toolbox.
+		m = expandNode(t, m)
+		updated, _ := m.Update(keyMsg("j"))
+		m = updated.(tui.Model)
+		require.Equal(t, "Garage:Toolbox", m.CurrentPath())
+
+		// h moves cursor to parent (Garage), no load needed.
+		updated2, cmd := m.Update(keyMsg("h"))
+		m2 := updated2.(tui.Model)
+		assert.Nil(t, cmd)
+		assert.Equal(t, "Garage", m2.CurrentPath())
+	})
+
+	t.Run("h at root collapsed node is no-op", func(t *testing.T) {
+		m := loadedModelFake(t, f)
+		assert.Equal(t, "Garage", m.CurrentPath())
+
+		updated, cmd := m.Update(keyMsg("h"))
+		m2 := updated.(tui.Model)
+		assert.Nil(t, cmd)
+		assert.Equal(t, "Garage", m2.CurrentPath())
 	})
 }
 
 func TestModel_QuitKeys(t *testing.T) {
 	roots := []app.EntityResult{entityResult("e1", "Garage", "Garage", false)}
 
-	for _, key := range []string{"q", "Q"} {
-		t.Run(fmt.Sprintf("%s quits", key), func(t *testing.T) {
+	for _, k := range []string{"q", "Q"} {
+		t.Run(fmt.Sprintf("%s quits", k), func(t *testing.T) {
 			m := loadedModel(t, roots)
-			_, cmd := m.Update(keyMsg(key))
+			_, cmd := m.Update(keyMsg(k))
 			require.NotNil(t, cmd)
 			msg := cmd()
 			assert.Equal(t, tea.QuitMsg{}, msg)
@@ -430,12 +408,10 @@ func TestModel_ActionGating(t *testing.T) {
 		f := &fakeTUIApp{roots: []app.EntityResult{locked, shelf}}
 		m := loadedModelFake(t, f)
 
-		// Trigger an errMsg.
 		updated, _ := m.Update(keyMsg("L"))
 		m2 := updated.(tui.Model)
 		require.NotEmpty(t, m2.ErrMsg())
 
-		// Navigate down — errMsg should clear.
 		updated2, _ := m2.Update(keyMsg("j"))
 		assert.Empty(t, updated2.(tui.Model).ErrMsg())
 	})
@@ -498,7 +474,6 @@ func TestModel_ConfirmMode(t *testing.T) {
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
-		// esc emits confirmCancelledMsg as a Cmd; execute it then feed back.
 		updated2, cancelCmd := updated.(tui.Model).Update(keyMsg("esc"))
 		require.NotNil(t, cancelCmd)
 		updated3, _ := updated2.(tui.Model).Update(cancelCmd())
@@ -509,11 +484,9 @@ func TestModel_ConfirmMode(t *testing.T) {
 		f := &fakeTUIApp{roots: []app.EntityResult{okEntity}}
 		m := loadedModelFake(t, f)
 
-		// Open confirm.
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
-		// Type a character — must land in the note field.
 		updated2, _ := updated.(tui.Model).Update(keyMsg("g"))
 		assert.Equal(t, "g", updated2.(tui.Model).ConfirmNote())
 	})
@@ -538,23 +511,21 @@ func TestModel_ConfirmMode(t *testing.T) {
 		}
 		m := loadedModelFake(t, f)
 
-		// Open confirm and type a note.
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 		updated, _ = updated.(tui.Model).Update(keyMsg("m"))
 		updated, _ = updated.(tui.Model).Update(keyMsg("i"))
 		updated, _ = updated.(tui.Model).Update(keyMsg("a"))
 
-		// Submit — note must reach the app call.
 		_, submitCmd := updated.(tui.Model).Update(keyMsg("enter"))
 		require.NotNil(t, submitCmd)
-		submitCmd() // execute to trigger MarkLost on the fake
+		submitCmd()
 
 		require.Len(t, f.lastLostReqs, 1)
 		assert.Equal(t, "mia", f.lastLostReqs[0].Note)
 	})
 
-	t.Run("enter submits lost and refreshes list", func(t *testing.T) {
+	t.Run("enter submits lost and refreshes tree", func(t *testing.T) {
 		refreshed := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusMissing, false)
 		f := &fakeTUIApp{
 			roots: []app.EntityResult{okEntity},
@@ -562,24 +533,22 @@ func TestModel_ConfirmMode(t *testing.T) {
 		}
 		m := loadedModelFake(t, f)
 
-		// Open confirm.
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
-		// Press enter — fires submitCmd.
 		updated2, submitCmd := updated.(tui.Model).Update(keyMsg("enter"))
 		require.NotNil(t, submitCmd)
 
-		// Execute submitCmd → actionDoneMsg.
 		actionMsg := submitCmd()
 		updated3, refreshCmd := updated2.(tui.Model).Update(actionMsg)
 		assert.Equal(t, "browse", updated3.(tui.Model).Mode())
 		require.NotNil(t, refreshCmd)
 
-		// Execute refreshCmd → childRefreshMsg.
+		// Execute refreshCmd → treeRefreshMsg with updated entity.
 		refreshMsg := refreshCmd()
 		updated4, _ := updated3.(tui.Model).Update(refreshMsg)
 		assert.Equal(t, "browse", updated4.(tui.Model).Mode())
+		// Root level still has 1 entity.
 		assert.Equal(t, 1, updated4.(tui.Model).ItemCount())
 	})
 }
@@ -650,11 +619,9 @@ func TestModel_HistoryRendersEvents(t *testing.T) {
 	}
 	m := loadedModelFake(t, f)
 
-	// Size the terminal so the viewport has non-zero dimensions.
 	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = sized.(tui.Model)
 
-	// Open history and execute the load command.
 	afterOpen, loadCmd := m.Update(keyMsg("H"))
 	m2 := afterOpen.(tui.Model)
 	require.Equal(t, "history", m2.RightPane())
@@ -686,7 +653,6 @@ func TestModel_HistoryPane(t *testing.T) {
 		assert.Equal(t, "browse", m2.Mode())
 		require.NotNil(t, loadCmd)
 
-		// Execute load cmd — still in browse mode, history pane open.
 		histMsg := loadCmd()
 		updated2, _ := m2.Update(histMsg)
 		assert.Equal(t, "history", updated2.(tui.Model).RightPane())
@@ -741,21 +707,17 @@ func TestModel_ScryShowsResults(t *testing.T) {
 	}
 	m := loadedModelFake(t, f)
 
-	// Size the terminal so the scry list has non-zero dimensions.
 	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = sized.(tui.Model)
 
-	// Open scry.
 	inScry, _ := m.Update(keyMsg("s"))
 	m = inScry.(tui.Model)
 	require.Equal(t, "scry", m.Mode())
 
-	// Type "d" to trigger a search; feed all resulting messages back.
 	_, batchCmd := m.Update(keyMsg("d"))
 	require.NotNil(t, batchCmd)
 	m = feedBatch(t, m, batchCmd)
 
-	// The entity path must be visible in the rendered view.
 	assert.Contains(t, m.View().Content, "Garage:Drill Bit")
 }
 
@@ -773,32 +735,27 @@ func TestModel_ScryNavigate(t *testing.T) {
 	inScry, _ := m.Update(keyMsg("s"))
 	m = inScry.(tui.Model)
 
-	// Trigger search and load results.
 	_, batchCmd := m.Update(keyMsg("d"))
 	m = feedBatch(t, m, batchCmd)
 
-	// Press enter — must fire a navigate cmd and eventually return to browse.
 	afterEnter, navigateCmd := m.Update(keyMsg("enter"))
 	require.NotNil(t, navigateCmd, "enter with results should return a navigate cmd")
 
 	navigateMsg := navigateCmd()
 	afterNavigate, _ := afterEnter.(tui.Model).Update(navigateMsg)
 	assert.Equal(t, "browse", afterNavigate.(tui.Model).Mode())
+	// Target entity is already visible in the tree; cursor should be on it.
+	assert.Equal(t, "Garage:Drill Bit", afterNavigate.(tui.Model).CurrentPath())
 }
 
 func TestModel_ScryEnterNoResults(t *testing.T) {
-	// Regression: pressing enter in scry with no matching results caused infinite
-	// recursion (stack overflow) because updateScry re-routed scryNavigatedMsg
-	// back through m.Update while still in modeScry.
 	entity := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusOk, false)
 	f := &fakeTUIApp{roots: []app.EntityResult{entity}}
 	m := loadedModelFake(t, f)
 
-	// Open scry mode (findResults is empty — no matches for anything).
 	inScry, _ := m.Update(keyMsg("s"))
 	require.Equal(t, "scry", inScry.(tui.Model).Mode())
 
-	// Press enter with an empty result list — must not panic or recurse.
 	updated, _ := inScry.(tui.Model).Update(keyMsg("enter"))
 	assert.Equal(t, "scry", updated.(tui.Model).Mode())
 }
@@ -838,4 +795,41 @@ func TestModel_CursorNavigation(t *testing.T) {
 		updated, _ = updated.(tui.Model).Update(keyMsg("j")) // past end
 		assert.Equal(t, 2, updated.(tui.Model).CursorIndex())
 	})
+}
+
+func TestModel_TreeExpandPreservesState(t *testing.T) {
+	// Expanding one node must not collapse or disturb siblings.
+	garage := entityResult("e1", "Garage", "Garage", true)
+	shelf := entityResult("e2", "Shelf", "Shelf", true)
+	garageKids := []app.EntityResult{
+		entityResult("e10", "Toolbox", "Garage:Toolbox", false),
+	}
+	shelfKids := []app.EntityResult{
+		entityResult("e20", "Book", "Shelf:Book", false),
+	}
+	f := &fakeTUIApp{
+		roots: []app.EntityResult{garage, shelf},
+		children: map[string][]app.EntityResult{
+			"e1": garageKids,
+			"e2": shelfKids,
+		},
+	}
+
+	m := loadedModelFake(t, f)
+
+	// Expand Garage.
+	m = expandNode(t, m)
+	require.Equal(t, 3, m.ItemCount()) // Garage, Toolbox, Shelf
+
+	// Move to Shelf (index 2) and expand it.
+	updated, _ := m.Update(keyMsg("j"))
+	m = updated.(tui.Model)
+	updated, _ = m.Update(keyMsg("j"))
+	m = updated.(tui.Model)
+	require.Equal(t, "Shelf", m.CurrentPath())
+	m = expandNode(t, m)
+
+	// Both Garage (and its child) and Shelf (and its child) must be visible.
+	// Garage, Toolbox, Shelf, Book = 4.
+	assert.Equal(t, 4, m.ItemCount())
 }
