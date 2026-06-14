@@ -16,25 +16,26 @@ import (
 
 // fakeTUIApp implements tui.App with controllable return values.
 type fakeTUIApp struct {
-	roots       []app.EntityResult
-	children    map[string][]app.EntityResult
-	err         error
-	created     []app.EntityResult
-	createErr   error
-	loaned      []app.EntityResult
-	loanErr     error
-	borrowed    []app.EntityResult
-	borrowErr   error
-	lost        []app.EntityResult
-	lostErr     error
-	returned    []app.EntityResult
-	returnErr   error
-	found       []app.EntityResult
-	foundErr    error
-	history     []app.HistoryResult
-	historyErr  error
-	findResults []app.FindResult
-	findErr     error
+	roots        []app.EntityResult
+	children     map[string][]app.EntityResult
+	err          error
+	created      []app.EntityResult
+	createErr    error
+	loaned       []app.EntityResult
+	loanErr      error
+	borrowed     []app.EntityResult
+	borrowErr    error
+	lost         []app.EntityResult
+	lostErr      error
+	lastLostReqs []app.ChangeStatusRequest
+	returned     []app.EntityResult
+	returnErr    error
+	found        []app.EntityResult
+	foundErr     error
+	history      []app.HistoryResult
+	historyErr   error
+	findResults  []app.FindResult
+	findErr      error
 }
 
 func (f *fakeTUIApp) GetRootEntities(_ context.Context) ([]app.EntityResult, error) {
@@ -60,7 +61,8 @@ func (f *fakeTUIApp) BorrowEntities(_ context.Context, _ []app.BorrowEntityReque
 	return f.borrowed, f.borrowErr
 }
 
-func (f *fakeTUIApp) MarkLost(_ context.Context, _ []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+func (f *fakeTUIApp) MarkLost(_ context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	f.lastLostReqs = reqs
 	return f.lost, f.lostErr
 }
 
@@ -82,6 +84,31 @@ func (f *fakeTUIApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) 
 
 func keyMsg(k string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Text: k}
+}
+
+// feedBatch executes cmd and feeds all resulting messages back into m.
+// Handles both single-message cmds and tea.BatchMsg transparently.
+func feedBatch(t *testing.T, m tui.Model, cmd tea.Cmd) tui.Model {
+	t.Helper()
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	switch msg := msg.(type) {
+	case tea.BatchMsg:
+		for _, c := range msg {
+			if c == nil {
+				continue
+			}
+			inner := c()
+			updated, _ := m.Update(inner)
+			m = updated.(tui.Model)
+		}
+	default:
+		updated, _ := m.Update(msg)
+		m = updated.(tui.Model)
+	}
+	return m
 }
 
 func entityResult(id, name, path string, hasChildren bool) app.EntityResult {
@@ -452,7 +479,7 @@ func TestModel_ConfirmMode(t *testing.T) {
 		assert.Nil(t, cmd)
 	})
 
-	t.Run("n cancels confirm and returns to browse", func(t *testing.T) {
+	t.Run("n goes into note field, does not cancel", func(t *testing.T) {
 		f := &fakeTUIApp{roots: []app.EntityResult{okEntity}}
 		m := loadedModelFake(t, f)
 
@@ -460,7 +487,8 @@ func TestModel_ConfirmMode(t *testing.T) {
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
 		updated2, _ := updated.(tui.Model).Update(keyMsg("n"))
-		assert.Equal(t, "browse", updated2.(tui.Model).Mode())
+		assert.Equal(t, "confirm", updated2.(tui.Model).Mode())
+		assert.Equal(t, "n", updated2.(tui.Model).ConfirmNote())
 	})
 
 	t.Run("esc cancels confirm and returns to browse", func(t *testing.T) {
@@ -470,11 +498,63 @@ func TestModel_ConfirmMode(t *testing.T) {
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
-		updated2, _ := updated.(tui.Model).Update(keyMsg("esc"))
-		assert.Equal(t, "browse", updated2.(tui.Model).Mode())
+		// esc emits confirmCancelledMsg as a Cmd; execute it then feed back.
+		updated2, cancelCmd := updated.(tui.Model).Update(keyMsg("esc"))
+		require.NotNil(t, cancelCmd)
+		updated3, _ := updated2.(tui.Model).Update(cancelCmd())
+		assert.Equal(t, "browse", updated3.(tui.Model).Mode())
 	})
 
-	t.Run("y submits lost and refreshes list", func(t *testing.T) {
+	t.Run("typing a letter puts it in the note field", func(t *testing.T) {
+		f := &fakeTUIApp{roots: []app.EntityResult{okEntity}}
+		m := loadedModelFake(t, f)
+
+		// Open confirm.
+		updated, _ := m.Update(keyMsg("x"))
+		require.Equal(t, "confirm", updated.(tui.Model).Mode())
+
+		// Type a character — must land in the note field.
+		updated2, _ := updated.(tui.Model).Update(keyMsg("g"))
+		assert.Equal(t, "g", updated2.(tui.Model).ConfirmNote())
+	})
+
+	t.Run("y goes into note field, does not submit", func(t *testing.T) {
+		f := &fakeTUIApp{roots: []app.EntityResult{okEntity}}
+		m := loadedModelFake(t, f)
+
+		updated, _ := m.Update(keyMsg("x"))
+		require.Equal(t, "confirm", updated.(tui.Model).Mode())
+
+		updated2, _ := updated.(tui.Model).Update(keyMsg("y"))
+		assert.Equal(t, "confirm", updated2.(tui.Model).Mode())
+		assert.Equal(t, "y", updated2.(tui.Model).ConfirmNote())
+	})
+
+	t.Run("enter submits note content to app", func(t *testing.T) {
+		refreshed := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusMissing, false)
+		f := &fakeTUIApp{
+			roots: []app.EntityResult{okEntity},
+			lost:  []app.EntityResult{refreshed},
+		}
+		m := loadedModelFake(t, f)
+
+		// Open confirm and type a note.
+		updated, _ := m.Update(keyMsg("x"))
+		require.Equal(t, "confirm", updated.(tui.Model).Mode())
+		updated, _ = updated.(tui.Model).Update(keyMsg("m"))
+		updated, _ = updated.(tui.Model).Update(keyMsg("i"))
+		updated, _ = updated.(tui.Model).Update(keyMsg("a"))
+
+		// Submit — note must reach the app call.
+		_, submitCmd := updated.(tui.Model).Update(keyMsg("enter"))
+		require.NotNil(t, submitCmd)
+		submitCmd() // execute to trigger MarkLost on the fake
+
+		require.Len(t, f.lastLostReqs, 1)
+		assert.Equal(t, "mia", f.lastLostReqs[0].Note)
+	})
+
+	t.Run("enter submits lost and refreshes list", func(t *testing.T) {
 		refreshed := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusMissing, false)
 		f := &fakeTUIApp{
 			roots: []app.EntityResult{okEntity},
@@ -486,8 +566,8 @@ func TestModel_ConfirmMode(t *testing.T) {
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
-		// Press y — fires submitCmd.
-		updated2, submitCmd := updated.(tui.Model).Update(keyMsg("y"))
+		// Press enter — fires submitCmd.
+		updated2, submitCmd := updated.(tui.Model).Update(keyMsg("enter"))
 		require.NotNil(t, submitCmd)
 
 		// Execute submitCmd → actionDoneMsg.
@@ -555,10 +635,44 @@ func TestModel_FormMode(t *testing.T) {
 	})
 }
 
-func TestModel_HistoryMode(t *testing.T) {
+func TestModel_HistoryRendersEvents(t *testing.T) {
+	entity := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusOk, false)
+	f := &fakeTUIApp{
+		roots: []app.EntityResult{entity},
+		history: []app.HistoryResult{
+			{
+				EventID:      34,
+				ActorUserID:  "alice",
+				EventType:    inventory.EntityCreatedEvent,
+				TimestampUTC: "2026-05-26T02:40:58Z",
+			},
+		},
+	}
+	m := loadedModelFake(t, f)
+
+	// Size the terminal so the viewport has non-zero dimensions.
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = sized.(tui.Model)
+
+	// Open history and execute the load command.
+	afterOpen, loadCmd := m.Update(keyMsg("H"))
+	m2 := afterOpen.(tui.Model)
+	require.Equal(t, "history", m2.RightPane())
+
+	histMsg := loadCmd()
+	afterLoad, _ := m2.Update(histMsg)
+	m3 := afterLoad.(tui.Model)
+
+	view := m3.View().Content
+	assert.Contains(t, view, "alice", "rendered history should include actor name")
+	assert.Contains(t, view, "2026-05-26T02:40:58Z", "rendered history should include timestamp")
+	assert.Contains(t, view, "entity.created", "rendered history should include event type")
+}
+
+func TestModel_HistoryPane(t *testing.T) {
 	entity := entityResultWithStatus("e1", "Wrench", "Garage:Wrench", inventory.EntityStatusOk, false)
 
-	t.Run("H opens modeHistory and fires load cmd", func(t *testing.T) {
+	t.Run("H opens history right pane and fires load cmd", func(t *testing.T) {
 		f := &fakeTUIApp{
 			roots:   []app.EntityResult{entity},
 			history: []app.HistoryResult{{EventID: 1, ActorUserID: "alice"}},
@@ -568,16 +682,17 @@ func TestModel_HistoryMode(t *testing.T) {
 		updated, loadCmd := m.Update(keyMsg("H"))
 		m2 := updated.(tui.Model)
 
-		assert.Equal(t, "history", m2.Mode())
+		assert.Equal(t, "history", m2.RightPane())
+		assert.Equal(t, "browse", m2.Mode())
 		require.NotNil(t, loadCmd)
 
-		// Execute load cmd.
+		// Execute load cmd — still in browse mode, history pane open.
 		histMsg := loadCmd()
 		updated2, _ := m2.Update(histMsg)
-		assert.Equal(t, "history", updated2.(tui.Model).Mode())
+		assert.Equal(t, "history", updated2.(tui.Model).RightPane())
 	})
 
-	t.Run("esc from history returns to browse", func(t *testing.T) {
+	t.Run("H again hides history pane", func(t *testing.T) {
 		f := &fakeTUIApp{
 			roots:   []app.EntityResult{entity},
 			history: []app.HistoryResult{},
@@ -585,11 +700,12 @@ func TestModel_HistoryMode(t *testing.T) {
 		m := loadedModelFake(t, f)
 
 		updated, loadCmd := m.Update(keyMsg("H"))
-		require.Equal(t, "history", updated.(tui.Model).Mode())
+		require.Equal(t, "history", updated.(tui.Model).RightPane())
 		histMsg := loadCmd()
 		updated2, _ := updated.(tui.Model).Update(histMsg)
 
-		updated3, _ := updated2.(tui.Model).Update(keyMsg("esc"))
+		updated3, _ := updated2.(tui.Model).Update(keyMsg("H"))
+		assert.Equal(t, "hidden", updated3.(tui.Model).RightPane())
 		assert.Equal(t, "browse", updated3.(tui.Model).Mode())
 	})
 }
@@ -615,6 +731,59 @@ func TestModel_ScryMode(t *testing.T) {
 		updated2, _ := updated.(tui.Model).Update(keyMsg("esc"))
 		assert.Equal(t, "browse", updated2.(tui.Model).Mode())
 	})
+}
+
+func TestModel_ScryShowsResults(t *testing.T) {
+	drillBit := entityResult("e1", "Drill Bit", "Garage:Drill Bit", false)
+	f := &fakeTUIApp{
+		roots:       []app.EntityResult{drillBit},
+		findResults: []app.FindResult{{Entity: drillBit, Distance: 0}},
+	}
+	m := loadedModelFake(t, f)
+
+	// Size the terminal so the scry list has non-zero dimensions.
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = sized.(tui.Model)
+
+	// Open scry.
+	inScry, _ := m.Update(keyMsg("s"))
+	m = inScry.(tui.Model)
+	require.Equal(t, "scry", m.Mode())
+
+	// Type "d" to trigger a search; feed all resulting messages back.
+	_, batchCmd := m.Update(keyMsg("d"))
+	require.NotNil(t, batchCmd)
+	m = feedBatch(t, m, batchCmd)
+
+	// The entity path must be visible in the rendered view.
+	assert.Contains(t, m.View().Content, "Garage:Drill Bit")
+}
+
+func TestModel_ScryNavigate(t *testing.T) {
+	drillBit := entityResult("e1", "Drill Bit", "Garage:Drill Bit", false)
+	f := &fakeTUIApp{
+		roots:       []app.EntityResult{drillBit},
+		findResults: []app.FindResult{{Entity: drillBit, Distance: 0}},
+	}
+	m := loadedModelFake(t, f)
+
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = sized.(tui.Model)
+
+	inScry, _ := m.Update(keyMsg("s"))
+	m = inScry.(tui.Model)
+
+	// Trigger search and load results.
+	_, batchCmd := m.Update(keyMsg("d"))
+	m = feedBatch(t, m, batchCmd)
+
+	// Press enter — must fire a navigate cmd and eventually return to browse.
+	afterEnter, navigateCmd := m.Update(keyMsg("enter"))
+	require.NotNil(t, navigateCmd, "enter with results should return a navigate cmd")
+
+	navigateMsg := navigateCmd()
+	afterNavigate, _ := afterEnter.(tui.Model).Update(navigateMsg)
+	assert.Equal(t, "browse", afterNavigate.(tui.Model).Mode())
 }
 
 func TestModel_ScryEnterNoResults(t *testing.T) {

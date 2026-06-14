@@ -5,12 +5,12 @@ import (
 	"fmt"
 )
 
-//nolint:revive // implements driver.Valuer; comment on interface is sufficient
+// Value implements [driver.Valuer], serializing the event type as its string name.
 func (e EventType) Value() (driver.Value, error) {
 	return e.String(), nil
 }
 
-//nolint:revive // implements sql.Scanner; comment on interface is sufficient
+// Scan implements [sql.Scanner], parsing a string column back into an EventType.
 func (e *EventType) Scan(src any) error {
 	s, ok := src.(string)
 	if !ok {

@@ -69,6 +69,11 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// Path returns the absolute filesystem path of the database file.
+func (s *Store) Path() string {
+	return s.cfg.Path
+}
+
 // DB returns the underlying [sql.DB].
 func (s *Store) DB() *sql.DB {
 	return s.db

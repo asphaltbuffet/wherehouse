@@ -75,6 +75,7 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 	locked, _ := cmd.Flags().GetBool("locked")
 	discrete, _ := cmd.Flags().GetBool("discrete")
 	allowDupes, _ := cmd.Flags().GetBool("allow-duplicates")
+	createParents, _ := cmd.Flags().GetBool("create-parents")
 
 	if !allowDupes {
 		seen := make(map[string]struct{}, len(args))
@@ -102,11 +103,12 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 			return fmt.Errorf("cannot determine entity name from %q", arg)
 		}
 		reqs = append(reqs, app.CreateEntityRequest{
-			DisplayName: name,
-			Locked:      locked,
-			Discrete:    discrete,
-			ParentPath:  p.Dir().String(),
-			ActorID:     cli.GetActorUserID(ctx),
+			DisplayName:   name,
+			Locked:        locked,
+			Discrete:      discrete,
+			ParentPath:    p.Dir().String(),
+			ActorID:       cli.GetActorUserID(ctx),
+			CreateParents: createParents,
 		})
 	}
 

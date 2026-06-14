@@ -27,8 +27,16 @@ const (
 	modeBrowse  tuiMode = iota // two-pane navigator (default)
 	modeForm                   // text-input form for add/loan/borrow
 	modeConfirm                // y/n prompt for lost/found/return
-	modeHistory                // scrollable event timeline
 	modeScry                   // inventory-wide search
+)
+
+// rightPaneKind controls what the right pane displays in modeBrowse.
+type rightPaneKind int
+
+const (
+	rightPaneHidden  rightPaneKind = iota // right pane not shown; nav expands to full width
+	rightPaneDetail                       // entity detail view
+	rightPaneHistory                      // entity event history
 )
 
 // borderWidth is the total horizontal space consumed by a single rounded border (left + right).
@@ -74,6 +82,9 @@ type keyMap struct {
 	Found    key.Binding
 	History  key.Binding
 	Scry     key.Binding
+	Detail   key.Binding
+	PgUp     key.Binding
+	PgDown   key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -138,12 +149,24 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("s"),
 			key.WithHelp("s", "scry"),
 		),
+		Detail: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "detail"),
+		),
+		PgUp: key.NewBinding(
+			key.WithKeys("pgup"),
+			key.WithHelp("pgup", "scroll up"),
+		),
+		PgDown: key.NewBinding(
+			key.WithKeys("pgdown"),
+			key.WithHelp("pgdn", "scroll down"),
+		),
 	}
 }
 
 // ShortHelp implements help.KeyMap.
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.DrillIn, k.DrillOut, k.Scry, k.History, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.DrillIn, k.DrillOut, k.Scry, k.Detail, k.Help, k.Quit}
 }
 
 // FullHelp implements help.KeyMap.
@@ -153,7 +176,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.DrillIn, k.DrillOut, k.Filter},
 		{k.Add, k.Loan, k.Borrow},
 		{k.Lost, k.Return, k.Found},
-		{k.History, k.Scry, k.Help, k.Quit},
+		{k.History, k.Scry, k.Detail, k.Help, k.Quit},
 	}
 }
 
@@ -201,7 +224,8 @@ type Model struct {
 	termHeight  int
 	err         error
 	mode        tuiMode
-	errMsg      string // transient detail-pane error, cleared on next action
+	errMsg      string        // transient detail-pane error, cleared on next action
+	rightPane   rightPaneKind // what the right pane shows (hidden by default)
 	form        formModel
 	confirm     confirmModel
 	history     historyModel
@@ -220,6 +244,12 @@ func New(a App) Model {
 	l.SetFilteringEnabled(true)
 	l.DisableQuitKeybindings()
 	l.SetShowHelp(false)
+
+	// Strip keys we've claimed at the Model level so the list never intercepts them.
+	km := l.KeyMap
+	km.NextPage = key.NewBinding(key.WithKeys("right", "l"))
+	km.PrevPage = key.NewBinding(key.WithKeys("left", "h"))
+	l.KeyMap = km
 
 	h := help.New()
 	h.ShowAll = false
@@ -251,8 +281,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateForm(msg)
 	case modeConfirm:
 		return m.updateConfirm(msg)
-	case modeHistory:
-		return m.updateHistory(msg)
 	case modeScry:
 		return m.updateScry(msg)
 	}
@@ -261,55 +289,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if result, cmd, handled := m.handleLevelMsg(msg); handled {
+		return result, cmd
+	}
+
 	switch msg := msg.(type) {
-	case rootsLoadedMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, tea.Quit
-		}
-		m.pathStack = nil
-		m.parentStack = nil
-		m = m.loadLevel(msg.items, "")
-		return m, nil
-
-	case childrenLoadedMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, tea.Quit
-		}
-		m.pathStack = append(m.pathStack, msg.parentPath)
-		m.parentStack = append(m.parentStack, msg.parentID)
-		m = m.loadLevel(msg.items, "")
-		return m, nil
-
-	case levelRestoredMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, tea.Quit
-		}
-		m.pathStack = msg.pathStack
-		m.parentStack = msg.parentStack
-		m = m.loadLevel(msg.items, "")
-		return m, nil
-
-	case childRefreshMsg:
-		if msg.err != nil {
-			m.errMsg = fmt.Sprintf("refresh failed: %v", msg.err)
+	case historyLoadedMsg:
+		if msg.gen != m.history.gen {
 			return m, nil
 		}
-		m = m.loadLevel(msg.items, msg.targetEntityID)
-		return m, nil
-
-	case scryNavigatedMsg:
-		if msg.err != nil {
-			m.errMsg = fmt.Sprintf("navigate failed: %v", msg.err)
-			return m, nil
-		}
-		m.mode = modeBrowse
-		m.pathStack = msg.pathStack
-		m.parentStack = msg.parentStack
-		m = m.loadLevel(msg.items, msg.targetEntityID)
-		return m, nil
+		var cmd tea.Cmd
+		m.history, cmd = m.history.Update(msg)
+		return m, cmd
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
@@ -323,11 +314,75 @@ func (m Model) updateBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	var histCmd tea.Cmd
+	switch msg := msg.(type) {
+	case rootsLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit, true
+		}
+		m.pathStack = nil
+		m.parentStack = nil
+		m = m.loadLevel(msg.items, "")
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
+
+	case childrenLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit, true
+		}
+		m.pathStack = append(m.pathStack, msg.parentPath)
+		m.parentStack = append(m.parentStack, msg.parentID)
+		m = m.loadLevel(msg.items, "")
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
+
+	case levelRestoredMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit, true
+		}
+		m.pathStack = msg.pathStack
+		m.parentStack = msg.parentStack
+		m = m.loadLevel(msg.items, "")
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
+
+	case childRefreshMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("refresh failed: %v", msg.err)
+			return m, nil, true
+		}
+		m = m.loadLevel(msg.items, msg.targetEntityID)
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
+
+	case scryNavigatedMsg:
+		if msg.err != nil {
+			m.errMsg = fmt.Sprintf("navigate failed: %v", msg.err)
+			return m, nil, true
+		}
+		m.mode = modeBrowse
+		m.pathStack = msg.pathStack
+		m.parentStack = msg.parentStack
+		m = m.loadLevel(msg.items, msg.targetEntityID)
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
+	}
+
+	return m, nil, false
+}
+
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.termWidth = msg.Width
 	m.termHeight = msg.Height
 	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
 	m.help.SetWidth(msg.Width)
+	if m.rightPane == rightPaneHistory {
+		m.history = m.history.Resize(m.detailPaneWidth(), m.paneHeight())
+	}
 	return m
 }
 
@@ -372,32 +427,9 @@ func (m Model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.refreshCmd(msg.result.EntityID)
-	case tea.KeyPressMsg:
-		s := msg.String()
-		if s == "n" || s == keyEsc {
-			m.mode = modeBrowse
-			return m, nil
-		}
 	}
 	var cmd tea.Cmd
 	m.confirm, cmd = m.confirm.Update(msg)
-	return m, cmd
-}
-
-func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case historyCancelledMsg:
-		m.mode = modeBrowse
-		return m, nil
-	case tea.KeyPressMsg:
-		s := msg.String()
-		if s == "q" || s == keyEsc {
-			m.mode = modeBrowse
-			return m, nil
-		}
-	}
-	var cmd tea.Cmd
-	m.history, cmd = m.history.Update(msg)
 	return m, cmd
 }
 
@@ -477,11 +509,22 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
 		return m, nil
 
+	case key.Matches(msg, m.keys.PgUp), key.Matches(msg, m.keys.PgDown):
+		if m.rightPane != rightPaneHistory {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.history, cmd = m.history.Update(msg)
+		return m, cmd
+
 	case key.Matches(msg, m.keys.DrillIn):
 		return m.drillDown()
 
 	case key.Matches(msg, m.keys.DrillOut):
 		return m.drillUp()
+
+	case key.Matches(msg, m.keys.Up), key.Matches(msg, m.keys.Down):
+		return m.handleNavKey(msg)
 
 	case key.Matches(msg, m.keys.Add):
 		return m.openAdd()
@@ -506,6 +549,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Scry):
 		return m.openScry()
+
+	case key.Matches(msg, m.keys.Detail):
+		return m.toggleDetail()
 	}
 
 	var cmd tea.Cmd
@@ -517,6 +563,44 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) selectedItem() (item, bool) {
 	sel, ok := m.list.SelectedItem().(item)
 	return sel, ok
+}
+
+func (m Model) toggleDetail() (tea.Model, tea.Cmd) {
+	if _, ok := m.selectedItem(); !ok {
+		return m, nil
+	}
+	if m.rightPane == rightPaneDetail {
+		m.rightPane = rightPaneHidden
+	} else {
+		m.rightPane = rightPaneDetail
+	}
+	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+	return m, nil
+}
+
+func (m Model) handleNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	var listCmd tea.Cmd
+	m.list, listCmd = m.list.Update(msg)
+	m, histCmd := m.reloadHistoryCmd()
+	if histCmd != nil {
+		return m, tea.Batch(listCmd, histCmd)
+	}
+	return m, listCmd
+}
+
+// reloadHistoryCmd reinitialises the history model for the current selection
+// and returns the updated Model and a loadCmd. Returns (m, nil) when the
+// history pane is not open or no entity is selected.
+func (m Model) reloadHistoryCmd() (Model, tea.Cmd) {
+	if m.rightPane != rightPaneHistory {
+		return m, nil
+	}
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m, nil
+	}
+	m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
+	return m, m.history.loadCmd()
 }
 
 // gateError sets errMsg and returns the model unchanged (no mode switch).
@@ -621,15 +705,22 @@ func (m Model) openHistory() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m.gateError("no entity selected")
 	}
+	if m.rightPane == rightPaneHistory {
+		m.rightPane = rightPaneHidden
+		m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+		return m, nil
+	}
 	m.errMsg = ""
-	m.history = newHistoryModel(sel.result, m.app, m.st)
-	m.mode = modeHistory
+	m.rightPane = rightPaneHistory
+	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
+	m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
 	return m, m.history.loadCmd()
 }
 
 func (m Model) openScry() (tea.Model, tea.Cmd) {
 	m.errMsg = ""
 	m.scry = newScryModel(m.app, m.st)
+	m.scry.results.SetSize(m.termWidth, m.termHeight-scryUIOverhead)
 	m.mode = modeScry
 	return m, nil
 }
@@ -646,15 +737,21 @@ func (m Model) View() tea.View {
 	switch m.mode {
 	case modeBrowse:
 		header := m.renderHeader()
-		body := lipgloss.JoinHorizontal(lipgloss.Top, m.renderNavPane(), m.renderDetailPane())
+		var body string
+		switch m.rightPane {
+		case rightPaneDetail:
+			body = lipgloss.JoinHorizontal(lipgloss.Top, m.renderNavPane(), m.renderDetailPane())
+		case rightPaneHistory:
+			body = lipgloss.JoinHorizontal(lipgloss.Top, m.renderNavPane(), m.renderHistoryPane())
+		case rightPaneHidden:
+			body = m.renderNavPane()
+		}
 		helpBar := m.renderHelp()
 		content = lipgloss.JoinVertical(lipgloss.Left, header, body, helpBar)
 	case modeForm:
 		content = m.form.View(m.termWidth)
 	case modeConfirm:
 		content = m.confirm.View(m.termWidth)
-	case modeHistory:
-		content = m.history.View(m.termWidth, m.termHeight)
 	case modeScry:
 		content = m.scry.View(m.termWidth, m.termHeight)
 	}
@@ -678,6 +775,19 @@ func (m Model) ItemCount() int { return len(m.list.Items()) }
 // CursorIndex returns the index of the currently highlighted item.
 func (m Model) CursorIndex() int { return m.list.Index() }
 
+// RightPane returns the current right pane state: "hidden", "detail", or "history".
+func (m Model) RightPane() string {
+	switch m.rightPane {
+	case rightPaneDetail:
+		return "detail"
+	case rightPaneHistory:
+		return "history"
+	case rightPaneHidden:
+		return "hidden"
+	}
+	return "hidden"
+}
+
 // Mode returns the current mode name for test assertions.
 func (m Model) Mode() string {
 	switch m.mode {
@@ -687,8 +797,6 @@ func (m Model) Mode() string {
 		return "form"
 	case modeConfirm:
 		return "confirm"
-	case modeHistory:
-		return "history"
 	case modeScry:
 		return "scry"
 	default:
@@ -702,9 +810,15 @@ func (m Model) ErrMsg() string { return m.errMsg }
 // FormKind returns the active form kind name for test assertions.
 func (m Model) FormKind() string { return m.form.kindName() }
 
+// ConfirmNote returns the current note field value in modeConfirm for test assertions.
+func (m Model) ConfirmNote() string { return m.confirm.note.Value() }
+
 // --- layout helpers ---
 
 func (m Model) navPaneWidth() int {
+	if m.rightPane == rightPaneHidden {
+		return m.termWidth
+	}
 	w := max(int(float64(m.termWidth)*navWidthRatio), navPaneMinWidth)
 	return w
 }
@@ -770,6 +884,15 @@ func (m Model) renderDetailPane() string {
 		Width(m.detailPaneWidth()).
 		Height(m.paneHeight()).
 		Render(inner)
+}
+
+func (m Model) renderHistoryPane() string {
+	title := m.st.TUIDetailLabel().Render("history: " + m.history.entity.FullPathDisplay)
+	body := strings.Join([]string{title, m.history.viewportView()}, "\n")
+	return m.st.TUIDetailBorder().
+		Width(m.detailPaneWidth()).
+		Height(m.paneHeight()).
+		Render(body)
 }
 
 func (m Model) buildDetailContent() string {

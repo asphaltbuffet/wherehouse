@@ -11,11 +11,13 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
 	"github.com/asphaltbuffet/wherehouse/cmd/borrow"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
+	dbcmd "github.com/asphaltbuffet/wherehouse/cmd/db"
 	"github.com/asphaltbuffet/wherehouse/cmd/doctor"
 	"github.com/asphaltbuffet/wherehouse/cmd/export"
 	"github.com/asphaltbuffet/wherehouse/cmd/found"
 	"github.com/asphaltbuffet/wherehouse/cmd/history"
 	importcmd "github.com/asphaltbuffet/wherehouse/cmd/import"
+	infocmd "github.com/asphaltbuffet/wherehouse/cmd/info"
 	listcmd "github.com/asphaltbuffet/wherehouse/cmd/list"
 	"github.com/asphaltbuffet/wherehouse/cmd/loan"
 	"github.com/asphaltbuffet/wherehouse/cmd/lost"
@@ -92,6 +94,8 @@ Examples:
 	rootCmd.AddCommand(status.NewDefaultStatusCmd())
 	rootCmd.AddCommand(tag.NewDefaultTagCmd())
 	rootCmd.AddCommand(doctor.NewDefaultDoctorCmd())
+	rootCmd.AddCommand(dbcmd.NewDefaultDBCmd())
+	rootCmd.AddCommand(infocmd.NewDefaultInfoCmd())
 
 	// hidden internal commands — not shown in help output
 	rootCmd.AddCommand(man.NewManCmd())

@@ -55,5 +55,5 @@ func (d delegate) Render(w io.Writer, m list.Model, index int, listItem list.Ite
 		statusTag = " " + d.st.Muted().Render(fmt.Sprintf("[%s]", i.result.Status.String()))
 	}
 
-	fmt.Fprintln(w, prefix+" "+name+statusTag)
+	fmt.Fprint(w, prefix+" "+name+statusTag)
 }

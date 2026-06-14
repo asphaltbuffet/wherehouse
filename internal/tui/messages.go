@@ -21,6 +21,7 @@ type historyLoadedMsg struct {
 	entity app.EntityResult
 	items  []app.HistoryResult
 	err    error
+	gen    int
 }
 
 // scryResultsMsg carries FindEntities results for the scry view.

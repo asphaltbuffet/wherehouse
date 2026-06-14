@@ -2,8 +2,9 @@ package inventory
 
 import "errors"
 
-//nolint:revive // sentinel errors; names are self-documenting
 var (
+	// ErrEntityNotFound is returned when a query finds no matching entity.
 	ErrEntityNotFound = errors.New("entity not found")
-	ErrEventNotFound  = errors.New("event not found")
+	// ErrEventNotFound is returned when a query finds no matching event.
+	ErrEventNotFound = errors.New("event not found")
 )

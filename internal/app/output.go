@@ -206,3 +206,19 @@ func ToBulkAddOutput(r BulkAddResult) BulkAddOutput {
 		Warnings: warnings,
 	}
 }
+
+// InfoOutput is the --json output shape for the info command.
+type InfoOutput struct {
+	Name     string         `json:"name"`
+	Database string         `json:"database"`
+	Entities map[string]int `json:"entities"`
+}
+
+// ToInfoOutput projects an InfoResult into the info command's JSON output shape.
+func ToInfoOutput(r InfoResult) InfoOutput {
+	return InfoOutput{
+		Name:     r.Name,
+		Database: r.DatabasePath,
+		Entities: r.EntityCounts,
+	}
+}

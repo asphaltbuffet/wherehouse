@@ -33,6 +33,13 @@ type HistoryResult struct {
 	Note         string
 }
 
+// InfoResult is the output of GetInfo — database name, path, and entity counts by status.
+type InfoResult struct {
+	Name         string
+	DatabasePath string
+	EntityCounts map[string]int
+}
+
 // FindResult pairs an EntityResult with its fuzzy-match distance.
 type FindResult struct {
 	Entity   EntityResult
