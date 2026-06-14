@@ -9,6 +9,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 // NewDefaultInfoCmd wires the info command for production use.
@@ -42,7 +43,13 @@ func NewInfoCmd(a *app.App) *cobra.Command {
 	return cmd
 }
 
-var statusOrder = []string{"ok", "missing", "borrowed", "loaned", "removed"}
+var statusOrder = []string{
+	inventory.EntityStatusOk.String(),
+	inventory.EntityStatusMissing.String(),
+	inventory.EntityStatusBorrowed.String(),
+	inventory.EntityStatusLoaned.String(),
+	inventory.EntityStatusRemoved.String(),
+}
 
 func runInfo(cmd *cobra.Command, a *app.App) error {
 	ctx := cmd.Context()

@@ -56,7 +56,7 @@ func (a *App) SetWherehouseName(ctx context.Context, name string) error {
 
 // ClearWherehouseName removes the display name, reverting to "(unnamed)".
 func (a *App) ClearWherehouseName(ctx context.Context) error {
-	if err := a.store.SetMetadata(ctx, displayNameKey, ""); err != nil {
+	if err := a.store.DeleteMetadata(ctx, displayNameKey); err != nil {
 		return fmt.Errorf("clear wherehouse name: %w", err)
 	}
 	return nil

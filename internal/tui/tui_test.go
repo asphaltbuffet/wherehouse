@@ -498,8 +498,11 @@ func TestModel_ConfirmMode(t *testing.T) {
 		updated, _ := m.Update(keyMsg("x"))
 		require.Equal(t, "confirm", updated.(tui.Model).Mode())
 
-		updated2, _ := updated.(tui.Model).Update(keyMsg("esc"))
-		assert.Equal(t, "browse", updated2.(tui.Model).Mode())
+		// esc emits confirmCancelledMsg as a Cmd; execute it then feed back.
+		updated2, cancelCmd := updated.(tui.Model).Update(keyMsg("esc"))
+		require.NotNil(t, cancelCmd)
+		updated3, _ := updated2.(tui.Model).Update(cancelCmd())
+		assert.Equal(t, "browse", updated3.(tui.Model).Mode())
 	})
 
 	t.Run("typing a letter puts it in the note field", func(t *testing.T) {

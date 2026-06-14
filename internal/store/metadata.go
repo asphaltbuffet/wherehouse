@@ -45,6 +45,16 @@ func (s *Store) CountEntitiesByStatus(ctx context.Context) (map[string]int, erro
 	return counts, rows.Err()
 }
 
+// DeleteMetadata removes a key from the schema_metadata table. No-op if absent.
+func (s *Store) DeleteMetadata(ctx context.Context, key string) error {
+	const query = `DELETE FROM schema_metadata WHERE key = ?`
+	_, err := s.db.ExecContext(ctx, query, key)
+	if err != nil {
+		return fmt.Errorf("delete metadata %q: %w", key, err)
+	}
+	return nil
+}
+
 // SetMetadata upserts a key/value pair in the schema_metadata table.
 func (s *Store) SetMetadata(ctx context.Context, key, value string) error {
 	const query = `

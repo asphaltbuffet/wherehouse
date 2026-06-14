@@ -21,16 +21,20 @@ type historyModel struct {
 	items    []app.HistoryResult
 	appRef   App
 	st       *styles.Styles
+	gen      int
 	ready    bool
 	err      error
 }
 
-func newHistoryModel(entity app.EntityResult, a App, st *styles.Styles, paneWidth, paneHeight int) historyModel {
+func newHistoryModel(
+	entity app.EntityResult, a App, st *styles.Styles, paneWidth, paneHeight, gen int,
+) historyModel {
 	vpHeight := max(0, paneHeight-historyUIOverhead)
 	return historyModel{
 		entity:   entity,
 		appRef:   a,
 		st:       st,
+		gen:      gen,
 		viewport: viewport.New(viewport.WithWidth(paneWidth), viewport.WithHeight(vpHeight)),
 	}
 }
@@ -38,11 +42,12 @@ func newHistoryModel(entity app.EntityResult, a App, st *styles.Styles, paneWidt
 func (h historyModel) loadCmd() tea.Cmd {
 	entity := h.entity
 	a := h.appRef
+	gen := h.gen
 	return func() tea.Msg {
 		items, err := a.GetHistory(context.Background(), app.GetHistoryRequest{
 			EntityID: entity.EntityID,
 		})
-		return historyLoadedMsg{entity: entity, items: items, err: err}
+		return historyLoadedMsg{entity: entity, items: items, err: err, gen: gen}
 	}
 }
 
@@ -95,5 +100,19 @@ func (h historyModel) viewportView() string {
 	if h.err != nil {
 		return h.st.DangerText().Render(h.err.Error())
 	}
+	if !h.ready {
+		return h.st.Muted().Render("loading…")
+	}
 	return h.viewport.View()
+}
+
+// Resize returns a copy of h with updated viewport dimensions, preserving loaded content.
+func (h historyModel) Resize(w, height int) historyModel {
+	vpHeight := max(0, height-historyUIOverhead)
+	h.viewport.SetWidth(w)
+	h.viewport.SetHeight(vpHeight)
+	if h.ready {
+		h.viewport.SetContent(h.renderContent())
+	}
+	return h
 }

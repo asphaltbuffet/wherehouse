@@ -5,12 +5,12 @@ import (
 	"fmt"
 )
 
-//nolint:revive // implements driver.Valuer; comment on interface is sufficient
+// Value implements [driver.Valuer], serializing the status as its string name.
 func (e EntityStatus) Value() (driver.Value, error) {
 	return e.String(), nil
 }
 
-//nolint:revive // implements sql.Scanner; comment on interface is sufficient
+// Scan implements [sql.Scanner], parsing a string column back into an EntityStatus.
 func (e *EntityStatus) Scan(src any) error {
 	s, ok := src.(string)
 	if !ok {

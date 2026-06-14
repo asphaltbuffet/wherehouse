@@ -295,6 +295,9 @@ func (m Model) updateBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case historyLoadedMsg:
+		if msg.gen != m.history.gen {
+			return m, nil
+		}
 		var cmd tea.Cmd
 		m.history, cmd = m.history.Update(msg)
 		return m, cmd
@@ -312,6 +315,7 @@ func (m Model) updateBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	var histCmd tea.Cmd
 	switch msg := msg.(type) {
 	case rootsLoadedMsg:
 		if msg.err != nil {
@@ -321,7 +325,8 @@ func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.pathStack = nil
 		m.parentStack = nil
 		m = m.loadLevel(msg.items, "")
-		return m, nil, true
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
 
 	case childrenLoadedMsg:
 		if msg.err != nil {
@@ -331,7 +336,8 @@ func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.pathStack = append(m.pathStack, msg.parentPath)
 		m.parentStack = append(m.parentStack, msg.parentID)
 		m = m.loadLevel(msg.items, "")
-		return m, nil, true
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
 
 	case levelRestoredMsg:
 		if msg.err != nil {
@@ -341,7 +347,8 @@ func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.pathStack = msg.pathStack
 		m.parentStack = msg.parentStack
 		m = m.loadLevel(msg.items, "")
-		return m, nil, true
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
 
 	case childRefreshMsg:
 		if msg.err != nil {
@@ -349,7 +356,8 @@ func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		m = m.loadLevel(msg.items, msg.targetEntityID)
-		return m, nil, true
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
 
 	case scryNavigatedMsg:
 		if msg.err != nil {
@@ -360,7 +368,8 @@ func (m Model) handleLevelMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.pathStack = msg.pathStack
 		m.parentStack = msg.parentStack
 		m = m.loadLevel(msg.items, msg.targetEntityID)
-		return m, nil, true
+		m, histCmd = m.reloadHistoryCmd()
+		return m, histCmd, true
 	}
 
 	return m, nil, false
@@ -371,6 +380,9 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.termHeight = msg.Height
 	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
 	m.help.SetWidth(msg.Width)
+	if m.rightPane == rightPaneHistory {
+		m.history = m.history.Resize(m.detailPaneWidth(), m.paneHeight())
+	}
 	return m
 }
 
@@ -415,11 +427,6 @@ func (m Model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.refreshCmd(msg.result.EntityID)
-	case tea.KeyPressMsg:
-		if msg.String() == keyEsc {
-			m.mode = modeBrowse
-			return m, nil
-		}
 	}
 	var cmd tea.Cmd
 	m.confirm, cmd = m.confirm.Update(msg)
@@ -574,13 +581,26 @@ func (m Model) toggleDetail() (tea.Model, tea.Cmd) {
 func (m Model) handleNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var listCmd tea.Cmd
 	m.list, listCmd = m.list.Update(msg)
-	if m.rightPane == rightPaneHistory {
-		if sel, ok := m.selectedItem(); ok {
-			m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight())
-			return m, tea.Batch(listCmd, m.history.loadCmd())
-		}
+	m, histCmd := m.reloadHistoryCmd()
+	if histCmd != nil {
+		return m, tea.Batch(listCmd, histCmd)
 	}
 	return m, listCmd
+}
+
+// reloadHistoryCmd reinitialises the history model for the current selection
+// and returns the updated Model and a loadCmd. Returns (m, nil) when the
+// history pane is not open or no entity is selected.
+func (m Model) reloadHistoryCmd() (Model, tea.Cmd) {
+	if m.rightPane != rightPaneHistory {
+		return m, nil
+	}
+	sel, ok := m.selectedItem()
+	if !ok {
+		return m, nil
+	}
+	m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
+	return m, m.history.loadCmd()
 }
 
 // gateError sets errMsg and returns the model unchanged (no mode switch).
@@ -693,7 +713,7 @@ func (m Model) openHistory() (tea.Model, tea.Cmd) {
 	m.errMsg = ""
 	m.rightPane = rightPaneHistory
 	m.list.SetSize(m.navPaneInnerWidth(), m.listHeight())
-	m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight())
+	m.history = newHistoryModel(sel.result, m.app, m.st, m.detailPaneWidth(), m.paneHeight(), m.history.gen+1)
 	return m, m.history.loadCmd()
 }
 
