@@ -195,13 +195,13 @@ func TestReparentEntity_LockedChildMovesWithParent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Top Drawer should now be under Office:File Cabinet.
-	drawer, err := a.GetEntityByPath(ctx, "Office:File Cabinet:Top Drawer")
+	drawer, err := a.LookupEntityByPath(ctx, "Office:File Cabinet:Top Drawer")
 	require.NoError(t, err)
 	assert.Equal(t, "Office:File Cabinet:Top Drawer", drawer.FullPathDisplay)
 	assert.True(t, drawer.Locked)
 }
 
-func TestGetEntity_ByPath(t *testing.T) {
+func TestLookupEntity_ByPath(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
@@ -211,12 +211,12 @@ func TestGetEntity_ByPath(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	result, err := a.GetEntityByPath(ctx, "Garage")
+	result, err := a.LookupEntityByPath(ctx, "Garage")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage", result.DisplayName)
 }
 
-func TestGetEntityByPath_Disambiguation(t *testing.T) {
+func TestLookupEntityByPath_Disambiguation(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
@@ -235,11 +235,11 @@ func TestGetEntityByPath_Disambiguation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	result, err := a.GetEntityByPath(ctx, "Garage:Shelf")
+	result, err := a.LookupEntityByPath(ctx, "Garage:Shelf")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage:Shelf", result.FullPathDisplay)
 
-	result2, err := a.GetEntityByPath(ctx, "Shelf")
+	result2, err := a.LookupEntityByPath(ctx, "Shelf")
 	require.NoError(t, err)
 	assert.Equal(t, "Shelf", result2.FullPathDisplay)
 }

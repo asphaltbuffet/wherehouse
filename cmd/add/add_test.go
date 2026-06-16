@@ -63,7 +63,7 @@ func TestRunAdd_LockedFlag(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
 
-	result, err := a.GetEntityByPath(ctx, "Garage")
+	result, err := a.LookupEntityByPath(ctx, "Garage")
 	require.NoError(t, err)
 	assert.True(t, result.Locked)
 	assert.False(t, result.Discrete)
@@ -79,7 +79,7 @@ func TestRunAdd_DiscreteFlag(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	require.NoError(t, cmd.Execute())
 
-	result, err := a.GetEntityByPath(ctx, "Box of Nails")
+	result, err := a.LookupEntityByPath(ctx, "Box of Nails")
 	require.NoError(t, err)
 	assert.False(t, result.Locked)
 	assert.True(t, result.Discrete)

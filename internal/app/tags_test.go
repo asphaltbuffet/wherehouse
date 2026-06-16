@@ -39,7 +39,7 @@ func TestTagEntity_Add(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	result, err := a.GetEntityByPath(ctx, "Garage:Wrench")
+	result, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hand_tool", "tool"}, result.Tags)
 }
@@ -58,7 +58,7 @@ func TestTagEntity_Remove(t *testing.T) {
 		EntityID: wrench.EntityID, ActorID: "alice", Remove: []string{"hand_tool"},
 	}))
 
-	result, err := a.GetEntityByPath(ctx, "Garage:Wrench")
+	result, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tool"}, result.Tags)
 }
@@ -80,7 +80,7 @@ func TestTagEntity_MixedAddRemove(t *testing.T) {
 		Remove:   []string{"tool"},
 	}))
 
-	result, err := a.GetEntityByPath(ctx, "Garage:Wrench")
+	result, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hand_tool"}, result.Tags)
 }
@@ -102,7 +102,7 @@ func TestTagEntity_OverlapCancels(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	result, err := a.GetEntityByPath(ctx, "Garage:Wrench")
+	result, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hand_tool"}, result.Tags)
 }
@@ -122,7 +122,7 @@ func TestTagEntity_AddDuplicate(t *testing.T) {
 		EntityID: wrench.EntityID, ActorID: "alice", Add: []string{"tool"},
 	}))
 
-	result, err := a.GetEntityByPath(ctx, "Garage:Wrench")
+	result, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tool"}, result.Tags)
 }

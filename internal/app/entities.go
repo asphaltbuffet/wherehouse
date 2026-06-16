@@ -134,15 +134,6 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 	return nil
 }
 
-// GetEntityByPath retrieves an entity by its colon-separated display path.
-func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, error) {
-	entity, err := a.resolveEntityPath(ctx, path)
-	if err != nil {
-		return EntityResult{}, err
-	}
-	return a.entityWithTags(ctx, entity)
-}
-
 // LookupEntityStatus returns all entities ever at the given path (any status, including removed),
 // ranked by last_event_id DESC (most recent first). Returns ErrNotFound when no entity matches.
 func (a *App) LookupEntityStatus(ctx context.Context, path string) ([]EntityResult, error) {
