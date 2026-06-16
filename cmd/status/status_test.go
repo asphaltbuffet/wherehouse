@@ -52,8 +52,10 @@ func TestRunStatus_ShowsCurrentStatus(t *testing.T) {
 func TestRunStatus_ShowsRemovedEntity(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedForStatus(t, a)
-	err := a.RemoveEntity(t.Context(), app.RemoveEntityRequest{
-		EntityPath: "Garage:Toolbox:Wrench", ActorID: "test",
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
+	err = a.RemoveEntity(t.Context(), app.RemoveEntityRequest{
+		EntityID: wrench.EntityID, ActorID: "test",
 	})
 	require.NoError(t, err)
 
@@ -72,8 +74,10 @@ func TestRunStatus_MultipleMatches_RankedByEventID(t *testing.T) {
 	seedForStatus(t, a)
 
 	// Remove the wrench, then re-add it — two entities ever at this path
-	err := a.RemoveEntity(t.Context(), app.RemoveEntityRequest{
-		EntityPath: "Garage:Toolbox:Wrench", ActorID: "test",
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
+	err = a.RemoveEntity(t.Context(), app.RemoveEntityRequest{
+		EntityID: wrench.EntityID, ActorID: "test",
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(t.Context(), app.CreateEntityRequest{

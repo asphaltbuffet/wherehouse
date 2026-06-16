@@ -58,10 +58,15 @@ func runRename(cmd *cobra.Command, args []string, a *app.App) error {
 	path := args[0]
 	toFlag, _ := cmd.Flags().GetString("to")
 
+	entity, err := a.LookupEntityByPath(ctx, path)
+	if err != nil {
+		return fmt.Errorf("failed to find %q: %w", path, err)
+	}
+
 	updated, err := a.RenameEntity(ctx, app.RenameEntityRequest{
-		EntityPath: path,
-		NewName:    toFlag,
-		ActorID:    cli.GetActorUserID(ctx),
+		EntityID: entity.EntityID,
+		NewName:  toFlag,
+		ActorID:  cli.GetActorUserID(ctx),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to rename %q: %w", path, err)

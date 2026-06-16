@@ -85,10 +85,10 @@ func (c confirmModel) submitCmd() tea.Cmd {
 	case confirmLost:
 		return func() tea.Msg {
 			reqs := []app.ChangeStatusRequest{{
-				EntityPath: entity.FullPathDisplay,
-				Status:     inventory.EntityStatusMissing,
-				ActorID:    cli.GetActorUserID(context.Background()),
-				Note:       note,
+				EntityID: entity.EntityID,
+				Status:   inventory.EntityStatusMissing,
+				ActorID:  cli.GetActorUserID(context.Background()),
+				Note:     note,
 			}}
 			results, err := a.MarkLost(context.Background(), reqs)
 			if err != nil {
@@ -103,9 +103,9 @@ func (c confirmModel) submitCmd() tea.Cmd {
 	case confirmReturn:
 		return func() tea.Msg {
 			reqs := []app.ChangeStatusRequest{{
-				EntityPath: entity.FullPathDisplay,
-				ActorID:    cli.GetActorUserID(context.Background()),
-				Note:       note,
+				EntityID: entity.EntityID,
+				ActorID:  cli.GetActorUserID(context.Background()),
+				Note:     note,
 			}}
 			results, err := a.MarkReturned(context.Background(), reqs)
 			if err != nil {
@@ -120,10 +120,10 @@ func (c confirmModel) submitCmd() tea.Cmd {
 	case confirmFound:
 		return func() tea.Msg {
 			reqs := []app.ChangeStatusRequest{{
-				EntityPath: entity.FullPathDisplay,
-				Status:     inventory.EntityStatusOk,
-				ActorID:    cli.GetActorUserID(context.Background()),
-				Note:       note,
+				EntityID: entity.EntityID,
+				Status:   inventory.EntityStatusOk,
+				ActorID:  cli.GetActorUserID(context.Background()),
+				Note:     note,
 			}}
 			results, err := a.MarkFound(context.Background(), reqs)
 			if err != nil {

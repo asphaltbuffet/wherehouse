@@ -191,7 +191,7 @@ func (f formModel) submitCmd() tea.Cmd {
 		a := f.appRef
 		return func() tea.Msg {
 			reqs := []app.ChangeStatusRequest{{
-				EntityPath:    entity.FullPathDisplay,
+				EntityID:      entity.EntityID,
 				StatusContext: to,
 				ActorID:       cli.GetActorUserID(context.Background()),
 				Note:          note,

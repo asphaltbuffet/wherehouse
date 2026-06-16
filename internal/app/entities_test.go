@@ -108,23 +108,23 @@ func TestReparentEntity_Locked_Error(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
-	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage",
 		Locked:      true,
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
-	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+	office, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Office",
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
-		EntityPath:    "Garage",
-		NewParentPath: "Office",
-		ActorID:       "alice",
+		EntityID:    garage.EntityID,
+		NewParentID: office.EntityID,
+		ActorID:     "alice",
 	})
 	assert.ErrorContains(t, err, "locked")
 }
@@ -133,23 +133,23 @@ func TestReparentEntity_IntoDiscrete_Error(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
-	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Box of Nails",
 		Discrete:    true,
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
-	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+	wrench, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Wrench",
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
-		EntityPath:    "Wrench",
-		NewParentPath: "Box of Nails",
-		ActorID:       "alice",
+		EntityID:    wrench.EntityID,
+		NewParentID: box.EntityID,
+		ActorID:     "alice",
 	})
 	assert.ErrorContains(t, err, "discrete")
 }
@@ -164,7 +164,7 @@ func TestReparentEntity_LockedChildMovesWithParent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+	fileCabinet, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "File Cabinet",
 		ParentPath:  "Garage",
 		ActorID:     "alice",
@@ -180,7 +180,7 @@ func TestReparentEntity_LockedChildMovesWithParent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+	office, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Office",
 		ActorID:     "alice",
 	})
@@ -188,9 +188,9 @@ func TestReparentEntity_LockedChildMovesWithParent(t *testing.T) {
 
 	// Moving File Cabinet (not locked) to Office should also move Top Drawer.
 	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
-		EntityPath:    "Garage:File Cabinet",
-		NewParentPath: "Office",
-		ActorID:       "alice",
+		EntityID:    fileCabinet.EntityID,
+		NewParentID: office.EntityID,
+		ActorID:     "alice",
 	})
 	require.NoError(t, err)
 
@@ -248,18 +248,18 @@ func TestRemoveEntity_ThenMutate_Error(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
-	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
 	err = a.RemoveEntity(ctx, app.RemoveEntityRequest{
-		EntityPath: "Garage", ActorID: "alice",
+		EntityID: garage.EntityID, ActorID: "alice",
 	})
 	require.NoError(t, err)
 
 	_, err = a.RenameEntity(ctx, app.RenameEntityRequest{
-		EntityPath: "Garage", NewName: "Workshop", ActorID: "alice",
+		EntityID: garage.EntityID, NewName: "Workshop", ActorID: "alice",
 	})
 	assert.Error(t, err)
 }
@@ -331,7 +331,7 @@ func TestApp_GetChildren(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		removedEntity, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Removed",
 			ParentPath:  "Parent",
 			ActorID:     "alice",
@@ -339,8 +339,8 @@ func TestApp_GetChildren(t *testing.T) {
 		require.NoError(t, err)
 
 		err = a.RemoveEntity(ctx, app.RemoveEntityRequest{
-			EntityPath: "Parent:Removed",
-			ActorID:    "alice",
+			EntityID: removedEntity.EntityID,
+			ActorID:  "alice",
 		})
 		require.NoError(t, err)
 
@@ -412,7 +412,7 @@ func TestApp_GetChildren(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		leaf, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Leaf",
 			ParentPath:  "GP:Mid",
 			ActorID:     "alice",
@@ -420,8 +420,8 @@ func TestApp_GetChildren(t *testing.T) {
 		require.NoError(t, err)
 
 		err = a.RemoveEntity(ctx, app.RemoveEntityRequest{
-			EntityPath: "GP:Mid:Leaf",
-			ActorID:    "alice",
+			EntityID: leaf.EntityID,
+			ActorID:  "alice",
 		})
 		require.NoError(t, err)
 
@@ -430,4 +430,57 @@ func TestApp_GetChildren(t *testing.T) {
 		require.Len(t, results, 1)
 		assert.False(t, results[0].HasChildren, "Mid should report HasChildren=false when its only child is removed")
 	})
+}
+
+func TestLookupEntityByPath_Found(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	created, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Garage",
+		ActorID:     "alice",
+	})
+	require.NoError(t, err)
+
+	result, err := a.LookupEntityByPath(ctx, "Garage")
+	require.NoError(t, err)
+	assert.Equal(t, created.EntityID, result.EntityID)
+	assert.Equal(t, "Garage", result.DisplayName)
+}
+
+func TestLookupEntityByPath_NotFound(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.LookupEntityByPath(ctx, "NoSuchThing")
+	assert.ErrorIs(t, err, app.ErrNotFound)
+}
+
+func TestRenameEntity_ByID(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	created, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+
+	result, err := a.RenameEntity(ctx, app.RenameEntityRequest{
+		EntityID: created.EntityID,
+		NewName:  "Workshop",
+		ActorID:  "alice",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Workshop", result.DisplayName)
+	assert.Equal(t, created.EntityID, result.EntityID)
+}
+
+func TestRenameEntity_UnknownID_Error(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	_, err := a.RenameEntity(ctx, app.RenameEntityRequest{
+		EntityID: "nonexistent",
+		NewName:  "Whatever",
+		ActorID:  "alice",
+	})
+	assert.ErrorIs(t, err, app.ErrNotFound)
 }

@@ -33,19 +33,22 @@ func seedEntityInStatus(t *testing.T, a *app.App, status inventory.EntityStatus)
 	})
 	require.NoError(t, err)
 
+	item, err := a.LookupEntityByPath(ctx, "Box:Item")
+	require.NoError(t, err)
+
 	switch status {
 	case inventory.EntityStatusOk:
 		// already ok
 	case inventory.EntityStatusMissing:
-		_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityPath: "Box:Item", ActorID: "test"}})
+		_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityID: item.EntityID, ActorID: "test"}})
 		require.NoError(t, err)
 	case inventory.EntityStatusLoaned:
 		_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{
-			{EntityPath: "Box:Item", StatusContext: "Bob", ActorID: "test"},
+			{EntityID: item.EntityID, StatusContext: "Bob", ActorID: "test"},
 		})
 		require.NoError(t, err)
 	case inventory.EntityStatusRemoved:
-		require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityPath: "Box:Item", ActorID: "test"}))
+		require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: item.EntityID, ActorID: "test"}))
 	case inventory.EntityStatusBorrowed:
 		t.Fatalf("borrowed handled above")
 	}
@@ -56,22 +59,46 @@ func seedEntityInStatus(t *testing.T, a *app.App, status inventory.EntityStatus)
 func TestStatusTransitionTable(t *testing.T) {
 	type call func(ctx context.Context, a *app.App) error
 
+	lookupItem := func(ctx context.Context, a *app.App) (string, error) {
+		e, err := a.LookupEntityByPath(ctx, "Box:Item")
+		if err != nil {
+			return "", err
+		}
+		return e.EntityID, nil
+	}
+
 	markLost := func(ctx context.Context, a *app.App) error {
-		_, err := a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityPath: "Box:Item", ActorID: "test"}})
+		id, err := lookupItem(ctx, a)
+		if err != nil {
+			return err
+		}
+		_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityID: id, ActorID: "test"}})
 		return err
 	}
 	markFound := func(ctx context.Context, a *app.App) error {
-		_, err := a.MarkFound(ctx, []app.ChangeStatusRequest{{EntityPath: "Box:Item", ActorID: "test"}})
+		id, err := lookupItem(ctx, a)
+		if err != nil {
+			return err
+		}
+		_, err = a.MarkFound(ctx, []app.ChangeStatusRequest{{EntityID: id, ActorID: "test"}})
 		return err
 	}
 	markLoaned := func(ctx context.Context, a *app.App) error {
-		_, err := a.MarkLoaned(ctx, []app.ChangeStatusRequest{
-			{EntityPath: "Box:Item", StatusContext: "Bob", ActorID: "test"},
+		id, err := lookupItem(ctx, a)
+		if err != nil {
+			return err
+		}
+		_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{
+			{EntityID: id, StatusContext: "Bob", ActorID: "test"},
 		})
 		return err
 	}
 	markReturned := func(ctx context.Context, a *app.App) error {
-		_, err := a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityPath: "Box:Item", ActorID: "test"}})
+		id, err := lookupItem(ctx, a)
+		if err != nil {
+			return err
+		}
+		_, err = a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: id, ActorID: "test"}})
 		return err
 	}
 
@@ -134,9 +161,12 @@ func TestStatusBatch_IllegalTransitionRollsBackBatch(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	entityA, err := a.LookupEntityByPath(ctx, "Box:A")
+	require.NoError(t, err)
+
 	// A is ok (legal lost), B is ok then we attempt found on it (illegal from ok) — whole batch must roll back.
 	_, err = a.MarkFound(ctx, []app.ChangeStatusRequest{
-		{EntityPath: "Box:A", ActorID: "test"}, // A is ok -> found illegal
+		{EntityID: entityA.EntityID, ActorID: "test"}, // A is ok -> found illegal
 	})
 	require.Error(t, err)
 

@@ -74,10 +74,12 @@ func TestRunList_ShowsStatusBadge(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	seedThree(t, a)
-	_, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
-		EntityPath: "Garage:Toolbox:Wrench",
-		Status:     inventory.EntityStatusMissing,
-		ActorID:    "test",
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
+	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+		EntityID: wrench.EntityID,
+		Status:   inventory.EntityStatusMissing,
+		ActorID:  "test",
 	})
 	require.NoError(t, err)
 
@@ -99,10 +101,12 @@ func TestRunList_FilterPrunesUnrelatedBranches(t *testing.T) {
 		ActorID:     "test",
 	})
 	require.NoError(t, err)
+	drill, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Drill")
+	require.NoError(t, err)
 	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
-		EntityPath: "Garage:Toolbox:Drill",
-		Status:     inventory.EntityStatusMissing,
-		ActorID:    "test",
+		EntityID: drill.EntityID,
+		Status:   inventory.EntityStatusMissing,
+		ActorID:  "test",
 	})
 	require.NoError(t, err)
 
@@ -117,10 +121,12 @@ func TestRunList_FilterKeepsAncestor(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	seedThree(t, a)
-	_, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
-		EntityPath: "Garage:Toolbox:Wrench",
-		Status:     inventory.EntityStatusMissing,
-		ActorID:    "test",
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
+	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+		EntityID: wrench.EntityID,
+		Status:   inventory.EntityStatusMissing,
+		ActorID:  "test",
 	})
 	require.NoError(t, err)
 
@@ -149,10 +155,12 @@ func TestRunList_VerboseShowsIDAndTags(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	seedThree(t, a)
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
 	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
-		EntityPath: "Garage:Toolbox:Wrench",
-		ActorID:    "test",
-		Add:        []string{"dewalt"},
+		EntityID: wrench.EntityID,
+		ActorID:  "test",
+		Add:      []string{"dewalt"},
 	}))
 
 	out := runCmd(t, a, "--verbose")
@@ -165,10 +173,12 @@ func TestRunList_NoTagsWithoutVerbose(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	seedThree(t, a)
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
 	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
-		EntityPath: "Garage:Toolbox:Wrench",
-		ActorID:    "test",
-		Add:        []string{"dewalt"},
+		EntityID: wrench.EntityID,
+		ActorID:  "test",
+		Add:      []string{"dewalt"},
 	}))
 
 	out := runCmd(t, a)
@@ -181,10 +191,12 @@ func TestRunList_JSONIncludesTags(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()
 	seedThree(t, a)
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
 	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
-		EntityPath: "Garage:Toolbox:Wrench",
-		ActorID:    "test",
-		Add:        []string{"dewalt"},
+		EntityID: wrench.EntityID,
+		ActorID:  "test",
+		Add:      []string{"dewalt"},
 	}))
 
 	cmd := listcmd.NewListCmd(a)
@@ -197,16 +209,16 @@ func TestRunList_JSONIncludesTags(t *testing.T) {
 	var items []map[string]any
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &items))
 
-	var wrench map[string]any
+	var wrenchItem map[string]any
 	for _, item := range items {
 		if item["path"] == "Garage:Toolbox:Wrench" {
-			wrench = item
+			wrenchItem = item
 			break
 		}
 	}
-	require.NotNil(t, wrench, "Wrench not found in JSON output")
+	require.NotNil(t, wrenchItem, "Wrench not found in JSON output")
 
-	tags, ok := wrench["tags"].([]any)
+	tags, ok := wrenchItem["tags"].([]any)
 	require.True(t, ok, "tags field must be an array")
 	require.Len(t, tags, 1)
 	assert.Equal(t, "dewalt", tags[0])

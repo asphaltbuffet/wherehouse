@@ -16,30 +16,30 @@ type CreateEntityRequest struct {
 
 // RenameEntityRequest is the input for renaming an entity.
 type RenameEntityRequest struct {
-	EntityPath string
-	NewName    string
-	ActorID    string
-	Note       string
+	EntityID string
+	NewName  string
+	ActorID  string
+	Note     string
 }
 
 // ReparentEntityRequest is the input for moving an entity to a new parent.
 type ReparentEntityRequest struct {
-	EntityPath    string
-	NewParentPath string // empty means make root-level
-	ActorID       string
-	Note          string
+	EntityID    string
+	NewParentID string // empty means make root-level
+	ActorID     string
+	Note        string
 }
 
 // RemoveEntityRequest is the input for removing an entity.
 type RemoveEntityRequest struct {
-	EntityPath string
-	ActorID    string
-	Note       string
+	EntityID string
+	ActorID  string
+	Note     string
 }
 
 // ChangeStatusRequest is the input for changing an entity's status.
 type ChangeStatusRequest struct {
-	EntityPath    string
+	EntityID      string
 	Status        inventory.EntityStatus
 	StatusContext string
 	ActorID       string
@@ -57,7 +57,6 @@ type BorrowEntityRequest struct {
 
 // GetHistoryRequest is the input for retrieving an entity's event history.
 type GetHistoryRequest struct {
-	EntityPath  string
 	EntityID    string
 	Limit       int
 	OldestFirst bool
@@ -71,14 +70,14 @@ type FindEntitiesRequest struct {
 
 // TagEntityRequest is the input for adding/removing tags on an entity.
 type TagEntityRequest struct {
-	EntityPath string
-	ActorID    string
-	Add        []string
-	Remove     []string
-	Note       string
+	EntityID string
+	ActorID  string
+	Add      []string
+	Remove   []string
+	Note     string
 }
 
 // ListTagsRequest is the input for listing tags on an entity.
 type ListTagsRequest struct {
-	EntityPath string
+	EntityID string
 }

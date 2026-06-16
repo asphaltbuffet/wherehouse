@@ -68,10 +68,10 @@ func TestApp_GetRootEntities(t *testing.T) {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Active", ActorID: "alice"})
 		require.NoError(t, err)
 
-		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Gone", ActorID: "alice"})
+		gone, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Gone", ActorID: "alice"})
 		require.NoError(t, err)
 
-		err = a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityPath: "Gone", ActorID: "alice"})
+		err = a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: gone.EntityID, ActorID: "alice"})
 		require.NoError(t, err)
 
 		results, err := a.GetRootEntities(ctx)

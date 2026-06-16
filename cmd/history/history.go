@@ -46,9 +46,16 @@ Examples:
 
 func runHistory(cmd *cobra.Command, args []string, a *app.App) error {
 	ctx := cmd.Context()
-	events, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityPath: args[0]})
+	path := args[0]
+
+	entity, err := a.LookupEntityByPath(ctx, path)
 	if err != nil {
-		return fmt.Errorf("failed to get history for %q: %w", args[0], err)
+		return fmt.Errorf("failed to find %q: %w", path, err)
+	}
+
+	events, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityID: entity.EntityID})
+	if err != nil {
+		return fmt.Errorf("failed to get history for %q: %w", path, err)
 	}
 
 	cfg, ok := cli.GetConfig(ctx)

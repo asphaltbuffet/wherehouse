@@ -221,9 +221,9 @@ func seedReparentScenario(t *testing.T) (*app.App, []app.ExportResult) {
 	_, err = a.ReparentEntity(
 		ctx,
 		app.ReparentEntityRequest{
-			EntityPath:    parent.FullPathDisplay,
-			NewParentPath: gp2.FullPathDisplay,
-			ActorID:       "alice",
+			EntityID:    parent.EntityID,
+			NewParentID: gp2.EntityID,
+			ActorID:     "alice",
 		},
 	)
 	require.NoError(t, err)

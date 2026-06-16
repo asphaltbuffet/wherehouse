@@ -109,8 +109,10 @@ func TestRunBorrow_BlocksLost(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
+	require.NoError(t, err)
 	_, err = a.MarkLost(t.Context(), []app.ChangeStatusRequest{
-		{EntityPath: "Shelf:Drill", Status: inventory.EntityStatusMissing, ActorID: "test"},
+		{EntityID: drill.EntityID, Status: inventory.EntityStatusMissing, ActorID: "test"},
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }
@@ -124,8 +126,10 @@ func TestRunBorrow_BlocksFound(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
+	require.NoError(t, err)
 	_, err = a.MarkFound(t.Context(), []app.ChangeStatusRequest{
-		{EntityPath: "Shelf:Drill", Status: inventory.EntityStatusOk, ActorID: "test"},
+		{EntityID: drill.EntityID, Status: inventory.EntityStatusOk, ActorID: "test"},
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }
@@ -139,8 +143,10 @@ func TestRunBorrow_BlocksLoan(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
+	require.NoError(t, err)
 	_, err = a.MarkLoaned(t.Context(), []app.ChangeStatusRequest{
-		{EntityPath: "Shelf:Drill", Status: inventory.EntityStatusLoaned, ActorID: "test"},
+		{EntityID: drill.EntityID, Status: inventory.EntityStatusLoaned, ActorID: "test"},
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }
@@ -154,8 +160,10 @@ func TestRunBorrow_BlocksRemove(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
+	require.NoError(t, err)
 	err = a.RemoveEntity(t.Context(), app.RemoveEntityRequest{
-		EntityPath: "Shelf:Drill", ActorID: "test",
+		EntityID: drill.EntityID, ActorID: "test",
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }
@@ -169,8 +177,10 @@ func TestRunBorrow_ReturnSetsRemoved(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
+	require.NoError(t, err)
 	_, err = a.MarkReturned(t.Context(), []app.ChangeStatusRequest{
-		{EntityPath: "Shelf:Drill", ActorID: "test"},
+		{EntityID: drill.EntityID, ActorID: "test"},
 	})
 	require.NoError(t, err)
 

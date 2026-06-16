@@ -10,24 +10,13 @@ import (
 // Results default to newest-first; set OldestFirst to reverse.
 // A positive Limit caps the number of returned events.
 func (a *App) GetHistory(ctx context.Context, req GetHistoryRequest) ([]HistoryResult, error) {
-	var entityID string
-
-	switch {
-	case req.EntityID != "":
-		entityID = req.EntityID
-	case req.EntityPath != "":
-		entity, err := a.resolveEntityPath(ctx, req.EntityPath)
-		if err != nil {
-			return nil, fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
-		}
-		entityID = entity.EntityID
-	default:
-		return nil, errors.New("GetHistory: either EntityPath or EntityID must be set")
+	if req.EntityID == "" {
+		return nil, errors.New("GetHistory: EntityID must be set")
 	}
 
-	events, err := a.store.GetEventsByEntity(ctx, entityID)
+	events, err := a.store.GetEventsByEntity(ctx, req.EntityID)
 	if err != nil {
-		return nil, fmt.Errorf("get history for %s: %w", entityID, err)
+		return nil, fmt.Errorf("get history for %s: %w", req.EntityID, err)
 	}
 
 	results := make([]HistoryResult, 0, len(events))

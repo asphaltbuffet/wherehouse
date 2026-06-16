@@ -58,8 +58,12 @@ func runLoan(cmd *cobra.Command, args []string, a *app.App) error {
 
 	reqs := make([]app.ChangeStatusRequest, len(args))
 	for i, path := range args {
+		entity, err := a.LookupEntityByPath(ctx, path)
+		if err != nil {
+			return fmt.Errorf("failed to find %q: %w", path, err)
+		}
 		reqs[i] = app.ChangeStatusRequest{
-			EntityPath:    path,
+			EntityID:      entity.EntityID,
 			Status:        inventory.EntityStatusLoaned,
 			StatusContext: toFlag,
 			Note:          noteFlag,
