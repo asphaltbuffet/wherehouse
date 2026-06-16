@@ -760,6 +760,39 @@ func TestModel_ScryEnterNoResults(t *testing.T) {
 	assert.Equal(t, "scry", updated.(tui.Model).Mode())
 }
 
+func TestModel_ScryTabMovesToList(t *testing.T) {
+	drillBit := entityResult("e1", "Drill Bit", "Garage:Drill Bit", false)
+	f := &fakeTUIApp{
+		roots:       []app.EntityResult{drillBit},
+		findResults: []app.FindResult{{Entity: drillBit, Distance: 0}},
+	}
+	m := loadedModelFake(t, f)
+
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = sized.(tui.Model)
+
+	inScry, _ := m.Update(keyMsg("s"))
+	m = inScry.(tui.Model)
+	require.Equal(t, "scry", m.Mode())
+
+	// Load results.
+	_, batchCmd := m.Update(keyMsg("d"))
+	m = feedBatch(t, m, batchCmd)
+	assert.Contains(t, m.View().Content, "Garage:Drill Bit")
+
+	// Tab moves focus to the list; enter from list focus still navigates.
+	afterTab, _ := m.Update(keyMsg("tab"))
+	m = afterTab.(tui.Model)
+
+	afterEnter, navigateCmd := m.Update(keyMsg("enter"))
+	require.NotNil(t, navigateCmd, "enter from list focus should produce navigate cmd")
+
+	navigateMsg := navigateCmd()
+	afterNavigate, _ := afterEnter.(tui.Model).Update(navigateMsg)
+	assert.Equal(t, "browse", afterNavigate.(tui.Model).Mode())
+	assert.Equal(t, "Garage:Drill Bit", afterNavigate.(tui.Model).CurrentPath())
+}
+
 func TestModel_CursorNavigation(t *testing.T) {
 	roots := []app.EntityResult{
 		entityResult("e1", "Garage", "Garage", true),
