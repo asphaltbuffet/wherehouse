@@ -13,9 +13,9 @@ import (
 
 // ChangeStatus records a status-change event for the entity at the given path.
 func (a *App) ChangeStatus(ctx context.Context, req ChangeStatusRequest) (EntityResult, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return EntityResult{}, fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return EntityResult{}, wrapEntityError(req.EntityID, err)
 	}
 
 	if entity.Locked && req.Status == inventory.EntityStatusMissing {
@@ -111,9 +111,9 @@ func execBatch[T any](
 }
 
 func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return "", wrapEntityError(req.EntityID, err)
 	}
 
 	if entity.Locked {
@@ -143,7 +143,7 @@ func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 	if _, err = a.bus.DispatchInTx(
 		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
 	); err != nil {
-		return "", fmt.Errorf("mark lost %q: %w", req.EntityPath, err)
+		return "", fmt.Errorf("mark lost %q: %w", req.EntityID, err)
 	}
 
 	return entity.EntityID, nil
@@ -165,9 +165,9 @@ func (a *App) MarkReturned(ctx context.Context, reqs []ChangeStatusRequest) ([]E
 }
 
 func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return "", wrapEntityError(req.EntityID, err)
 	}
 
 	if entity.Status != inventory.EntityStatusLoaned && entity.Status != inventory.EntityStatusBorrowed {
@@ -200,16 +200,16 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 	if _, err = a.bus.DispatchInTx(
 		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
 	); err != nil {
-		return "", fmt.Errorf("mark returned %q: %w", req.EntityPath, err)
+		return "", fmt.Errorf("mark returned %q: %w", req.EntityID, err)
 	}
 
 	return entity.EntityID, nil
 }
 
 func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return "", wrapEntityError(req.EntityID, err)
 	}
 
 	if entity.Locked {
@@ -245,7 +245,7 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 	if _, err = a.bus.DispatchInTx(
 		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
 	); err != nil {
-		return "", fmt.Errorf("mark loaned %q: %w", req.EntityPath, err)
+		return "", fmt.Errorf("mark loaned %q: %w", req.EntityID, err)
 	}
 
 	return entity.EntityID, nil
@@ -303,9 +303,9 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 }
 
 func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return "", fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return "", wrapEntityError(req.EntityID, err)
 	}
 
 	if entity.Status != inventory.EntityStatusMissing {
@@ -333,7 +333,7 @@ func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRe
 	if _, err = a.bus.DispatchInTx(
 		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
 	); err != nil {
-		return "", fmt.Errorf("mark found %q: %w", req.EntityPath, err)
+		return "", fmt.Errorf("mark found %q: %w", req.EntityID, err)
 	}
 
 	return entity.EntityID, nil

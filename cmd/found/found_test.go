@@ -32,9 +32,13 @@ func seedForFound(t *testing.T, a *app.App) {
 		require.NoError(t, err)
 	}
 	// Mark both as missing so found has something to recover
-	_, err := a.MarkLost(ctx, []app.ChangeStatusRequest{
-		{EntityPath: "Garage:Toolbox:Wrench", Status: inventory.EntityStatusMissing, ActorID: "test"},
-		{EntityPath: "Garage:Toolbox:Hammer", Status: inventory.EntityStatusMissing, ActorID: "test"},
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
+	hammer, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Hammer")
+	require.NoError(t, err)
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{
+		{EntityID: wrench.EntityID, Status: inventory.EntityStatusMissing, ActorID: "test"},
+		{EntityID: hammer.EntityID, Status: inventory.EntityStatusMissing, ActorID: "test"},
 	})
 	require.NoError(t, err)
 }
@@ -116,10 +120,12 @@ func TestRunFound_WorksOnLockedEntity(t *testing.T) {
 	require.NoError(t, err)
 
 	// Manually put it in missing state via ChangeStatus (not locked, so allowed)
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
+	require.NoError(t, err)
 	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
-		EntityPath: "Garage:Wrench",
-		Status:     inventory.EntityStatusMissing,
-		ActorID:    "test",
+		EntityID: wrench.EntityID,
+		Status:   inventory.EntityStatusMissing,
+		ActorID:  "test",
 	})
 	require.NoError(t, err)
 

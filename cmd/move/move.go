@@ -54,10 +54,20 @@ func runMove(cmd *cobra.Command, args []string, a *app.App) error {
 	srcPath := args[0]
 	destPath, _ := cmd.Flags().GetString("to")
 
+	src, err := a.LookupEntityByPath(ctx, srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to find %q: %w", srcPath, err)
+	}
+
+	dest, err := a.LookupEntityByPath(ctx, destPath)
+	if err != nil {
+		return fmt.Errorf("failed to find destination %q: %w", destPath, err)
+	}
+
 	updated, err := a.ReparentEntity(ctx, app.ReparentEntityRequest{
-		EntityPath:    srcPath,
-		NewParentPath: destPath,
-		ActorID:       cli.GetActorUserID(ctx),
+		EntityID:    src.EntityID,
+		NewParentID: dest.EntityID,
+		ActorID:     cli.GetActorUserID(ctx),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to move %q: %w", srcPath, err)

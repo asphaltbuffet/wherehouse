@@ -51,11 +51,17 @@ func runRemove(cmd *cobra.Command, args []string, a *app.App) error {
 	path := args[0]
 	noteFlag, _ := cmd.Flags().GetString("note")
 
-	if err := a.RemoveEntity(ctx, app.RemoveEntityRequest{
-		EntityPath: path,
-		ActorID:    cli.GetActorUserID(ctx),
-		Note:       noteFlag,
-	}); err != nil {
+	entity, err := a.LookupEntityByPath(ctx, path)
+	if err != nil {
+		return fmt.Errorf("failed to find %q: %w", path, err)
+	}
+
+	err = a.RemoveEntity(ctx, app.RemoveEntityRequest{
+		EntityID: entity.EntityID,
+		ActorID:  cli.GetActorUserID(ctx),
+		Note:     noteFlag,
+	})
+	if err != nil {
 		return fmt.Errorf("failed to remove %q: %w", path, err)
 	}
 

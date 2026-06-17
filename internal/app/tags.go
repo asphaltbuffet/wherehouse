@@ -10,13 +10,13 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
 )
 
-// TagEntity adds and/or removes tags on the entity identified by req.EntityPath.
+// TagEntity adds and/or removes tags on the entity identified by req.EntityID.
 // Tags in both Add and Remove cancel each other out (a warning is logged).
 // Adding an existing tag or removing a missing tag are no-ops.
 func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return wrapEntityError(req.EntityID, err)
 	}
 
 	addSet := make(map[string]bool, len(req.Add))
@@ -72,11 +72,11 @@ func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 	return nil
 }
 
-// ListTags returns the canonical tags for the entity at req.EntityPath, sorted alphabetically.
+// ListTags returns the canonical tags for the entity identified by req.EntityID, sorted alphabetically.
 func (a *App) ListTags(ctx context.Context, req ListTagsRequest) ([]string, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return nil, fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return nil, wrapEntityError(req.EntityID, err)
 	}
 	tags, err := a.store.GetTagsByEntity(ctx, entity.EntityID)
 	if err != nil {

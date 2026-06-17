@@ -88,6 +88,10 @@ The normalized form of a name used for matching. Rules (from `CanonicalizeString
 
 **Do not confuse `CanonicalName` with `FullPathCanonical`.** Use `FullPathDisplay` when checking depth or path structure in `EntityResult`.
 
+### PathResolution
+
+The act of translating a user-supplied colon-separated path string into an `entity_id` by canonical-name lookup. PathResolution is a CLI/UI concern — the app layer's `LookupEntityByPath` method is the single authoritative entry point. Internal mutations (rename, reparent, remove, status change, tag, history) accept only `entity_id`; CLI commands that receive a path from the user perform PathResolution before constructing a request. Web and TUI callers that already hold an `entity_id` bypass PathResolution entirely.
+
 ### Scry
 
 The `scry` command searches for entities by name (fuzzy, using Levenshtein distance). It is a **search/find** command — not an inference engine for missing items. Results are `FindResult` values with `Entity` and `Distance` fields.

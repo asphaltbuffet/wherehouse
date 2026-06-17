@@ -15,12 +15,12 @@ func TestGetHistory_ByPath(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
-	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Garage", ActorID: "alice",
 	})
 	require.NoError(t, err)
 
-	history, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityPath: "Garage"})
+	history, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityID: garage.EntityID})
 	require.NoError(t, err)
 	assert.Len(t, history, 1)
 	assert.Equal(t, inventory.EntityCreatedEvent, history[0].EventType)

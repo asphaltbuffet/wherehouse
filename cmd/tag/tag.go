@@ -66,20 +66,26 @@ func runTag(cmd *cobra.Command, args []string, a *app.App) error {
 	}
 	out := cli.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.IsJSON(), cfg.IsQuiet())
 
+	entity, err := a.LookupEntityByPath(ctx, path)
+	if err != nil {
+		return fmt.Errorf("failed to find %q: %w", path, err)
+	}
+
 	isMutation := len(addFlags) > 0 || len(removeFlags) > 0
 
 	if isMutation {
-		if err := a.TagEntity(ctx, app.TagEntityRequest{
-			EntityPath: path,
-			ActorID:    cli.GetActorUserID(ctx),
-			Add:        addFlags,
-			Remove:     removeFlags,
-		}); err != nil {
+		err = a.TagEntity(ctx, app.TagEntityRequest{
+			EntityID: entity.EntityID,
+			ActorID:  cli.GetActorUserID(ctx),
+			Add:      addFlags,
+			Remove:   removeFlags,
+		})
+		if err != nil {
 			return fmt.Errorf("tag %q: %w", path, err)
 		}
 	}
 
-	tags, err := a.ListTags(ctx, app.ListTagsRequest{EntityPath: path})
+	tags, err := a.ListTags(ctx, app.ListTagsRequest{EntityID: entity.EntityID})
 	if err != nil {
 		return fmt.Errorf("list tags for %q: %w", path, err)
 	}

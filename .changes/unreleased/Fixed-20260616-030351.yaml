@@ -1,0 +1,5 @@
+kind: Fixed
+body: Storage errors (DB unavailable, context cancelled) no longer surface as "entity not found"; they are now propagated with their original cause
+time: 2026-06-16T03:03:51Z
+custom:
+    Issue: ""

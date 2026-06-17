@@ -56,7 +56,9 @@ func TestTagCmd_Add(t *testing.T) {
 	_, _, err := runTagCmd(t.Context(), t, a, "Garage:Wrench", "--add", "tool", "--add", "hand_tool")
 	require.NoError(t, err)
 
-	tags, err := a.ListTags(t.Context(), app.ListTagsRequest{EntityPath: "Garage:Wrench"})
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Wrench")
+	require.NoError(t, err)
+	tags, err := a.ListTags(t.Context(), app.ListTagsRequest{EntityID: wrench.EntityID})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hand_tool", "tool"}, tags)
 }
@@ -65,14 +67,16 @@ func TestTagCmd_Remove(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedForTagCmd(t, a)
 
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Wrench")
+	require.NoError(t, err)
 	require.NoError(t, a.TagEntity(t.Context(), app.TagEntityRequest{
-		EntityPath: "Garage:Wrench", ActorID: "alice", Add: []string{"tool", "hand_tool"},
+		EntityID: wrench.EntityID, ActorID: "alice", Add: []string{"tool", "hand_tool"},
 	}))
 
-	_, _, err := runTagCmd(t.Context(), t, a, "Garage:Wrench", "--remove", "hand_tool")
+	_, _, err = runTagCmd(t.Context(), t, a, "Garage:Wrench", "--remove", "hand_tool")
 	require.NoError(t, err)
 
-	tags, err := a.ListTags(t.Context(), app.ListTagsRequest{EntityPath: "Garage:Wrench"})
+	tags, err := a.ListTags(t.Context(), app.ListTagsRequest{EntityID: wrench.EntityID})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tool"}, tags)
 }
@@ -81,14 +85,16 @@ func TestTagCmd_MixedFlags(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedForTagCmd(t, a)
 
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Wrench")
+	require.NoError(t, err)
 	require.NoError(t, a.TagEntity(t.Context(), app.TagEntityRequest{
-		EntityPath: "Garage:Wrench", ActorID: "alice", Add: []string{"tool"},
+		EntityID: wrench.EntityID, ActorID: "alice", Add: []string{"tool"},
 	}))
 
-	_, _, err := runTagCmd(t.Context(), t, a, "Garage:Wrench", "--add", "hand_tool", "--remove", "tool")
+	_, _, err = runTagCmd(t.Context(), t, a, "Garage:Wrench", "--add", "hand_tool", "--remove", "tool")
 	require.NoError(t, err)
 
-	tags, err := a.ListTags(t.Context(), app.ListTagsRequest{EntityPath: "Garage:Wrench"})
+	tags, err := a.ListTags(t.Context(), app.ListTagsRequest{EntityID: wrench.EntityID})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hand_tool"}, tags)
 }
@@ -97,8 +103,10 @@ func TestTagCmd_JSON_List(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedForTagCmd(t, a)
 
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Wrench")
+	require.NoError(t, err)
 	require.NoError(t, a.TagEntity(t.Context(), app.TagEntityRequest{
-		EntityPath: "Garage:Wrench", ActorID: "alice", Add: []string{"tool"},
+		EntityID: wrench.EntityID, ActorID: "alice", Add: []string{"tool"},
 	}))
 
 	jsonCtx := context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithJSON()))

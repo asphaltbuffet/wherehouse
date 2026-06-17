@@ -17,9 +17,17 @@ import (
 // scryUIOverhead is the number of terminal rows used by title, input, and help bar.
 const scryUIOverhead = 4
 
+type scryFocus int
+
+const (
+	scryFocusInput scryFocus = iota
+	scryFocusList
+)
+
 type scryModel struct {
 	input   textinput.Model
 	results list.Model
+	focus   scryFocus
 	appRef  App
 	st      *styles.Styles
 }
@@ -51,6 +59,7 @@ func newScryModel(a App, st *styles.Styles) scryModel {
 	return scryModel{
 		input:   inp,
 		results: l,
+		focus:   scryFocusInput,
 		appRef:  a,
 		st:      st,
 	}
@@ -65,26 +74,60 @@ func (s scryModel) searchCmd() tea.Cmd {
 	}
 }
 
+func (s scryModel) navigate() tea.Cmd {
+	sel, ok := s.results.SelectedItem().(scryItem)
+	if !ok {
+		return nil
+	}
+	entity := sel.result.Entity
+	return func() tea.Msg {
+		return scryNavigatedMsg{targetEntityID: entity.EntityID}
+	}
+}
+
 func (s scryModel) Update(msg tea.Msg) (scryModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case keyEsc:
-			return s, func() tea.Msg { return scryCancelledMsg{} }
+		key := msg.String()
 
-		case "enter":
-			sel, ok := s.results.SelectedItem().(scryItem)
-			if !ok {
-				return s, nil
-			}
-			entity := sel.result.Entity
-			a := s.appRef
-			return s, s.navigateCmd(entity, a)
+		// Esc always cancels, regardless of focus.
+		if key == keyEsc {
+			return s, func() tea.Msg { return scryCancelledMsg{} }
 		}
 
-		var cmd tea.Cmd
-		s.input, cmd = s.input.Update(msg)
-		return s, tea.Batch(cmd, s.searchCmd())
+		// Enter always navigates to the selected result.
+		if key == "enter" {
+			return s, s.navigate()
+		}
+
+		// Tab or ↓ from input moves focus to the list.
+		if s.focus == scryFocusInput && (key == "tab" || key == "down") {
+			s.focus = scryFocusList
+			s.input.Blur()
+			var cmd tea.Cmd
+			s.results, cmd = s.results.Update(msg)
+			return s, cmd
+		}
+
+		// Any printable character while list is focused returns focus to the input.
+		if s.focus == scryFocusList && len([]rune(key)) == 1 {
+			s.focus = scryFocusInput
+			s.input.Focus()
+			var inputCmd tea.Cmd
+			s.input, inputCmd = s.input.Update(msg)
+			return s, tea.Batch(inputCmd, s.searchCmd())
+		}
+
+		if s.focus == scryFocusList {
+			var cmd tea.Cmd
+			s.results, cmd = s.results.Update(msg)
+			return s, cmd
+		}
+
+		// Input focused: forward to text input and re-search.
+		var inputCmd tea.Cmd
+		s.input, inputCmd = s.input.Update(msg)
+		return s, tea.Batch(inputCmd, s.searchCmd())
 
 	case scryResultsMsg:
 		if msg.err != nil {
@@ -109,28 +152,18 @@ func (s scryModel) Update(msg tea.Msg) (scryModel, tea.Cmd) {
 
 type scryCancelledMsg struct{}
 
-// navigateCmd loads root entities and returns a scryNavigatedMsg targeting the entity.
-// EntityResult does not carry parentID, so we always reload from root and let the
-// Update handler position the cursor by ID. Deep navigation is a future improvement
-// once EntityResult exposes parentID.
-func (s scryModel) navigateCmd(entity app.EntityResult, a App) tea.Cmd {
-	return func() tea.Msg {
-		roots, err := a.GetRootEntities(context.Background())
-		return scryNavigatedMsg{
-			items:          roots,
-			targetEntityID: entity.EntityID,
-			pathStack:      nil,
-			parentStack:    nil,
-			err:            err,
-		}
+func (s scryModel) helpText() string {
+	if s.focus == scryFocusInput {
+		return "[tab/↓] select result  [enter] navigate  [esc] cancel"
 	}
+	return "[j/k] move  [enter] navigate  [any char] search  [esc] cancel"
 }
 
 func (s scryModel) View(width, height int) string {
 	title := s.st.TUIDetailLabel().Render("scry")
 	inp := s.input.View()
 	results := s.results.View()
-	help := s.st.Muted().Render("[enter] navigate  [esc] cancel")
+	help := s.st.Muted().Render(s.helpText())
 	return lipgloss.NewStyle().Width(width).Height(height).Render(
 		strings.Join([]string{title, inp, results, help}, "\n"),
 	)

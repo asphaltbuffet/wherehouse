@@ -24,9 +24,9 @@ func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (Entity
 
 // RenameEntity renames an entity resolved by its current path.
 func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (EntityResult, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return EntityResult{}, fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return EntityResult{}, wrapEntityError(req.EntityID, err)
 	}
 
 	payload := eventbus.EntityRenamedPayload{
@@ -57,9 +57,9 @@ func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (Entity
 
 // ReparentEntity moves an entity to a new parent, resolved by paths.
 func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (EntityResult, error) {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return EntityResult{}, fmt.Errorf("resolve entity path %q: %w", req.EntityPath, err)
+		return EntityResult{}, wrapEntityError(req.EntityID, err)
 	}
 
 	if entity.Locked {
@@ -67,11 +67,11 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 	}
 
 	var newParentID *string
-	if req.NewParentPath != "" {
+	if req.NewParentID != "" {
 		var parentEntity *inventory.Entity
-		parentEntity, err = a.resolveEntityPath(ctx, req.NewParentPath)
+		parentEntity, err = a.store.GetEntity(ctx, req.NewParentID)
 		if err != nil {
-			return EntityResult{}, fmt.Errorf("resolve new parent path %q: %w", req.NewParentPath, err)
+			return EntityResult{}, wrapEntityError(req.NewParentID, err)
 		}
 		if parentEntity.Discrete {
 			return EntityResult{}, fmt.Errorf("cannot move into %q: entity is discrete", parentEntity.FullPathDisplay)
@@ -107,9 +107,9 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 
 // RemoveEntity permanently marks an entity as removed.
 func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
-	entity, err := a.resolveEntityPath(ctx, req.EntityPath)
+	entity, err := a.store.GetEntity(ctx, req.EntityID)
 	if err != nil {
-		return fmt.Errorf("resolve path %q: %w", req.EntityPath, err)
+		return wrapEntityError(req.EntityID, err)
 	}
 
 	if entity.Status == inventory.EntityStatusBorrowed {
@@ -132,15 +132,6 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 	}
 
 	return nil
-}
-
-// GetEntityByPath retrieves an entity by its colon-separated display path.
-func (a *App) GetEntityByPath(ctx context.Context, path string) (EntityResult, error) {
-	entity, err := a.resolveEntityPath(ctx, path)
-	if err != nil {
-		return EntityResult{}, err
-	}
-	return a.entityWithTags(ctx, entity)
 }
 
 // LookupEntityStatus returns all entities ever at the given path (any status, including removed),
@@ -285,6 +276,18 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 	return a.resolveEntityPathWith(path, func(canonical string) ([]*inventory.Entity, error) {
 		return a.store.GetEntitiesByCanonicalName(ctx, canonical)
 	})
+}
+
+// LookupEntityByPath resolves a colon-separated path to an EntityResult.
+// This is the single PathResolution entry point for CLI callers. Web and TUI
+// callers that already hold an entity_id should pass it directly to request
+// structs and skip this call entirely.
+func (a *App) LookupEntityByPath(ctx context.Context, path string) (EntityResult, error) {
+	entity, err := a.resolveEntityPath(ctx, path)
+	if err != nil {
+		return EntityResult{}, err
+	}
+	return a.entityWithTags(ctx, entity)
 }
 
 func (a *App) resolveEntityPathTx(ctx context.Context, tx store.Tx, path string) (*inventory.Entity, error) {
