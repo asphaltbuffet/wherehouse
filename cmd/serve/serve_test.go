@@ -1,7 +1,9 @@
 package serve_test
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
 type fakeApp struct{}
@@ -62,4 +65,69 @@ func TestBuildServeCmd_FlagOverride(t *testing.T) {
 	bind, _ := cmd.Flags().GetString("bind")
 	assert.Equal(t, 9090, port)
 	assert.Equal(t, "0.0.0.0", bind)
+}
+
+func TestBuildServeCmd_ActorHeaderDefault(t *testing.T) {
+	cmd := serve.NewServeCmd(&fakeApp{})
+
+	h, err := cmd.Flags().GetString("actor-header")
+	require.NoError(t, err)
+	assert.Empty(t, h)
+}
+
+// runServe executes serve on 0.0.0.0 with an already-cancelled context so it
+// starts and shuts down immediately. The non-loopback warning on stderr
+// reveals which actor header won.
+func runServe(t *testing.T, cfgHeader string, args ...string) (string, error) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if cfgHeader != "" {
+		cfg := config.GetDefaults()
+		cfg.Web.ActorHeader = cfgHeader
+		ctx = context.WithValue(ctx, config.ConfigKey, cfg)
+	}
+
+	var stderr bytes.Buffer
+	cmd := serve.NewServeCmd(&fakeApp{})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs(append([]string{"--bind", "0.0.0.0", "--port", "0"}, args...))
+	err := cmd.ExecuteContext(ctx)
+	return stderr.String(), err
+}
+
+func TestServe_ActorHeaderPrecedence(t *testing.T) {
+	cases := []struct {
+		name      string
+		cfgHeader string
+		args      []string
+		want      string // header named in the warning; "" means no warning
+	}{
+		{"neither", "", nil, ""},
+		{"config only", "X-Config-User", nil, "X-Config-User"},
+		{"flag only", "", []string{"--actor-header", "Tailscale-User-Login"}, "Tailscale-User-Login"},
+		{
+			"flag beats config", "X-Config-User",
+			[]string{"--actor-header", "Tailscale-User-Login"}, "Tailscale-User-Login",
+		},
+		{"empty flag disables config", "X-Config-User", []string{"--actor-header", ""}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stderr, err := runServe(t, tc.cfgHeader, tc.args...)
+			require.NoError(t, err)
+			if tc.want == "" {
+				assert.NotContains(t, stderr, "warning: trusting identity header")
+				return
+			}
+			assert.Contains(t, stderr, "warning: trusting identity header "+tc.want)
+		})
+	}
+}
+
+func TestServe_InvalidActorHeader(t *testing.T) {
+	_, err := runServe(t, "", "--actor-header", "Tailscale User")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid actor header name")
 }
