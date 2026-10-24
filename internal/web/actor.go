@@ -49,3 +49,23 @@ func isTokenChar(c byte) bool {
 	}
 	return strings.IndexByte("!#$%&'*+-.^_`|~", c) >= 0
 }
+
+// actorView is the page header's "acting as" label. Source explains where
+// Name came from so a header that fails to arrive is visible.
+type actorView struct {
+	Name   string
+	Source string
+}
+
+func (s *Server) actorView(r *http.Request) actorView {
+	name, fromHeader := s.resolveActor(r)
+	header := http.CanonicalHeaderKey(s.cfg.ActorHeader)
+	switch {
+	case fromHeader:
+		return actorView{Name: name, Source: "from header " + header}
+	case header == "":
+		return actorView{Name: name, Source: "no identity header configured"}
+	default:
+		return actorView{Name: name, Source: "header " + header + " not received"}
+	}
+}

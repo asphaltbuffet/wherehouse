@@ -14,6 +14,7 @@ type indexData struct {
 	Roots     []app.EntityResult
 	Version   string
 	GitCommit string
+	Actor     actorView
 }
 
 // handleIndex renders the full page shell with root-level tree nodes.
@@ -35,6 +36,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Roots:     roots,
 		Version:   versioncmd.Version,
 		GitCommit: versioncmd.GitCommit,
+		Actor:     s.actorView(r),
 	}
 	s.renderHTML(w, "index", data)
 }
@@ -118,5 +120,6 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	s.renderHTML(w, "search_page", struct {
 		Roots  []app.EntityResult
 		Search any
-	}{Roots: roots, Search: searchData})
+		Actor  actorView
+	}{Roots: roots, Search: searchData, Actor: s.actorView(r)})
 }

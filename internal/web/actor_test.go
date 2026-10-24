@@ -140,3 +140,61 @@ func TestAddItemForm_HasNoUserField(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), `name="user"`)
 }
+
+func getPage(t *testing.T, h http.Handler, target string, hdr map[string]string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	for k, v := range hdr {
+		req.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	return rec.Body.String()
+}
+
+func TestHeader_ShowsActorOnEveryFullPage(t *testing.T) {
+	for _, page := range []string{"/", "/search?q=ham", "/entities/abc"} {
+		t.Run(page, func(t *testing.T) {
+			h := newActorHandler(t, &fakeApp{entities: hammer()}, tsHeader)
+			body := getPage(t, h, page, map[string]string{tsHeader: "alice@example.com"})
+
+			assert.Contains(t, body, "acting as alice@example.com")
+			assert.Contains(t, body, `title="from header Tailscale-User-Login"`)
+		})
+	}
+}
+
+func TestHeader_ActorSource(t *testing.T) {
+	cases := []struct {
+		name       string
+		configured string
+		sent       map[string]string
+		wantText   string
+		wantTitle  string
+	}{
+		{"not configured", "", nil, "acting as webui", `title="no identity header configured"`},
+		{"configured, absent", tsHeader, nil, "acting as webui", `title="header Tailscale-User-Login not received"`},
+		{"configured lowercase, present", "tailscale-user-login",
+			map[string]string{tsHeader: "alice@example.com"},
+			"acting as alice@example.com", `title="from header Tailscale-User-Login"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newActorHandler(t, &fakeApp{entities: hammer()}, tc.configured)
+			body := getPage(t, h, "/", tc.sent)
+
+			assert.Contains(t, body, tc.wantText)
+			assert.Contains(t, body, tc.wantTitle)
+			assert.NotContains(t, body, "signed in")
+		})
+	}
+}
+
+func TestHeader_EscapesActor(t *testing.T) {
+	h := newActorHandler(t, &fakeApp{entities: hammer()}, tsHeader)
+	body := getPage(t, h, "/", map[string]string{tsHeader: `<script>alert(1)</script>`})
+
+	assert.NotContains(t, body, "<script>alert(1)</script>")
+	assert.Contains(t, body, "acting as &lt;script&gt;alert(1)&lt;/script&gt;")
+}
