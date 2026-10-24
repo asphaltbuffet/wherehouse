@@ -48,8 +48,9 @@ header's value is recorded instead.
 
 wherehouse does NOT authenticate requests. Only set an actor header behind
 a reverse proxy that overwrites that header and is the sole path to this
-listener (e.g. --bind 127.0.0.1 inside a Tailscale sidecar's network
-namespace). Anyone who can reach the listener directly can forge it.
+listener (e.g. --bind 127.0.0.1 inside a kernel-mode Tailscale sidecar's
+network namespace; in userspace mode tailnet peers can reach loopback).
+Anyone who can reach the listener directly can forge it.
 
 Examples:
   wherehouse serve                   # Listen on 127.0.0.1:8080

@@ -122,14 +122,14 @@ docker run -d --name wherehouse \
 - **Bind mounts**: the image runs as uid `65532`. To mount a host directory, either `chown 65532:65532` it or run with `--user "$(id -u):$(id -g)"`; otherwise startup fails with `unable to open database file`.
 - **Arguments**: anything after the image name is passed to `wherehouse serve`, e.g. `... wherehouse:latest --port 9090`.
 - **Configuration**: set `WHEREHOUSE_*` environment variables (see [Environment Variables](#environment-variables)), or put a `wherehouse.toml` in `/data`.
-- **Identity**: web edits are recorded as actor `webui`. Behind an authenticating proxy, set `-e WHEREHOUSE_WEB_ACTOR_HEADER=<header>` to record the proxy's user instead — see [Behind Tailscale Serve](#behind-tailscale-serve).
+- **Identity**: web edits are recorded as actor `webui`. Only when the container sits behind an authenticating proxy that is its sole ingress (e.g. the sidecar recipe), set `WHEREHOUSE_WEB_ACTOR_HEADER=<header>` to record the proxy's user instead. Never set it together with `-p` publishing the port directly: anyone who reaches the port can forge the header. See [Behind Tailscale Serve](#behind-tailscale-serve).
 - **Logs**: written to stderr; view with `docker logs wherehouse`. Leave `logging.max_size_mb` unset.
 - **Health**: `GET /healthz` returns 200 when the server is up. Use it for orchestrator probes; the image has no `HEALTHCHECK`.
 - **CLI commands**: run them against the same volume with `docker run --rm -v wherehouse:/data --entrypoint /usr/bin/wherehouse ghcr.io/asphaltbuffet/wherehouse:latest doctor`.
 
 #### Behind Tailscale Serve
 
-wherehouse does no authentication of its own ([ADR 0031](docs/adr/0031-web-authentication-delegated-to-trusted-proxy.md)). Put it behind Tailscale Serve, which authenticates tailnet users and sets `Tailscale-User-Login`, and bind to loopback so Serve is the only way in:
+wherehouse does no authentication of its own ([ADR 0031](docs/adr/0031-web-authentication-delegated-to-trusted-proxy.md)). Put it behind Tailscale Serve, which authenticates tailnet users and sets `Tailscale-User-Login`, and bind to loopback so Serve is the only way in. The sidecar must run in kernel networking mode (`TS_USERSPACE=false`): in the image's default userspace mode, tailnet traffic to the node is delivered to `127.0.0.1`, so a loopback bind alone does not keep peers out. The tailnet also needs MagicDNS and HTTPS certificates enabled for `"HTTPS": true` / `${TS_CERT_DOMAIN}`.
 
 ```yaml
 services:
@@ -140,6 +140,11 @@ services:
       - TS_AUTHKEY=${TS_AUTHKEY}
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_SERVE_CONFIG=/config/serve.json
+      - TS_USERSPACE=false
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
     volumes:
       - ts-state:/var/lib/tailscale
       - ./serve.json:/config/serve.json:ro
@@ -165,7 +170,9 @@ volumes:
 }
 ```
 
-Without `--bind 127.0.0.1`, the listener is reachable on the node's tailnet IP and any peer can bypass Serve and forge the header; `serve` prints a warning at startup in that case. The page header shows `acting as …` so you can confirm the identity arrives.
+Without `--bind 127.0.0.1`, the listener is reachable on the node's tailnet IP and any peer can bypass Serve and forge the header; `serve` prints a warning at startup in that case. As defence in depth, restrict the node to port 443 in your tailnet ACLs/grants.
+
+Verify from another tailnet device: `curl -H 'Tailscale-User-Login: mallory' http://wherehouse:8080/` must fail to connect. The page header shows `acting as …` so you can confirm the identity arrives through Serve.
 
 ---
 
@@ -458,7 +465,7 @@ programs.wherehouse = {
     };
 
     web = {
-      actorHeader = "Tailscale-User-Login";
+      actorHeader = "Tailscale-User-Login"; # only behind a proxy that is the sole path to serve
     };
   };
 };

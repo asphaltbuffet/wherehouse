@@ -15,7 +15,7 @@ Wherehouse does not authenticate web requests itself. Access control is the resp
 - No credential storage, password hashing, session handling, or 401 middleware in `internal/web`.
 - Running `serve` on a reachable interface without a proxy exposes the inventory to anyone on that network; this is the operator's responsibility and is documented in `serve --help`.
 - When an actor header is configured and the bind address is not loopback, `serve` warns at startup but still runs. Proxies in a separate container legitimately need a non-loopback bind, so refusing would break valid deployments; the shipped container image binds `0.0.0.0`, which in a Tailscale-sidecar namespace exposes the listener on the tailnet IP and lets peers bypass Serve and forge the header.
-- The identity header is only trustworthy when the proxy overwrites or strips any client-supplied copy and nothing can reach the listener directly (e.g. `--bind 127.0.0.1` inside the proxy's network namespace).
+- The identity header is only trustworthy when the proxy overwrites or strips any client-supplied copy and nothing can reach the listener directly (e.g. `--bind 127.0.0.1` inside the proxy's network namespace). In Tailscale's userspace-networking mode (the `tailscale/tailscale` image default), traffic to the node's tailnet IP is delivered to loopback, so a loopback bind is not sufficient there; kernel networking mode (`TS_USERSPACE=false`), or ACLs restricting the node to the Serve port, is required.
 
 ## Considered Options
 
