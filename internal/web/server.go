@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
@@ -57,8 +58,12 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = logging.GetLogger()
 	}
+	cfg.ActorHeader = strings.TrimSpace(cfg.ActorHeader)
 	if cfg.ActorHeader != "" && !isHeaderToken(cfg.ActorHeader) {
-		return nil, fmt.Errorf("invalid actor header name %q", cfg.ActorHeader)
+		return nil, fmt.Errorf(
+			"invalid actor header name %q (check --actor-header / web.actor_header / WHEREHOUSE_WEB_ACTOR_HEADER)",
+			cfg.ActorHeader,
+		)
 	}
 
 	tmpl, err := parseTemplates(assetsFS)

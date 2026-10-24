@@ -76,6 +76,10 @@ func TestActor_Resolution(t *testing.T) {
 			"lowercase config name", "tailscale-user-login",
 			map[string]string{tsHeader: "alice@example.com"}, "", "alice@example.com",
 		},
+		{
+			"padded config name", " " + tsHeader + " \t",
+			map[string]string{tsHeader: "alice@example.com"}, "", "alice@example.com",
+		},
 		{"form user ignored when off", "", nil, "user=mallory", "webui"},
 		{
 			"form user ignored when on", tsHeader,
