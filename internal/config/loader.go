@@ -19,9 +19,8 @@ import (
 //   - WHEREHOUSE_CONFIG - custom config file path (overrides default file lookup)
 //   - WHEREHOUSE_DATABASE_PATH - database file path
 //   - WHEREHOUSE_USER_DEFAULT_IDENTITY - default user identity
-//   - WHEREHOUSE_USER_OS_USERNAME_MAP - OS username mapping (not commonly used)
 //   - WHEREHOUSE_OUTPUT_DEFAULT_FORMAT - default output format (human or json)
-//   - WHEREHOUSE_OUTPUT_QUIET - quiet mode (true or false)
+//   - WHEREHOUSE_OUTPUT_QUIET - quiet level (0, 1, or 2)
 //
 // Precedence order (highest to lowest):
 //  1. Command-line flags (handled by caller)
@@ -45,6 +44,15 @@ func loadConfig(fs afero.Fs, filepath string) (*Config, error) {
 	// Set key replacer for environment variables: "." → "_"
 	// Example: "output.default_format" → "WHEREHOUSE_OUTPUT_DEFAULT_FORMAT"
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// AutomaticEnv only applies to keys viper already knows about; Unmarshal
+	// does not discover env vars on its own. Bind every key explicitly so env
+	// vars work even when no config file is loaded.
+	for _, key := range envBoundKeys {
+		if err := v.BindEnv(key); err != nil {
+			return nil, fmt.Errorf("binding env for %q: %w", key, err)
+		}
+	}
 
 	// Set config file type
 	v.SetConfigType("toml")
@@ -71,6 +79,20 @@ func loadConfig(fs afero.Fs, filepath string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// envBoundKeys lists every config key that can be overridden by a
+// WHEREHOUSE_* environment variable. user.os_username_map is omitted: a
+// single env string cannot decode into a map and would fail loading.
+var envBoundKeys = []string{
+	"database.path",
+	"logging.file_path",
+	"logging.level",
+	"logging.max_size_mb",
+	"logging.max_backups",
+	"user.default_identity",
+	"output.default_format",
+	"output.quiet",
 }
 
 // loadDefaultConfigs loads configuration from default locations.
