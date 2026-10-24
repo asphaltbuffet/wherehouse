@@ -46,7 +46,10 @@ Run locally after the release PR merges. Takes no argument:
 1. Extract the version from the tag name
 2. `mise run generate`, `mise run completions`, `mise run manpages`
 3. Fail unless `CHANGELOG.md` has a `## [<version>]` entry
-4. Run goreleaser with `--release-notes=.changes/<version>.md` (currently mismatched with changie's `v`-prefixed filename, so releases ship with empty notes; see #269)
+4. Fail unless `.changes/v<version>.md` exists and is non-empty
+5. Run goreleaser with `--release-notes=.changes/v<version>.md`
+
+goreleaser's `changelog.disable` must stay off in `.goreleaser.yml`. goreleaser reads `--release-notes` inside its changelog pipe, so disabling that pipe silently drops the notes and publishes an empty release body (this happened for v0.1.0–v0.6.2).
 
 Here `<version>` is the bare semver (e.g. `0.6.2`); tags and changie version files carry the `v` prefix.
 

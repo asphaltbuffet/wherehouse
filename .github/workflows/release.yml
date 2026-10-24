@@ -54,6 +54,10 @@ jobs:
             exit 1
           fi
 
+      - name: Assert release notes file exists
+        run: |
+          test -s ".changes/${GITHUB_REF_NAME}.md" || { echo "Error: .changes/${GITHUB_REF_NAME}.md missing or empty"; exit 1; }
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
@@ -72,7 +76,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: "~> v2"
-          args: release --clean --release-notes=".changes/${{ steps.version.outputs.version }}.md"
+          args: release --clean --release-notes=".changes/${{ github.ref_name }}.md"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}

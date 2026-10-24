@@ -51,9 +51,6 @@ checksum:
 snapshot:
   version_template: "{{ .Version }}-snapshot"
 
-changelog:
-  disable: true
-
 release:
   github:
     owner: asphaltbuffet
