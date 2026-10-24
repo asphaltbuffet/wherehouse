@@ -37,13 +37,19 @@
     quiet = cfg.settings.output.quiet;
   };
 
+  # Build the [web] section, omitting null values.
+  webSettings = lib.filterAttrs (_: v: v != null) {
+    actor_header = cfg.settings.web.actorHeader;
+  };
+
   # Assemble only non-empty sections so wherehouse runtime defaults
   # (XDG dirs, OS username, etc.) are not overridden when unset.
   settingsToml =
     lib.optionalAttrs (dbSettings != {}) {database = dbSettings;}
     // lib.optionalAttrs (loggingSettings != {}) {logging = loggingSettings;}
     // lib.optionalAttrs (userSettings != {}) {user = userSettings;}
-    // lib.optionalAttrs (outputSettings != {}) {output = outputSettings;};
+    // lib.optionalAttrs (outputSettings != {}) {output = outputSettings;}
+    // lib.optionalAttrs (webSettings != {}) {web = webSettings;};
 in {
   options.programs.wherehouse = {
     enable = lib.mkEnableOption "wherehouse, a personal inventory tracker";
@@ -158,6 +164,20 @@ in {
             When null, defaults to false.
           '';
           example = false;
+        };
+      };
+
+      web = {
+        actorHeader = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = ''
+            Request header set by a trusted reverse proxy whose value is
+            recorded as the actor for web UI changes (e.g. Tailscale-User-Login).
+            Only safe when the proxy overwrites the header and is the sole path
+            to the listener. When null, web changes are recorded as "webui".
+          '';
+          example = "Tailscale-User-Login";
         };
       };
     };

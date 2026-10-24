@@ -28,6 +28,7 @@ type Config struct {
 	Logging  LoggingConfig  `mapstructure:"logging"  toml:"logging"`
 	User     UserConfig     `mapstructure:"user"     toml:"user"`
 	Output   OutputConfig   `mapstructure:"output"   toml:"output"`
+	Web      WebConfig      `mapstructure:"web"      toml:"web"`
 }
 
 // LoggingConfig holds logging-related configuration.
@@ -66,6 +67,14 @@ type UserConfig struct {
 type OutputConfig struct {
 	DefaultFormat string `mapstructure:"default_format" toml:"default_format"`
 	Quiet         int    `mapstructure:"quiet"          toml:"quiet"`
+}
+
+// WebConfig holds web server configuration.
+type WebConfig struct {
+	// ActorHeader names a request header, set by a trusted reverse proxy,
+	// whose value is recorded as the event actor. Empty disables it.
+	// See ADR 0031.
+	ActorHeader string `mapstructure:"actor_header" toml:"actor_header"`
 }
 
 // New creates a Config instance with the given optional filepath.
