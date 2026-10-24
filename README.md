@@ -122,10 +122,50 @@ docker run -d --name wherehouse \
 - **Bind mounts**: the image runs as uid `65532`. To mount a host directory, either `chown 65532:65532` it or run with `--user "$(id -u):$(id -g)"`; otherwise startup fails with `unable to open database file`.
 - **Arguments**: anything after the image name is passed to `wherehouse serve`, e.g. `... wherehouse:latest --port 9090`.
 - **Configuration**: set `WHEREHOUSE_*` environment variables (see [Environment Variables](#environment-variables)), or put a `wherehouse.toml` in `/data`.
-- **Identity**: web edits are recorded as user `unknown` unless you set `-e WHEREHOUSE_USER_DEFAULT_IDENTITY=<name>`.
+- **Identity**: web edits are recorded as actor `webui`. Behind an authenticating proxy, set `-e WHEREHOUSE_WEB_ACTOR_HEADER=<header>` to record the proxy's user instead — see [Behind Tailscale Serve](#behind-tailscale-serve).
 - **Logs**: written to stderr; view with `docker logs wherehouse`. Leave `logging.max_size_mb` unset.
 - **Health**: `GET /healthz` returns 200 when the server is up. Use it for orchestrator probes; the image has no `HEALTHCHECK`.
 - **CLI commands**: run them against the same volume with `docker run --rm -v wherehouse:/data --entrypoint /usr/bin/wherehouse ghcr.io/asphaltbuffet/wherehouse:latest doctor`.
+
+#### Behind Tailscale Serve
+
+wherehouse does no authentication of its own ([ADR 0031](docs/adr/0031-web-authentication-delegated-to-trusted-proxy.md)). Put it behind Tailscale Serve, which authenticates tailnet users and sets `Tailscale-User-Login`, and bind to loopback so Serve is the only way in:
+
+```yaml
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: wherehouse
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+  wherehouse:
+    image: ghcr.io/asphaltbuffet/wherehouse:latest
+    network_mode: service:tailscale
+    command: ["--bind", "127.0.0.1"]   # overrides the image's 0.0.0.0
+    environment:
+      - WHEREHOUSE_WEB_ACTOR_HEADER=Tailscale-User-Login
+    volumes:
+      - wherehouse:/data
+volumes:
+  ts-state:
+  wherehouse:
+```
+
+`serve.json`:
+
+```json
+{
+  "TCP": { "443": { "HTTPS": true } },
+  "Web": { "${TS_CERT_DOMAIN}:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:8080" } } } }
+}
+```
+
+Without `--bind 127.0.0.1`, the listener is reachable on the node's tailnet IP and any peer can bypass Serve and forge the header; `serve` prints a warning at startup in that case. The page header shows `acting as …` so you can confirm the identity arrives.
 
 ---
 
@@ -290,6 +330,7 @@ wherehouse serve
 # Custom port or bind address
 wherehouse serve --port 9090
 wherehouse serve --bind 0.0.0.0   # share on LAN
+wherehouse serve --actor-header Tailscale-User-Login   # trust a proxy identity header
 ```
 
 Open `http://localhost:8080` in your browser. From the UI you can browse the full entity tree, search, add entities, edit names, and toggle item status.
@@ -321,7 +362,7 @@ Status:
   doctor               Check inventory health (--rebuild, --rebuild --force)
 
 Web UI:
-  serve                Start local web server (--port, --bind)
+  serve                Start local web server (--port, --bind, --actor-header)
 
 Configuration:
   config init          Create config file with defaults (--local, --force)
@@ -378,6 +419,9 @@ os_username_map = {}
 [output]
 default_format = "human"
 quiet = false
+
+[web]
+actor_header = ""
 ```
 
 ### Environment Variables
@@ -387,6 +431,7 @@ export WHEREHOUSE_DATABASE_PATH="/mnt/nas/wherehouse.db"
 export WHEREHOUSE_CONFIG="$HOME/projects/workshop/wherehouse.toml"
 export WHEREHOUSE_LOG_PATH="/var/log/wherehouse/wherehouse.log"
 export WHEREHOUSE_OUTPUT_DEFAULT_FORMAT="json"
+export WHEREHOUSE_WEB_ACTOR_HEADER="Tailscale-User-Login"
 ```
 
 ### Home Manager
@@ -411,6 +456,10 @@ programs.wherehouse = {
       defaultFormat = "human";
       quiet = false;
     };
+
+    web = {
+      actorHeader = "Tailscale-User-Login";
+    };
   };
 };
 ```
@@ -426,6 +475,7 @@ programs.wherehouse = {
 | `settings.user.osUsernameMap` | attrset | `{}` | Map OS usernames to display names |
 | `settings.output.defaultFormat` | `"human"` \| `"json"` | `"human"` | Default output format |
 | `settings.output.quiet` | bool | `false` | Suppress non-essential output |
+| `settings.web.actorHeader` | string \| `null` | `null` | Trusted reverse-proxy header whose value is recorded as the web actor (see [Behind Tailscale Serve](#behind-tailscale-serve)) |
 
 ---
 
