@@ -203,7 +203,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	_, err = s.cfg.App.RenameEntity(r.Context(), app.RenameEntityRequest{
 		EntityID: entityID,
 		NewName:  newName,
-		ActorID:  "webui",
+		ActorID:  s.actorFor(r),
 	})
 	if err != nil {
 		s.cfg.Logger.Error("rename entity", "error", err, "entity_id", entityID)
@@ -255,7 +255,7 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 	_, err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
 		EntityID: entityID,
 		Status:   target,
-		ActorID:  "webui",
+		ActorID:  s.actorFor(r),
 	})
 	if err != nil {
 		s.cfg.Logger.Error("change status", "error", err, "entity_id", entityID)

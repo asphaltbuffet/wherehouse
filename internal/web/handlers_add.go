@@ -65,15 +65,10 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 		return
 	}
 
-	actor := strings.TrimSpace(r.FormValue("user"))
-	if actor == "" {
-		actor = "webui"
-	}
-
 	created, err := s.cfg.App.CreateEntity(r.Context(), app.CreateEntityRequest{
 		DisplayName: displayName,
 		ParentPath:  parentPath,
-		ActorID:     actor,
+		ActorID:     s.actorFor(r),
 	})
 	if err != nil {
 		s.serverError(w, "create entity", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -26,6 +27,7 @@ type fakeApp struct {
 	statusErr    error
 	findResults  []app.FindResult
 	findErr      error
+	lastActor    string // ActorID from the most recent mutating call
 }
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
@@ -61,15 +63,18 @@ func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.
 	return f.history, f.err
 }
 
-func (f *fakeApp) CreateEntity(_ context.Context, _ app.CreateEntityRequest) (app.EntityResult, error) {
+func (f *fakeApp) CreateEntity(_ context.Context, req app.CreateEntityRequest) (app.EntityResult, error) {
+	f.lastActor = req.ActorID
 	return app.EntityResult{}, f.err
 }
 
-func (f *fakeApp) RenameEntity(_ context.Context, _ app.RenameEntityRequest) (app.EntityResult, error) {
+func (f *fakeApp) RenameEntity(_ context.Context, req app.RenameEntityRequest) (app.EntityResult, error) {
+	f.lastActor = req.ActorID
 	return f.renameResult, f.renameErr
 }
 
-func (f *fakeApp) ChangeStatus(_ context.Context, _ app.ChangeStatusRequest) (app.EntityResult, error) {
+func (f *fakeApp) ChangeStatus(_ context.Context, req app.ChangeStatusRequest) (app.EntityResult, error) {
+	f.lastActor = req.ActorID
 	return app.EntityResult{}, f.statusErr
 }
 
@@ -87,4 +92,12 @@ func newTestServer(t *testing.T, a web.App) *httptest.Server {
 	})
 	require.NoError(t, err)
 	return httptest.NewServer(srv.Handler())
+}
+
+// newActorHandler builds a server that trusts header (may be "") for the actor.
+func newActorHandler(t *testing.T, a web.App, header string) http.Handler {
+	t.Helper()
+	srv, err := web.New(web.Config{App: a, Output: io.Discard, ActorHeader: header})
+	require.NoError(t, err)
+	return srv.Handler()
 }

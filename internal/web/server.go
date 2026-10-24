@@ -28,6 +28,11 @@ type Config struct {
 	Port   int
 	Output io.Writer      // destination for the startup URL line; defaults to os.Stdout
 	Logger logging.Logger // structured logger; defaults to logging.GetLogger()
+
+	// ActorHeader names a request header, set by a trusted reverse proxy,
+	// whose value is recorded as the event actor. Empty disables it.
+	// See ADR 0031.
+	ActorHeader string
 }
 
 // Server is the wherehouse web server.
@@ -47,6 +52,9 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = logging.GetLogger()
+	}
+	if cfg.ActorHeader != "" && !isHeaderToken(cfg.ActorHeader) {
+		return nil, fmt.Errorf("invalid actor header name %q", cfg.ActorHeader)
 	}
 
 	tmpl, err := parseTemplates(assetsFS)
