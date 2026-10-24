@@ -106,6 +106,27 @@ nix profile install github:asphaltbuffet/wherehouse/v0.6.1
 }
 ```
 
+### Container
+
+A multi-arch (`linux/amd64`, `linux/arm64`) image runs the web UI:
+
+```bash
+docker run -d --name wherehouse \
+  -p 8080:8080 \
+  -v wherehouse:/data \
+  ghcr.io/asphaltbuffet/wherehouse:latest
+```
+
+- **Tags**: `X.Y.Z` (exact), `X.Y` (latest patch), `latest` (latest stable). Prereleases get only `X.Y.Z-rc.N`.
+- **Data**: the database is `/data/wherehouse.db`. Keep `/data` on a volume, or you lose the event log when the container is removed.
+- **Bind mounts**: the image runs as uid `65532`. To mount a host directory, either `chown 65532:65532` it or run with `--user "$(id -u):$(id -g)"`; otherwise startup fails with `unable to open database file`.
+- **Arguments**: anything after the image name is passed to `wherehouse serve`, e.g. `... wherehouse:latest --port 9090`.
+- **Configuration**: set `WHEREHOUSE_*` environment variables (see [Environment Variables](#environment-variables)), or put a `wherehouse.toml` in `/data`.
+- **Identity**: web edits are recorded as user `unknown` unless you set `-e WHEREHOUSE_USER_DEFAULT_IDENTITY=<name>`.
+- **Logs**: written to stderr; view with `docker logs wherehouse`. Leave `logging.max_size_mb` unset.
+- **Health**: `GET /healthz` returns 200 when the server is up. Use it for orchestrator probes; the image has no `HEALTHCHECK`.
+- **CLI commands**: run them against the same volume with `docker run --rm -v wherehouse:/data --entrypoint /usr/bin/wherehouse ghcr.io/asphaltbuffet/wherehouse:latest doctor`.
+
 ---
 
 ## Quick Start
