@@ -100,7 +100,6 @@
             gopls
             nixd
             pkgs.nur.repos.goreleaser.goreleaser-pro
-            gomod2nix.packages.${system}.default
             uv
             nodejs
             gh
