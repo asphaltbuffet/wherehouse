@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net"
 	"net/http"
 	"strings"
 )
@@ -68,4 +69,13 @@ func (s *Server) actorView(r *http.Request) actorView {
 	default:
 		return actorView{Name: name, Source: "header " + header + " not received"}
 	}
+}
+
+// isLoopbackBind reports whether bind only accepts connections from this host.
+func isLoopbackBind(bind string) bool {
+	if strings.EqualFold(bind, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(bind)
+	return ip != nil && ip.IsLoopback()
 }

@@ -23,11 +23,12 @@ const (
 
 // Config holds all configuration for the web server.
 type Config struct {
-	App    App
-	Bind   string
-	Port   int
-	Output io.Writer      // destination for the startup URL line; defaults to os.Stdout
-	Logger logging.Logger // structured logger; defaults to logging.GetLogger()
+	App       App
+	Bind      string
+	Port      int
+	Output    io.Writer      // destination for the startup URL line; defaults to os.Stdout
+	ErrOutput io.Writer      // destination for startup warnings; defaults to os.Stderr
+	Logger    logging.Logger // structured logger; defaults to logging.GetLogger()
 
 	// ActorHeader names a request header, set by a trusted reverse proxy,
 	// whose value is recorded as the event actor. Empty disables it.
@@ -46,6 +47,9 @@ type Server struct {
 func New(cfg Config) (*Server, error) {
 	if cfg.Output == nil {
 		cfg.Output = os.Stdout
+	}
+	if cfg.ErrOutput == nil {
+		cfg.ErrOutput = os.Stderr
 	}
 	if cfg.Bind == "" {
 		cfg.Bind = "127.0.0.1"
@@ -82,6 +86,15 @@ func New(cfg Config) (*Server, error) {
 // or an OS interrupt (SIGINT/SIGTERM) is received, then shuts down gracefully.
 func (s *Server) Run(ctx context.Context) error {
 	addr := "http://" + net.JoinHostPort(s.cfg.Bind, strconv.Itoa(s.cfg.Port))
+	if s.cfg.ActorHeader != "" && !isLoopbackBind(s.cfg.Bind) {
+		header := http.CanonicalHeaderKey(s.cfg.ActorHeader)
+		fmt.Fprintf(s.cfg.ErrOutput,
+			"warning: trusting identity header %s on non-loopback address %s; "+
+				"any client that can reach this address directly can forge it\n",
+			header, s.cfg.Bind)
+		s.cfg.Logger.Warn("actor header trusted on non-loopback bind",
+			"header", header, "bind", s.cfg.Bind)
+	}
 	fmt.Fprintln(s.cfg.Output, "Listening on", addr)
 
 	errCh := make(chan error, 1)
