@@ -59,6 +59,7 @@ func WriteDefault(fs afero.Fs, path string, force bool) error {
 	v.SetDefault("user.os_username_map", defaults.User.OSUsernameMap)
 	v.SetDefault("output.default_format", defaults.Output.DefaultFormat)
 	v.SetDefault("output.quiet", defaults.Output.Quiet)
+	v.SetDefault("web.actor_header", defaults.Web.ActorHeader)
 
 	return v.WriteConfigAs(path)
 }
@@ -150,6 +151,8 @@ func GetValue(cfg *Config, key string) (any, error) {
 		return cfg.Output.DefaultFormat, nil
 	case "output.quiet":
 		return cfg.Output.Quiet, nil
+	case "web.actor_header":
+		return cfg.Web.ActorHeader, nil
 	default:
 		return nil, fmt.Errorf("unknown configuration key %q", key)
 	}
@@ -196,6 +199,9 @@ func parseConfigValue(key, value string) (any, error) {
 			return nil, fmt.Errorf("output.quiet must be 'true' or 'false', got %q", value)
 		}
 		return b, nil
+	case "web.actor_header":
+		// Name validity is checked by web.New at startup; config must not import internal/web.
+		return value, nil
 	default:
 		return nil, fmt.Errorf("unknown configuration key %q", key)
 	}

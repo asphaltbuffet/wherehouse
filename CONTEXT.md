@@ -106,7 +106,10 @@ Adding a tag that already exists, or removing a tag that is not present, is a si
 
 ### Actor
 
-The user attributed to an event. Defaults to the OS username. Stored as `actor_user_id` on every event. Attribution only — no access control.
+The user attributed to an event. Stored as `actor_user_id` on every event. Attribution only — no access control.
+
+- **CLI:** the configured/`--as` identity, else the (optionally mapped) OS username.
+- **Web UI:** the identity asserted by a trusted reverse proxy, recorded verbatim (e.g. `alice@example.com`); `webui` when no such identity is present. The web UI never lets the visitor choose their own actor. The same person may therefore appear under different actor strings from CLI and web.
 
 ### DoctorIssue
 

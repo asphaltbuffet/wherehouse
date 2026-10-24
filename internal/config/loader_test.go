@@ -17,6 +17,7 @@ func TestLoadConfig_EnvWithoutConfigFile(t *testing.T) {
 	t.Setenv("WHEREHOUSE_LOGGING_LEVEL", "debug")
 	t.Setenv("WHEREHOUSE_USER_DEFAULT_IDENTITY", "web")
 	t.Setenv("WHEREHOUSE_OUTPUT_DEFAULT_FORMAT", "json")
+	t.Setenv("WHEREHOUSE_WEB_ACTOR_HEADER", "Tailscale-User-Login")
 
 	cfg, err := loadConfig(afero.NewMemMapFs(), "")
 	require.NoError(t, err)
@@ -26,6 +27,7 @@ func TestLoadConfig_EnvWithoutConfigFile(t *testing.T) {
 	assert.Equal(t, "debug", cfg.Logging.Level)
 	assert.Equal(t, "web", cfg.User.DefaultIdentity)
 	assert.Equal(t, "json", cfg.Output.DefaultFormat)
+	assert.Equal(t, "Tailscale-User-Login", cfg.Web.ActorHeader)
 }
 
 // TestLoadConfig_MapEnvIgnored verifies a map-typed key set via env does not

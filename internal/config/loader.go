@@ -21,6 +21,7 @@ import (
 //   - WHEREHOUSE_USER_DEFAULT_IDENTITY - default user identity
 //   - WHEREHOUSE_OUTPUT_DEFAULT_FORMAT - default output format (human or json)
 //   - WHEREHOUSE_OUTPUT_QUIET - quiet level (0, 1, or 2)
+//   - WHEREHOUSE_WEB_ACTOR_HEADER - request header recorded as the web actor
 //
 // Precedence order (highest to lowest):
 //  1. Command-line flags (handled by caller)
@@ -93,6 +94,7 @@ var envBoundKeys = []string{
 	"user.default_identity",
 	"output.default_format",
 	"output.quiet",
+	"web.actor_header",
 }
 
 // loadDefaultConfigs loads configuration from default locations.

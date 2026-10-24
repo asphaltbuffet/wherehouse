@@ -27,6 +27,7 @@ type detailData struct {
 // detailPageData wraps detailData with the tree roots for full-page (non-HTMX) renders.
 type detailPageData struct {
 	Detail detailData
+	Actor  actorView
 	Roots  []app.EntityResult
 }
 
@@ -151,7 +152,7 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 			roots = append(roots, e)
 		}
 	}
-	s.renderHTML(w, "detail", detailPageData{Detail: data, Roots: roots})
+	s.renderHTML(w, "detail", detailPageData{Detail: data, Roots: roots, Actor: s.actorView(r)})
 }
 
 func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +204,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	_, err = s.cfg.App.RenameEntity(r.Context(), app.RenameEntityRequest{
 		EntityID: entityID,
 		NewName:  newName,
-		ActorID:  "webui",
+		ActorID:  s.actorFor(r),
 	})
 	if err != nil {
 		s.cfg.Logger.Error("rename entity", "error", err, "entity_id", entityID)
@@ -255,7 +256,7 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 	_, err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
 		EntityID: entityID,
 		Status:   target,
-		ActorID:  "webui",
+		ActorID:  s.actorFor(r),
 	})
 	if err != nil {
 		s.cfg.Logger.Error("change status", "error", err, "entity_id", entityID)

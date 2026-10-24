@@ -34,6 +34,7 @@ func TestWriteDefault_AllDefaultsRoundTrip(t *testing.T) {
 	assert.Equal(t, defaults.User.DefaultIdentity, v.GetString("user.default_identity"))
 	assert.Equal(t, defaults.Output.DefaultFormat, v.GetString("output.default_format"))
 	assert.Equal(t, defaults.Output.Quiet, v.GetInt("output.quiet"))
+	assert.Equal(t, defaults.Web.ActorHeader, v.GetString("web.actor_header"))
 }
 
 // TestWriteDefault_CreatesFile verifies file is created.
@@ -155,6 +156,12 @@ func TestSet_UpdatesValue(t *testing.T) {
 			key:   "output.quiet",
 			value: "false",
 			want:  false,
+		},
+		{
+			name:  "web.actor_header",
+			key:   "web.actor_header",
+			value: "Tailscale-User-Login",
+			want:  "Tailscale-User-Login",
 		},
 	}
 
@@ -368,6 +375,14 @@ func TestGetValue_AllKeys(t *testing.T) {
 				cfg.Output.Quiet = 1
 			},
 			want: 1,
+		},
+		{
+			name: "web.actor_header",
+			key:  "web.actor_header",
+			setupCfg: func(cfg *Config) {
+				cfg.Web.ActorHeader = "Tailscale-User-Login"
+			},
+			want: "Tailscale-User-Login",
 		},
 	}
 
