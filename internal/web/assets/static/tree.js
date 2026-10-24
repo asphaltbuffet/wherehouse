@@ -166,11 +166,12 @@
   }
 
   // After the "+ Add root" GET fetches the form into #add-modal-body,
-  // show the dialog.
+  // show the dialog. htmx dispatches afterRequest on the requesting
+  // element, so match on the swap target in e.detail instead.
   function onAddRootAfterRequest(e) {
-    if (e.target && e.target.id === 'add-modal-body') {
-      document.getElementById('add-modal').showModal();
-    }
+    if (!e.detail || !e.detail.target || e.detail.target.id !== 'add-modal-body') return;
+    var dialog = document.getElementById('add-modal');
+    if (dialog && !dialog.open) dialog.showModal();
   }
 
   // Add child button inside the detail pane action menu.

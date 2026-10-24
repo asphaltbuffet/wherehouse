@@ -1,0 +1,5 @@
+kind: Changed
+body: Update go to 1.26.10 and updated dependencies.
+time: 2026-10-24T13:43:46.652537801-04:00
+custom:
+    Issue: '#225'

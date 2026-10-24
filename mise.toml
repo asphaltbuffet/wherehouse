@@ -123,7 +123,9 @@ depends_post = ["nix-hash"]
 description = "Update gomod2nix.toml dependency lockfile"
 sources = ["go.sum"]
 outputs = ["gomod2nix.toml"]
-run = "gomod2nix generate"
+# Resolve mise's pinned gomod2nix explicitly: direnv/nix PATH entries can
+# shadow it, and other builds format gomod2nix.toml differently (CI diffs it).
+run = '"$(mise which gomod2nix)" generate'
 
 [tasks.snapshot]
 description = "goreleaser build snapshot"
