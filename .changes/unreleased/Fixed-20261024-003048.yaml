@@ -1,5 +1,0 @@
-kind: Fixed
-body: WHEREHOUSE_* environment variables are now applied when no config file exists
-time: 2026-10-24T00:30:48.633582564-04:00
-custom:
-    Issue: ""
