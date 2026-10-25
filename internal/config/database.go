@@ -83,10 +83,18 @@ func DefaultDatabasePath() string {
 	}
 }
 
-// GetDatabasePath returns the resolved database path with the following precedence:
-//  1. Explicit config file setting (cfg.Database.Path)
-//  2. WHEREHOUSE_DB_PATH environment variable
-//  3. Platform-specific default (via DefaultDatabasePath)
+// LegacyDBPathEnv is the removed database path environment variable. It is
+// no longer read; LegacyDBPathSet lets callers warn users who still set it.
+const LegacyDBPathEnv = "WHEREHOUSE_DB_PATH"
+
+// LegacyDBPathSet reports whether the removed WHEREHOUSE_DB_PATH is set.
+func LegacyDBPathSet() bool {
+	return os.Getenv(LegacyDBPathEnv) != ""
+}
+
+// GetDatabasePath returns the resolved database path:
+//  1. cfg.Database.Path (config file, WHEREHOUSE_DATABASE_PATH, or --db), expanded
+//  2. Platform-specific default (via DefaultDatabasePath)
 //
 // Paths are expanded (~ and env vars) and converted to absolute paths.
 // Returns error if path expansion fails or path is invalid.
@@ -94,22 +102,10 @@ func DefaultDatabasePath() string {
 // Note: This does NOT create directories. The parent directory must exist
 // for database creation to succeed.
 func (c *Config) GetDatabasePath() (string, error) {
-	var rawPath string
-
-	// Priority 1: Explicit config file setting
-	if c.Database.Path != "" {
-		rawPath = c.Database.Path
-	} else {
-		// Priority 2: Environment variable
-		if envPath := os.Getenv("WHEREHOUSE_DB_PATH"); envPath != "" {
-			rawPath = envPath
-		} else {
-			// Priority 3: Platform-specific default
-			// Default is already absolute, no expansion needed
-			return DefaultDatabasePath(), nil
-		}
+	if c.Database.Path == "" {
+		// Default is already absolute, no expansion needed
+		return DefaultDatabasePath(), nil
 	}
 
-	// Expand path (handles ~ and env vars)
-	return ExpandPath(rawPath)
+	return ExpandPath(c.Database.Path)
 }
