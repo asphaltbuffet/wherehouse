@@ -35,6 +35,7 @@ Always run `mise run lint` and `mise run test` before committing.
 3. Add a `changie new` fragment for user-visible changes to the binary or image (not for docs-only changes)
 4. After features or fixes, update README.md, `docs/`, and CONTEXT.md where behavior or terminology changed
 5. Track deferred work as GitHub Issues (`github.com/asphaltbuffet/wherehouse`), not as TODOs in CLAUDE.md or comments in code
+6. Open PRs per `docs/agents/pull-requests.md`
 
 ## Architecture: Event Sourcing
 
@@ -180,6 +181,10 @@ Custom label vocabulary in use (e.g. `to_triage`, `ready_afk`). See `docs/agents
 ### Domain docs
 
 Single-context repo: one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+### Pull requests
+
+PR bodies follow `.github/pull_request_template.md`, which `gh pr create --body-file` bypasses. See `docs/agents/pull-requests.md`.
 
 ### Serena MCP — what to use and what to avoid
 
