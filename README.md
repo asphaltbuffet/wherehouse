@@ -121,7 +121,7 @@ docker run -d --name wherehouse \
 - **Data**: the database is `/data/wherehouse.db`. Keep `/data` on a volume, or you lose the event log when the container is removed.
 - **Bind mounts**: the image runs as uid `65532`. To mount a host directory, either `chown 65532:65532` it or run with `--user "$(id -u):$(id -g)"`; otherwise startup fails with `unable to open database file`.
 - **Arguments**: anything after the image name is passed to `wherehouse serve`, e.g. `... wherehouse:latest --port 9090`.
-- **Configuration**: set `WHEREHOUSE_*` environment variables (see [Environment Variables](#environment-variables)), or put a `wherehouse.toml` in `/data`.
+- **Configuration**: set `WHEREHOUSE_*` environment variables (see [Environment Variables](#environment-variables)), or put a `wherehouse.toml` in `/data` (found as `./wherehouse.toml` because the working directory is `/data`). The image presets `WHEREHOUSE_DATABASE_PATH` and `WHEREHOUSE_LOGGING_FILE_PATH`, and environment variables override the file, so `database.path` and `logging.file_path` in the file are ignored; change them with `-e` instead.
 - **Identity**: web edits are recorded as actor `webui`. Only when the container sits behind an authenticating proxy that is its sole ingress (e.g. the sidecar recipe), set `WHEREHOUSE_WEB_ACTOR_HEADER=<header>` to record the proxy's user instead. Never set it together with `-p` publishing the port directly: anyone who reaches the port can forge the header. See [Behind Tailscale Serve](#behind-tailscale-serve).
 - **Logs**: written to stderr (`WHEREHOUSE_LOGGING_FILE_PATH=-`); view with `docker logs wherehouse`. Setting `logging.max_size_mb` with the stderr sink is a configuration error.
 - **Health**: `GET /healthz` returns 200 when the server is up. Use it for orchestrator probes; the image has no `HEALTHCHECK`.
@@ -433,6 +433,8 @@ actor_header = ""
 ```
 
 ### Environment Variables
+
+Environment variables override values from any config file; command-line flags (e.g. `--db`) override both.
 
 ```bash
 export WHEREHOUSE_DATABASE_PATH="/mnt/nas/wherehouse.db"

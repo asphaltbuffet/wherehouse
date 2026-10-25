@@ -31,9 +31,9 @@ Always run `mise run lint` and `mise run test` before committing.
 ## Task Completion Checklist
 
 1. Fix all warnings (`mise run lint`, `mise run test`, compiler)
-2. Run `/pre-commit` skill before every commit
-3. Run `/commit` skill for message conventions (conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`)
-4. Run `/audit-docs` after features or fixes
+2. Describe changes with conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`); add `Closes #N` when resolving an issue
+3. Add a `changie new` fragment for user-visible changes to the binary or image (not for docs-only changes)
+4. After features or fixes, update README.md, `docs/`, and CONTEXT.md where behavior or terminology changed
 5. Track deferred work as GitHub Issues (`github.com/asphaltbuffet/wherehouse`), not as TODOs in CLAUDE.md or comments in code
 
 ## Architecture: Event Sourcing
