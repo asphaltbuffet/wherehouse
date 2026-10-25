@@ -115,10 +115,10 @@ func TestInitConfig_NoConfigFlagLogic(t *testing.T) {
 
 	testCmd := &cobra.Command{}
 	testCmd.SetContext(t.Context())
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
-	require.NoError(t, testCmd.PersistentFlags().Set("no-config", "true"))
+	require.NoError(t, testCmd.Flags().Set("no-config", "true"))
 
 	// Call initConfig
 	require.NoError(t, initConfig(testCmd, []string{}))
@@ -139,10 +139,10 @@ func TestInitConfig_SetsContextWithConfig(t *testing.T) {
 
 	testCmd := &cobra.Command{}
 	testCmd.SetContext(t.Context())
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
-	require.NoError(t, testCmd.PersistentFlags().Set("no-config", "true"))
+	require.NoError(t, testCmd.Flags().Set("no-config", "true"))
 
 	// Call initConfig
 	require.NoError(t, initConfig(testCmd, []string{}))
@@ -164,8 +164,8 @@ func TestInitConfig_ContextPreservesExistingValues(t *testing.T) {
 	cmd := GetRootCmd()
 
 	testCmd := &cobra.Command{}
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
 	// Set context with existing value using a typed key
 	type ctxKey int
@@ -173,7 +173,7 @@ func TestInitConfig_ContextPreservesExistingValues(t *testing.T) {
 	ctx := context.WithValue(t.Context(), customKeyType, "customValue")
 	testCmd.SetContext(ctx)
 
-	require.NoError(t, testCmd.PersistentFlags().Set("no-config", "true"))
+	require.NoError(t, testCmd.Flags().Set("no-config", "true"))
 
 	// Call initConfig
 	require.NoError(t, initConfig(testCmd, []string{}))
@@ -194,10 +194,10 @@ func TestInitConfig_DefaultsApplied(t *testing.T) {
 
 	testCmd := &cobra.Command{}
 	testCmd.SetContext(t.Context())
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
-	require.NoError(t, testCmd.PersistentFlags().Set("no-config", "true"))
+	require.NoError(t, testCmd.Flags().Set("no-config", "true"))
 
 	require.NoError(t, initConfig(testCmd, []string{}))
 
@@ -208,8 +208,8 @@ func TestInitConfig_DefaultsApplied(t *testing.T) {
 	assert.Equal(t, defaults.Output.Quiet, globalConfig.Output.Quiet)
 }
 
-// TestInitConfig_FallsBackToDefaultsWithoutFlags tests fallback when no flags and no config files exist.
-func TestInitConfig_FallsBackToDefaultsWithoutFlags(t *testing.T) {
+// TestInitConfig_DefaultsWhenNoConfigFiles tests that defaults apply when no config files exist.
+func TestInitConfig_DefaultsWhenNoConfigFiles(t *testing.T) {
 	rootCmd = nil
 	globalConfig = nil
 
@@ -217,10 +217,10 @@ func TestInitConfig_FallsBackToDefaultsWithoutFlags(t *testing.T) {
 
 	testCmd := &cobra.Command{}
 	testCmd.SetContext(t.Context())
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
-	// Don't set any flags - should fall back to defaults
+	// No flags set and no config files exist, so defaults apply
 	require.NoError(t, initConfig(testCmd, []string{}))
 
 	require.NotNil(t, globalConfig)
@@ -250,8 +250,8 @@ default_identity = "envuser"
 
 	testCmd := &cobra.Command{}
 	testCmd.SetContext(t.Context())
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
 	// Call initConfig with no config flag - should use WHEREHOUSE_CONFIG
 	require.NoError(t, initConfig(testCmd, []string{}))
@@ -270,10 +270,10 @@ func TestInitConfig_ReturnsNilError(t *testing.T) {
 
 	testCmd := &cobra.Command{}
 	testCmd.SetContext(t.Context())
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(cmd.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(cmd.PersistentFlags().Lookup("config"))
 
-	require.NoError(t, testCmd.PersistentFlags().Set("no-config", "true"))
+	require.NoError(t, testCmd.Flags().Set("no-config", "true"))
 
 	// Call initConfig
 	assert.NoError(t, initConfig(testCmd, []string{}))
@@ -292,8 +292,8 @@ func newInitConfigTestCmd(t *testing.T, parent *cobra.Command) (*cobra.Command, 
 		parent.AddCommand(testCmd)
 	}
 	testCmd.SetContext(t.Context())
-	testCmd.PersistentFlags().AddFlag(root.PersistentFlags().Lookup("no-config"))
-	testCmd.PersistentFlags().AddFlag(root.PersistentFlags().Lookup("config"))
+	testCmd.Flags().AddFlag(root.PersistentFlags().Lookup("no-config"))
+	testCmd.Flags().AddFlag(root.PersistentFlags().Lookup("config"))
 	var stderr bytes.Buffer
 	testCmd.SetErr(&stderr)
 	return testCmd, &stderr
@@ -344,7 +344,7 @@ func TestInitConfig_ConfigSubtreeFallsBackWithWarning(t *testing.T) {
 func TestInitConfig_WarnsOnLegacyLogPath(t *testing.T) {
 	t.Setenv(config.LegacyLogPathEnv, "/tmp/legacy.log")
 	testCmd, stderr := newInitConfigTestCmd(t, nil)
-	require.NoError(t, testCmd.PersistentFlags().Set("no-config", "true"))
+	require.NoError(t, testCmd.Flags().Set("no-config", "true"))
 
 	require.NoError(t, initConfig(testCmd, nil))
 
