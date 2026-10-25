@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,6 +17,10 @@ import (
 // logFileMode is the file permission for the log file.
 // Owner-only read/write since logs may contain sensitive path information.
 const logFileMode = 0o600
+
+// StderrPath is the log path sentinel that selects [os.Stderr] as the sink.
+// Rotation does not apply to it.
+const StderrPath = "-"
 
 // slogAdapter wraps [slog.Logger] to implement the Logger interface.
 // With() on slogAdapter returns another slogAdapter, satisfying Logger.
@@ -46,7 +51,7 @@ var (
 // Only the first call takes effect (sync.Once semantics). If the first call
 // fails, subsequent calls return the same error without retrying.
 //
-// logPath must be the resolved absolute path.
+// logPath must be the resolved absolute path, or StderrPath to log to [os.Stderr].
 // level is a string level name (ParseLevel converts it).
 // maxSizeMB == 0 disables rotation; > 0 enables lumberjack.
 // maxBackups is coerced to 3 if maxSizeMB > 0 and maxBackups == 0.
@@ -132,6 +137,14 @@ func ParseLevel(s string) slog.Level {
 // or configures lumberjack (rotation), and returns a Logger and its Closer.
 // No global state is touched.
 func newLogger(fs afero.Fs, logPath, level string, maxSizeMB, maxBackups int) (Logger, io.Closer, error) {
+	if logPath == StderrPath {
+		if maxSizeMB > 0 {
+			return nil, nil, errors.New("logging: stderr sink does not support rotation (max_size_mb > 0)")
+		}
+		// No closer: os.Stderr must outlive Close() so late errors still print.
+		return newSlogAdapter(os.Stderr, level), nil, nil
+	}
+
 	dir := filepath.Dir(logPath)
 
 	// Use afero for directory creation - enables MemMapFs in tests.
@@ -167,10 +180,13 @@ func newLogger(fs afero.Fs, logPath, level string, maxSizeMB, maxBackups int) (L
 		closer = f
 	}
 
-	lvl := ParseLevel(level)
-	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: lvl})
-	inner := slog.New(handler)
-	return &slogAdapter{inner: inner}, closer, nil
+	return newSlogAdapter(w, level), closer, nil
+}
+
+// newSlogAdapter builds a text-handler Logger writing to w at level.
+func newSlogAdapter(w io.Writer, level string) Logger {
+	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: ParseLevel(level)})
+	return &slogAdapter{inner: slog.New(handler)}
 }
 
 // activeLogger returns the initialized Logger or a no-op Logger.

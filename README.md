@@ -123,7 +123,7 @@ docker run -d --name wherehouse \
 - **Arguments**: anything after the image name is passed to `wherehouse serve`, e.g. `... wherehouse:latest --port 9090`.
 - **Configuration**: set `WHEREHOUSE_*` environment variables (see [Environment Variables](#environment-variables)), or put a `wherehouse.toml` in `/data`.
 - **Identity**: web edits are recorded as actor `webui`. Only when the container sits behind an authenticating proxy that is its sole ingress (e.g. the sidecar recipe), set `WHEREHOUSE_WEB_ACTOR_HEADER=<header>` to record the proxy's user instead. Never set it together with `-p` publishing the port directly: anyone who reaches the port can forge the header. See [Behind Tailscale Serve](#behind-tailscale-serve).
-- **Logs**: written to stderr; view with `docker logs wherehouse`. Leave `logging.max_size_mb` unset.
+- **Logs**: written to stderr (`WHEREHOUSE_LOGGING_FILE_PATH=-`); view with `docker logs wherehouse`. Setting `logging.max_size_mb` with the stderr sink is a configuration error.
 - **Health**: `GET /healthz` returns 200 when the server is up. Use it for orchestrator probes; the image has no `HEALTHCHECK`.
 - **CLI commands**: run them against the same volume with `docker run --rm -v wherehouse:/data --entrypoint /usr/bin/wherehouse ghcr.io/asphaltbuffet/wherehouse:latest doctor`.
 
@@ -416,6 +416,7 @@ path = "~/.local/share/wherehouse/wherehouse.db"
 [logging]
 level = "warn"
 # file_path = "~/.local/state/wherehouse/wherehouse.log"
+# file_path = "-"   # log to stderr; max_size_mb must stay 0
 # max_size_mb = 10
 # max_backups = 3
 
@@ -436,7 +437,7 @@ actor_header = ""
 ```bash
 export WHEREHOUSE_DATABASE_PATH="/mnt/nas/wherehouse.db"
 export WHEREHOUSE_CONFIG="$HOME/projects/workshop/wherehouse.toml"
-export WHEREHOUSE_LOG_PATH="/var/log/wherehouse/wherehouse.log"
+export WHEREHOUSE_LOGGING_FILE_PATH="/var/log/wherehouse/wherehouse.log"   # or "-" for stderr
 export WHEREHOUSE_OUTPUT_DEFAULT_FORMAT="json"
 export WHEREHOUSE_WEB_ACTOR_HEADER="Tailscale-User-Login"
 ```
@@ -474,7 +475,7 @@ programs.wherehouse = {
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `settings.database.path` | string | XDG data dir | Path to SQLite database file |
-| `settings.logging.filePath` | string | XDG state dir | Path to log file |
+| `settings.logging.filePath` | string | XDG state dir | Path to log file, or `"-"` for stderr |
 | `settings.logging.level` | `"debug"`…`"error"` | `"warn"` | Minimum log level |
 | `settings.logging.maxSizeMB` | int | `0` (disabled) | Max log size before rotation |
 | `settings.logging.maxBackups` | int | `3` | Old rotated files to keep |

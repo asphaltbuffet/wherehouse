@@ -77,12 +77,13 @@ in {
           type = lib.types.nullOr lib.types.str;
           default = null;
           description = ''
-            Absolute path to the log file.
+            Absolute path to the log file, or "-" for stderr.
             Supports ~ and environment variables.
+            Set to "-" to log to stderr (maxSizeMB must then be null or 0).
             When null, wherehouse uses the platform default:
             $XDG_STATE_HOME/wherehouse/wherehouse.log on Linux
             (typically ~/.local/state/wherehouse/wherehouse.log).
-            Can also be set via the WHEREHOUSE_LOG_PATH environment variable.
+            Can also be set via the WHEREHOUSE_LOGGING_FILE_PATH environment variable.
           '';
           example = "~/.local/state/wherehouse/wherehouse.log";
         };

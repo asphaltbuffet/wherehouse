@@ -198,6 +198,31 @@ func TestValidation(t *testing.T) {
 		errorMsg string
 	}{
 		{
+			name: "stderr sink without rotation",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Logging:  LoggingConfig{FilePath: "-"},
+				Output:   OutputConfig{DefaultFormat: "human"},
+			},
+		},
+		{
+			name: "stderr sink with rotation",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Logging:  LoggingConfig{FilePath: "-", MaxSizeMB: 10},
+				Output:   OutputConfig{DefaultFormat: "human"},
+			},
+			errorMsg: `logging configuration: file_path "-" (stderr) cannot be combined with max_size_mb > 0; rotation applies only to log files`,
+		},
+		{
+			name: "file sink with rotation",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Logging:  LoggingConfig{FilePath: "/var/log/w.log", MaxSizeMB: 10},
+				Output:   OutputConfig{DefaultFormat: "human"},
+			},
+		},
+		{
 			name: "valid config",
 			config: &Config{
 				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
@@ -916,4 +941,13 @@ func TestIsJSON_WithJSON(t *testing.T) {
 	}
 
 	assert.True(t, cfg.IsJSON())
+}
+
+func TestNew_StderrWithRotationFromEnvFails(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("WHEREHOUSE_LOGGING_FILE_PATH", "-")
+	t.Setenv("WHEREHOUSE_LOGGING_MAX_SIZE_MB", "10")
+
+	_, err := NewWithFS(afero.NewMemMapFs(), "")
+	require.ErrorContains(t, err, `file_path "-" (stderr)`)
 }

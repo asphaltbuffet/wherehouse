@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/asphaltbuffet/wherehouse/internal/logging"
 )
 
 // DefaultLogPath returns the platform-specific default log file path.
@@ -62,19 +64,26 @@ func DefaultLogPath() string {
 	}
 }
 
-// GetLogPath returns the resolved log file path with the following precedence:
-//  1. Explicit config file setting (cfg.Logging.FilePath)
-//  2. WHEREHOUSE_LOG_PATH environment variable
+// LegacyLogPathEnv is the removed log path environment variable. It is no
+// longer read; LegacyLogPathSet lets callers warn users who still set it.
+const LegacyLogPathEnv = "WHEREHOUSE_LOG_PATH"
+
+// LegacyLogPathSet reports whether the removed WHEREHOUSE_LOG_PATH is set.
+func LegacyLogPathSet() bool {
+	return os.Getenv(LegacyLogPathEnv) != ""
+}
+
+// GetLogPath returns the resolved log file path:
+//  1. logging.StderrPath ("-"), returned verbatim to select stderr
+//  2. cfg.Logging.FilePath (also set by WHEREHOUSE_LOGGING_FILE_PATH), expanded
 //  3. Platform-specific default (via DefaultLogPath)
-//
-// Paths are expanded (~ and env vars) and converted to absolute paths.
-// Returns error if path expansion fails.
 func (c *Config) GetLogPath() (string, error) {
-	if c.Logging.FilePath != "" {
+	switch c.Logging.FilePath {
+	case logging.StderrPath:
+		return logging.StderrPath, nil
+	case "":
+		return DefaultLogPath(), nil
+	default:
 		return ExpandPath(c.Logging.FilePath)
 	}
-	if envPath := os.Getenv("WHEREHOUSE_LOG_PATH"); envPath != "" {
-		return ExpandPath(envPath)
-	}
-	return DefaultLogPath(), nil
 }
