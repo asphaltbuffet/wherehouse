@@ -1,5 +1,0 @@
-kind: Removed
-body: WHEREHOUSE_LOG_PATH environment variable; use WHEREHOUSE_LOGGING_FILE_PATH. A warning is printed while it is still set.
-time: 2026-10-24T23:14:27.584018407-04:00
-custom:
-    Issue: '#257'

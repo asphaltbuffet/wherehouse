@@ -1,5 +1,0 @@
-kind: Fixed
-body: Web UI "+ Add root" button now opens the add dialog.
-time: 2026-10-24T14:10:04.656394168-04:00
-custom:
-    Issue: '#268'
