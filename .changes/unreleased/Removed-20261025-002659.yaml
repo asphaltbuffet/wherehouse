@@ -1,0 +1,5 @@
+kind: Removed
+body: WHEREHOUSE_DB_PATH environment variable; use WHEREHOUSE_DATABASE_PATH. It never took effect; a warning is printed while it is still set.
+time: 2026-10-25T00:26:59.039422728-04:00
+custom:
+    Issue: '#259'

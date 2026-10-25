@@ -351,6 +351,16 @@ func TestInitConfig_WarnsOnLegacyLogPath(t *testing.T) {
 	assert.Contains(t, stderr.String(), "WHEREHOUSE_LOG_PATH is no longer supported; use WHEREHOUSE_LOGGING_FILE_PATH")
 }
 
+func TestInitConfig_WarnsOnLegacyDBPath(t *testing.T) {
+	t.Setenv(config.LegacyDBPathEnv, "/tmp/legacy.db")
+	testCmd, stderr := newInitConfigTestCmd(t, nil)
+	require.NoError(t, testCmd.Flags().Set("no-config", "true"))
+
+	require.NoError(t, initConfig(testCmd, nil))
+
+	assert.Contains(t, stderr.String(), "WHEREHOUSE_DB_PATH is no longer supported; use WHEREHOUSE_DATABASE_PATH")
+}
+
 func TestNewConfigCmd_AllowsInvalidConfig(t *testing.T) {
 	check, _, err := configpkg.NewConfigCmd().Find([]string{"check"})
 	require.NoError(t, err)
