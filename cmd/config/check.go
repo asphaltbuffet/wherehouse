@@ -23,6 +23,7 @@ Checks both global and local configuration files for:
   - Syntax errors (invalid TOML)
   - Validation errors (invalid values)
   - Missing required fields
+  - Invalid combinations across files and WHEREHOUSE_* environment variables
 
 Examples:
   wherehouse config check   # Validate all configuration files`,
@@ -83,6 +84,22 @@ func runCheck(cmd *cobra.Command, _ []string) error {
 		} else {
 			out.Success(fmt.Sprintf("Local config valid: %s", expandedLocal))
 		}
+	}
+
+	// Per-file checks cannot see combinations across layers (e.g. a global
+	// max_size_mb with an env file_path of "-"), so validate the merged result.
+	if noConfig, _ := cmd.Flags().GetBool("no-config"); !noConfig {
+		configPath, _ := cmd.Flags().GetString("config")
+		if _, effErr := config.NewWithFS(cmdFS, configPath); effErr != nil {
+			out.Issue("config", fmt.Sprintf("Effective configuration invalid (files + environment) — %v", effErr))
+			hasErrors = true
+		} else {
+			out.Success("Effective config valid (files + environment)")
+		}
+	}
+
+	if config.LegacyLogPathSet() {
+		out.Warning(config.LegacyLogPathEnv + " is no longer supported; use WHEREHOUSE_LOGGING_FILE_PATH")
 	}
 
 	if hasErrors {
