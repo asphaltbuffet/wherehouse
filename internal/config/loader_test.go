@@ -8,25 +8,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestLoadConfig_EnvWithoutConfigFile verifies WHEREHOUSE_* env vars apply
-// even when no global or local config file exists (e.g. in a container).
+// TestLoadConfig_EnvWithoutConfigFile verifies every WHEREHOUSE_* env var
+// applies even when no global or local config file exists (e.g. in a container).
 func TestLoadConfig_EnvWithoutConfigFile(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/nonexistent")
 	t.Setenv("WHEREHOUSE_DATABASE_PATH", "/data/wherehouse.db")
-	t.Setenv("WHEREHOUSE_LOGGING_FILE_PATH", "/dev/stderr")
+	t.Setenv("WHEREHOUSE_LOGGING_FILE_PATH", "/data/wherehouse.log")
 	t.Setenv("WHEREHOUSE_LOGGING_LEVEL", "debug")
+	t.Setenv("WHEREHOUSE_LOGGING_MAX_SIZE_MB", "10")
+	t.Setenv("WHEREHOUSE_LOGGING_MAX_BACKUPS", "3")
 	t.Setenv("WHEREHOUSE_USER_DEFAULT_IDENTITY", "web")
 	t.Setenv("WHEREHOUSE_OUTPUT_DEFAULT_FORMAT", "json")
+	t.Setenv("WHEREHOUSE_OUTPUT_QUIET", "2")
 	t.Setenv("WHEREHOUSE_WEB_ACTOR_HEADER", "Tailscale-User-Login")
 
 	cfg, err := loadConfig(afero.NewMemMapFs(), "")
 	require.NoError(t, err)
 
 	assert.Equal(t, "/data/wherehouse.db", cfg.Database.Path)
-	assert.Equal(t, "/dev/stderr", cfg.Logging.FilePath)
+	assert.Equal(t, "/data/wherehouse.log", cfg.Logging.FilePath)
 	assert.Equal(t, "debug", cfg.Logging.Level)
+	assert.Equal(t, 10, cfg.Logging.MaxSizeMB)
+	assert.Equal(t, 3, cfg.Logging.MaxBackups)
 	assert.Equal(t, "web", cfg.User.DefaultIdentity)
 	assert.Equal(t, "json", cfg.Output.DefaultFormat)
+	assert.Equal(t, 2, cfg.Output.Quiet)
 	assert.Equal(t, "Tailscale-User-Login", cfg.Web.ActorHeader)
 }
 
