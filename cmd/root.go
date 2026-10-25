@@ -178,7 +178,7 @@ func loadConfig(configPath string, noConfig bool) (*config.Config, error) {
 
 	cfg, err := config.New(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, err
 	}
 
 	return cfg, nil
