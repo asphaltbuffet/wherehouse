@@ -1,0 +1,5 @@
+kind: Added
+body: 'Stderr log sink: set logging.file_path (or WHEREHOUSE_LOGGING_FILE_PATH) to "-". Rotation with the stderr sink is rejected, and config check now validates the merged files + environment configuration. The container image logs to stderr this way.'
+time: 2026-10-24T23:19:50.164982558-04:00
+custom:
+    Issue: '#257'

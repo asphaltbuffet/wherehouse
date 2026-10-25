@@ -10,10 +10,8 @@ ARG TARGETPLATFORM
 COPY --from=gcr.io/distroless/static-debian13:nonroot --chown=65532:65532 /tmp /data
 COPY $TARGETPLATFORM/wherehouse /usr/bin/wherehouse
 
-# /dev/stderr only works while logging.max_size_mb is 0 (rotation off).
-# Replace once a real stderr sink lands: github.com/asphaltbuffet/wherehouse/issues/257
 ENV WHEREHOUSE_DATABASE_PATH=/data/wherehouse.db \
-    WHEREHOUSE_LOGGING_FILE_PATH=/dev/stderr
+    WHEREHOUSE_LOGGING_FILE_PATH=-
 
 USER 65532:65532
 WORKDIR /data
