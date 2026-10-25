@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 )
 
@@ -275,4 +277,82 @@ func TestInitConfig_ReturnsNilError(t *testing.T) {
 
 	// Call initConfig
 	assert.NoError(t, initConfig(testCmd, []string{}))
+}
+
+// newInitConfigTestCmd returns a command carrying root's config flags,
+// optionally nested under parent.
+func newInitConfigTestCmd(t *testing.T, parent *cobra.Command) (*cobra.Command, *bytes.Buffer) {
+	t.Helper()
+	rootCmd = nil
+	globalConfig = nil
+	root := GetRootCmd()
+
+	testCmd := &cobra.Command{Use: "leaf"}
+	if parent != nil {
+		parent.AddCommand(testCmd)
+	}
+	testCmd.SetContext(t.Context())
+	testCmd.PersistentFlags().AddFlag(root.PersistentFlags().Lookup("no-config"))
+	testCmd.PersistentFlags().AddFlag(root.PersistentFlags().Lookup("config"))
+	var stderr bytes.Buffer
+	testCmd.SetErr(&stderr)
+	return testCmd, &stderr
+}
+
+func writeInvalidConfig(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "bad.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[output]\ndefault_format = \"xml\"\n"), 0o644))
+	t.Setenv("WHEREHOUSE_CONFIG", path)
+}
+
+func TestInitConfig_InvalidConfigIsFatal(t *testing.T) {
+	writeInvalidConfig(t)
+	testCmd, _ := newInitConfigTestCmd(t, nil)
+
+	err := initConfig(testCmd, nil)
+
+	require.ErrorContains(t, err, "default_format")
+}
+
+func TestInitConfig_InvalidEnvComboIsFatal(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("WHEREHOUSE_DATABASE_PATH", "/data/wherehouse.db")
+	t.Setenv("WHEREHOUSE_LOGGING_FILE_PATH", "-")
+	t.Setenv("WHEREHOUSE_LOGGING_MAX_SIZE_MB", "10")
+	testCmd, _ := newInitConfigTestCmd(t, nil)
+
+	err := initConfig(testCmd, nil)
+
+	require.ErrorContains(t, err, `file_path "-" (stderr)`)
+}
+
+func TestInitConfig_ConfigSubtreeFallsBackWithWarning(t *testing.T) {
+	writeInvalidConfig(t)
+	parent := &cobra.Command{
+		Use:         "config",
+		Annotations: map[string]string{configpkg.AllowInvalidConfigAnnotation: "true"},
+	}
+	testCmd, stderr := newInitConfigTestCmd(t, parent)
+
+	require.NoError(t, initConfig(testCmd, nil))
+
+	assert.Contains(t, stderr.String(), "warning: invalid configuration, using defaults: ")
+	assert.Equal(t, config.GetDefaults().Output.DefaultFormat, globalConfig.Output.DefaultFormat)
+}
+
+func TestInitConfig_WarnsOnLegacyLogPath(t *testing.T) {
+	t.Setenv(config.LegacyLogPathEnv, "/tmp/legacy.log")
+	testCmd, stderr := newInitConfigTestCmd(t, nil)
+	require.NoError(t, testCmd.PersistentFlags().Set("no-config", "true"))
+
+	require.NoError(t, initConfig(testCmd, nil))
+
+	assert.Contains(t, stderr.String(), "WHEREHOUSE_LOG_PATH is no longer supported; use WHEREHOUSE_LOGGING_FILE_PATH")
+}
+
+func TestNewConfigCmd_AllowsInvalidConfig(t *testing.T) {
+	check, _, err := configpkg.NewConfigCmd().Find([]string{"check"})
+	require.NoError(t, err)
+	assert.True(t, allowsInvalidConfig(check))
 }

@@ -1,0 +1,5 @@
+kind: Fixed
+body: An invalid configuration file or WHEREHOUSE_* environment value was silently replaced by defaults (including the database path); commands now fail with the validation error. config subcommands still run, with a warning.
+time: 2026-10-24T23:16:16.649148146-04:00
+custom:
+    Issue: '#257'

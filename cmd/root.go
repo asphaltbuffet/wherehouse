@@ -133,9 +133,21 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 	configPath, _ := cmd.Flags().GetString("config")
 	noConfig, _ := cmd.Flags().GetBool("no-config")
 
-	cfg, err := loadConfigOrDefaults(configPath, noConfig)
+	cfg, err := loadConfig(configPath, noConfig)
 	if err != nil {
-		return err
+		if !allowsInvalidConfig(cmd) {
+			return err
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: invalid configuration, using defaults: %v\n", err)
+		cfg = config.GetDefaults()
+	}
+
+	if config.LegacyLogPathSet() {
+		fmt.Fprintf(
+			cmd.ErrOrStderr(),
+			"warning: %s is no longer supported; use WHEREHOUSE_LOGGING_FILE_PATH\n",
+			config.LegacyLogPathEnv,
+		)
 	}
 
 	bindFlagsToConfig(cmd, cfg)
@@ -156,22 +168,31 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// loadConfigOrDefaults loads configuration from file or returns defaults.
-// Returns an error only if an explicit config path was provided but failed to load.
-func loadConfigOrDefaults(configPath string, noConfig bool) (*config.Config, error) {
+// loadConfig loads configuration from files and environment, or returns
+// defaults for --no-config. Missing default config files are not an error;
+// every returned error means the configuration is unreadable or invalid.
+func loadConfig(configPath string, noConfig bool) (*config.Config, error) {
 	if noConfig {
 		return config.GetDefaults(), nil
 	}
 
 	cfg, err := config.New(configPath)
 	if err != nil {
-		if configPath != "" {
-			return nil, fmt.Errorf("failed to load config from %q: %w", configPath, err)
-		}
-		return config.GetDefaults(), nil
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	return cfg, nil
+}
+
+// allowsInvalidConfig reports whether cmd or an ancestor opted in to running
+// with defaults when the configuration is invalid.
+func allowsInvalidConfig(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if _, ok := c.Annotations[configpkg.AllowInvalidConfigAnnotation]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Execute runs the root command and renders any error to stderr.
