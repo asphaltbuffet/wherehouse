@@ -73,23 +73,6 @@ func TestOpenDatabase(t *testing.T) {
 			errMsg:  "configuration not found in context",
 		},
 		{
-			name: "success with empty path uses default",
-			setup: func(t *testing.T) context.Context {
-				t.Helper()
-				tmpDir := t.TempDir()
-				dbPath := filepath.Join(tmpDir, "default.db")
-				t.Setenv("WHEREHOUSE_DB_PATH", dbPath)
-
-				cfg := &config.Config{
-					Database: config.DatabaseConfig{
-						Path: "", // Empty path will fall back to env var
-					},
-				}
-				return context.WithValue(context.Background(), config.ConfigKey, cfg)
-			},
-			wantErr: false,
-		},
-		{
 			name: "success with nested directory creation",
 			setup: func(t *testing.T) context.Context {
 				t.Helper()

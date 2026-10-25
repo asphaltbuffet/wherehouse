@@ -94,72 +94,43 @@ func TestConfig_GetDatabasePath(t *testing.T) {
 	tests := []struct {
 		name            string
 		configPath      string
-		envPath         string
 		wantContains    string
 		wantErrContains string
 	}{
 		{
 			name:         "explicit config path takes precedence",
 			configPath:   "/explicit/path/to/db.db",
-			envPath:      "/env/path/to/db.db",
 			wantContains: "/explicit/path/to/db.db",
 		},
 		{
-			name:         "env var used when config empty",
+			name:         "default used when config empty",
 			configPath:   "",
-			envPath:      "/env/path/to/db.db",
-			wantContains: "/env/path/to/db.db",
-		},
-		{
-			name:         "default used when both empty",
-			configPath:   "",
-			envPath:      "",
 			wantContains: "wherehouse.db",
 		},
 		{
 			name:         "tilde expansion in config path",
 			configPath:   "~/custom/wherehouse.db",
-			envPath:      "",
 			wantContains: "custom/wherehouse.db",
-		},
-		{
-			name:         "tilde expansion in env path",
-			configPath:   "",
-			envPath:      "~/env/wherehouse.db",
-			wantContains: "env/wherehouse.db",
 		},
 		{
 			name:            "invalid ~username pattern in config",
 			configPath:      "~someuser/wherehouse.db",
-			envPath:         "",
-			wantErrContains: "~username expansion not supported",
-		},
-		{
-			name:            "invalid ~username pattern in env",
-			configPath:      "",
-			envPath:         "~someuser/wherehouse.db",
 			wantErrContains: "~username expansion not supported",
 		},
 		{
 			name:         "env var expansion in config path",
 			configPath:   "$HOME/custom/wherehouse.db",
-			envPath:      "",
 			wantContains: "custom/wherehouse.db",
 		},
 		{
 			name:         "relative path in config",
 			configPath:   "./local/wherehouse.db",
-			envPath:      "",
 			wantContains: "wherehouse.db",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.envPath != "" {
-				t.Setenv("WHEREHOUSE_DB_PATH", tt.envPath)
-			}
-
 			cfg := &Config{
 				Database: DatabaseConfig{
 					Path: tt.configPath,
@@ -179,44 +150,36 @@ func TestConfig_GetDatabasePath(t *testing.T) {
 	}
 }
 
-func TestConfig_GetDatabasePath_Precedence(t *testing.T) {
-	t.Run("config overrides env", func(t *testing.T) {
-		t.Setenv("WHEREHOUSE_DB_PATH", "/env/path/db.db")
+// TestGetDatabasePath_LegacyEnvIgnored verifies the removed WHEREHOUSE_DB_PATH
+// no longer influences the database path.
+func TestGetDatabasePath_LegacyEnvIgnored(t *testing.T) {
+	t.Setenv(LegacyDBPathEnv, "/env/path/db.db")
 
-		cfg := &Config{
-			Database: DatabaseConfig{
-				Path: "/config/path/db.db",
-			},
-		}
+	t.Run("config path used", func(t *testing.T) {
+		cfg := &Config{Database: DatabaseConfig{Path: "/config/path/db.db"}}
+
 		path, err := cfg.GetDatabasePath()
+
 		require.NoError(t, err)
-		assert.Contains(t, path, "/config/path/db.db")
+		assert.Equal(t, "/config/path/db.db", path)
 	})
 
-	t.Run("env used when config empty", func(t *testing.T) {
-		t.Setenv("WHEREHOUSE_DB_PATH", "/env/path/db.db")
+	t.Run("default used when config empty", func(t *testing.T) {
+		cfg := &Config{}
 
-		cfg := &Config{
-			Database: DatabaseConfig{
-				Path: "",
-			},
-		}
 		path, err := cfg.GetDatabasePath()
-		require.NoError(t, err)
-		assert.Contains(t, path, "/env/path/db.db")
-	})
 
-	// Test 3: Default used when both empty
-	t.Run("default used when both empty", func(t *testing.T) {
-		cfg := &Config{
-			Database: DatabaseConfig{
-				Path: "",
-			},
-		}
-		path, err := cfg.GetDatabasePath()
 		require.NoError(t, err)
-		assert.Contains(t, path, filepath.Join("wherehouse", "wherehouse.db"))
+		assert.Equal(t, DefaultDatabasePath(), path)
 	})
+}
+
+func TestLegacyDBPathSet(t *testing.T) {
+	t.Setenv(LegacyDBPathEnv, "")
+	assert.False(t, LegacyDBPathSet())
+
+	t.Setenv(LegacyDBPathEnv, "/x.db")
+	assert.True(t, LegacyDBPathSet())
 }
 
 func TestConfig_GetDatabasePath_ExpandPath(t *testing.T) {

@@ -951,3 +951,31 @@ func TestNew_StderrWithRotationFromEnvFails(t *testing.T) {
 	_, err := NewWithFS(afero.NewMemMapFs(), "")
 	require.ErrorContains(t, err, `file_path "-" (stderr)`)
 }
+
+// TestNewWithFS_LegacyDBPathIgnored verifies that setting only the removed
+// WHEREHOUSE_DB_PATH leaves the database path at the platform default.
+func TestNewWithFS_LegacyDBPathIgnored(t *testing.T) {
+	t.Setenv("WHEREHOUSE_CONFIG", "")
+	t.Setenv("WHEREHOUSE_DATABASE_PATH", "")
+	t.Setenv(LegacyDBPathEnv, "/legacy/db.sqlite")
+
+	cfg, err := NewWithFS(afero.NewMemMapFs(), "")
+	require.NoError(t, err)
+
+	path, err := cfg.GetDatabasePath()
+	require.NoError(t, err)
+	assert.Equal(t, DefaultDatabasePath(), path)
+}
+
+// TestNewWithFS_DatabasePathWinsOverLegacy verifies WHEREHOUSE_DATABASE_PATH
+// is used when both the current and the removed variable are set.
+func TestNewWithFS_DatabasePathWinsOverLegacy(t *testing.T) {
+	t.Setenv("WHEREHOUSE_CONFIG", "")
+	t.Setenv("WHEREHOUSE_DATABASE_PATH", "/from/env.sqlite")
+	t.Setenv(LegacyDBPathEnv, "/legacy/db.sqlite")
+
+	cfg, err := NewWithFS(afero.NewMemMapFs(), "")
+	require.NoError(t, err)
+
+	assert.Equal(t, "/from/env.sqlite", cfg.Database.Path)
+}
