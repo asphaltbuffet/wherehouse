@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -727,4 +728,58 @@ func TestNewLogger_DirectoryPermissions(t *testing.T) {
 
 	mode := info.Mode().Perm()
 	assert.Equal(t, os.FileMode(0o755), mode)
+}
+
+// captureStderr swaps [os.Stderr] for a pipe for the duration of fn and
+// returns what was written. Not parallel-safe.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	orig := os.Stderr
+	os.Stderr = w                          //nolint:reassign // swapping os.Stderr is the only way to observe the sink
+	t.Cleanup(func() { os.Stderr = orig }) //nolint:reassign // restores os.Stderr after the test
+
+	fn()
+
+	require.NoError(t, w.Close())
+	os.Stderr = orig //nolint:reassign // restores os.Stderr
+	out, err := io.ReadAll(r)
+	require.NoError(t, err)
+	return string(out)
+}
+
+func TestNewLogger_StderrSink(t *testing.T) {
+	fs := afero.NewMemMapFs()
+
+	out := captureStderr(t, func() {
+		logger, closer, err := newLogger(fs, StderrPath, "info", 0, 0)
+		require.NoError(t, err)
+		assert.Nil(t, closer, "stderr sink must not hand back a closer")
+		logger.Info("to stderr")
+	})
+
+	assert.Contains(t, out, "to stderr")
+	exists, err := afero.Exists(fs, StderrPath)
+	require.NoError(t, err)
+	assert.False(t, exists, "no file named - may be created")
+}
+
+func TestNewLogger_StderrRejectsRotation(t *testing.T) {
+	_, _, err := newLogger(afero.NewMemMapFs(), StderrPath, "info", 10, 0)
+	require.ErrorContains(t, err, "rotation")
+}
+
+func TestInit_StderrCloseLeavesStderrOpen(t *testing.T) {
+	resetForTesting()
+	t.Cleanup(resetForTesting)
+
+	out := captureStderr(t, func() {
+		require.NoError(t, Init(afero.NewMemMapFs(), StderrPath, "info", 0, 0))
+		require.NoError(t, Close())
+		_, err := os.Stderr.WriteString("still open\n")
+		require.NoError(t, err)
+	})
+
+	assert.Contains(t, out, "still open")
 }
