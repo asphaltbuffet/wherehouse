@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+
+	"github.com/asphaltbuffet/wherehouse/internal/logging"
 )
 
 // Validate checks the configuration for errors.
@@ -17,6 +19,10 @@ func Validate(cfg *Config) error {
 func validate(cfg *Config) error {
 	if err := validateDatabase(&cfg.Database); err != nil {
 		return fmt.Errorf("database configuration: %w", err)
+	}
+
+	if err := validateLogging(&cfg.Logging); err != nil {
+		return fmt.Errorf("logging configuration: %w", err)
 	}
 
 	if err := validateUser(&cfg.User); err != nil {
@@ -60,3 +66,17 @@ func validateOutput(cfg *OutputConfig) error {
 
 	return nil
 }
+
+// validateLogging rejects rotation settings on the stderr sink.
+func validateLogging(cfg *LoggingConfig) error {
+	if cfg.FilePath == logging.StderrPath && cfg.MaxSizeMB > 0 {
+		return errStderrRotation
+	}
+
+	return nil
+}
+
+var errStderrRotation = errors.New(
+	`file_path "-" (stderr) cannot be combined with max_size_mb > 0; ` +
+		`rotation applies only to log files`,
+)

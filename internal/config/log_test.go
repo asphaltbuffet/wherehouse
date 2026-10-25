@@ -49,7 +49,7 @@ func TestGetLogPath_ConfigTakesPrecedence(t *testing.T) {
 			FilePath: "/explicit/path.log",
 		},
 	}
-	t.Setenv("WHEREHOUSE_LOG_PATH", "/env/path.log")
+	t.Setenv(LegacyLogPathEnv, "/env/path.log")
 
 	result, err := cfg.GetLogPath()
 
@@ -57,31 +57,44 @@ func TestGetLogPath_ConfigTakesPrecedence(t *testing.T) {
 	assert.Equal(t, "/explicit/path.log", result)
 }
 
-// TestGetLogPath_EnvVarFallback verifies that WHEREHOUSE_LOG_PATH env var is used when config FilePath is empty.
-func TestGetLogPath_EnvVarFallback(t *testing.T) {
-	cfg := &Config{
-		Logging: LoggingConfig{
-			FilePath: "",
-		},
-	}
-	t.Setenv("WHEREHOUSE_LOG_PATH", "/env/path.log")
-	t.Setenv("XDG_STATE_HOME", "")
-	t.Setenv("HOME", "")
+// TestGetLogPath_LegacyEnvIgnored verifies the removed WHEREHOUSE_LOG_PATH
+// no longer influences the log path.
+func TestGetLogPath_LegacyEnvIgnored(t *testing.T) {
+	cfg := &Config{}
+	t.Setenv(LegacyLogPathEnv, "/env/path.log")
+	t.Setenv("XDG_STATE_HOME", "/xdg/state")
 
 	result, err := cfg.GetLogPath()
 
 	require.NoError(t, err)
-	assert.Equal(t, "/env/path.log", result)
+	assert.Equal(t, filepath.Join("/xdg/state", "wherehouse", "wherehouse.log"), result)
 }
 
-// TestGetLogPath_DefaultFallback verifies that DefaultLogPath is used when config and env var are both empty.
+func TestGetLogPath_StderrSentinelNotExpanded(t *testing.T) {
+	cfg := &Config{Logging: LoggingConfig{FilePath: "-"}}
+
+	result, err := cfg.GetLogPath()
+
+	require.NoError(t, err)
+	assert.Equal(t, "-", result)
+}
+
+func TestLegacyLogPathSet(t *testing.T) {
+	t.Setenv(LegacyLogPathEnv, "")
+	assert.False(t, LegacyLogPathSet())
+
+	t.Setenv(LegacyLogPathEnv, "/x.log")
+	assert.True(t, LegacyLogPathSet())
+}
+
+// TestGetLogPath_DefaultFallback verifies that DefaultLogPath is used when config is empty.
 func TestGetLogPath_DefaultFallback(t *testing.T) {
 	cfg := &Config{
 		Logging: LoggingConfig{
 			FilePath: "",
 		},
 	}
-	t.Setenv("WHEREHOUSE_LOG_PATH", "")
+
 	t.Setenv("XDG_STATE_HOME", "/custom/state")
 	t.Setenv("HOME", "/home/user")
 

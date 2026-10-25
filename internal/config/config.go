@@ -33,7 +33,7 @@ type Config struct {
 
 // LoggingConfig holds logging-related configuration.
 type LoggingConfig struct {
-	// FilePath is the absolute path to the log file.
+	// FilePath is the absolute path to the log file; "-" logs to stderr (rotation must be off).
 	// Empty string causes logging.Init() to use DefaultLogPath().
 	FilePath string `mapstructure:"file_path" toml:"file_path"`
 
