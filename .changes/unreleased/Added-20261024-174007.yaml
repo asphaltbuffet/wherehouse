@@ -1,5 +1,0 @@
-kind: Added
-body: Web UI can record the user asserted by a trusted reverse proxy (e.g. Tailscale-User-Login) as the event actor via `serve --actor-header`, `web.actor_header` or `WHEREHOUSE_WEB_ACTOR_HEADER`; the page header shows "acting as …".
-time: 2026-10-24T17:40:07.204996217-04:00
-custom:
-    Issue: '#267'
