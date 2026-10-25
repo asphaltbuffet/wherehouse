@@ -93,6 +93,58 @@ actor_header = "X-File-User"
 	assert.Equal(t, map[string]string{"grue": "Grue"}, cfg.User.OSUsernameMap)
 }
 
+// TestLoadConfig_InvalidIntEnv verifies a non-integer value in an int-typed
+// WHEREHOUSE_* env var fails loading with an error naming the config key.
+func TestLoadConfig_InvalidIntEnv(t *testing.T) {
+	tests := []struct {
+		name            string
+		envKey          string
+		envValue        string
+		wantErrContains string
+	}{
+		{
+			name:            "quiet non-numeric",
+			envKey:          "WHEREHOUSE_OUTPUT_QUIET",
+			envValue:        "abc",
+			wantErrContains: "output.quiet",
+		},
+		{
+			name:            "max_size_mb non-numeric",
+			envKey:          "WHEREHOUSE_LOGGING_MAX_SIZE_MB",
+			envValue:        "abc",
+			wantErrContains: "logging.max_size_mb",
+		},
+		{
+			name:            "max_backups non-numeric",
+			envKey:          "WHEREHOUSE_LOGGING_MAX_BACKUPS",
+			envValue:        "abc",
+			wantErrContains: "logging.max_backups",
+		},
+		{
+			name:            "quiet float",
+			envKey:          "WHEREHOUSE_OUTPUT_QUIET",
+			envValue:        "1.5",
+			wantErrContains: "output.quiet",
+		},
+		{
+			name:            "quiet overflow",
+			envKey:          "WHEREHOUSE_OUTPUT_QUIET",
+			envValue:        "99999999999999999999",
+			wantErrContains: "output.quiet",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", "/nonexistent")
+			t.Setenv(tt.envKey, tt.envValue)
+
+			_, err := loadConfig(afero.NewMemMapFs(), "")
+			require.ErrorContains(t, err, tt.wantErrContains)
+		})
+	}
+}
+
 // TestLoadConfig_MapEnvIgnored verifies a map-typed key set via env does not
 // break loading; a single env string cannot decode into a map.
 func TestLoadConfig_MapEnvIgnored(t *testing.T) {
