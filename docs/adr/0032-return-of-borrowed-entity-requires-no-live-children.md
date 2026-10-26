@@ -9,4 +9,4 @@ Returning a `borrowed` entity sets it to `removed`. If it still has non-removed 
 
 ## Consequences
 
-The same orphaning hazard exists for `remove`; extending this guard there is a separate, deliberately deferred behavior change.
+The same orphaning hazard exists for `remove`; extending this guard there is a separate behavior change, tracked in [#287](https://github.com/asphaltbuffet/wherehouse/issues/287).
