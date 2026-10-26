@@ -36,8 +36,12 @@ func (f *fakeApp) RenameEntity(_ context.Context, _ app.RenameEntityRequest) (ap
 	return app.EntityResult{}, nil
 }
 
-func (f *fakeApp) ChangeStatus(_ context.Context, _ app.ChangeStatusRequest) (app.EntityResult, error) {
-	return app.EntityResult{}, nil
+func (f *fakeApp) MarkLost(_ context.Context, _ []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	return nil, nil
+}
+
+func (f *fakeApp) MarkFound(_ context.Context, _ []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	return nil, nil
 }
 
 func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {

@@ -112,7 +112,7 @@ func TestRunBorrow_BlocksLost(t *testing.T) {
 	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
 	require.NoError(t, err)
 	_, err = a.MarkLost(t.Context(), []app.ChangeStatusRequest{
-		{EntityID: drill.EntityID, Status: inventory.EntityStatusMissing, ActorID: "test"},
+		{EntityID: drill.EntityID, ActorID: "test"},
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }
@@ -129,7 +129,7 @@ func TestRunBorrow_BlocksFound(t *testing.T) {
 	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
 	require.NoError(t, err)
 	_, err = a.MarkFound(t.Context(), []app.ChangeStatusRequest{
-		{EntityID: drill.EntityID, Status: inventory.EntityStatusOk, ActorID: "test"},
+		{EntityID: drill.EntityID, ActorID: "test"},
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }
@@ -146,7 +146,7 @@ func TestRunBorrow_BlocksLoan(t *testing.T) {
 	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
 	require.NoError(t, err)
 	_, err = a.MarkLoaned(t.Context(), []app.ChangeStatusRequest{
-		{EntityID: drill.EntityID, Status: inventory.EntityStatusLoaned, StatusContext: "Bob", ActorID: "test"},
+		{EntityID: drill.EntityID, StatusContext: "Bob", ActorID: "test"},
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }

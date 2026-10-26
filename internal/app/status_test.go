@@ -11,7 +11,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-func TestChangeStatus_Missing(t *testing.T) {
+func TestMarkLost_Missing(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
@@ -25,18 +25,16 @@ func TestChangeStatus_Missing(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	result, err := a.ChangeStatus(ctx, app.ChangeStatusRequest{
-		EntityID:      wrench.EntityID,
-		Status:        inventory.EntityStatusMissing,
-		StatusContext: "lost at job site",
-		ActorID:       "alice",
-	})
+	results, err := a.MarkLost(ctx, []app.ChangeStatusRequest{{
+		EntityID: wrench.EntityID,
+		ActorID:  "alice",
+	}})
 	require.NoError(t, err)
-	assert.Equal(t, inventory.EntityStatusMissing, result.Status)
-	assert.Equal(t, "lost at job site", result.StatusContext)
+	require.Len(t, results, 1)
+	assert.Equal(t, inventory.EntityStatusMissing, results[0].Status)
 }
 
-func TestChangeStatus_LockedEntity_MissingForbidden(t *testing.T) {
+func TestMarkLost_LockedEntity_Forbidden(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
 
@@ -45,10 +43,9 @@ func TestChangeStatus_LockedEntity_MissingForbidden(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{
 		EntityID: garage.EntityID,
-		Status:   inventory.EntityStatusMissing,
 		ActorID:  "alice",
-	})
+	}})
 	assert.ErrorContains(t, err, "locked")
 }

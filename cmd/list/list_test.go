@@ -13,7 +13,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 // seedThree creates Garage (place) → Garage:Toolbox (container) → Garage:Toolbox:Wrench (leaf).
@@ -76,11 +75,10 @@ func TestRunList_ShowsStatusBadge(t *testing.T) {
 	seedThree(t, a)
 	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
 	require.NoError(t, err)
-	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{
 		EntityID: wrench.EntityID,
-		Status:   inventory.EntityStatusMissing,
 		ActorID:  "test",
-	})
+	}})
 	require.NoError(t, err)
 
 	out := runCmd(t, a)
@@ -103,11 +101,10 @@ func TestRunList_FilterPrunesUnrelatedBranches(t *testing.T) {
 	require.NoError(t, err)
 	drill, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Drill")
 	require.NoError(t, err)
-	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{
 		EntityID: drill.EntityID,
-		Status:   inventory.EntityStatusMissing,
 		ActorID:  "test",
-	})
+	}})
 	require.NoError(t, err)
 
 	out := runCmd(t, a, "--status", "missing")
@@ -123,11 +120,10 @@ func TestRunList_FilterKeepsAncestor(t *testing.T) {
 	seedThree(t, a)
 	wrench, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Wrench")
 	require.NoError(t, err)
-	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{
 		EntityID: wrench.EntityID,
-		Status:   inventory.EntityStatusMissing,
 		ActorID:  "test",
-	})
+	}})
 	require.NoError(t, err)
 
 	out := runCmd(t, a, "--status", "missing")

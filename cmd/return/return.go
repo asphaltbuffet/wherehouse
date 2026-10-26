@@ -64,7 +64,6 @@ func runReturn(cmd *cobra.Command, args []string, a *app.App) error {
 		}
 		reqs[i] = app.ChangeStatusRequest{
 			EntityID: entity.EntityID,
-			Status:   inventory.EntityStatusOk,
 			Note:     noteFlag,
 			ActorID:  cli.GetActorUserID(ctx),
 		}

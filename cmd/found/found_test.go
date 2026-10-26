@@ -37,8 +37,8 @@ func seedForFound(t *testing.T, a *app.App) {
 	hammer, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Hammer")
 	require.NoError(t, err)
 	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{
-		{EntityID: wrench.EntityID, Status: inventory.EntityStatusMissing, ActorID: "test"},
-		{EntityID: hammer.EntityID, Status: inventory.EntityStatusMissing, ActorID: "test"},
+		{EntityID: wrench.EntityID, ActorID: "test"},
+		{EntityID: hammer.EntityID, ActorID: "test"},
 	})
 	require.NoError(t, err)
 }
@@ -119,14 +119,13 @@ func TestRunFound_WorksOnLockedEntity(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Manually put it in missing state via ChangeStatus (not locked, so allowed)
+	// Put it in missing state via MarkLost (not locked, so allowed)
 	wrench, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
 	require.NoError(t, err)
-	_, err = a.ChangeStatus(ctx, app.ChangeStatusRequest{
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{
 		EntityID: wrench.EntityID,
-		Status:   inventory.EntityStatusMissing,
 		ActorID:  "test",
-	})
+	}})
 	require.NoError(t, err)
 
 	cmd := found.NewFoundCmd(a)

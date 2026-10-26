@@ -288,16 +288,12 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := inventory.EntityStatusMissing
+	reqs := []app.ChangeStatusRequest{{EntityID: entityID, ActorID: s.actorFor(r)}}
 	if data.IsMissing {
-		target = inventory.EntityStatusOk
+		_, err = s.cfg.App.MarkFound(r.Context(), reqs)
+	} else {
+		_, err = s.cfg.App.MarkLost(r.Context(), reqs)
 	}
-
-	_, err = s.cfg.App.ChangeStatus(r.Context(), app.ChangeStatusRequest{
-		EntityID: entityID,
-		Status:   target,
-		ActorID:  s.actorFor(r),
-	})
 	if err != nil {
 		s.cfg.Logger.Error("change status", "error", err, "entity_id", entityID)
 		data.Error = "status change failed"
@@ -453,7 +449,6 @@ func (s *Server) handleLoan(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = s.cfg.App.MarkLoaned(r.Context(), []app.ChangeStatusRequest{{
 		EntityID:      entityID,
-		Status:        inventory.EntityStatusLoaned,
 		StatusContext: form.Recipient,
 		Note:          form.Note,
 		ActorID:       s.actorFor(r),
