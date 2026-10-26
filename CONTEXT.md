@@ -14,11 +14,11 @@ The single unified domain type. Everything in the inventory — a storage place,
 
 ### locked
 
-A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
+A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Conversely, an entity can only be locked while its status is `ok` or `borrowed`, so a locked entity is never `missing` or `loaned`. Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
 
 ### discrete
 
-A mutable boolean attribute on an entity. When `true`, the entity may not have children added to it (via `add` or `move`). Acts as a guard rail against accidental nesting — for example, a "Box of Nails" that should be tracked as a single unit. Defaults to `false` at creation. Can be cleared when sub-tracking is needed (e.g. pulling individual items out of a box). Toggled via `EntityDiscreteSetEvent` / `EntityDiscreteClearedEvent`.
+A mutable boolean attribute on an entity. When `true`, the entity may not have children added to it (via `add` or `move`). Acts as a guard rail against accidental nesting — for example, a "Box of Nails" that should be tracked as a single unit. Can only be set on an entity with no live (non-`removed`) children, so a discrete entity never has live children. Defaults to `false` at creation. Can be cleared when sub-tracking is needed (e.g. pulling individual items out of a box). Toggled via `EntityDiscreteSetEvent` / `EntityDiscreteClearedEvent`.
 
 ### Eligible parent
 
