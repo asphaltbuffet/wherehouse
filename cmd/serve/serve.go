@@ -39,8 +39,9 @@ func buildServeCmd() *cobra.Command {
 		Use:   "serve",
 		Short: "Start a local web server to browse the inventory",
 		Long: `Start a local HTTP server that renders the inventory as a navigable
-tree in your browser. You can browse, search, add entities, edit names, and
-toggle item status (active/missing) from the UI.
+tree in your browser. You can browse, search, add entities, edit names,
+toggle item status (active/missing), and lock/unlock or mark entities
+discrete from the UI.
 
 Identity: web changes are recorded as actor "webui". With --actor-header
 (or web.actor_header / WHEREHOUSE_WEB_ACTOR_HEADER), the named request
