@@ -9,3 +9,6 @@ completions/
 release_notes/
 **/mocks/*
 .direnv/
+
+# Playwright MCP output (snapshots, console logs, screenshots)
+.playwright-mcp/

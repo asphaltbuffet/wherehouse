@@ -15,12 +15,19 @@ type EntityResult struct {
 	CanonicalName   string
 	Locked          bool
 	Discrete        bool
+	ParentID        string // empty for root entities
 	FullPathDisplay string
 	Status          inventory.EntityStatus
 	StatusContext   string
 	HasChildren     bool
 	Tags            []string
 	UpdatedAt       time.Time
+}
+
+// IsEligibleParent reports whether the entity may receive a new child:
+// any entity that is neither removed nor discrete (see CONTEXT.md "Eligible parent").
+func (r EntityResult) IsEligibleParent() bool {
+	return r.Status != inventory.EntityStatusRemoved && !r.Discrete
 }
 
 // HistoryResult is the output representation of a single history event.
@@ -51,12 +58,17 @@ func entityToResult(e *inventory.Entity, tags []string) EntityResult {
 	if e.StatusContext != nil {
 		statusCtx = *e.StatusContext
 	}
+	parentID := ""
+	if e.ParentID != nil {
+		parentID = *e.ParentID
+	}
 	return EntityResult{
 		EntityID:        e.EntityID,
 		DisplayName:     e.DisplayName,
 		CanonicalName:   e.CanonicalName,
 		Locked:          e.Locked,
 		Discrete:        e.Discrete,
+		ParentID:        parentID,
 		FullPathDisplay: e.FullPathDisplay,
 		Status:          e.Status,
 		StatusContext:   statusCtx,

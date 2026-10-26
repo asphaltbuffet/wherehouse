@@ -183,6 +183,18 @@ func (s *Store) GetChildren(ctx context.Context, parentID string) ([]ChildRow, e
 	return scanChildRows(rows)
 }
 
+// CountLiveChildrenTx returns the number of non-removed direct children of parentID,
+// reading inside tx so that earlier writes in the same batch are visible.
+func (s *Store) CountLiveChildrenTx(ctx context.Context, tx Tx, parentID string) (int, error) {
+	const query = `SELECT COUNT(*) FROM entities_current WHERE parent_id = ? AND status != 'removed'`
+
+	var n int
+	if err := tx.QueryRowContext(ctx, query, parentID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count children of %s: %w", parentID, err)
+	}
+	return n, nil
+}
+
 // GetRootEntities returns all non-removed entities at depth 0 (no parent), ordered by display_name ASC, entity_id ASC.
 func (s *Store) GetRootEntities(ctx context.Context) ([]ChildRow, error) {
 	const query = `

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/nanoid"
@@ -180,6 +182,15 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 	// Borrowed entities are removed from inventory when returned, not reset to ok.
 	targetStatus := inventory.EntityStatusOk
 	if entity.Status == inventory.EntityStatusBorrowed {
+		var n int
+		n, err = a.store.CountLiveChildrenTx(ctx, tx, entity.EntityID)
+		if err != nil {
+			return "", fmt.Errorf("return %q: %w", entity.FullPathDisplay, err)
+		}
+		if n > 0 {
+			return "", fmt.Errorf("cannot return %q (%d inside; return or move them first): %w",
+				entity.FullPathDisplay, n, ErrHasChildren)
+		}
 		targetStatus = inventory.EntityStatusRemoved
 	}
 
@@ -257,6 +268,14 @@ func (a *App) BorrowEntities(ctx context.Context, reqs []BorrowEntityRequest) ([
 }
 
 func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntityRequest) (string, error) {
+	if err := entitypath.ValidateSegment(req.DisplayName); err != nil {
+		return "", fmt.Errorf("invalid name %q: %w", req.DisplayName, err)
+	}
+	lender := strings.TrimSpace(req.StatusContext)
+	if lender == "" {
+		return "", fmt.Errorf("borrow %q: %w", req.DisplayName, ErrLenderRequired)
+	}
+
 	var parentID *string
 	if req.ParentPath != "" {
 		parent, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
@@ -274,16 +293,11 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 		return "", fmt.Errorf("generate entity ID: %w", err)
 	}
 
-	var statusContext *string
-	if req.StatusContext != "" {
-		statusContext = &req.StatusContext
-	}
-
 	payload := eventbus.EntityBorrowedPayload{
 		EntityID:      entityID,
 		DisplayName:   req.DisplayName,
 		ParentID:      parentID,
-		StatusContext: statusContext,
+		StatusContext: &lender,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

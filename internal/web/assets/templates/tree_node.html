@@ -1,5 +1,6 @@
 {{define "tree_node"}}
-<li role="treeitem"
+<li id="tree-node-{{.EntityID}}"
+    role="treeitem"
     aria-selected="false"
     {{if .HasChildren}}aria-expanded="false"{{end}}
     aria-label="{{.DisplayName}}">

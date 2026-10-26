@@ -103,6 +103,7 @@
             uv
             nodejs
             gh
+            playwright-mcp # browser automation MCP server; bundles Nix-built browsers
           ];
 
           shellHook = ''

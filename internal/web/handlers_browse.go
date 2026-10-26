@@ -123,3 +123,45 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Actor  actorView
 	}{Roots: roots, Search: searchData, Actor: s.actorView(r)})
 }
+
+// handleParentOptions returns eligible-parent matches for the borrow form's parent picker.
+func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if len(q) > maxQueryLen {
+		http.Error(w, "query too long", http.StatusBadRequest)
+		return
+	}
+	q = strings.TrimSpace(q)
+
+	var results []app.FindResult
+	if q != "" {
+		var err error
+		results, err = s.cfg.App.FindParentCandidates(r.Context(), app.FindEntitiesRequest{
+			Query: q,
+			Limit: parentOptionsLimit,
+		})
+		if err != nil {
+			s.serverError(w, "find parent candidates", err)
+			return
+		}
+	}
+
+	s.renderHTML(w, "parent_options", struct {
+		Query   string
+		Results []app.FindResult
+	}{Query: q, Results: results})
+}
+
+// handleTreeNode returns a single tree_node fragment for inserting a newly created entity.
+func (s *Server) handleTreeNode(w http.ResponseWriter, r *http.Request) {
+	e, err := s.cfg.App.GetEntityByID(r.Context(), r.PathValue("entityID"))
+	if errors.Is(err, app.ErrNotFound) {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.serverError(w, "get entity", err)
+		return
+	}
+	s.renderHTML(w, "tree_node", e)
+}

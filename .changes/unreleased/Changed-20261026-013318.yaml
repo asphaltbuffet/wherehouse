@@ -1,0 +1,5 @@
+kind: Changed
+body: return refuses a borrowed entity that still contains other entities; return or move them first
+time: 2026-10-26T01:33:18.000000000Z
+custom:
+    Issue: ""

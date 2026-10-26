@@ -110,6 +110,7 @@ A command's `--json` shape is an **app-owned** type with JSON tags in `internal/
 - `handlers_browse.go` — index, tree children, search (entity discovery/navigation)
 - `handlers_entity.go` — entity detail, edit name, toggle-missing, `buildDetailData`, `renderDetailSection`
 - `handlers_add.go` — add item forms and creation flow
+- `handlers_borrow.go` — borrow form, default-parent resolution, borrow creation
 - `handlers_util.go` — `renderHTML`, `renderHTMLAppend`, `serverError`, `handleHealthz`, shared constants
 - `handlers_data.go` — create this when import/export handlers arrive (not yet present)
 

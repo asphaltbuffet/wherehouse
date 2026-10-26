@@ -46,7 +46,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 - **Hierarchical Paths** — place > container > leaf nesting with colon-path addressing
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
-- **Web UI** — local HTTP server for browsing, searching, adding, and editing inventory
+- **Web UI** — local HTTP server for browsing, searching, adding, editing, borrowing, and returning inventory
 - **Network Storage Ready** — SQLite WAL mode works with NFS/SMB mounts
 - **Multi-User Attribution** — trust-based; tracks who made changes, no permissions enforcement
 - **Single File Database** — entire inventory in one portable SQLite file
@@ -265,12 +265,55 @@ wherehouse found "Basement:Toolbox:10mm socket"
 # Lend something out (recipient required)
 wherehouse loan "Garage:Ladder" --to "Bob" --note "lent for the weekend"
 
-# Bring a loaned (or borrowed) entity back
+# Bring a loaned (or borrowed) entity back; a borrowed entity is removed,
+# and must not still contain other entities
 wherehouse return "Garage:Ladder"
 
 # Track an externally-owned item brought into the inventory
 wherehouse borrow "Garage:Alice's Drill" --from "Alice"
 ```
+
+#### Status Lifecycle
+
+Legal transitions (see [ADR 0024](docs/adr/0024-status-transition-commands-enforce-source-preconditions.md)). Edges marked `[web]` are also available in the web UI; all others are CLI-only.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> ok: add [web]
+    [*] --> borrowed: borrow [web]
+    ok --> missing: lost [web]
+    missing --> ok: found [web]
+    ok --> loaned: loan
+    missing --> loaned: loan
+    loaned --> ok: return [web]
+    borrowed --> removed: return [web]
+    ok --> removed: remove
+    missing --> removed: remove
+    loaned --> removed: remove
+    removed --> [*]
+
+    note right of ok
+        lost and loan are blocked
+        on locked entities
+    end note
+```
+
+Non-status actions, by interface:
+
+| Action | CLI | Web UI | Notes |
+|---|:-:|:-:|---|
+| add | ✅ | ✅ | web form has no `--locked` / `--discrete` / `--create-parents` |
+| rename | ✅ | ✅ | |
+| move | ✅ | ❌ | |
+| remove | ✅ | ❌ | |
+| lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities, so a locked entity marked `missing` cannot be found from the web |
+| loan | ✅ | ❌ | |
+| borrow | ✅ | ✅ | web creates one entity per submit, with a searchable location picker defaulting to the entity being viewed |
+| return | ✅ | ✅ | web asks for confirmation before returning a borrowed entity |
+| scry / list | ✅ | ✅ | web has search and tree browsing; no status filter |
+| history | ✅ | ❌ | |
+| export / doctor | ✅ | ❌ | |
 
 ### 7. List Entities
 

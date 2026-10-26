@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/web"
 )
 
@@ -28,6 +29,18 @@ type fakeApp struct {
 	findResults  []app.FindResult
 	findErr      error
 	lastActor    string // ActorID from the most recent mutating call
+
+	returnErr     error
+	lastReturnReq app.ChangeStatusRequest
+
+	parentResults   []app.FindResult
+	parentCalls     int
+	lastParentQuery string
+
+	borrowResults []app.EntityResult
+	borrowErr     error
+	borrowCalls   int
+	lastBorrowReq app.BorrowEntityRequest
 }
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
@@ -35,6 +48,18 @@ func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
 }
 
 func (f *fakeApp) GetEntityByID(_ context.Context, entityID string) (app.EntityResult, error) {
+	if f.err != nil {
+		return app.EntityResult{}, f.err
+	}
+	for _, e := range f.entities {
+		if e.EntityID == entityID && e.Status != inventory.EntityStatusRemoved {
+			return e, nil
+		}
+	}
+	return app.EntityResult{}, app.ErrNotFound
+}
+
+func (f *fakeApp) GetEntityByIDAnyStatus(_ context.Context, entityID string) (app.EntityResult, error) {
 	if f.err != nil {
 		return app.EntityResult{}, f.err
 	}
@@ -80,6 +105,33 @@ func (f *fakeApp) ChangeStatus(_ context.Context, req app.ChangeStatusRequest) (
 
 func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {
 	return f.findResults, f.findErr
+}
+
+func (f *fakeApp) MarkReturned(_ context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	if len(reqs) > 0 {
+		f.lastActor = reqs[0].ActorID
+		f.lastReturnReq = reqs[0]
+	}
+	return nil, f.returnErr
+}
+
+func (f *fakeApp) FindParentCandidates(_ context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error) {
+	f.parentCalls++
+	f.lastParentQuery = req.Query
+	return f.parentResults, f.findErr
+}
+
+func (f *fakeApp) BorrowEntities(_ context.Context, reqs []app.BorrowEntityRequest) ([]app.EntityResult, error) {
+	f.borrowCalls++
+	if len(reqs) > 0 {
+		f.lastActor = reqs[0].ActorID
+		f.lastBorrowReq = reqs[0]
+	}
+	if f.borrowErr != nil {
+		return nil, f.borrowErr
+	}
+	f.entities = append(f.entities, f.borrowResults...)
+	return f.borrowResults, nil
 }
 
 func newTestServer(t *testing.T, a web.App) *httptest.Server {

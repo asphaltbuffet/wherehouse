@@ -43,6 +43,22 @@ func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]
 	return nil, nil
 }
 
+func (f *fakeApp) MarkReturned(_ context.Context, _ []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	return nil, nil
+}
+
+func (f *fakeApp) FindParentCandidates(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {
+	return nil, nil
+}
+
+func (f *fakeApp) GetEntityByIDAnyStatus(_ context.Context, _ string) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
+
+func (f *fakeApp) BorrowEntities(_ context.Context, _ []app.BorrowEntityRequest) ([]app.EntityResult, error) {
+	return nil, nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

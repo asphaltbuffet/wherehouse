@@ -38,6 +38,9 @@ func buildReturnCmd() *cobra.Command {
 		Short: "Mark one or more loaned entities as returned",
 		Long: `Mark one or more entities as ok (status: ok), recording that they have been returned.
 
+A borrowed entity is removed from the inventory instead. A borrowed entity that still
+contains other entities cannot be returned; return or move them first.
+
 All entities are updated atomically — if any path fails, none are changed.
 
 Examples:

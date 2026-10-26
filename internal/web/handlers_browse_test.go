@@ -3,6 +3,9 @@ package web_test
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -121,4 +124,75 @@ func TestHandleSearch_AppError(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func getParentOptions(t *testing.T, ts *httptest.Server, q string) (*http.Response, string) {
+	t.Helper()
+	resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=" + url.QueryEscape(q))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func TestHandleParentOptions_RendersCandidates(t *testing.T) {
+	fake := &fakeApp{parentResults: []app.FindResult{
+		{Entity: app.EntityResult{EntityID: "t1", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox"}},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := getParentOptions(t, ts, "  tool  ")
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "tool", fake.lastParentQuery)
+	assert.Contains(t, body, `data-action="pick-parent"`)
+	assert.Contains(t, body, `data-parent-id="t1"`)
+	assert.Contains(t, body, `data-parent-path="Garage:Toolbox"`)
+}
+
+func TestHandleParentOptions_NoMatches(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{})
+	defer ts.Close()
+
+	_, body := getParentOptions(t, ts, "zzz")
+	assert.Contains(t, body, "No matching locations")
+}
+
+func TestHandleParentOptions_EmptyQuerySkipsSearch(t *testing.T) {
+	fake := &fakeApp{}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := getParentOptions(t, ts, "   ")
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Zero(t, fake.parentCalls)
+	assert.NotContains(t, body, "No matching locations")
+}
+
+func TestHandleParentOptions_QueryTooLong(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{})
+	defer ts.Close()
+
+	resp, _ := getParentOptions(t, ts, strings.Repeat("a", 101))
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestHandleTreeNode(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill", Status: inventory.EntityStatusBorrowed},
+	}})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/abc/tree-node")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), `id="tree-node-abc"`)
+
+	resp2, err := ts.Client().Get(ts.URL + "/entities/nope/tree-node")
+	require.NoError(t, err)
+	defer resp2.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp2.StatusCode)
 }

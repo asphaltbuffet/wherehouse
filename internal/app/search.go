@@ -10,6 +10,18 @@ import (
 // FindEntities searches for non-removed entities whose display name contains the query string.
 // Results are sorted by Levenshtein distance (exact matches first), then alphabetically.
 func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]FindResult, error) {
+	return a.findMatching(ctx, req, func(EntityResult) bool { return true })
+}
+
+// FindParentCandidates searches like FindEntities but returns only eligible parents.
+// Filtering happens before the limit so ineligible matches cannot crowd out eligible ones.
+func (a *App) FindParentCandidates(ctx context.Context, req FindEntitiesRequest) ([]FindResult, error) {
+	return a.findMatching(ctx, req, EntityResult.IsEligibleParent)
+}
+
+func (a *App) findMatching(
+	ctx context.Context, req FindEntitiesRequest, keep func(EntityResult) bool,
+) ([]FindResult, error) {
 	all, err := a.store.ListEntities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("find entities: %w", err)
@@ -33,8 +45,12 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 		if !strings.Contains(name, query) {
 			continue
 		}
+		r := entityToResult(e, tagsByID[e.EntityID])
+		if !keep(r) {
+			continue
+		}
 		results = append(results, FindResult{
-			Entity:   entityToResult(e, tagsByID[e.EntityID]),
+			Entity:   r,
 			Distance: levenshtein(query, name),
 		})
 	}
