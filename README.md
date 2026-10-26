@@ -272,6 +272,46 @@ wherehouse return "Garage:Ladder"
 wherehouse borrow "Garage:Alice's Drill" --from "Alice"
 ```
 
+#### Status Lifecycle
+
+Legal transitions (see [ADR 0024](docs/adr/0024-status-transition-commands-enforce-source-preconditions.md)). Edges marked `[web]` are also available in the web UI; all others are CLI-only.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> ok: add [web]
+    [*] --> borrowed: borrow
+    ok --> missing: lost [web]
+    missing --> ok: found [web]
+    ok --> loaned: loan
+    missing --> loaned: loan
+    loaned --> ok: return
+    borrowed --> removed: return
+    ok --> removed: remove
+    missing --> removed: remove
+    loaned --> removed: remove
+    removed --> [*]
+
+    note right of ok
+        lost and loan are blocked
+        on locked entities
+    end note
+```
+
+Non-status actions, by interface:
+
+| Action | CLI | Web UI | Notes |
+|---|:-:|:-:|---|
+| add | ✅ | ✅ | web form has no `--locked` / `--discrete` / `--create-parents` |
+| rename | ✅ | ✅ | |
+| move | ✅ | ❌ | |
+| remove | ✅ | ❌ | |
+| lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities, so a locked entity marked `missing` cannot be found from the web |
+| loan / return / borrow | ✅ | ❌ | |
+| scry / list | ✅ | ✅ | web has search and tree browsing; no status filter |
+| history | ✅ | ❌ | |
+| export / doctor | ✅ | ❌ | |
+
 ### 7. List Entities
 
 ```bash
