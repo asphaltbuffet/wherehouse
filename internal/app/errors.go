@@ -10,6 +10,9 @@ import (
 // ErrNotFound is returned when a requested entity does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrLenderRequired is returned when a borrow request has no lender (StatusContext).
+var ErrLenderRequired = errors.New("lender is required")
+
 // wrapEntityError translates a store.GetEntity error into an app-layer error.
 // store.ErrNotFound becomes app.ErrNotFound; all other errors (DB failures,
 // context cancellations, etc.) are propagated directly so callers can
