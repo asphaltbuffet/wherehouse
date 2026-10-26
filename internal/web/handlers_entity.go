@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -378,6 +379,36 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 	}
 }
 
+// treeNodeDetachedEvent is the tree-node-detached payload: entityID left
+// parentID's child list. tree.js resets the parent to a leaf when
+// ParentHasChildren is false.
+type treeNodeDetachedEvent struct {
+	EntityID          string `json:"entityId"`
+	ParentID          string `json:"parentId"`
+	ParentHasChildren bool   `json:"parentHasChildren"`
+}
+
+// setTreeNodeDetachedTrigger sets Hx-Trigger-After-Swap so tree.js runs after
+// the OOB delete. On failure it logs and sends no trigger: the removal has
+// already committed, and a stale chevron is better than a false error.
+func (s *Server) setTreeNodeDetachedTrigger(w http.ResponseWriter, r *http.Request, removed app.EntityResult) {
+	ev := treeNodeDetachedEvent{EntityID: removed.EntityID, ParentID: removed.ParentID}
+	if removed.ParentID != "" {
+		has, err := s.cfg.App.HasLiveChildren(r.Context(), removed.ParentID)
+		if err != nil {
+			s.cfg.Logger.Warn("count parent children", "error", err, "parent_id", removed.ParentID)
+			return
+		}
+		ev.ParentHasChildren = has
+	}
+	trigger, err := json.Marshal(map[string]treeNodeDetachedEvent{"tree-node-detached": ev})
+	if err != nil {
+		s.cfg.Logger.Warn("marshal tree-node-detached", "error", err)
+		return
+	}
+	w.Header().Set("Hx-Trigger-After-Swap", string(trigger))
+}
+
 // renderAfterRemoval shows the removed entity's parent (or the empty state for a
 // root entity), pushes the matching URL, and deletes the entity's tree node.
 func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, removed app.EntityResult) {
@@ -391,6 +422,7 @@ func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, remo
 		}
 	}
 
+	s.setTreeNodeDetachedTrigger(w, r, removed)
 	if parent.Entity.EntityID == "" {
 		w.Header().Set("Hx-Push-Url", "/")
 		s.renderHTML(w, "detail_empty", nil)

@@ -34,6 +34,10 @@ type fakeApp struct {
 	lastReturnReq app.ChangeStatusRequest
 	onReturn      func(*fakeApp) // runs inside MarkReturned; simulates a concurrent writer
 
+	hasChildren      map[string]bool // parentID → HasLiveChildren result; missing key ⇒ false
+	hasChildrenErr   error
+	hasChildrenCalls int
+
 	parentResults   []app.FindResult
 	parentCalls     int
 	lastParentQuery string
@@ -117,6 +121,14 @@ func (f *fakeApp) MarkReturned(_ context.Context, reqs []app.ChangeStatusRequest
 		f.onReturn(f)
 	}
 	return nil, f.returnErr
+}
+
+func (f *fakeApp) HasLiveChildren(_ context.Context, parentID string) (bool, error) {
+	f.hasChildrenCalls++
+	if f.hasChildrenErr != nil {
+		return false, f.hasChildrenErr
+	}
+	return f.hasChildren[parentID], nil
 }
 
 func (f *fakeApp) FindParentCandidates(_ context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error) {
