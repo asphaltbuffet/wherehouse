@@ -36,8 +36,8 @@ func seedForReturn(t *testing.T, a *app.App) {
 	hammer, err := a.LookupEntityByPath(ctx, "Garage:Toolbox:Hammer")
 	require.NoError(t, err)
 	_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{
-		{EntityID: wrench.EntityID, Status: inventory.EntityStatusLoaned, StatusContext: "Bob", ActorID: "test"},
-		{EntityID: hammer.EntityID, Status: inventory.EntityStatusLoaned, StatusContext: "Bob", ActorID: "test"},
+		{EntityID: wrench.EntityID, StatusContext: "Bob", ActorID: "test"},
+		{EntityID: hammer.EntityID, StatusContext: "Bob", ActorID: "test"},
 	})
 	require.NoError(t, err)
 }

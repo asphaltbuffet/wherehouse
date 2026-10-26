@@ -26,6 +26,8 @@ type fakeApp struct {
 	renameResult app.EntityResult
 	renameErr    error
 	statusErr    error
+	lostCalls    int
+	foundCalls   int
 	findResults  []app.FindResult
 	findErr      error
 	lastActor    string // ActorID from the most recent mutating call
@@ -108,9 +110,20 @@ func (f *fakeApp) RenameEntity(_ context.Context, req app.RenameEntityRequest) (
 	return f.renameResult, f.renameErr
 }
 
-func (f *fakeApp) ChangeStatus(_ context.Context, req app.ChangeStatusRequest) (app.EntityResult, error) {
-	f.lastActor = req.ActorID
-	return app.EntityResult{}, f.statusErr
+func (f *fakeApp) MarkLost(_ context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	f.lostCalls++
+	if len(reqs) > 0 {
+		f.lastActor = reqs[0].ActorID
+	}
+	return nil, f.statusErr
+}
+
+func (f *fakeApp) MarkFound(_ context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	f.foundCalls++
+	if len(reqs) > 0 {
+		f.lastActor = reqs[0].ActorID
+	}
+	return nil, f.statusErr
 }
 
 func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {

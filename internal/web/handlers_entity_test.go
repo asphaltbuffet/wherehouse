@@ -191,7 +191,8 @@ func TestHandleToggleMissing_OkToMissing(t *testing.T) {
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
 			Status: inventory.EntityStatusOk},
 	}
-	ts := newTestServer(t, &fakeApp{entities: entities})
+	fa := &fakeApp{entities: entities}
+	ts := newTestServer(t, fa)
 	defer ts.Close()
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/toggle-missing", nil)
@@ -203,6 +204,8 @@ func TestHandleToggleMissing_OkToMissing(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), `id="entity-detail"`)
+	assert.Equal(t, 1, fa.lostCalls, "ok → missing must go through MarkLost")
+	assert.Zero(t, fa.foundCalls)
 }
 
 func TestHandleToggleMissing_MissingToOk(t *testing.T) {
@@ -210,7 +213,8 @@ func TestHandleToggleMissing_MissingToOk(t *testing.T) {
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
 			Status: inventory.EntityStatusMissing},
 	}
-	ts := newTestServer(t, &fakeApp{entities: entities})
+	fa := &fakeApp{entities: entities}
+	ts := newTestServer(t, fa)
 	defer ts.Close()
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/toggle-missing", nil)
@@ -220,6 +224,8 @@ func TestHandleToggleMissing_MissingToOk(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 1, fa.foundCalls, "missing → ok must go through MarkFound")
+	assert.Zero(t, fa.lostCalls)
 }
 
 func TestHandleToggleMissing_LockedEntity_Forbidden(t *testing.T) {
@@ -730,7 +736,6 @@ func TestHandleLoan_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "abc", fake.lastLoanReq.EntityID)
-	assert.Equal(t, inventory.EntityStatusLoaned, fake.lastLoanReq.Status)
 	assert.Equal(t, "Alice", fake.lastLoanReq.StatusContext)
 	assert.Equal(t, "for the weekend", fake.lastLoanReq.Note)
 	assert.Contains(t, body, `id="entity-detail"`)

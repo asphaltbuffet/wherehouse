@@ -1,7 +1,5 @@
 package app
 
-import "github.com/asphaltbuffet/wherehouse/internal/inventory"
-
 // CreateEntityRequest is the input for creating a new entity.
 type CreateEntityRequest struct {
 	DisplayName string
@@ -37,10 +35,11 @@ type RemoveEntityRequest struct {
 	Note     string
 }
 
-// ChangeStatusRequest is the input for changing an entity's status.
+// ChangeStatusRequest is the input for the intent-specific status transitions
+// (MarkLost, MarkFound, MarkLoaned, MarkReturned). The target status is implied
+// by the method called; StatusContext carries the loan recipient for MarkLoaned.
 type ChangeStatusRequest struct {
 	EntityID      string
-	Status        inventory.EntityStatus
 	StatusContext string
 	ActorID       string
 	Note          string

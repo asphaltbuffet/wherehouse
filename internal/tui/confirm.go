@@ -12,7 +12,6 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/styles"
 )
 
@@ -86,7 +85,6 @@ func (c confirmModel) submitCmd() tea.Cmd {
 		return func() tea.Msg {
 			reqs := []app.ChangeStatusRequest{{
 				EntityID: entity.EntityID,
-				Status:   inventory.EntityStatusMissing,
 				ActorID:  cli.GetActorUserID(context.Background()),
 				Note:     note,
 			}}
@@ -121,7 +119,6 @@ func (c confirmModel) submitCmd() tea.Cmd {
 		return func() tea.Msg {
 			reqs := []app.ChangeStatusRequest{{
 				EntityID: entity.EntityID,
-				Status:   inventory.EntityStatusOk,
 				ActorID:  cli.GetActorUserID(context.Background()),
 				Note:     note,
 			}}

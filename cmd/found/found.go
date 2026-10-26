@@ -8,7 +8,6 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
-	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 // NewDefaultFoundCmd returns a found command that opens the database from context configuration at runtime.
@@ -61,7 +60,6 @@ func runFound(cmd *cobra.Command, args []string, a *app.App) error {
 		}
 		reqs[i] = app.ChangeStatusRequest{
 			EntityID: entity.EntityID,
-			Status:   inventory.EntityStatusOk,
 			Note:     noteFlag,
 			ActorID:  cli.GetActorUserID(ctx),
 		}
