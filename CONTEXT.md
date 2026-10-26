@@ -20,6 +20,10 @@ A mutable boolean attribute on an entity. When `true`, the entity cannot be dire
 
 A mutable boolean attribute on an entity. When `true`, the entity may not have children added to it (via `add` or `move`). Acts as a guard rail against accidental nesting — for example, a "Box of Nails" that should be tracked as a single unit. Defaults to `false` at creation. Can be cleared when sub-tracking is needed (e.g. pulling individual items out of a box). Toggled via `EntityDiscreteSetEvent` / `EntityDiscreteClearedEvent`.
 
+### Eligible parent
+
+An entity that may receive a new child (via `add`, `borrow`, or `move`): any entity that is neither `removed` nor `discrete`. Status is otherwise irrelevant — a `borrowed`, `loaned`, or `missing` entity is still an eligible parent (e.g. borrowed bits placed inside a borrowed drill case). The root (no parent) is always eligible.
+
 ### EntityStatus
 
 The lifecycle state of an entity. Valid values:
@@ -28,7 +32,7 @@ The lifecycle state of an entity. Valid values:
 |---|---|---|
 | `EntityStatusOk` | `"ok"` | Normal, at its location |
 | `EntityStatusMissing` | `"missing"` | Location unknown |
-| `EntityStatusBorrowed` | `"borrowed"` | An external item brought into the inventory temporarily (a new entity is created to represent it). `borrowed` is a terminal status — the only valid transition is `return`, which sets the entity to `removed`. All other status changes (including `ok`, `missing`, `loaned`) and direct `remove` are blocked. |
+| `EntityStatusBorrowed` | `"borrowed"` | An external item brought into the inventory temporarily (a new entity is created to represent it). `borrowed` is a terminal status — the only valid transition is `return`, which sets the entity to `removed`, and only when it has no non-removed children ([ADR 0032](docs/adr/0032-return-of-borrowed-entity-requires-no-live-children.md)). All other status changes (including `ok`, `missing`, `loaned`) and direct `remove` are blocked. |
 | `EntityStatusLoaned` | `"loaned"` | An existing inventory entity given out to someone else (the entity already exists; no new entity is created) |
 | `EntityStatusRemoved` | `"removed"` | Soft-deleted from the inventory |
 
