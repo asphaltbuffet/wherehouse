@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
@@ -26,6 +28,8 @@ type detailData struct {
 	CanLoan           bool          // ok/missing and not locked (ADR 0024)
 	LoanBlockedReason string        // non-empty when Loan is shown disabled
 	LoanForm          *loanFormData // non-nil re-opens the loan form (validation error)
+	LockAction        attrAction    // Lock / Unlock button
+	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
 	Breadcrumbs       []Breadcrumb
 	Error             string // populated by edit POST handlers; rendered inline above the detail dl
 }
@@ -40,6 +44,118 @@ type loanFormData struct {
 
 // loanLockedReason is the tooltip on a disabled Loan button.
 const loanLockedReason = "Locked entities cannot be loaned"
+
+// attrAction is the view model for one attribute button on the detail panel.
+// The button posts Field=Value: the explicit target, never a toggle, so a
+// stale click fails with ErrNoChange instead of flipping the attribute.
+type attrAction struct {
+	EntityID      string
+	Label         string
+	Field         string // "locked" or "discrete"
+	Value         string // "true" or "false"
+	BlockedReason string // non-empty => rendered disabled with this tooltip
+}
+
+const (
+	lockBlockedReason     = "Missing or loaned entities cannot be locked"
+	discreteBlockedReason = "Entities with children cannot be marked discrete"
+	attrStaleMessage      = "Already changed elsewhere; showing current state."
+	attrFailedMessage     = "attribute change failed"
+)
+
+func lockAction(e app.EntityResult) attrAction {
+	if e.Locked {
+		return attrAction{EntityID: e.EntityID, Label: "Unlock", Field: "locked", Value: "false"}
+	}
+	a := attrAction{EntityID: e.EntityID, Label: "Lock", Field: "locked", Value: "true"}
+	if e.Status != inventory.EntityStatusOk && e.Status != inventory.EntityStatusBorrowed {
+		a.BlockedReason = lockBlockedReason
+	}
+	return a
+}
+
+// discreteAction queries live children only when marking is possible. A failed
+// count leaves the button enabled: the app enforces the rule on submit.
+func (s *Server) discreteAction(ctx context.Context, e app.EntityResult) attrAction {
+	if e.Discrete {
+		return attrAction{EntityID: e.EntityID, Label: "Clear discrete", Field: "discrete", Value: "false"}
+	}
+	a := attrAction{EntityID: e.EntityID, Label: "Mark discrete", Field: "discrete", Value: "true"}
+	has, err := s.cfg.App.HasLiveChildren(ctx, e.EntityID)
+	if err != nil {
+		s.cfg.Logger.Warn("count children for discrete action", "error", err, "entity_id", e.EntityID)
+		return a
+	}
+	if has {
+		a.BlockedReason = discreteBlockedReason
+	}
+	return a
+}
+
+// parseAttrForm reads locked and/or discrete as explicit booleans. ok is false
+// when neither is present or a value does not parse.
+func parseAttrForm(form url.Values) (app.SetAttributesRequest, bool) {
+	var req app.SetAttributesRequest
+	for _, f := range []struct {
+		name string
+		dst  **bool
+	}{{"locked", &req.Locked}, {"discrete", &req.Discrete}} {
+		raw, present := form[f.name]
+		if !present {
+			continue
+		}
+		v, err := strconv.ParseBool(raw[0])
+		if err != nil {
+			return app.SetAttributesRequest{}, false
+		}
+		*f.dst = &v
+	}
+	return req, req.Locked != nil || req.Discrete != nil
+}
+
+// handleAttr sets the attribute(s) posted by a detail-panel button. Failures
+// re-read the entity and render its current state with an inline error.
+func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	req, ok := parseAttrForm(r.PostForm)
+	if !ok {
+		http.Error(w, "locked and/or discrete must be true or false", http.StatusBadRequest)
+		return
+	}
+	req.EntityID = entityID
+	req.ActorID = s.actorFor(r)
+
+	_, setErr := s.cfg.App.SetAttributes(r.Context(), []app.SetAttributesRequest{req})
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+
+	switch {
+	case setErr == nil:
+	case errors.Is(setErr, app.ErrNoChange):
+		s.cfg.Logger.Info("attribute unchanged: panel was stale", "error", setErr, "entity_id", entityID)
+		fresh.Error = attrStaleMessage
+	default:
+		s.cfg.Logger.Error("set attributes", "error", setErr, "entity_id", entityID)
+		fresh.Error = attrFailedMessage
+	}
+
+	s.renderDetailSection(w, r, fresh)
+	if r.Header.Get("Hx-Request") == htmxHeaderVal {
+		s.renderHTMLAppend(w, "tree_attrs_oob", fresh.Entity)
+	}
+}
 
 // detailPageData wraps detailData with the tree roots for full-page (non-HTMX) renders.
 type detailPageData struct {
@@ -143,6 +259,8 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		ReturnConfirm:     returnConfirm(entity),
 		CanLoan:           !entity.Locked && editable,
 		LoanBlockedReason: loanBlockedReason,
+		LockAction:        lockAction(entity),
+		DiscreteAction:    s.discreteAction(ctx, entity),
 		Breadcrumbs:       BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
 	}, nil
 }

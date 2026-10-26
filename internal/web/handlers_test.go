@@ -55,6 +55,34 @@ type fakeApp struct {
 	borrowErr     error
 	borrowCalls   int
 	lastBorrowReq app.BorrowEntityRequest
+
+	attrErr     error
+	attrCalls   int
+	lastAttrReq app.SetAttributesRequest
+}
+
+// SetAttributes records the request and, on success, applies it to f.entities
+// so the handler's fresh re-read shows the new state.
+func (f *fakeApp) SetAttributes(_ context.Context, reqs []app.SetAttributesRequest) ([]app.EntityResult, error) {
+	f.attrCalls++
+	f.lastAttrReq = reqs[0]
+	f.lastActor = reqs[0].ActorID
+	if f.attrErr != nil {
+		return nil, f.attrErr
+	}
+	for i := range f.entities {
+		if f.entities[i].EntityID != reqs[0].EntityID {
+			continue
+		}
+		if reqs[0].Locked != nil {
+			f.entities[i].Locked = *reqs[0].Locked
+		}
+		if reqs[0].Discrete != nil {
+			f.entities[i].Discrete = *reqs[0].Discrete
+		}
+		return []app.EntityResult{f.entities[i]}, nil
+	}
+	return nil, app.ErrNotFound
 }
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {

@@ -14,18 +14,20 @@
     <span class="chevron{{if not .HasChildren}} chevron-hidden{{end}}" aria-hidden="true">
       <svg viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>
     </span>
-    {{if .Locked}}<span aria-hidden="true">🔒</span>{{end}}
+    <span id="tree-lock-{{.EntityID}}" class="tree-slot">{{template "tree_lock" .}}</span>
     <span id="tree-label-{{.EntityID}}">{{.DisplayName}}</span>
     {{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}">{{if $cls}}{{.Status}}{{end}}</span>
-    {{if not .Discrete}}
-    <button class="add-btn"
-            type="button"
-            data-parent-id="{{.EntityID}}"
-            aria-label="Add child item under {{.DisplayName}}">+</button>
-    {{end}}
+    <span id="tree-add-{{.EntityID}}" class="tree-slot">{{template "tree_add_btn" .}}</span>
   </div>
   <ul id="tree-children-{{.EntityID}}"
       class="tree-children tree-node{{if .HasChildren}} collapsed{{end}}"
       role="group"></ul>
 </li>
 {{end}}
+
+{{define "tree_lock"}}{{if .Locked}}<span aria-hidden="true">🔒</span>{{end}}{{end}}
+
+{{define "tree_add_btn"}}{{if not .Discrete}}<button class="add-btn"
+            type="button"
+            data-parent-id="{{.EntityID}}"
+            aria-label="Add child item under {{.DisplayName}}">+</button>{{end}}{{end}}

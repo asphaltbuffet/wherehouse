@@ -420,7 +420,8 @@ func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
 	assert.Contains(t, string(body), "Select an item to see details.")
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: ""}, detachedTrigger(t, resp))
-	assert.Zero(t, fake.hasChildrenCalls, "root removal must not query child count")
+	assert.Equal(t, 1, fake.hasChildrenCalls,
+		"only the detail panel's discrete check queries; a root removal must not query a parent")
 }
 
 func TestHandleReturn_OkForbidden(t *testing.T) {

@@ -67,6 +67,8 @@
         Loan
       </button>
       {{end}}
+      {{template "attr_button" .LockAction}}
+      {{template "attr_button" .DiscreteAction}}
     </aside>
   </div>
 
@@ -125,4 +127,21 @@
 
 {{define "tree_node_delete_oob"}}
 <li id="tree-node-{{.EntityID}}" hx-swap-oob="delete"></li>
+{{end}}
+
+{{define "attr_button"}}
+{{if .BlockedReason}}
+<button class="btn-ghost detail-action-btn" disabled aria-disabled="true"
+        title="{{.BlockedReason}}">{{.Label}}</button>
+{{else}}
+<button class="btn-ghost detail-action-btn"
+        name="{{.Field}}" value="{{.Value}}"
+        hx-post="/entities/{{.EntityID}}/actions/attr"
+        hx-target="#entity-detail" hx-swap="outerHTML">{{.Label}}</button>
+{{end}}
+{{end}}
+
+{{define "tree_attrs_oob"}}
+<span id="tree-lock-{{.EntityID}}" class="tree-slot" hx-swap-oob="true">{{template "tree_lock" .}}</span>
+<span id="tree-add-{{.EntityID}}" class="tree-slot" hx-swap-oob="true">{{template "tree_add_btn" .}}</span>
 {{end}}
