@@ -234,6 +234,27 @@
     });
   }
 
+  // After a node leaves its parent's list (return; later remove and move): if
+  // the parent has no live children left, reset it to the leaf shape that
+  // tree_node renders. onEntityCreated then treats it as never-expanded, so a
+  // later borrow reveals the chevron and children load on expand.
+  function onTreeNodeDetached(e) {
+    var parentId = e.detail.parentId;
+    if (!parentId || e.detail.parentHasChildren) return;
+    var item = document.querySelector('.tree-item[data-entity-id="' + parentId + '"]');
+    if (!item) return;
+    var li = item.closest('li');
+    if (li) li.removeAttribute('aria-expanded');
+    delete item.dataset.expanded;
+    var ch = item.querySelector('.chevron');
+    if (ch) {
+      ch.classList.add('chevron-hidden');
+      ch.classList.remove('open');
+    }
+    var list = document.getElementById('tree-children-' + parentId);
+    if (list) list.classList.remove('collapsed');
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     var root = document.getElementById('tree-root-list');
     if (root) {
@@ -249,5 +270,6 @@
     document.body.addEventListener('click', onParentPick);
     document.body.addEventListener('keydown', onParentSearchKeydown);
     document.body.addEventListener('entity-created', onEntityCreated);
+    document.body.addEventListener('tree-node-detached', onTreeNodeDetached);
   });
 }());
