@@ -245,7 +245,7 @@ wherehouse move "Garage:Toolbox" --to "Basement"
 wherehouse move "Garage:Toolbox:Ratchet" --to "Garage:Pegboard"
 ```
 
-Locked entities (`--locked`) cannot be directly reparented; everything else is movable.
+Locked entities (`--locked`) cannot be directly reparented. A `missing` entity must be found first (`wherehouse found`), and a `loaned` entity must be returned first (`wherehouse return`). An entity cannot be moved into itself, anything inside it, or the parent it is already in.
 
 ### 5. View History
 

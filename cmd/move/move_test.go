@@ -83,3 +83,19 @@ func TestRunMove_Quiet_SuppressesSuccess(t *testing.T) {
 	assert.Empty(t, stdout.String())
 	assert.Empty(t, stderr.String())
 }
+
+func TestRunMove_MissingRejected(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForMove(t, a)
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
+	_, err = a.MarkLost(t.Context(), []app.ChangeStatusRequest{{EntityID: wrench.EntityID, ActorID: "test"}})
+	require.NoError(t, err)
+
+	cmd := move.NewMoveCmd(a)
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--to", "Workshop"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	assert.ErrorContains(t, cmd.Execute(), "mark it found first")
+}

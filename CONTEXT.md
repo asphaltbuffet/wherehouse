@@ -24,6 +24,10 @@ A mutable boolean attribute on an entity. When `true`, the entity may not have c
 
 An entity that may receive a new child (via `add`, `borrow`, or `move`): any entity that is neither `removed` nor `discrete`. Status is otherwise irrelevant — a `borrowed`, `loaned`, or `missing` entity is still an eligible parent (e.g. borrowed bits placed inside a borrowed drill case). The root (no parent) is always eligible.
 
+### Move
+
+Changing an entity's parent (recorded as `EntityReparentedEvent`). Move changes location only — never status. Only an entity that is not `locked` and whose status is `ok` or `borrowed` may be moved; a `missing` entity must first be found, and a `loaned` entity must first be returned. The destination must be an eligible parent (including the root) and may not be the entity itself, any of its descendants, or its current parent (a move must change location).
+
 ### EntityStatus
 
 The lifecycle state of an entity. Valid values:

@@ -1,0 +1,5 @@
+kind: Changed
+body: move rejects missing and loaned entities (find or return them first) and moves to the parent an entity is already in
+time: 2026-10-26T22:22:06.000000000Z
+custom:
+    Issue: ""

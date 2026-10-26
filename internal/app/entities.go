@@ -65,6 +65,27 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 	if entity.Locked {
 		return EntityResult{}, fmt.Errorf("cannot move %q: entity is locked", entity.FullPathDisplay)
 	}
+	if entity.Status == inventory.EntityStatusMissing {
+		return EntityResult{}, fmt.Errorf(
+			"cannot move %q: entity is missing — mark it found first",
+			entity.FullPathDisplay,
+		)
+	}
+	if entity.Status == inventory.EntityStatusLoaned {
+		return EntityResult{}, fmt.Errorf("cannot move %q: entity is loaned — return it first", entity.FullPathDisplay)
+	}
+
+	currentParentID := ""
+	if entity.ParentID != nil {
+		currentParentID = *entity.ParentID
+	}
+	if req.NewParentID == currentParentID {
+		return EntityResult{}, fmt.Errorf(
+			"cannot move %q: already there: %w",
+			entity.FullPathDisplay,
+			ErrInvalidDestination,
+		)
+	}
 
 	var newParentID *string
 	if req.NewParentID != "" {
@@ -74,7 +95,17 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 			return EntityResult{}, wrapEntityError(req.NewParentID, err)
 		}
 		if parentEntity.Discrete {
-			return EntityResult{}, fmt.Errorf("cannot move into %q: entity is discrete", parentEntity.FullPathDisplay)
+			return EntityResult{}, fmt.Errorf("cannot move into %q: entity is discrete: %w",
+				parentEntity.FullPathDisplay, ErrInvalidDestination)
+		}
+		var inside bool
+		inside, err = a.isSelfOrDescendant(ctx, entity.EntityID, parentEntity.EntityID)
+		if err != nil {
+			return EntityResult{}, err
+		}
+		if inside {
+			return EntityResult{}, fmt.Errorf("cannot move %q into itself or its own contents: %w",
+				entity.FullPathDisplay, ErrInvalidDestination)
 		}
 		newParentID = &parentEntity.EntityID
 	}
@@ -103,6 +134,27 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 	}
 
 	return a.entityWithTags(ctx, updated)
+}
+
+// isSelfOrDescendant reports whether candidateID is entityID or lies beneath it.
+// It walks the candidate's ancestors by ID — names are not unique, so path
+// prefixes cannot be trusted — and reads removed ancestors too, because a live
+// entity may sit under a removed one (#287).
+func (a *App) isSelfOrDescendant(ctx context.Context, entityID, candidateID string) (bool, error) {
+	for id := candidateID; id != ""; {
+		if id == entityID {
+			return true, nil
+		}
+		e, err := a.store.GetEntityAnyStatus(ctx, id)
+		if err != nil {
+			return false, wrapEntityError(id, err)
+		}
+		id = ""
+		if e.ParentID != nil {
+			id = *e.ParentID
+		}
+	}
+	return false, nil
 }
 
 // RemoveEntity permanently marks an entity as removed.
