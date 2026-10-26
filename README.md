@@ -46,7 +46,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 - **Hierarchical Paths** — arbitrarily nested entities with colon-path addressing
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
-- **Web UI** — local HTTP server for browsing, searching, adding, editing, borrowing, loaning, and returning inventory
+- **Web UI** — local HTTP server for browsing, searching, adding, editing, locking, marking discrete, borrowing, loaning, and returning inventory
 - **Network Storage Ready** — SQLite WAL mode works with NFS/SMB mounts
 - **Multi-User Attribution** — trust-based; tracks who made changes, no permissions enforcement
 - **Single File Database** — entire inventory in one portable SQLite file
@@ -212,6 +212,15 @@ wherehouse add "Garage:Toolbox:Ratchet" --discrete
 
 Paths are colon-separated from the root. Providing a nested path like `Garage:Toolbox:Wrench` will add `Wrench` under the existing `Garage:Toolbox` entity.
 
+Attributes can be changed later with `attr` (use the `=` form to clear):
+
+```bash
+wherehouse attr "Garage:Toolbox"                      # show locked/discrete
+wherehouse attr "Garage:Toolbox" --locked             # lock (only ok or borrowed entities)
+wherehouse attr "Garage:Toolbox" --locked=false       # unlock
+wherehouse attr "Garage:Box of Nails" --discrete      # only when it holds nothing
+```
+
 ### 3. Search
 
 ```bash
@@ -305,9 +314,10 @@ Non-status actions, by interface:
 |---|:-:|:-:|---|
 | add | ✅ | ✅ | web form has no `--locked` / `--discrete` / `--create-parents` |
 | rename | ✅ | ✅ | |
+| attr (lock / discrete) | ✅ | ✅ | web has one button per attribute; disabled with a tooltip when blocked |
 | move | ✅ | ❌ | |
 | remove | ✅ | ❌ | |
-| lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities, so a locked entity marked `missing` cannot be found from the web |
+| lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities (a locked entity can never be `missing`; unlock it first) |
 | loan | ✅ | ✅ | web form asks for "Loaned to" and an optional note; disabled for locked entities |
 | borrow | ✅ | ✅ | web creates one entity per submit, with a searchable location picker defaulting to the entity being viewed |
 | return | ✅ | ✅ | web asks for confirmation before returning a borrowed entity |
@@ -383,7 +393,7 @@ wherehouse serve --bind 0.0.0.0   # share on LAN
 wherehouse serve --actor-header Tailscale-User-Login   # trust a proxy identity header
 ```
 
-Open `http://localhost:8080` in your browser. From the UI you can browse the full entity tree, search, add entities, edit names, and toggle item status.
+Open `http://localhost:8080` in your browser. From the UI you can browse the full entity tree, search, add entities, edit names, toggle item status, and lock/unlock or mark entities discrete.
 
 ---
 
@@ -394,6 +404,7 @@ wherehouse <command> [flags]
 
 Entity Management:
   add <path>           Add an entity (--locked, --discrete, --create-parents)
+  attr <path>...       Show/set locked & discrete (--locked[=bool], --discrete[=bool])
   move <path>          Move an entity to a new parent (--to <dest>)
   rename <path>        Rename an entity (--to <new-name>)
   remove <path>        Remove an entity from the inventory

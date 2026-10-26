@@ -374,6 +374,8 @@ h1, h2, h3 {
 }
 .tree-item:hover .add-btn,
 .tree-item:focus-within .add-btn { opacity: 1; }
+/* Swap targets for OOB updates; contents keeps .add-btn a flex child of .tree-item. */
+.tree-slot { display: contents; }
 
 /* ── Detail pane content ─────────────────────────────────────────────── */
 .breadcrumbs {

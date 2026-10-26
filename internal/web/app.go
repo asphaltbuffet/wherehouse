@@ -25,4 +25,5 @@ type App interface {
 	FindParentCandidates(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
 	GetEntityByIDAnyStatus(ctx context.Context, entityID string) (app.EntityResult, error)
 	BorrowEntities(ctx context.Context, reqs []app.BorrowEntityRequest) ([]app.EntityResult, error)
+	SetAttributes(ctx context.Context, reqs []app.SetAttributesRequest) ([]app.EntityResult, error)
 }

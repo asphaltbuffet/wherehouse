@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/asphaltbuffet/wherehouse/cmd/add"
+	"github.com/asphaltbuffet/wherehouse/cmd/attr"
 	"github.com/asphaltbuffet/wherehouse/cmd/borrow"
 	configpkg "github.com/asphaltbuffet/wherehouse/cmd/config"
 	dbcmd "github.com/asphaltbuffet/wherehouse/cmd/db"
@@ -77,6 +78,7 @@ Examples:
 
 	rootCmd.AddCommand(configpkg.NewConfigCmd())
 	rootCmd.AddCommand(add.NewDefaultAddCmd())
+	rootCmd.AddCommand(attr.NewDefaultAttrCmd())
 	rootCmd.AddCommand(borrow.NewDefaultBorrowCmd())
 	rootCmd.AddCommand(export.NewDefaultExportCmd())
 	rootCmd.AddCommand(found.NewDefaultFoundCmd())

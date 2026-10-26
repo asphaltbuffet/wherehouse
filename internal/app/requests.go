@@ -45,6 +45,16 @@ type ChangeStatusRequest struct {
 	Note          string
 }
 
+// SetAttributesRequest is the input for changing an entity's locked and/or
+// discrete attributes. A nil field leaves that attribute unchanged.
+type SetAttributesRequest struct {
+	EntityID string
+	Locked   *bool
+	Discrete *bool
+	ActorID  string
+	Note     string
+}
+
 // BorrowEntityRequest is the input for borrowing an external entity into the inventory.
 type BorrowEntityRequest struct {
 	DisplayName   string

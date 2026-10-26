@@ -68,6 +68,10 @@ func (f *fakeApp) BorrowEntities(_ context.Context, _ []app.BorrowEntityRequest)
 	return nil, nil
 }
 
+func (f *fakeApp) SetAttributes(_ context.Context, _ []app.SetAttributesRequest) ([]app.EntityResult, error) {
+	return nil, nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

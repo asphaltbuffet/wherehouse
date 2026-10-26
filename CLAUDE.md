@@ -56,6 +56,7 @@ Every `ORDER BY` that could tie **must** include `event_id ASC` as a tiebreaker.
 ```
 cmd/                     # CLI commands (cobra); one subdir per command
   add/                   # add item / add location
+  attr/                  # show/set locked and discrete attributes
   config/                # config init/get/set/check/edit/path
   history/               # event timeline for an item
   list/                  # list items/locations

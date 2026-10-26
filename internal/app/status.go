@@ -24,7 +24,11 @@ func (a *App) markStatusBatch(
 	reqs []ChangeStatusRequest,
 	inTx func(context.Context, store.Tx, ChangeStatusRequest) (string, error),
 ) ([]EntityResult, error) {
-	if err := a.rejectDuplicateIDs(ctx, reqs); err != nil {
+	ids := make([]string, len(reqs))
+	for i, req := range reqs {
+		ids[i] = req.EntityID
+	}
+	if err := a.rejectDuplicateIDs(ctx, ids); err != nil {
 		return nil, err
 	}
 	return execBatch(ctx, a, caller, reqs, inTx)
@@ -33,15 +37,15 @@ func (a *App) markStatusBatch(
 // rejectDuplicateIDs fails a batch that names the same entity twice. Without it
 // the second request trips its own status guard ("entity is ok", or not found
 // for a removed borrow), which hides the real mistake from the user.
-func (a *App) rejectDuplicateIDs(ctx context.Context, reqs []ChangeStatusRequest) error {
-	seen := make(map[string]struct{}, len(reqs))
-	for _, req := range reqs {
-		if _, dup := seen[req.EntityID]; !dup {
-			seen[req.EntityID] = struct{}{}
+func (a *App) rejectDuplicateIDs(ctx context.Context, ids []string) error {
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
 			continue
 		}
-		name := req.EntityID
-		if e, err := a.store.GetEntityAnyStatus(ctx, req.EntityID); err == nil {
+		name := id
+		if e, err := a.store.GetEntityAnyStatus(ctx, id); err == nil {
 			name = e.FullPathDisplay
 		}
 		return fmt.Errorf("%q: %w", name, ErrDuplicateEntity)

@@ -162,6 +162,29 @@ func ToStatusOutputs(results []EntityResult) []StatusOutput {
 	return out
 }
 
+// AttrOutput is the `attr` command's JSON output shape: an entity's attributes
+// after the command. Read mode and write mode share it (ADR 0033).
+type AttrOutput struct {
+	EntityID string `json:"entity_id"`
+	Path     string `json:"path"`
+	Locked   bool   `json:"locked"`
+	Discrete bool   `json:"discrete"`
+}
+
+// ToAttrOutputs projects entity results into the `attr` output shape.
+func ToAttrOutputs(results []EntityResult) []AttrOutput {
+	out := make([]AttrOutput, len(results))
+	for i, e := range results {
+		out[i] = AttrOutput{
+			EntityID: e.EntityID,
+			Path:     e.FullPathDisplay,
+			Locked:   e.Locked,
+			Discrete: e.Discrete,
+		}
+	}
+	return out
+}
+
 // TagOutput is the --json output shape for the tag command.
 type TagOutput struct {
 	Path string   `json:"path"`
