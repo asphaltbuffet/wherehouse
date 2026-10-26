@@ -2,7 +2,9 @@ package inventory
 
 import "time"
 
-// Entity represents a single inventory node: a place, container, or leaf item.
+// Entity represents a single inventory node. Entities have no type classification;
+// they are distinguished only by position in the hierarchy and the mutable
+// Locked and Discrete flags.
 type Entity struct {
 	EntityID          string
 	DisplayName       string
