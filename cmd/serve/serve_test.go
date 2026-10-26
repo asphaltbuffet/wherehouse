@@ -51,6 +51,10 @@ func (f *fakeApp) FindParentCandidates(_ context.Context, _ app.FindEntitiesRequ
 	return nil, nil
 }
 
+func (f *fakeApp) GetEntityByIDAnyStatus(_ context.Context, _ string) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

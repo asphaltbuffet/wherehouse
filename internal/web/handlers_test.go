@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/web"
 )
 
@@ -42,6 +43,18 @@ func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
 }
 
 func (f *fakeApp) GetEntityByID(_ context.Context, entityID string) (app.EntityResult, error) {
+	if f.err != nil {
+		return app.EntityResult{}, f.err
+	}
+	for _, e := range f.entities {
+		if e.EntityID == entityID && e.Status != inventory.EntityStatusRemoved {
+			return e, nil
+		}
+	}
+	return app.EntityResult{}, app.ErrNotFound
+}
+
+func (f *fakeApp) GetEntityByIDAnyStatus(_ context.Context, entityID string) (app.EntityResult, error) {
 	if f.err != nil {
 		return app.EntityResult{}, f.err
 	}

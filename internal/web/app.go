@@ -20,4 +20,5 @@ type App interface {
 	FindEntities(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
 	MarkReturned(ctx context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error)
 	FindParentCandidates(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
+	GetEntityByIDAnyStatus(ctx context.Context, entityID string) (app.EntityResult, error)
 }

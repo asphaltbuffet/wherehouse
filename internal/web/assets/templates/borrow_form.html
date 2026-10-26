@@ -1,0 +1,39 @@
+{{define "borrow_form"}}
+<form hx-post="/entities/borrow"
+      hx-target="#detail-panel"
+      hx-swap="innerHTML"
+      data-form="borrow">
+  <h2>Borrow Item</h2>
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+
+  <label for="borrow_display_name">Name</label>
+  <input id="borrow_display_name" type="text" name="display_name" value="{{.DisplayName}}" required autofocus>
+
+  <label for="borrow_from">Borrowed from</label>
+  <input id="borrow_from" type="text" name="from" value="{{.From}}" required>
+
+  <label for="borrow_parent_q">Put it in</label>
+  <input type="hidden" id="borrow_parent_id" name="parent_id" value="{{.ParentID}}">
+  <div class="parent-chosen">
+    <span id="borrow_parent_label">{{if .ParentPath}}{{.ParentPath}}{{else}}(root){{end}}</span>
+    <button type="button" class="btn-link" data-action="clear-parent"
+            aria-label="Put it at the root">✕</button>
+  </div>
+  <input id="borrow_parent_q" type="search" name="q" autocomplete="off"
+         placeholder="Search locations…"
+         hx-get="/entities/parent-options"
+         hx-trigger="input changed delay:200ms"
+         hx-target="#borrow_parent_options"
+         hx-swap="innerHTML"
+         hx-include="this">
+  <ul id="borrow_parent_options" class="parent-options" aria-label="Matching locations"></ul>
+
+  <label for="borrow_note">Note</label>
+  <input id="borrow_note" type="text" name="note" value="{{.Note}}">
+
+  <div class="modal-actions">
+    <button type="submit" class="btn-primary">Borrow</button>
+    <button type="button" class="btn-ghost" data-action="close-add-modal">Cancel</button>
+  </div>
+</form>
+{{end}}

@@ -21,6 +21,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /entities/{parentID}/add", s.handleAddItem)
 	mux.HandleFunc("GET /entities/add", s.handleRootAddItemForm)
 	mux.HandleFunc("GET /entities/parent-options", s.handleParentOptions)
+	mux.HandleFunc("GET /entities/borrow", s.handleBorrowForm)
 	mux.HandleFunc("POST /entities/add", s.handleRootAddItem)
 	mux.HandleFunc("GET /entities/{entityID}/edit/name", s.handleEditNameForm)
 	mux.HandleFunc("POST /entities/{entityID}/edit/name", s.handleEditName)
