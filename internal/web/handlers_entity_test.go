@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -313,6 +314,25 @@ func TestHandleReturn_LoanedRerendersInPlace(t *testing.T) {
 	assert.Equal(t, "abc", fake.lastReturnReq.EntityID)
 	assert.Contains(t, string(body), `id="tree-badge-abc"`)
 	assert.Empty(t, resp.Header.Get("Hx-Push-Url"))
+	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
+}
+
+type detachedEvent struct {
+	EntityID          string `json:"entityId"`
+	ParentID          string `json:"parentId"`
+	ParentHasChildren bool   `json:"parentHasChildren"`
+}
+
+// detachedTrigger decodes the tree-node-detached payload from Hx-Trigger-After-Swap.
+func detachedTrigger(t *testing.T, resp *http.Response) detachedEvent {
+	t.Helper()
+	raw := resp.Header.Get("Hx-Trigger-After-Swap")
+	require.NotEmpty(t, raw, "Hx-Trigger-After-Swap missing")
+	var trigger map[string]detachedEvent
+	require.NoError(t, json.Unmarshal([]byte(raw), &trigger))
+	ev, ok := trigger["tree-node-detached"]
+	require.True(t, ok, "tree-node-detached key missing: %s", raw)
+	return ev
 }
 
 func TestHandleReturn_BorrowedShowsParentAndDeletesNode(t *testing.T) {
@@ -332,6 +352,49 @@ func TestHandleReturn_BorrowedShowsParentAndDeletesNode(t *testing.T) {
 	assert.Equal(t, "/entities/g", resp.Header.Get("Hx-Push-Url"))
 	assert.Contains(t, string(body), "<h2>Garage</h2>")
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: "g", ParentHasChildren: false}, detachedTrigger(t, resp))
+}
+
+func TestHandleReturn_BorrowedSiblingRemainsKeepsParentExpandable(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+		hasChildren: map[string]bool{"g": true},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: "g", ParentHasChildren: true}, detachedTrigger(t, resp))
+}
+
+// A failed child count must not turn a committed return into an error page.
+func TestHandleReturn_BorrowedCountErrorOmitsTrigger(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+		hasChildrenErr: errTest,
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), "<h2>Garage</h2>")
+	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
 }
 
 func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
@@ -349,6 +412,8 @@ func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
 	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
 	assert.Contains(t, string(body), "Select an item to see details.")
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: ""}, detachedTrigger(t, resp))
+	assert.Zero(t, fake.hasChildrenCalls, "root removal must not query child count")
 }
 
 func TestHandleReturn_OkForbidden(t *testing.T) {
@@ -388,6 +453,7 @@ func TestHandleReturn_HasChildrenShowsMessage(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), "still contains other entities")
+	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
 }
 
 // Review Focus #1 (#292): a concurrent Return removed the borrowed entity
@@ -414,6 +480,7 @@ func TestHandleReturn_ConcurrentBorrowedShowsRemoval(t *testing.T) {
 	assert.Contains(t, string(body), "<h2>Garage</h2>")
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.NotContains(t, string(body), "return failed")
+	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: "g"}, detachedTrigger(t, resp))
 }
 
 // Review Focus #2 (#292): a concurrent Return already set the loaned entity

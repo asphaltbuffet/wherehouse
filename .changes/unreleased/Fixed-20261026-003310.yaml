@@ -1,0 +1,5 @@
+kind: Fixed
+body: 'Web: returning a parent''s last borrowed child now clears the parent''s expand chevron in the tree.'
+time: 2026-10-26T00:33:10.784402971-04:00
+custom:
+    Issue: '#293'
