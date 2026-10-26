@@ -140,7 +140,7 @@ run = [
 [tasks.update-deps]
 description = "update direct dependencies to latest versions"
 alias = "up"
-run = "go get -u"
+run = "go get -u -t ./..."
 depends_post = ["mod-tidy"]
 
 [tasks.test]
