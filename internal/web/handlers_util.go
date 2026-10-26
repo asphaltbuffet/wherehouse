@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	searchLimit   = 50
-	maxQueryLen   = 100
-	maxFormBytes  = 16 * 1024 // upper bound for POST form bodies
-	htmxHeaderVal = "true"
+	searchLimit        = 50
+	parentOptionsLimit = 10
+	maxQueryLen        = 100
+	maxFormBytes       = 16 * 1024 // upper bound for POST form bodies
+	htmxHeaderVal      = "true"
 )
 
 // serverError logs the internal detail and returns a generic 500 to the client.

@@ -1,0 +1,14 @@
+{{define "parent_options"}}
+{{if .Query}}
+{{range .Results}}
+<li>
+  <button type="button" class="btn-link parent-option"
+          data-action="pick-parent"
+          data-parent-id="{{.Entity.EntityID}}"
+          data-parent-path="{{.Entity.FullPathDisplay}}">{{.Entity.FullPathDisplay}}</button>
+</li>
+{{else}}
+<li class="parent-options-empty">No matching locations</li>
+{{end}}
+{{end}}
+{{end}}

@@ -31,6 +31,10 @@ type fakeApp struct {
 
 	returnErr     error
 	lastReturnReq app.ChangeStatusRequest
+
+	parentResults   []app.FindResult
+	parentCalls     int
+	lastParentQuery string
 }
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
@@ -91,6 +95,12 @@ func (f *fakeApp) MarkReturned(_ context.Context, reqs []app.ChangeStatusRequest
 		f.lastReturnReq = reqs[0]
 	}
 	return nil, f.returnErr
+}
+
+func (f *fakeApp) FindParentCandidates(_ context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error) {
+	f.parentCalls++
+	f.lastParentQuery = req.Query
+	return f.parentResults, f.findErr
 }
 
 func newTestServer(t *testing.T, a web.App) *httptest.Server {

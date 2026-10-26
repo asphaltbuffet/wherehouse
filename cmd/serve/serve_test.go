@@ -47,6 +47,10 @@ func (f *fakeApp) MarkReturned(_ context.Context, _ []app.ChangeStatusRequest) (
 	return nil, nil
 }
 
+func (f *fakeApp) FindParentCandidates(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {
+	return nil, nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 
