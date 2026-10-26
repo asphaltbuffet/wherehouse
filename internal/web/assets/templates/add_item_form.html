@@ -7,12 +7,15 @@
   <label for="display_name">Display Name</label>
   <input id="display_name" type="text" name="display_name" required autofocus>
 
-  <label for="entity_type">Type</label>
-  <select id="entity_type" name="entity_type">
-    <option value="place">Place</option>
-    <option value="container">Container</option>
-    <option value="leaf">Leaf</option>
-  </select>
+  <label for="locked">
+    <input id="locked" type="checkbox" name="locked">
+    Locked — prevent direct reparenting
+  </label>
+
+  <label for="discrete">
+    <input id="discrete" type="checkbox" name="discrete">
+    Discrete — no children allowed
+  </label>
 
   <div class="modal-actions">
     <button type="submit" class="btn-primary">Add</button>

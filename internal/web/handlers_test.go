@@ -32,6 +32,8 @@ type fakeApp struct {
 	findErr      error
 	lastActor    string // ActorID from the most recent mutating call
 
+	lastCreateReq app.CreateEntityRequest // most recent CreateEntity request
+
 	returnErr     error
 	lastReturnReq app.ChangeStatusRequest
 	onReturn      func(*fakeApp) // runs inside MarkReturned; simulates a concurrent writer
@@ -102,6 +104,7 @@ func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.
 
 func (f *fakeApp) CreateEntity(_ context.Context, req app.CreateEntityRequest) (app.EntityResult, error) {
 	f.lastActor = req.ActorID
+	f.lastCreateReq = req
 	return app.EntityResult{}, f.err
 }
 

@@ -43,7 +43,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 
 - **Event-Sourced** — append-only event log; projections are derived and rebuildable
 - **Unified Entity Model** — locations and items are both entities; hierarchy via colon-separated paths (`Garage:Toolbox:Wrench`)
-- **Hierarchical Paths** — place > container > leaf nesting with colon-path addressing
+- **Hierarchical Paths** — arbitrarily nested entities with colon-path addressing
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
 - **Web UI** — local HTTP server for browsing, searching, adding, editing, borrowing, loaning, and returning inventory

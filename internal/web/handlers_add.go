@@ -67,6 +67,8 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 
 	created, err := s.cfg.App.CreateEntity(r.Context(), app.CreateEntityRequest{
 		DisplayName: displayName,
+		Locked:      r.FormValue("locked") != "",
+		Discrete:    r.FormValue("discrete") != "",
 		ParentPath:  parentPath,
 		ActorID:     s.actorFor(r),
 	})
