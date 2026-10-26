@@ -594,3 +594,109 @@ func TestEntityDetail_ReturnButton(t *testing.T) {
 		})
 	}
 }
+
+func TestEntityDetail_LoanButton(t *testing.T) {
+	tests := []struct {
+		name        string
+		entity      app.EntityResult
+		wantButton  bool
+		wantEnabled bool
+	}{
+		{
+			name: "ok is loanable",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk},
+			wantButton: true, wantEnabled: true,
+		},
+		{
+			name: "missing is loanable (ADR 0024)",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusMissing},
+			wantButton: true, wantEnabled: true,
+		},
+		{
+			name: "locked is disabled",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk, Locked: true},
+			wantButton: true,
+		},
+		{
+			name: "loaned has no loan button",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+		},
+		{
+			name: "borrowed has no loan button",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{tt.entity}})
+			defer ts.Close()
+
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
+			req.Header.Set("Hx-Request", "true")
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			assert.Equal(t, tt.wantButton, strings.Contains(string(body), `data-action="loan"`))
+			assert.Equal(t, tt.wantEnabled, strings.Contains(string(body), `hx-get="/entities/abc/actions/loan"`))
+			assert.Equal(t, tt.wantButton && !tt.wantEnabled,
+				strings.Contains(string(body), `title="Locked entities cannot be loaned"`))
+		})
+	}
+}
+
+func TestHandleLoanForm(t *testing.T) {
+	tests := []struct {
+		name     string
+		entities []app.EntityResult
+		wantCode int
+	}{
+		{
+			name: "ok renders form",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk}},
+			wantCode: http.StatusOK,
+		},
+		{
+			name: "locked forbidden",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk, Locked: true}},
+			wantCode: http.StatusForbidden,
+		},
+		{
+			name: "loaned forbidden",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"}},
+			wantCode: http.StatusForbidden,
+		},
+		{name: "not found", wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: tt.entities})
+			defer ts.Close()
+
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc/actions/loan", nil)
+			req.Header.Set("Hx-Request", "true")
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			if tt.wantCode == http.StatusOK {
+				assert.Contains(t, string(body), `hx-post="/entities/abc/actions/loan"`)
+				assert.Contains(t, string(body), `name="recipient"`)
+				assert.Contains(t, string(body), "required")
+				assert.Contains(t, string(body), `name="note"`)
+				assert.Contains(t, string(body), "Loaned to")
+			}
+		})
+	}
+}

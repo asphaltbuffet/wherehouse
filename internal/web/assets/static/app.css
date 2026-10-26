@@ -410,6 +410,9 @@ h1, h2, h3 {
 }
 .detail-action-btn { width: 100%; text-align: left; }
 .detail-action-btn:disabled { opacity: 0.4; cursor: default; }
+.loan-form { display: flex; flex-direction: column; gap: var(--space-1); }
+.loan-form label { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.loan-form-buttons { display: flex; gap: var(--space-2); }
 
 .history-table {
   width: 100%;

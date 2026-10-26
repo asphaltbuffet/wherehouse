@@ -1,0 +1,18 @@
+{{define "loan_form"}}
+<form class="loan-form" data-action="loan"
+      hx-post="/entities/{{.EntityID}}/actions/loan"
+      hx-target="#entity-detail" hx-swap="outerHTML">
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+  <label for="loan_recipient">Loaned to</label>
+  <input id="loan_recipient" type="text" name="recipient"
+         value="{{.Recipient}}" required autofocus>
+  <label for="loan_note">Note (optional)</label>
+  <input id="loan_note" type="text" name="note" value="{{.Note}}">
+  <div class="loan-form-buttons">
+    <button type="submit" class="btn-link" aria-label="Loan">✓</button>
+    <button type="button" class="btn-link" aria-label="Cancel"
+            hx-get="/entities/{{.EntityID}}"
+            hx-target="#entity-detail" hx-swap="outerHTML">✕</button>
+  </div>
+</form>
+{{end}}

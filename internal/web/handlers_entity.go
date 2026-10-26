@@ -15,17 +15,31 @@ import (
 
 // detailData is the view model for the entity detail pane.
 type detailData struct {
-	Entity         app.EntityResult
-	DateAdded      string
-	History        []app.HistoryResult
-	CanAddChild    bool
-	CanMarkMissing bool
-	IsMissing      bool   // true when Status == EntityStatusMissing
-	CanReturn      bool   // borrowed or loaned
-	ReturnConfirm  string // non-empty only for borrowed: returning removes the entity
-	Breadcrumbs    []Breadcrumb
-	Error          string // populated by edit POST handlers; rendered inline above the detail dl
+	Entity            app.EntityResult
+	DateAdded         string
+	History           []app.HistoryResult
+	CanAddChild       bool
+	CanMarkMissing    bool
+	IsMissing         bool          // true when Status == EntityStatusMissing
+	CanReturn         bool          // borrowed or loaned
+	ReturnConfirm     string        // non-empty only for borrowed: returning removes the entity
+	CanLoan           bool          // ok/missing and not locked (ADR 0024)
+	LoanBlockedReason string        // non-empty when Loan is shown disabled
+	LoanForm          *loanFormData // non-nil re-opens the loan form (validation error)
+	Breadcrumbs       []Breadcrumb
+	Error             string // populated by edit POST handlers; rendered inline above the detail dl
 }
+
+// loanFormData is the view model for the inline loan form.
+type loanFormData struct {
+	EntityID  string
+	Recipient string
+	Note      string
+	Error     string
+}
+
+// loanLockedReason is the tooltip on a disabled Loan button.
+const loanLockedReason = "Locked entities cannot be loaned"
 
 // detailPageData wraps detailData with the tree roots for full-page (non-HTMX) renders.
 type detailPageData struct {
@@ -107,9 +121,15 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		history[i], history[j] = history[j], history[i]
 	}
 
-	// Missing toggles apply only to ok/missing; borrowed/loaned use Return.
+	// Missing toggles and Loan apply only to ok/missing (ADR 0024);
+	// borrowed/loaned use Return.
 	editable := entity.Status == inventory.EntityStatusOk ||
 		entity.Status == inventory.EntityStatusMissing
+
+	loanBlockedReason := ""
+	if editable && entity.Locked {
+		loanBlockedReason = loanLockedReason
+	}
 
 	return detailData{
 		Entity:         entity,
@@ -120,8 +140,10 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		IsMissing:      entity.Status == inventory.EntityStatusMissing,
 		CanReturn: entity.Status == inventory.EntityStatusBorrowed ||
 			entity.Status == inventory.EntityStatusLoaned,
-		ReturnConfirm: returnConfirm(entity),
-		Breadcrumbs:   BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
+		ReturnConfirm:     returnConfirm(entity),
+		CanLoan:           !entity.Locked && editable,
+		LoanBlockedReason: loanBlockedReason,
+		Breadcrumbs:       BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
 	}, nil
 }
 
@@ -377,6 +399,28 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 		fresh.Error = "return failed"
 		s.renderDetailSection(w, r, fresh)
 	}
+}
+
+// handleLoanForm handles GET /entities/{entityID}/actions/loan, swapping the
+// Loan button for the inline loan form.
+func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.CanLoan {
+		http.Error(w, "entity cannot be loaned", http.StatusForbidden)
+		return
+	}
+
+	s.renderHTML(w, "loan_form", loanFormData{EntityID: entityID})
 }
 
 // treeNodeDetachedEvent is the tree-node-detached payload: entityID left
