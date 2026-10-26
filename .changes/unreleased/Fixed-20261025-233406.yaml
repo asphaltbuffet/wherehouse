@@ -1,0 +1,5 @@
+kind: Fixed
+body: Concurrent status changes no longer fail with 'database is locked' or record duplicate events
+time: 2026-10-25T23:34:06.447711642-04:00
+custom:
+    Issue: "299"

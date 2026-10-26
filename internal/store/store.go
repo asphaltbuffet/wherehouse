@@ -48,7 +48,14 @@ func Open(cfg Config) (*Store, error) {
 		cfg.BusyTimeout = DefaultBusyTimeout
 	}
 
-	dsn := fmt.Sprintf("file:%s?_busy_timeout=%d&_journal_mode=WAL&_foreign_keys=on", cfg.Path, cfg.BusyTimeout)
+	// _txlock=immediate takes the write lock at BEGIN, so concurrent writers
+	// queue on busy_timeout and each sees the previous commit before its
+	// guards run. Deferred BEGIN lets two transactions read the same state,
+	// then one fails its lock upgrade with SQLITE_BUSY (or both write).
+	dsn := fmt.Sprintf(
+		"file:%s?_busy_timeout=%d&_journal_mode=WAL&_foreign_keys=on&_txlock=immediate",
+		cfg.Path, cfg.BusyTimeout,
+	)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
