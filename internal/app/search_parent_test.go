@@ -81,3 +81,61 @@ func TestEntityResult_CanMove(t *testing.T) {
 		})
 	}
 }
+
+func TestFindMoveDestinations_ExcludesSelfDescendantsAndCurrentParent(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	for _, c := range []struct{ name, parent string }{
+		{"Box Shelf", ""},
+		{"Box", "Box Shelf"},
+		{"Box Lid", "Box Shelf:Box"},
+		{"Box Room", ""},
+	} {
+		_, err := a.CreateEntity(
+			ctx,
+			app.CreateEntityRequest{DisplayName: c.name, ParentPath: c.parent, ActorID: "test"},
+		)
+		require.NoError(t, err)
+	}
+	box, err := a.LookupEntityByPath(ctx, "Box Shelf:Box")
+	require.NoError(t, err)
+
+	results, err := a.FindMoveDestinations(ctx, box.EntityID, app.FindEntitiesRequest{Query: "box"})
+
+	require.NoError(t, err)
+	var names []string
+	for _, r := range results {
+		names = append(names, r.Entity.FullPathDisplay)
+	}
+	assert.Equal(t, []string{"Box Room"}, names)
+}
+
+// Exclusions apply before the limit, so excluded matches never crowd out valid ones.
+func TestFindMoveDestinations_FiltersBeforeLimit(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bin", ActorID: "test"})
+	require.NoError(t, err)
+	for _, name := range []string{"Bin A", "Bin B"} {
+		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: name, ParentPath: "Bin", ActorID: "test"})
+		require.NoError(t, err)
+	}
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Cabinet", ActorID: "test"})
+	require.NoError(t, err)
+	bin, err := a.LookupEntityByPath(ctx, "Bin")
+	require.NoError(t, err)
+
+	results, err := a.FindMoveDestinations(ctx, bin.EntityID, app.FindEntitiesRequest{Query: "b", Limit: 1})
+
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "Cabinet", results[0].Entity.DisplayName)
+}
+
+func TestFindMoveDestinations_UnknownEntity(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	_, err := a.FindMoveDestinations(t.Context(), "nope", app.FindEntitiesRequest{Query: "x"})
+
+	require.ErrorIs(t, err, app.ErrNotFound)
+}

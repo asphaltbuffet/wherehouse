@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 // FindEntities searches for non-removed entities whose display name contains the query string.
@@ -17,6 +19,55 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 // Filtering happens before the limit so ineligible matches cannot crowd out eligible ones.
 func (a *App) FindParentCandidates(ctx context.Context, req FindEntitiesRequest) ([]FindResult, error) {
 	return a.findMatching(ctx, req, EntityResult.IsEligibleParent)
+}
+
+// FindMoveDestinations returns eligible parents matching req.Query that
+// entityID may be moved into: everything except the entity itself, its
+// descendants, and its current parent (ADR 0034). Exclusions apply before
+// req.Limit so they never crowd out valid matches.
+func (a *App) FindMoveDestinations(
+	ctx context.Context, entityID string, req FindEntitiesRequest,
+) ([]FindResult, error) {
+	moving, err := a.store.GetEntity(ctx, entityID)
+	if err != nil {
+		return nil, wrapEntityError(entityID, err)
+	}
+	all, err := a.store.ListEntities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("find move destinations: %w", err)
+	}
+
+	excluded := subtreeIDs(all, moving.EntityID)
+	if moving.ParentID != nil {
+		excluded[*moving.ParentID] = true
+	}
+
+	return a.findMatching(ctx, req, func(r EntityResult) bool {
+		return r.IsEligibleParent() && !excluded[r.EntityID]
+	})
+}
+
+// subtreeIDs returns rootID plus the IDs of every entity in all beneath it.
+func subtreeIDs(all []*inventory.Entity, rootID string) map[string]bool {
+	children := make(map[string][]string)
+	for _, e := range all {
+		if e.ParentID != nil {
+			children[*e.ParentID] = append(children[*e.ParentID], e.EntityID)
+		}
+	}
+	ids := map[string]bool{rootID: true}
+	queue := []string{rootID}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		for _, c := range children[id] {
+			if !ids[c] {
+				ids[c] = true
+				queue = append(queue, c)
+			}
+		}
+	}
+	return ids
 }
 
 func (a *App) findMatching(
