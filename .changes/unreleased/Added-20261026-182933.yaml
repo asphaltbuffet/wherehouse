@@ -1,0 +1,5 @@
+kind: Added
+body: "Web UI: Move action with a searchable destination picker, a move-to-root choice, and an optional note; disabled for locked, missing, or loaned entities"
+time: 2026-10-26T22:29:33.000000000Z
+custom:
+    Issue: ""

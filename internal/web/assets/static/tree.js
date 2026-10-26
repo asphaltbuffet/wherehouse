@@ -210,12 +210,10 @@
     if (e.key === 'Enter' && e.target.matches && e.target.matches('[data-parent-search]')) e.preventDefault();
   }
 
-  // After a borrow: close the modal and insert the new node when its parent's
-  // child list is already loaded (root, or a parent expanded at least once).
-  // A never-expanded parent only needs its chevron revealed; children load on expand.
-  function onEntityCreated(e) {
-    var dialog = document.getElementById('add-modal');
-    if (dialog) dialog.close();
+  // Insert a node that joined parentId's list (borrow, move) when that list is
+  // already loaded (root, or a parent expanded at least once). A never-expanded
+  // parent only needs its chevron revealed; children load on expand.
+  function onTreeNodeAttached(e) {
     var parentId = e.detail.parentId;
     var listId = parentId ? 'tree-children-' + parentId : 'tree-root-list';
     if (!document.getElementById(listId)) return;
@@ -235,7 +233,14 @@
     });
   }
 
-  // After a node leaves its parent's list (return; later remove and move): if
+  // After a borrow: close the modal, then insert the new node.
+  function onEntityCreated(e) {
+    var dialog = document.getElementById('add-modal');
+    if (dialog) dialog.close();
+    onTreeNodeAttached(e);
+  }
+
+  // After a node leaves its parent's list (return, move; later remove): if
   // the parent has no live children left, reset it to the leaf shape that
   // tree_node renders. onEntityCreated then treats it as never-expanded, so a
   // later borrow reveals the chevron and children load on expand.
@@ -272,5 +277,6 @@
     document.body.addEventListener('keydown', onParentSearchKeydown);
     document.body.addEventListener('entity-created', onEntityCreated);
     document.body.addEventListener('tree-node-detached', onTreeNodeDetached);
+    document.body.addEventListener('tree-node-attached', onTreeNodeAttached);
   });
 }());

@@ -674,6 +674,105 @@ func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
 	s.renderHTML(w, "move_form", moveFormData{EntityID: entityID, AtRoot: isRootEntity(data.Entity)})
 }
 
+// moveRootValue is the destination form value meaning "move to the root".
+// Entity IDs are 10-char NanoIDs, so it cannot collide with one.
+const moveRootValue = "root"
+
+// handleMove handles POST /entities/{entityID}/actions/move.
+func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.CanMove {
+		http.Error(w, "entity cannot be moved", http.StatusForbidden)
+		return
+	}
+
+	form := moveFormData{
+		EntityID: entityID,
+		AtRoot:   isRootEntity(data.Entity),
+		Note:     strings.TrimSpace(r.FormValue("note")),
+	}
+	destination := strings.TrimSpace(r.FormValue("destination"))
+	if destination == "" {
+		form.Error = "Choose a destination."
+		data.MoveForm = &form
+		s.renderDetailSection(w, r, data)
+		return
+	}
+	newParentID := destination
+	if destination == moveRootValue {
+		newParentID = ""
+	}
+
+	moved, err := s.cfg.App.ReparentEntity(r.Context(), app.ReparentEntityRequest{
+		EntityID:    entityID,
+		NewParentID: newParentID,
+		ActorID:     s.actorFor(r),
+		Note:        form.Note,
+	})
+	if err != nil {
+		s.renderMoveFailure(w, r, data, form, err)
+		return
+	}
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	s.setTreeNodeMovedTrigger(w, r, data.Entity.ParentID, moved)
+	s.renderDetailSection(w, r, fresh)
+	s.renderHTMLAppend(w, "tree_node_delete_oob", moved)
+}
+
+// renderMoveFailure handles a failed ReparentEntity. It re-reads the entity
+// first: if it is still movable, a bad or vanished destination re-opens the
+// form; anything else shows the fresh state with an error, never as success.
+func (s *Server) renderMoveFailure(
+	w http.ResponseWriter, r *http.Request, stale detailData, form moveFormData, err error,
+) {
+	entityID := stale.Entity.EntityID
+	fresh, ferr := s.buildDetailData(r.Context(), entityID)
+	if ferr != nil {
+		s.serverError(w, "build detail data", ferr)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		s.cfg.Logger.Info("move target removed concurrently", "error", err, "entity_id", entityID)
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+
+	if fresh.CanMove && (errors.Is(err, app.ErrInvalidDestination) || errors.Is(err, app.ErrNotFound)) {
+		form.Error = "Can't move there — choose another destination."
+		fresh.MoveForm = &form
+		s.renderDetailSection(w, r, fresh)
+		return
+	}
+
+	if fresh.CanMove {
+		s.cfg.Logger.Error("move entity", "error", err, "entity_id", entityID)
+	} else {
+		s.cfg.Logger.Info("move rejected: entity changed concurrently", "error", err, "entity_id", entityID)
+	}
+	fresh.Error = "move failed"
+	s.renderStatusChanged(w, r, fresh)
+}
+
 // treeNodeDetachedEvent is the tree-node-detached payload: entityID left
 // parentID's child list. tree.js resets the parent to a leaf when
 // ParentHasChildren is false.
@@ -683,18 +782,56 @@ type treeNodeDetachedEvent struct {
 	ParentHasChildren bool   `json:"parentHasChildren"`
 }
 
-// setTreeNodeDetachedTrigger sets Hx-Trigger-After-Swap so tree.js runs after
-// the OOB delete. On failure it logs and sends no trigger: the removal has
-// already committed, and a stale chevron is better than a false error.
-func (s *Server) setTreeNodeDetachedTrigger(w http.ResponseWriter, r *http.Request, removed app.EntityResult) {
-	ev := treeNodeDetachedEvent{EntityID: removed.EntityID, ParentID: removed.ParentID}
-	if removed.ParentID != "" {
-		has, err := s.cfg.App.HasLiveChildren(r.Context(), removed.ParentID)
+// detachedEvent builds the tree-node-detached payload for entityID leaving
+// parentID. ok is false when the parent's child count could not be read; the
+// caller then sends no trigger, because the write already committed and a
+// stale chevron is better than a false error.
+func (s *Server) detachedEvent(ctx context.Context, entityID, parentID string) (treeNodeDetachedEvent, bool) {
+	ev := treeNodeDetachedEvent{EntityID: entityID, ParentID: parentID}
+	if parentID != "" {
+		has, err := s.cfg.App.HasLiveChildren(ctx, parentID)
 		if err != nil {
-			s.cfg.Logger.Warn("count parent children", "error", err, "parent_id", removed.ParentID)
-			return
+			s.cfg.Logger.Warn("count parent children", "error", err, "parent_id", parentID)
+			return treeNodeDetachedEvent{}, false
 		}
 		ev.ParentHasChildren = has
+	}
+	return ev, true
+}
+
+// treeNodeMovedTriggers is the Hx-Trigger-After-Swap body for a move: detach
+// from the old parent, then attach under the new one. Field order is the
+// order htmx fires the events.
+type treeNodeMovedTriggers struct {
+	Detached *treeNodeDetachedEvent `json:"tree-node-detached,omitempty"`
+	Attached treeNodeAttachedEvent  `json:"tree-node-attached"`
+}
+
+// setTreeNodeMovedTrigger sets the detach + attach triggers for a moved entity.
+// If the old parent's child count is unreadable, only the attach is sent.
+func (s *Server) setTreeNodeMovedTrigger(
+	w http.ResponseWriter, r *http.Request, oldParentID string, moved app.EntityResult,
+) {
+	triggers := treeNodeMovedTriggers{
+		Attached: treeNodeAttachedEvent{EntityID: moved.EntityID, ParentID: moved.ParentID},
+	}
+	if ev, ok := s.detachedEvent(r.Context(), moved.EntityID, oldParentID); ok {
+		triggers.Detached = &ev
+	}
+	trigger, err := json.Marshal(triggers)
+	if err != nil {
+		s.cfg.Logger.Warn("marshal tree-node-moved", "error", err)
+		return
+	}
+	w.Header().Set("Hx-Trigger-After-Swap", string(trigger))
+}
+
+// setTreeNodeDetachedTrigger sets Hx-Trigger-After-Swap so tree.js runs after
+// the OOB delete.
+func (s *Server) setTreeNodeDetachedTrigger(w http.ResponseWriter, r *http.Request, removed app.EntityResult) {
+	ev, ok := s.detachedEvent(r.Context(), removed.EntityID, removed.ParentID)
+	if !ok {
+		return
 	}
 	trigger, err := json.Marshal(map[string]treeNodeDetachedEvent{"tree-node-detached": ev})
 	if err != nil {

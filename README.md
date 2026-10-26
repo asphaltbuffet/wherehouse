@@ -315,7 +315,7 @@ Non-status actions, by interface:
 | add | ✅ | ✅ | web form has no `--locked` / `--discrete` / `--create-parents` |
 | rename | ✅ | ✅ | |
 | attr (lock / discrete) | ✅ | ✅ | web has one button per attribute; disabled with a tooltip when blocked |
-| move | ✅ | ❌ | |
+| move | ✅ | ✅ | web form has a searchable destination picker and a "Move to root" choice; disabled with a tooltip for locked, missing, or loaned entities |
 | remove | ✅ | ❌ | |
 | lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities (a locked entity can never be `missing`; unlock it first) |
 | loan | ✅ | ✅ | web form asks for "Loaned to" and an optional note; disabled for locked entities |

@@ -228,3 +228,23 @@ func TestHandleParentOptions_WithoutMovingUsesParentCandidates(t *testing.T) {
 	assert.Empty(t, fake.lastMovingID)
 	assert.Equal(t, 1, fake.parentCalls)
 }
+
+// A moved entity may have children; its re-inserted tree node needs a chevron.
+func TestHandleTreeNode_ShowsChevronWhenEntityHasChildren(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Toolbox", FullPathDisplay: "Toolbox",
+			Status: inventory.EntityStatusOk}},
+		hasChildren: map[string]bool{"abc": true},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/abc/tree-node")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), `aria-expanded="false"`)
+	assert.NotContains(t, string(body), "chevron-hidden")
+}

@@ -159,7 +159,7 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 	}{Query: q, Results: results})
 }
 
-// handleTreeNode returns a single tree_node fragment for inserting a newly created entity.
+// handleTreeNode returns a single tree_node fragment for inserting a new or moved entity.
 func (s *Server) handleTreeNode(w http.ResponseWriter, r *http.Request) {
 	e, err := s.cfg.App.GetEntityByID(r.Context(), r.PathValue("entityID"))
 	if errors.Is(err, app.ErrNotFound) {
@@ -168,6 +168,12 @@ func (s *Server) handleTreeNode(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.serverError(w, "get entity", err)
+		return
+	}
+	// GetEntityByID leaves HasChildren false; a moved entity may have children.
+	e.HasChildren, err = s.cfg.App.HasLiveChildren(r.Context(), e.EntityID)
+	if err != nil {
+		s.serverError(w, "count children", err)
 		return
 	}
 	s.renderHTML(w, "tree_node", e)

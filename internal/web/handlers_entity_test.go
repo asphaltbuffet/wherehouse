@@ -958,3 +958,139 @@ func TestHandleMoveForm(t *testing.T) {
 		})
 	}
 }
+
+func postMove(t *testing.T, ts *httptest.Server, form url.Values) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/move", strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func movableDrill() []app.EntityResult {
+	return []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "w", DisplayName: "Workshop", FullPathDisplay: "Workshop", Status: inventory.EntityStatusOk},
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+			Status: inventory.EntityStatusOk},
+	}
+}
+
+func TestHandleMove_Success(t *testing.T) {
+	fake := &fakeApp{entities: movableDrill(), hasChildren: map[string]bool{}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postMove(t, ts, url.Values{"destination": {"w"}, "note": {"new bench"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "abc", fake.lastMoveReq.EntityID)
+	assert.Equal(t, "w", fake.lastMoveReq.NewParentID)
+	assert.Equal(t, "new bench", fake.lastMoveReq.Note)
+	assert.Contains(t, body, `id="entity-detail"`)
+	assert.Contains(t, body, "Workshop:Drill")
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.JSONEq(t,
+		`{"tree-node-detached":{"entityId":"abc","parentId":"g","parentHasChildren":false},`+
+			`"tree-node-attached":{"entityId":"abc","parentId":"w"}}`,
+		resp.Header.Get("Hx-Trigger-After-Swap"))
+}
+
+func TestHandleMove_ToRoot(t *testing.T) {
+	fake := &fakeApp{entities: movableDrill()}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postMove(t, ts, url.Values{"destination": {"root"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Empty(t, fake.lastMoveReq.NewParentID)
+	assert.Contains(t, resp.Header.Get("Hx-Trigger-After-Swap"),
+		`"tree-node-attached":{"entityId":"abc","parentId":""}`)
+	assert.NotContains(t, body, "move failed")
+}
+
+func TestHandleMove_BlankDestinationReopensForm(t *testing.T) {
+	fake := &fakeApp{entities: movableDrill()}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postMove(t, ts, url.Values{"destination": {""}, "note": {"keep me"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 0, fake.moveCalls)
+	assert.Contains(t, body, "Choose a destination.")
+	assert.Contains(t, body, `hx-post="/entities/abc/actions/move"`)
+	assert.Contains(t, body, `value="keep me"`)
+}
+
+// A destination removed (or otherwise invalid) since it was picked re-opens the form.
+func TestHandleMove_InvalidDestinationReopensForm(t *testing.T) {
+	for _, moveErr := range []error{
+		fmt.Errorf("get entity %q: %w", "w", app.ErrNotFound),
+		fmt.Errorf("cannot move: %w", app.ErrInvalidDestination),
+	} {
+		t.Run(moveErr.Error(), func(t *testing.T) {
+			fake := &fakeApp{entities: movableDrill(), moveErr: moveErr}
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			resp, body := postMove(t, ts, url.Values{"destination": {"w"}})
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Contains(t, body, "Can&#39;t move there — choose another destination.")
+			assert.Contains(t, body, `hx-post="/entities/abc/actions/move"`)
+			assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
+		})
+	}
+}
+
+func TestHandleMove_ConcurrentLostShowsFreshState(t *testing.T) {
+	fake := &fakeApp{
+		entities: movableDrill(),
+		moveErr:  errTest,
+		onMove:   func(f *fakeApp) { f.entities[2].Status = inventory.EntityStatusMissing },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postMove(t, ts, url.Values{"destination": {"w"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, "move failed")
+	assert.Contains(t, body, `title="Missing entities cannot be moved — mark found first"`)
+	assert.Contains(t, body, `id="tree-badge-abc"`)
+}
+
+func TestHandleMove_RemovedConcurrentlyNotFound(t *testing.T) {
+	fake := &fakeApp{
+		entities: movableDrill(),
+		moveErr:  errTest,
+		onMove:   func(f *fakeApp) { f.entities = f.entities[:2] },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postMove(t, ts, url.Values{"destination": {"w"}})
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleMove_Rejected(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill", Status: inventory.EntityStatusLoaned,
+			StatusContext: "Bob"},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postMove(t, ts, url.Values{"destination": {"root"}})
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	assert.Equal(t, 0, fake.moveCalls)
+}
