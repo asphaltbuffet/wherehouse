@@ -194,3 +194,25 @@ func TestHandleBorrow_AppValidationErrors(t *testing.T) {
 		})
 	}
 }
+
+// The tree must follow where the entity was actually created, not the submitted
+// parent_id: path resolution can pick a different same-named sibling.
+func TestHandleBorrow_TriggerUsesCreatedParent(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "binA", DisplayName: "Bin", FullPathDisplay: "Bin", Status: inventory.EntityStatusOk},
+			{EntityID: "binB", DisplayName: "Bin", FullPathDisplay: "Bin", Status: inventory.EntityStatusOk},
+		},
+		borrowResults: []app.EntityResult{
+			{EntityID: "n", DisplayName: "Drill", FullPathDisplay: "Bin:Drill", ParentID: "binA",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postBorrow(t, ts, url.Values{"display_name": {"Drill"}, "from": {"Alice"}, "parent_id": {"binB"}})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, resp.Header.Get("Hx-Trigger"), `"parentId":"binA"`)
+}

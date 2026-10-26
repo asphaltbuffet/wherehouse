@@ -131,7 +131,7 @@ func (s *Server) handleBorrow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trigger, err := json.Marshal(map[string]entityCreatedEvent{
-		"entity-created": {EntityID: created.EntityID, ParentID: form.ParentID},
+		"entity-created": {EntityID: created.EntityID, ParentID: created.ParentID},
 	})
 	if err != nil {
 		s.serverError(w, "marshal trigger", err)
