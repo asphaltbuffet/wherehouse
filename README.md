@@ -265,7 +265,8 @@ wherehouse found "Basement:Toolbox:10mm socket"
 # Lend something out (recipient required)
 wherehouse loan "Garage:Ladder" --to "Bob" --note "lent for the weekend"
 
-# Bring a loaned (or borrowed) entity back
+# Bring a loaned (or borrowed) entity back; a borrowed entity is removed,
+# and must not still contain other entities
 wherehouse return "Garage:Ladder"
 
 # Track an externally-owned item brought into the inventory

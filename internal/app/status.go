@@ -182,6 +182,15 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 	// Borrowed entities are removed from inventory when returned, not reset to ok.
 	targetStatus := inventory.EntityStatusOk
 	if entity.Status == inventory.EntityStatusBorrowed {
+		var n int
+		n, err = a.store.CountLiveChildrenTx(ctx, tx, entity.EntityID)
+		if err != nil {
+			return "", fmt.Errorf("return %q: %w", entity.FullPathDisplay, err)
+		}
+		if n > 0 {
+			return "", fmt.Errorf("cannot return %q (%d inside; return or move them first): %w",
+				entity.FullPathDisplay, n, ErrHasChildren)
+		}
 		targetStatus = inventory.EntityStatusRemoved
 	}
 
