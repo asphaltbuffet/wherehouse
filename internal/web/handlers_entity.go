@@ -318,12 +318,7 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 		ActorID:  s.actorFor(r),
 	}})
 	if err != nil {
-		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
-		data.Error = "return failed"
-		if errors.Is(err, app.ErrHasChildren) {
-			data.Error = "return failed: it still contains other entities — return or move them first"
-		}
-		s.renderDetailSection(w, r, data)
+		s.renderReturnFailure(w, r, data, err)
 		return
 	}
 
@@ -337,9 +332,49 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, "build detail data", err)
 		return
 	}
+	s.renderReturned(w, r, fresh)
+}
+
+// renderReturned renders the detail of an entity that is no longer
+// borrowed/loaned, plus the out-of-band tree badge update.
+func (s *Server) renderReturned(w http.ResponseWriter, r *http.Request, fresh detailData) {
 	s.renderDetailSection(w, r, fresh)
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
 		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
+	}
+}
+
+// renderReturnFailure handles a failed MarkReturned. stale was read before the
+// write; a concurrent Return may have committed since (#292), leaving a
+// borrowed entity removed or a loaned one back to ok. Re-read and render that
+// outcome instead of a stale "return failed" with a live Return button.
+func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, stale detailData, err error) {
+	entityID := stale.Entity.EntityID
+
+	if errors.Is(err, app.ErrHasChildren) {
+		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
+		stale.Error = "return failed: it still contains other entities — return or move them first"
+		s.renderDetailSection(w, r, stale)
+		return
+	}
+
+	fresh, ferr := s.buildDetailData(r.Context(), entityID)
+	if ferr != nil {
+		s.serverError(w, "build detail data", ferr)
+		return
+	}
+
+	switch {
+	case fresh.Entity.EntityID == "":
+		s.cfg.Logger.Info("return already applied concurrently", "entity_id", entityID)
+		s.renderAfterRemoval(w, r, stale.Entity)
+	case !fresh.CanReturn:
+		s.cfg.Logger.Info("return already applied concurrently", "entity_id", entityID)
+		s.renderReturned(w, r, fresh)
+	default:
+		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
+		fresh.Error = "return failed"
+		s.renderDetailSection(w, r, fresh)
 	}
 }
 

@@ -17,6 +17,9 @@ var ErrLenderRequired = errors.New("lender is required")
 // still has non-removed children.
 var ErrHasChildren = errors.New("entity still contains other entities")
 
+// ErrDuplicateEntity is returned when a batch names the same entity more than once.
+var ErrDuplicateEntity = errors.New("entity named more than once")
+
 // wrapEntityError translates a store.GetEntity error into an app-layer error.
 // store.ErrNotFound becomes app.ErrNotFound; all other errors (DB failures,
 // context cancellations, etc.) are propagated directly so callers can

@@ -10,7 +10,8 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
-// OpenApp opens an *app.App backed by an in-memory SQLite store.
+// OpenApp opens an *app.App backed by a SQLite file in t.TempDir() (WAL mode,
+// so concurrent connections behave as in production).
 // The store is closed automatically when t completes.
 func OpenApp(t *testing.T) *app.App {
 	t.Helper()

@@ -32,6 +32,7 @@ type fakeApp struct {
 
 	returnErr     error
 	lastReturnReq app.ChangeStatusRequest
+	onReturn      func(*fakeApp) // runs inside MarkReturned; simulates a concurrent writer
 
 	parentResults   []app.FindResult
 	parentCalls     int
@@ -111,6 +112,9 @@ func (f *fakeApp) MarkReturned(_ context.Context, reqs []app.ChangeStatusRequest
 	if len(reqs) > 0 {
 		f.lastActor = reqs[0].ActorID
 		f.lastReturnReq = reqs[0]
+	}
+	if f.onReturn != nil {
+		f.onReturn(f)
 	}
 	return nil, f.returnErr
 }

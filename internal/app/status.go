@@ -67,7 +67,29 @@ func (a *App) markStatusBatch(
 	reqs []ChangeStatusRequest,
 	inTx func(context.Context, store.Tx, ChangeStatusRequest) (string, error),
 ) ([]EntityResult, error) {
+	if err := a.rejectDuplicateIDs(ctx, reqs); err != nil {
+		return nil, err
+	}
 	return execBatch(ctx, a, caller, reqs, inTx)
+}
+
+// rejectDuplicateIDs fails a batch that names the same entity twice. Without it
+// the second request trips its own status guard ("entity is ok", or not found
+// for a removed borrow), which hides the real mistake from the user.
+func (a *App) rejectDuplicateIDs(ctx context.Context, reqs []ChangeStatusRequest) error {
+	seen := make(map[string]struct{}, len(reqs))
+	for _, req := range reqs {
+		if _, dup := seen[req.EntityID]; !dup {
+			seen[req.EntityID] = struct{}{}
+			continue
+		}
+		name := req.EntityID
+		if e, err := a.store.GetEntityAnyStatus(ctx, req.EntityID); err == nil {
+			name = e.FullPathDisplay
+		}
+		return fmt.Errorf("%q: %w", name, ErrDuplicateEntity)
+	}
+	return nil
 }
 
 // execBatch runs inTx for every request inside a single transaction, then fetches the
@@ -113,7 +135,7 @@ func execBatch[T any](
 }
 
 func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
+	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 	if err != nil {
 		return "", wrapEntityError(req.EntityID, err)
 	}
@@ -167,7 +189,7 @@ func (a *App) MarkReturned(ctx context.Context, reqs []ChangeStatusRequest) ([]E
 }
 
 func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
+	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 	if err != nil {
 		return "", wrapEntityError(req.EntityID, err)
 	}
@@ -218,7 +240,7 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 }
 
 func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
+	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 	if err != nil {
 		return "", wrapEntityError(req.EntityID, err)
 	}
@@ -317,7 +339,7 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 }
 
 func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
+	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 	if err != nil {
 		return "", wrapEntityError(req.EntityID, err)
 	}

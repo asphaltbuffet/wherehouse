@@ -390,6 +390,96 @@ func TestHandleReturn_HasChildrenShowsMessage(t *testing.T) {
 	assert.Contains(t, string(body), "still contains other entities")
 }
 
+// Review Focus #1 (#292): a concurrent Return removed the borrowed entity
+// between our detail read and our MarkReturned call.
+func TestHandleReturn_ConcurrentBorrowedShowsRemoval(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+		returnErr: fmt.Errorf("get entity %q: %w", "abc", app.ErrNotFound),
+		onReturn:  func(f *fakeApp) { f.entities[1].Status = inventory.EntityStatusRemoved },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "/entities/g", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, string(body), "<h2>Garage</h2>")
+	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.NotContains(t, string(body), "return failed")
+}
+
+// Review Focus #2 (#292): a concurrent Return already set the loaned entity
+// back to ok, so our MarkReturned fails with a plain "entity is ok" error.
+func TestHandleReturn_ConcurrentLoanedShowsReturned(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+		},
+		returnErr: errTest,
+		onReturn:  func(f *fakeApp) { f.entities[0].Status = inventory.EntityStatusOk },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), `id="tree-badge-abc"`)
+	assert.NotContains(t, string(body), "return failed")
+	assert.NotContains(t, string(body), "/actions/return")
+	assert.Empty(t, resp.Header.Get("Hx-Push-Url"))
+}
+
+// Review Focus #3: a real failure leaves the entity returnable, so the user
+// sees the error and can retry.
+func TestHandleReturn_GenericFailureShowsError(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+		},
+		returnErr: errTest,
+	})
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), "return failed")
+	assert.Contains(t, string(body), "/entities/abc/actions/return")
+}
+
+// Review Focus #4: the post-failure re-read itself fails.
+func TestHandleReturn_RereadFailureServerError(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+		},
+		returnErr: errTest,
+		onReturn:  func(f *fakeApp) { f.err = errTest },
+	})
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
 func TestEntityDetail_ReturnButton(t *testing.T) {
 	tests := []struct {
 		name        string
