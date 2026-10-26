@@ -70,7 +70,7 @@ func TestHandleBorrowForm_DefaultParent(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			assert.Contains(t, string(body), `name="parent_id" value="`+tt.wantID+`"`)
-			assert.Contains(t, string(body), `<span id="borrow_parent_label">`+tt.wantLabel+`</span>`)
+			assert.Contains(t, string(body), `<span id="borrow_parent_label" data-parent-label>`+tt.wantLabel+`</span>`)
 		})
 	}
 }

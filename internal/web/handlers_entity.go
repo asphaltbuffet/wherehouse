@@ -28,6 +28,9 @@ type detailData struct {
 	CanLoan           bool          // ok/missing and not locked (ADR 0024)
 	LoanBlockedReason string        // non-empty when Loan is shown disabled
 	LoanForm          *loanFormData // non-nil re-opens the loan form (validation error)
+	CanMove           bool          // not locked; ok or borrowed (ADR 0034)
+	MoveBlockedReason string        // non-empty when Move is shown disabled
+	MoveForm          *moveFormData // non-nil re-opens the move form (validation error)
 	LockAction        attrAction    // Lock / Unlock button
 	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
 	Breadcrumbs       []Breadcrumb
@@ -44,6 +47,34 @@ type loanFormData struct {
 
 // loanLockedReason is the tooltip on a disabled Loan button.
 const loanLockedReason = "Locked entities cannot be loaned"
+
+// moveFormData is the view model for the inline move form.
+type moveFormData struct {
+	EntityID string
+	AtRoot   bool // hides the "move to root" choice: it would be a no-op
+	Note     string
+	Error    string
+}
+
+// Tooltips on a disabled Move button; each names the one action that unblocks it.
+const (
+	moveLockedReason  = "Locked entities cannot be moved"
+	moveMissingReason = "Missing entities cannot be moved — mark found first"
+	moveLoanedReason  = "Loaned entities cannot be moved — return it first"
+)
+
+func moveBlockedReason(e app.EntityResult) string {
+	if e.Locked {
+		return moveLockedReason
+	}
+	if e.Status == inventory.EntityStatusMissing {
+		return moveMissingReason
+	}
+	if e.Status == inventory.EntityStatusLoaned {
+		return moveLoanedReason
+	}
+	return ""
+}
 
 // attrAction is the view model for one attribute button on the detail panel.
 // The button posts Field=Value: the explicit target, never a toggle, so a
@@ -259,6 +290,8 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		ReturnConfirm:     returnConfirm(entity),
 		CanLoan:           !entity.Locked && editable,
 		LoanBlockedReason: loanBlockedReason,
+		CanMove:           entity.CanMove(),
+		MoveBlockedReason: moveBlockedReason(entity),
 		LockAction:        lockAction(entity),
 		DiscreteAction:    s.discreteAction(ctx, entity),
 		Breadcrumbs:       BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
@@ -617,6 +650,28 @@ func (s *Server) renderLoanFailure(
 	}
 	fresh.Error = "loan failed"
 	s.renderStatusChanged(w, r, fresh)
+}
+
+// handleMoveForm handles GET /entities/{entityID}/actions/move, swapping the
+// Move button for the inline move form.
+func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.CanMove {
+		http.Error(w, "entity cannot be moved", http.StatusForbidden)
+		return
+	}
+
+	s.renderHTML(w, "move_form", moveFormData{EntityID: entityID, AtRoot: isRootEntity(data.Entity)})
 }
 
 // treeNodeDetachedEvent is the tree-node-detached payload: entityID left

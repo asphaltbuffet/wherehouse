@@ -59,6 +59,50 @@ type fakeApp struct {
 	attrErr     error
 	attrCalls   int
 	lastAttrReq app.SetAttributesRequest
+
+	moveErr     error
+	moveCalls   int
+	lastMoveReq app.ReparentEntityRequest
+	onMove      func(*fakeApp) // runs inside ReparentEntity; simulates a concurrent writer
+
+	lastMovingID string // entityID from the most recent FindMoveDestinations call
+}
+
+// ReparentEntity records the request and, on success, re-parents the entity in
+// f.entities so the handler's fresh re-read shows the new path.
+func (f *fakeApp) ReparentEntity(_ context.Context, req app.ReparentEntityRequest) (app.EntityResult, error) {
+	f.moveCalls++
+	f.lastMoveReq = req
+	f.lastActor = req.ActorID
+	if f.onMove != nil {
+		f.onMove(f)
+	}
+	if f.moveErr != nil {
+		return app.EntityResult{}, f.moveErr
+	}
+	for i := range f.entities {
+		if f.entities[i].EntityID != req.EntityID {
+			continue
+		}
+		f.entities[i].ParentID = req.NewParentID
+		f.entities[i].FullPathDisplay = f.entities[i].DisplayName
+		for _, p := range f.entities {
+			if p.EntityID == req.NewParentID {
+				f.entities[i].FullPathDisplay = p.FullPathDisplay + ":" + f.entities[i].DisplayName
+			}
+		}
+		return f.entities[i], nil
+	}
+	return app.EntityResult{}, app.ErrNotFound
+}
+
+func (f *fakeApp) FindMoveDestinations(
+	_ context.Context, entityID string, req app.FindEntitiesRequest,
+) ([]app.FindResult, error) {
+	f.parentCalls++
+	f.lastParentQuery = req.Query
+	f.lastMovingID = entityID
+	return f.parentResults, f.findErr
 }
 
 // SetAttributes records the request and, on success, applies it to f.entities

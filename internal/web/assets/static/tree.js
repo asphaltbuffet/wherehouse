@@ -190,23 +190,24 @@
     if (dialog) dialog.close();
   }
 
-  // Borrow modal: picking a type-ahead result fills the hidden parent_id and
-  // the visible label; the ✕ button resets to root.
+  // Parent pickers (borrow, move): picking a type-ahead result fills the
+  // hidden input and the visible label. The clear button writes its own
+  // data-parent-value: '' (borrow's root) or 'root' (move's root).
   function onParentPick(e) {
     var pick = e.target.closest && e.target.closest('[data-action="pick-parent"]');
     var clear = e.target.closest && e.target.closest('[data-action="clear-parent"]');
     if (!pick && !clear) return;
     var form = e.target.closest('form');
     if (!form) return;
-    form.querySelector('#borrow_parent_id').value = pick ? pick.dataset.parentId : '';
-    form.querySelector('#borrow_parent_label').textContent = pick ? pick.dataset.parentPath : '(root)';
-    form.querySelector('#borrow_parent_options').innerHTML = '';
-    form.querySelector('#borrow_parent_q').value = '';
+    form.querySelector('[data-parent-input]').value = pick ? pick.dataset.parentId : (clear.dataset.parentValue || '');
+    form.querySelector('[data-parent-label]').textContent = pick ? pick.dataset.parentPath : '(root)';
+    form.querySelector('[data-parent-options]').innerHTML = '';
+    form.querySelector('[data-parent-search]').value = '';
   }
 
-  // Enter in the parent search box must not submit the borrow form.
+  // Enter in a parent search box must not submit its form.
   function onParentSearchKeydown(e) {
-    if (e.key === 'Enter' && e.target.id === 'borrow_parent_q') e.preventDefault();
+    if (e.key === 'Enter' && e.target.matches && e.target.matches('[data-parent-search]')) e.preventDefault();
   }
 
   // After a borrow: close the modal and insert the new node when its parent's

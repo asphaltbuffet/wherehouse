@@ -844,3 +844,117 @@ func TestHandleLoan_Rejected(t *testing.T) {
 		})
 	}
 }
+
+func TestEntityDetail_MoveButton(t *testing.T) {
+	tests := []struct {
+		name        string
+		entity      app.EntityResult
+		wantEnabled bool
+		wantReason  string
+	}{
+		{
+			name: "ok is movable",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk},
+			wantEnabled: true,
+		},
+		{
+			name: "borrowed is movable",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+			wantEnabled: true,
+		},
+		{
+			name: "locked is disabled",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk, Locked: true},
+			wantReason: "Locked entities cannot be moved",
+		},
+		{
+			name: "missing is disabled",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusMissing},
+			wantReason: "Missing entities cannot be moved — mark found first",
+		},
+		{
+			name: "loaned is disabled",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+			wantReason: "Loaned entities cannot be moved — return it first",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{tt.entity}})
+			defer ts.Close()
+
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
+			req.Header.Set("Hx-Request", "true")
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			assert.Contains(t, string(body), `data-action="move"`)
+			assert.Equal(t, tt.wantEnabled, strings.Contains(string(body), `hx-get="/entities/abc/actions/move"`))
+			if tt.wantReason != "" {
+				assert.Contains(t, string(body), `title="`+tt.wantReason+`"`)
+			}
+		})
+	}
+}
+
+func TestHandleMoveForm(t *testing.T) {
+	tests := []struct {
+		name       string
+		entities   []app.EntityResult
+		wantCode   int
+		wantToRoot bool
+	}{
+		{
+			name: "nested entity offers root",
+			entities: []app.EntityResult{
+				{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+					Status: inventory.EntityStatusOk},
+			},
+			wantCode: http.StatusOK, wantToRoot: true,
+		},
+		{
+			name: "root entity hides root choice",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk}},
+			wantCode: http.StatusOK,
+		},
+		{
+			name: "missing forbidden",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusMissing}},
+			wantCode: http.StatusForbidden,
+		},
+		{name: "not found", wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: tt.entities})
+			defer ts.Close()
+
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc/actions/move", nil)
+			req.Header.Set("Hx-Request", "true")
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			if tt.wantCode != http.StatusOK {
+				return
+			}
+			assert.Contains(t, string(body), `hx-post="/entities/abc/actions/move"`)
+			assert.Contains(t, string(body), `name="destination"`)
+			assert.Contains(t, string(body), `name="note"`)
+			assert.Contains(t, string(body), `hx-vals='{"moving": "abc"}'`)
+			assert.Equal(t, tt.wantToRoot, strings.Contains(string(body), `data-parent-value="root"`))
+		})
+	}
+}
