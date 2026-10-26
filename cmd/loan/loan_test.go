@@ -73,6 +73,25 @@ func TestRunLoan_WithTo(t *testing.T) {
 	}
 }
 
+func TestRunLoan_WhitespaceToRejected(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForLoan(t, a)
+
+	cmd := loan.NewLoanCmd(a)
+	cmd.SetArgs([]string{"Garage:Toolbox:Wrench", "--to", "   "})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	require.ErrorIs(t, cmd.Execute(), app.ErrRecipientRequired)
+
+	entities, err := a.ListEntities(t.Context())
+	require.NoError(t, err)
+	for _, e := range entities {
+		if e.FullPathDisplay == "Garage:Toolbox:Wrench" {
+			assert.Equal(t, inventory.EntityStatusOk, e.Status)
+		}
+	}
+}
+
 func TestRunLoan_MultiplePaths(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	seedForLoan(t, a)

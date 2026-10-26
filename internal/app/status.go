@@ -240,6 +240,11 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 }
 
 func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
+	recipient := strings.TrimSpace(req.StatusContext)
+	if recipient == "" {
+		return "", fmt.Errorf("loan %q: %w", req.EntityID, ErrRecipientRequired)
+	}
+
 	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 	if err != nil {
 		return "", wrapEntityError(req.EntityID, err)
@@ -255,15 +260,10 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 		)
 	}
 
-	var statusContext *string
-	if req.StatusContext != "" {
-		statusContext = &req.StatusContext
-	}
-
 	payload := eventbus.EntityStatusChangedPayload{
 		EntityID:      entity.EntityID,
 		Status:        inventory.EntityStatusLoaned.String(),
-		StatusContext: statusContext,
+		StatusContext: &recipient,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
