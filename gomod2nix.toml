@@ -37,9 +37,6 @@ schema = 3
   [mod."github.com/clipperhouse/uax29/v2"]
     version = "v2.7.0"
     hash = "sha256-GO3az7WiGcwU0OvmocwdfR5ohGRL8NbjscIaMyhAdxE="
-  [mod."github.com/davecgh/go-spew"]
-    version = "v1.1.2-0.20180830191138-d8f796af33cc"
-    hash = "sha256-fV9oI51xjHdOmEx6+dlq7Ku2Ag+m/bmbzPo6A4Y74qc="
   [mod."github.com/dustin/go-humanize"]
     version = "v1.1.0"
     hash = "sha256-Qa7BSAXtgH7CB5STBiXTTOCgivWUiA65u3KxDOSZCkQ="
@@ -94,9 +91,6 @@ schema = 3
   [mod."github.com/pelletier/go-toml/v2"]
     version = "v2.4.3"
     hash = "sha256-CyCjKBN+zUciGhQiaFpq54qv+NDITcuh5U2HmjArow4="
-  [mod."github.com/pmezard/go-difflib"]
-    version = "v1.0.1-0.20181226105442-5d4384ee4fb2"
-    hash = "sha256-XA4Oj1gdmdV/F/+8kMI+DBxKPthZ768hbKsO3d9Gx90="
   [mod."github.com/remyoudompheng/bigfft"]
     version = "v0.0.0-20230129092748-24d4a6f8daec"
     hash = "sha256-vYmpyCE37eBYP/navhaLV4oX4/nu0Z/StAocLIFqrmM="
@@ -125,11 +119,11 @@ schema = 3
     version = "v1.21.0"
     hash = "sha256-A9A8i7HH/ge4j3hw7G++HNj8BjhhpZKvxHhfY+QAxkI="
   [mod."github.com/stretchr/objx"]
-    version = "v0.5.2"
-    hash = "sha256-VKYxrrFb1nkX6Wu3tE5DoP9+fCttwSl9pgLN6567nck="
+    version = "v0.8.0"
+    hash = "sha256-OXVQhTJbSQbknHlFbj8cRtjh54cyd+e2EE245D+teNw="
   [mod."github.com/stretchr/testify"]
-    version = "v1.11.1"
-    hash = "sha256-sWfjkuKJyDllDEtnM8sb/pdLzPQmUYWYtmeWz/5suUc="
+    version = "v1.12.1"
+    hash = "sha256-9MTDdVjZMh1MJ5EH3HmAFrm24YqZayeMBgKwtaURZCc="
   [mod."github.com/subosito/gotenv"]
     version = "v1.6.0"
     hash = "sha256-LspbjTniiq2xAICSXmgqP7carwlNaLqnCTQfw2pa80A="
@@ -148,18 +142,12 @@ schema = 3
   [mod."golang.org/x/text"]
     version = "v0.43.0"
     hash = "sha256-gykmMKFe61Tc4tblLPd3IyMKCqL0MSTQpgb6yE5EnDA="
-  [mod."gopkg.in/check.v1"]
-    version = "v1.0.0-20190902080502-41f04d3bba15"
-    hash = "sha256-Xl5gjoqU26M+Yxm6Xok5VHVpYT5hItwsN7d2Wj9L020="
   [mod."gopkg.in/natefinch/lumberjack.v2"]
     version = "v2.2.1"
     hash = "sha256-GaXWRDxhGy4Z4mgE+bJ8OE9SVvYUa9TnNiydnp2s1Ms="
-  [mod."gopkg.in/yaml.v3"]
-    version = "v3.0.1"
-    hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
   [mod."modernc.org/libc"]
-    version = "v1.79.0"
-    hash = "sha256-f70OLLdDHzjlwu2PKdPDPS+427MhJKViGPdUj3a1arA="
+    version = "v1.79.1"
+    hash = "sha256-tTzZIGVxVRIGkbu9JhHUGZGs9NXE+0wISdoqI3xvsoE="
   [mod."modernc.org/mathutil"]
     version = "v1.7.1"
     hash = "sha256-COZ5rF2GhQVR1r6a0DanJ8qwQ94JSKdQxTMWrDzE0Cc="
