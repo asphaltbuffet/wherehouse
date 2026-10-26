@@ -32,7 +32,9 @@ func (a *App) FindMoveDestinations(
 	if err != nil {
 		return nil, wrapEntityError(entityID, err)
 	}
-	all, err := a.store.ListEntities(ctx)
+	// Include removed entities so the walk reaches live entities orphaned
+	// under a removed ancestor (#287); findMatching drops removed candidates.
+	all, err := a.store.ListAllEntities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("find move destinations: %w", err)
 	}

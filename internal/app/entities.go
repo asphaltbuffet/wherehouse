@@ -139,12 +139,18 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 // isSelfOrDescendant reports whether candidateID is entityID or lies beneath it.
 // It walks the candidate's ancestors by ID — names are not unique, so path
 // prefixes cannot be trusted — and reads removed ancestors too, because a live
-// entity may sit under a removed one (#287).
+// entity may sit under a removed one (#287). A projection already damaged by
+// the pre-ADR-0034 cycle bug is reported as an error instead of looping forever.
 func (a *App) isSelfOrDescendant(ctx context.Context, entityID, candidateID string) (bool, error) {
+	seen := make(map[string]bool)
 	for id := candidateID; id != ""; {
 		if id == entityID {
 			return true, nil
 		}
+		if seen[id] {
+			return false, fmt.Errorf("ancestor chain of %q loops at %q", candidateID, id)
+		}
+		seen[id] = true
 		e, err := a.store.GetEntityAnyStatus(ctx, id)
 		if err != nil {
 			return false, wrapEntityError(id, err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -706,4 +707,24 @@ func TestReparentEntity_DescendantUnderRemovedAncestor(t *testing.T) {
 	})
 
 	require.ErrorIs(t, err, app.ErrInvalidDestination)
+}
+
+// A projection already damaged by the pre-ADR-0034 cycle bug must not hang a move.
+func TestReparentEntity_ExistingCycleDoesNotHang(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	looped, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Looped", ActorID: "alice"})
+	require.NoError(t, err)
+	wrench, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Wrench", ActorID: "alice"})
+	require.NoError(t, err)
+	_, err = s.DB().ExecContext(ctx,
+		`UPDATE entities_current SET parent_id = entity_id WHERE entity_id = ?`, looped.EntityID)
+	require.NoError(t, err)
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: wrench.EntityID, NewParentID: looped.EntityID, ActorID: "alice",
+	})
+
+	assert.ErrorContains(t, err, "loops")
 }

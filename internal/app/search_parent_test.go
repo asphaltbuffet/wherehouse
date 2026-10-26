@@ -139,3 +139,22 @@ func TestFindMoveDestinations_UnknownEntity(t *testing.T) {
 
 	require.ErrorIs(t, err, app.ErrNotFound)
 }
+
+// A live entity under a removed ancestor (#287) is still a descendant, so the
+// picker must not offer it.
+func TestFindMoveDestinations_ExcludesDescendantUnderRemovedAncestor(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "test"})
+	require.NoError(t, err)
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentPath: "Garage", ActorID: "test"})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bit", ParentPath: "Garage:Box", ActorID: "test"})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "test"}))
+
+	results, err := a.FindMoveDestinations(ctx, garage.EntityID, app.FindEntitiesRequest{Query: "bit"})
+
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
