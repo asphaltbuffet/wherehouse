@@ -245,6 +245,15 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 	return results, nil
 }
 
+// HasLiveChildren reports whether parentID has any non-removed direct children.
+func (a *App) HasLiveChildren(ctx context.Context, parentID string) (bool, error) {
+	n, err := a.store.CountLiveChildren(ctx, parentID)
+	if err != nil {
+		return false, fmt.Errorf("has live children of %s: %w", parentID, err)
+	}
+	return n > 0, nil
+}
+
 // GetRootEntities returns all non-removed entities at the root of the hierarchy (no parent).
 func (a *App) GetRootEntities(ctx context.Context) ([]EntityResult, error) {
 	rows, err := a.store.GetRootEntities(ctx)

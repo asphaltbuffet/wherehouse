@@ -432,6 +432,49 @@ func TestApp_GetChildren(t *testing.T) {
 	})
 }
 
+func TestApp_HasLiveChildren(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("live child", func(t *testing.T) {
+		a := openTestApp(t)
+		parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Parent", ActorID: "alice"})
+		require.NoError(t, err)
+		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "Child", ParentPath: "Parent", ActorID: "alice",
+		})
+		require.NoError(t, err)
+
+		has, err := a.HasLiveChildren(ctx, parent.EntityID)
+		require.NoError(t, err)
+		assert.True(t, has)
+	})
+
+	t.Run("only child removed", func(t *testing.T) {
+		a := openTestApp(t)
+		parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Parent", ActorID: "alice"})
+		require.NoError(t, err)
+		child, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: "Child", ParentPath: "Parent", ActorID: "alice",
+		})
+		require.NoError(t, err)
+		require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: child.EntityID, ActorID: "alice"}))
+
+		has, err := a.HasLiveChildren(ctx, parent.EntityID)
+		require.NoError(t, err)
+		assert.False(t, has)
+	})
+
+	t.Run("leaf", func(t *testing.T) {
+		a := openTestApp(t)
+		leaf, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Leaf", ActorID: "alice"})
+		require.NoError(t, err)
+
+		has, err := a.HasLiveChildren(ctx, leaf.EntityID)
+		require.NoError(t, err)
+		assert.False(t, has)
+	})
+}
+
 func TestLookupEntityByPath_Found(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
