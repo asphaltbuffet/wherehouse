@@ -1,0 +1,5 @@
+kind: Fixed
+body: return, loan, lost and found reject a command that names the same entity twice instead of recording two events
+time: 2026-10-25T23:50:14.856190177-04:00
+custom:
+    Issue: "299"

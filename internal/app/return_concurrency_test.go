@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 
@@ -9,6 +10,8 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 // concurrentReturners is how many goroutines race to return the same entity.
@@ -37,6 +40,21 @@ func historyLen(t *testing.T, a *app.App, entityID string) int {
 	h, err := a.GetHistory(t.Context(), app.GetHistoryRequest{EntityID: entityID})
 	require.NoError(t, err)
 	return len(h)
+}
+
+// assertOneStatusEvent checks exactly one event was appended since before and
+// that it is a status change to want.
+func assertOneStatusEvent(t *testing.T, a *app.App, entityID string, before int, want inventory.EntityStatus) {
+	t.Helper()
+	h, err := a.GetHistory(t.Context(), app.GetHistoryRequest{EntityID: entityID})
+	require.NoError(t, err)
+	require.Len(t, h, before+1, "exactly one return event")
+
+	newest := h[0]
+	assert.Equal(t, inventory.EntityStatusChangedEvent, newest.EventType)
+	var p eventbus.EntityStatusChangedPayload
+	require.NoError(t, json.Unmarshal(newest.Payload, &p))
+	assert.Equal(t, want.String(), p.Status)
 }
 
 // assertOneWinner checks exactly one call succeeded and no loser failed on
@@ -68,7 +86,7 @@ func TestMarkReturned_ConcurrentBorrowedOneWinner(t *testing.T) {
 	for _, err := range assertOneWinner(t, raceMarkReturned(t, a, id)) {
 		require.ErrorIs(t, err, app.ErrNotFound)
 	}
-	assert.Equal(t, before+1, historyLen(t, a, id), "exactly one return event")
+	assertOneStatusEvent(t, a, id, before, inventory.EntityStatusRemoved)
 }
 
 // #299: concurrent returns of a loaned entity must not all pass the status
@@ -84,6 +102,8 @@ func TestMarkReturned_ConcurrentLoanedOneWinner(t *testing.T) {
 	require.NoError(t, err)
 	before := historyLen(t, a, e.EntityID)
 
-	assertOneWinner(t, raceMarkReturned(t, a, e.EntityID))
-	assert.Equal(t, before+1, historyLen(t, a, e.EntityID), "exactly one return event")
+	for _, err := range assertOneWinner(t, raceMarkReturned(t, a, e.EntityID)) {
+		require.ErrorContains(t, err, "only loaned or borrowed entities can be returned")
+	}
+	assertOneStatusEvent(t, a, e.EntityID, before, inventory.EntityStatusOk)
 }

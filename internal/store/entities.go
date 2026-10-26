@@ -56,7 +56,6 @@ func (s *Store) UpdateEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 	return nil
 }
 
-// GetEntity retrieves a single entity by ID.
 // GetEntity retrieves a single non-removed entity by ID.
 func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Entity, error) {
 	const query = `
@@ -382,6 +381,27 @@ func (s *Store) GetEntityTx(ctx context.Context, tx Tx, entityID string) (*inven
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get entity tx %s: %w", entityID, err)
+	}
+	return e, nil
+}
+
+// GetLiveEntityTx is GetEntity inside an existing transaction: removed entities
+// return ErrNotFound. Guards must read through tx so they see earlier writes in
+// the same batch.
+func (s *Store) GetLiveEntityTx(ctx context.Context, tx Tx, entityID string) (*inventory.Entity, error) {
+	const query = `
+		SELECT entity_id, display_name, canonical_name, locked, discrete,
+		       parent_id, full_path_display, full_path_canonical,
+		       depth, status, status_context, last_event_id, updated_at
+		FROM entities_current WHERE entity_id = ? AND status != 'removed'`
+
+	row := tx.QueryRowContext(ctx, query, entityID)
+	e, err := scanEntity(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get live entity tx %s: %w", entityID, err)
 	}
 	return e, nil
 }
