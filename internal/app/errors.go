@@ -23,6 +23,13 @@ var ErrHasChildren = errors.New("entity still contains other entities")
 // ErrDuplicateEntity is returned when a batch names the same entity more than once.
 var ErrDuplicateEntity = errors.New("entity named more than once")
 
+// ErrNoChange is returned when a command would set an attribute to the value it
+// already has (ADR 0024: no-op changes are errors, not events).
+var ErrNoChange = errors.New("no change")
+
+// ErrNoAttributes is returned when an attribute request names no attribute.
+var ErrNoAttributes = errors.New("no attribute to change")
+
 // wrapEntityError translates a store.GetEntity error into an app-layer error.
 // store.ErrNotFound becomes app.ErrNotFound; all other errors (DB failures,
 // context cancellations, etc.) are propagated directly so callers can

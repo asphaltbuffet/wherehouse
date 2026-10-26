@@ -236,3 +236,20 @@ func TestToStatusOutput_NoNoteOmitsContext(t *testing.T) {
 	}`, string(b))
 	assert.NotContains(t, string(b), "status_context")
 }
+
+func TestToAttrOutputs_JSONContract(t *testing.T) {
+	results := []app.EntityResult{{
+		EntityID: "abc1234567", DisplayName: "Shelf", FullPathDisplay: "Garage:Shelf",
+		Locked: true, Status: inventory.EntityStatusMissing, Tags: []string{"x"},
+	}}
+
+	b, err := json.Marshal(app.ToAttrOutputs(results))
+	require.NoError(t, err)
+
+	assert.JSONEq(t, `[{
+		"entity_id": "abc1234567",
+		"path": "Garage:Shelf",
+		"locked": true,
+		"discrete": false
+	}]`, string(b))
+}
