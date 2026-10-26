@@ -38,14 +38,7 @@
 
 {{define "search_page"}}<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Wherehouse — Search</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js" defer></script>
-  <script src="/static/tree.js" defer></script>
-</head>
+<head>{{template "head" "Wherehouse — Search"}}</head>
 <body>
   <a class="skip-link" href="#detail-panel">Skip to content</a>
   {{template "header" .Actor}}
