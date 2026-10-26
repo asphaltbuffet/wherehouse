@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -697,6 +698,143 @@ func TestHandleLoanForm(t *testing.T) {
 				assert.Contains(t, string(body), `name="note"`)
 				assert.Contains(t, string(body), "Loaned to")
 			}
+		})
+	}
+}
+
+func postLoan(t *testing.T, ts *httptest.Server, form url.Values) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/loan", strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func loanableHammer() []app.EntityResult {
+	return []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: inventory.EntityStatusOk},
+	}
+}
+
+func TestHandleLoan_Success(t *testing.T) {
+	fake := &fakeApp{entities: loanableHammer()}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postLoan(t, ts, url.Values{"recipient": {"Alice"}, "note": {"for the weekend"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "abc", fake.lastLoanReq.EntityID)
+	assert.Equal(t, inventory.EntityStatusLoaned, fake.lastLoanReq.Status)
+	assert.Equal(t, "Alice", fake.lastLoanReq.StatusContext)
+	assert.Equal(t, "for the weekend", fake.lastLoanReq.Note)
+	assert.Contains(t, body, `id="entity-detail"`)
+	assert.Contains(t, body, "loaned — Alice")
+	assert.Contains(t, body, `id="tree-badge-abc"`)
+	assert.NotContains(t, body, `data-action="loan"`)
+	assert.NotContains(t, body, "loan failed")
+}
+
+func TestHandleLoan_BlankRecipientReopensForm(t *testing.T) {
+	fake := &fakeApp{
+		entities: loanableHammer(),
+		loanErr:  fmt.Errorf("mark loaned: %w", app.ErrRecipientRequired),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postLoan(t, ts, url.Values{"recipient": {"   "}, "note": {"keep me"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, `id="entity-detail"`)
+	assert.Contains(t, body, "Loaned to is required.")
+	assert.Contains(t, body, `hx-post="/entities/abc/actions/loan"`)
+	assert.Contains(t, body, `value="keep me"`)
+	assert.NotContains(t, body, `id="tree-badge-abc"`)
+}
+
+func TestHandleLoan_ConcurrentLoanShowsFreshState(t *testing.T) {
+	fake := &fakeApp{
+		entities: loanableHammer(),
+		loanErr:  errTest,
+		onLoan: func(f *fakeApp) {
+			f.entities[0].Status = inventory.EntityStatusLoaned
+			f.entities[0].StatusContext = "Bob"
+		},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postLoan(t, ts, url.Values{"recipient": {"Alice"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, "loan failed")
+	assert.Contains(t, body, "loaned — Bob")
+	assert.Contains(t, body, `id="tree-badge-abc"`)
+	assert.NotContains(t, body, `data-action="loan"`)
+}
+
+func TestHandleLoan_GenericFailureShowsError(t *testing.T) {
+	fake := &fakeApp{entities: loanableHammer(), loanErr: errTest}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postLoan(t, ts, url.Values{"recipient": {"Alice"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, "loan failed")
+	assert.Contains(t, body, `hx-get="/entities/abc/actions/loan"`)
+}
+
+func TestHandleLoan_RemovedConcurrentlyNotFound(t *testing.T) {
+	fake := &fakeApp{
+		entities: loanableHammer(),
+		loanErr:  errTest,
+		onLoan:   func(f *fakeApp) { f.entities = nil },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postLoan(t, ts, url.Values{"recipient": {"Alice"}})
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleLoan_Rejected(t *testing.T) {
+	tests := []struct {
+		name     string
+		entities []app.EntityResult
+		wantCode int
+	}{
+		{
+			name: "locked forbidden",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+				Status: inventory.EntityStatusOk, Locked: true}},
+			wantCode: http.StatusForbidden,
+		},
+		{
+			name: "loaned forbidden",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"}},
+			wantCode: http.StatusForbidden,
+		},
+		{name: "not found", wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeApp{entities: tt.entities}
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			resp, _ := postLoan(t, ts, url.Values{"recipient": {"Alice"}})
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			assert.Zero(t, fake.loanCalls, "no write may be attempted")
 		})
 	}
 }

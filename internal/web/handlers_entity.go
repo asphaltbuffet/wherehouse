@@ -355,12 +355,12 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, "build detail data", err)
 		return
 	}
-	s.renderReturned(w, r, fresh)
+	s.renderStatusChanged(w, r, fresh)
 }
 
-// renderReturned renders the detail of an entity that is no longer
-// borrowed/loaned, plus the out-of-band tree badge update.
-func (s *Server) renderReturned(w http.ResponseWriter, r *http.Request, fresh detailData) {
+// renderStatusChanged renders the detail of an entity whose status changed in
+// place, plus the out-of-band tree badge update.
+func (s *Server) renderStatusChanged(w http.ResponseWriter, r *http.Request, fresh detailData) {
 	s.renderDetailSection(w, r, fresh)
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
 		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
@@ -393,7 +393,7 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 		s.renderAfterRemoval(w, r, stale.Entity)
 	case !fresh.CanReturn:
 		s.cfg.Logger.Info("return already applied concurrently", "entity_id", entityID)
-		s.renderReturned(w, r, fresh)
+		s.renderStatusChanged(w, r, fresh)
 	default:
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
 		fresh.Error = "return failed"
@@ -421,6 +421,89 @@ func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.renderHTML(w, "loan_form", loanFormData{EntityID: entityID})
+}
+
+// handleLoan handles POST /entities/{entityID}/actions/loan.
+func (s *Server) handleLoan(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.CanLoan {
+		http.Error(w, "entity cannot be loaned", http.StatusForbidden)
+		return
+	}
+
+	form := loanFormData{
+		EntityID:  entityID,
+		Recipient: r.FormValue("recipient"),
+		Note:      r.FormValue("note"),
+	}
+	_, err = s.cfg.App.MarkLoaned(r.Context(), []app.ChangeStatusRequest{{
+		EntityID:      entityID,
+		Status:        inventory.EntityStatusLoaned,
+		StatusContext: form.Recipient,
+		Note:          form.Note,
+		ActorID:       s.actorFor(r),
+	}})
+	if err != nil {
+		s.renderLoanFailure(w, r, data, form, err)
+		return
+	}
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	s.renderStatusChanged(w, r, fresh)
+}
+
+// renderLoanFailure handles a failed MarkLoaned. A blank recipient re-opens the
+// form with the user's input. Anything else re-reads the entity: unlike Return,
+// a concurrent loan is not this request's outcome (it may name a different
+// recipient), so the fresh state is shown with an error, never as success.
+func (s *Server) renderLoanFailure(
+	w http.ResponseWriter, r *http.Request, stale detailData, form loanFormData, err error,
+) {
+	if errors.Is(err, app.ErrRecipientRequired) {
+		form.Error = "Loaned to is required."
+		stale.LoanForm = &form
+		s.renderDetailSection(w, r, stale)
+		return
+	}
+
+	entityID := stale.Entity.EntityID
+	fresh, ferr := s.buildDetailData(r.Context(), entityID)
+	if ferr != nil {
+		s.serverError(w, "build detail data", ferr)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		s.cfg.Logger.Info("loan target removed concurrently", "error", err, "entity_id", entityID)
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+
+	if fresh.CanLoan {
+		s.cfg.Logger.Error("loan entity", "error", err, "entity_id", entityID)
+	} else {
+		s.cfg.Logger.Info("loan rejected: entity changed concurrently", "error", err, "entity_id", entityID)
+	}
+	fresh.Error = "loan failed"
+	s.renderStatusChanged(w, r, fresh)
 }
 
 // treeNodeDetachedEvent is the tree-node-detached payload: entityID left

@@ -1,0 +1,5 @@
+kind: Added
+body: 'Web UI: Loan action for ok and missing entities, with a required "Loaned to" and an optional note'
+time: 2026-10-26T00:58:13.475533558-04:00
+custom:
+    Issue: '#289'

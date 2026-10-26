@@ -46,7 +46,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 - **Hierarchical Paths** — place > container > leaf nesting with colon-path addressing
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
-- **Web UI** — local HTTP server for browsing, searching, adding, editing, borrowing, and returning inventory
+- **Web UI** — local HTTP server for browsing, searching, adding, editing, borrowing, loaning, and returning inventory
 - **Network Storage Ready** — SQLite WAL mode works with NFS/SMB mounts
 - **Multi-User Attribution** — trust-based; tracks who made changes, no permissions enforcement
 - **Single File Database** — entire inventory in one portable SQLite file
@@ -284,8 +284,8 @@ stateDiagram-v2
     [*] --> borrowed: borrow [web]
     ok --> missing: lost [web]
     missing --> ok: found [web]
-    ok --> loaned: loan
-    missing --> loaned: loan
+    ok --> loaned: loan [web]
+    missing --> loaned: loan [web]
     loaned --> ok: return [web]
     borrowed --> removed: return [web]
     ok --> removed: remove
@@ -308,7 +308,7 @@ Non-status actions, by interface:
 | move | ✅ | ❌ | |
 | remove | ✅ | ❌ | |
 | lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities, so a locked entity marked `missing` cannot be found from the web |
-| loan | ✅ | ❌ | |
+| loan | ✅ | ✅ | web form asks for "Loaned to" and an optional note; disabled for locked entities |
 | borrow | ✅ | ✅ | web creates one entity per submit, with a searchable location picker defaulting to the entity being viewed |
 | return | ✅ | ✅ | web asks for confirmation before returning a borrowed entity |
 | scry / list | ✅ | ✅ | web has search and tree browsing; no status filter |
