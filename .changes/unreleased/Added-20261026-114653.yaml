@@ -1,0 +1,5 @@
+kind: Added
+body: 'attr command: show or change an entity''s locked/discrete attributes after creation'
+time: 2026-10-26T11:46:53.155298761-04:00
+custom:
+    Issue: "310"

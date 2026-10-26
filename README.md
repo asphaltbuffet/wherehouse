@@ -212,6 +212,15 @@ wherehouse add "Garage:Toolbox:Ratchet" --discrete
 
 Paths are colon-separated from the root. Providing a nested path like `Garage:Toolbox:Wrench` will add `Wrench` under the existing `Garage:Toolbox` entity.
 
+Attributes can be changed later with `attr` (use the `=` form to clear):
+
+```bash
+wherehouse attr "Garage:Toolbox"                      # show locked/discrete
+wherehouse attr "Garage:Toolbox" --locked             # lock (only ok or borrowed entities)
+wherehouse attr "Garage:Toolbox" --locked=false       # unlock
+wherehouse attr "Garage:Box of Nails" --discrete      # only when it holds nothing
+```
+
 ### 3. Search
 
 ```bash
