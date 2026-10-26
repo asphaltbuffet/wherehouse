@@ -15,6 +15,7 @@ type EntityResult struct {
 	CanonicalName   string
 	Locked          bool
 	Discrete        bool
+	ParentID        string // empty for root entities
 	FullPathDisplay string
 	Status          inventory.EntityStatus
 	StatusContext   string
@@ -51,12 +52,17 @@ func entityToResult(e *inventory.Entity, tags []string) EntityResult {
 	if e.StatusContext != nil {
 		statusCtx = *e.StatusContext
 	}
+	parentID := ""
+	if e.ParentID != nil {
+		parentID = *e.ParentID
+	}
 	return EntityResult{
 		EntityID:        e.EntityID,
 		DisplayName:     e.DisplayName,
 		CanonicalName:   e.CanonicalName,
 		Locked:          e.Locked,
 		Discrete:        e.Discrete,
+		ParentID:        parentID,
 		FullPathDisplay: e.FullPathDisplay,
 		Status:          e.Status,
 		StatusContext:   statusCtx,
