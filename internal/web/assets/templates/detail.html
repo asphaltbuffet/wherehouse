@@ -53,6 +53,20 @@
         Return
       </button>
       {{end}}
+      {{if .LoanForm}}
+      {{template "loan_form" .LoanForm}}
+      {{else if .CanLoan}}
+      <button class="btn-ghost detail-action-btn" data-action="loan"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/loan"
+              hx-target="this" hx-swap="outerHTML">
+        Loan
+      </button>
+      {{else if .LoanBlockedReason}}
+      <button class="btn-ghost detail-action-btn" data-action="loan" disabled aria-disabled="true"
+              title="{{.LoanBlockedReason}}">
+        Loan
+      </button>
+      {{end}}
     </aside>
   </div>
 

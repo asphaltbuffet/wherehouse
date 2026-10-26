@@ -48,6 +48,10 @@ func (f *fakeApp) MarkReturned(_ context.Context, _ []app.ChangeStatusRequest) (
 	return nil, nil
 }
 
+func (f *fakeApp) MarkLoaned(_ context.Context, _ []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	return nil, nil
+}
+
 func (f *fakeApp) FindParentCandidates(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {
 	return nil, nil
 }

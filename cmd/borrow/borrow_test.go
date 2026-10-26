@@ -146,7 +146,7 @@ func TestRunBorrow_BlocksLoan(t *testing.T) {
 	drill, err := a.LookupEntityByPath(t.Context(), "Shelf:Drill")
 	require.NoError(t, err)
 	_, err = a.MarkLoaned(t.Context(), []app.ChangeStatusRequest{
-		{EntityID: drill.EntityID, Status: inventory.EntityStatusLoaned, ActorID: "test"},
+		{EntityID: drill.EntityID, Status: inventory.EntityStatusLoaned, StatusContext: "Bob", ActorID: "test"},
 	})
 	assert.ErrorContains(t, err, "borrowed")
 }

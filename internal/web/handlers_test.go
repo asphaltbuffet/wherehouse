@@ -34,6 +34,11 @@ type fakeApp struct {
 	lastReturnReq app.ChangeStatusRequest
 	onReturn      func(*fakeApp) // runs inside MarkReturned; simulates a concurrent writer
 
+	loanErr     error
+	loanCalls   int
+	lastLoanReq app.ChangeStatusRequest
+	onLoan      func(*fakeApp) // runs inside MarkLoaned; simulates a concurrent writer
+
 	hasChildren      map[string]bool // parentID → HasLiveChildren result; missing key ⇒ false
 	hasChildrenErr   error
 	hasChildrenCalls int
@@ -121,6 +126,29 @@ func (f *fakeApp) MarkReturned(_ context.Context, reqs []app.ChangeStatusRequest
 		f.onReturn(f)
 	}
 	return nil, f.returnErr
+}
+
+func (f *fakeApp) MarkLoaned(_ context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	f.loanCalls++
+	if len(reqs) > 0 {
+		f.lastActor = reqs[0].ActorID
+		f.lastLoanReq = reqs[0]
+	}
+	if f.onLoan != nil {
+		f.onLoan(f)
+	}
+	if f.loanErr != nil {
+		return nil, f.loanErr
+	}
+	for _, req := range reqs {
+		for i := range f.entities {
+			if f.entities[i].EntityID == req.EntityID {
+				f.entities[i].Status = inventory.EntityStatusLoaned
+				f.entities[i].StatusContext = req.StatusContext
+			}
+		}
+	}
+	return nil, nil
 }
 
 func (f *fakeApp) HasLiveChildren(_ context.Context, parentID string) (bool, error) {

@@ -20,6 +20,7 @@ type App interface {
 	ChangeStatus(ctx context.Context, req app.ChangeStatusRequest) (app.EntityResult, error)
 	FindEntities(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
 	MarkReturned(ctx context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error)
+	MarkLoaned(ctx context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error)
 	FindParentCandidates(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
 	GetEntityByIDAnyStatus(ctx context.Context, entityID string) (app.EntityResult, error)
 	BorrowEntities(ctx context.Context, reqs []app.BorrowEntityRequest) ([]app.EntityResult, error)
