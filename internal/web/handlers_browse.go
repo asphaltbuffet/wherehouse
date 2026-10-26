@@ -151,3 +151,17 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 		Results []app.FindResult
 	}{Query: q, Results: results})
 }
+
+// handleTreeNode returns a single tree_node fragment for inserting a newly created entity.
+func (s *Server) handleTreeNode(w http.ResponseWriter, r *http.Request) {
+	e, err := s.cfg.App.GetEntityByID(r.Context(), r.PathValue("entityID"))
+	if errors.Is(err, app.ErrNotFound) {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.serverError(w, "get entity", err)
+		return
+	}
+	s.renderHTML(w, "tree_node", e)
+}

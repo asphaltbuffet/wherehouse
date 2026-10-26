@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 )
 
 // borrowFormData is the view model for the borrow modal. Field values are
@@ -67,4 +69,100 @@ func (s *Server) defaultBorrowParent(ctx context.Context, entityID string) (app.
 		entityID = e.ParentID
 	}
 	return app.EntityResult{}, nil
+}
+
+var errNoBorrowResult = errors.New("borrow returned no result")
+
+// entityCreatedEvent is the HX-Trigger detail tree.js uses to insert the new node.
+type entityCreatedEvent struct {
+	EntityID string `json:"entityId"`
+	ParentID string `json:"parentId"`
+}
+
+// handleBorrow creates one borrowed entity and shows its detail. Validation and
+// app errors re-render the form inside the modal instead.
+func (s *Server) handleBorrow(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	form := borrowFormData{
+		ParentID:    strings.TrimSpace(r.FormValue("parent_id")),
+		DisplayName: strings.TrimSpace(r.FormValue("display_name")),
+		From:        strings.TrimSpace(r.FormValue("from")),
+		Note:        strings.TrimSpace(r.FormValue("note")),
+	}
+
+	if form.ParentID != "" {
+		parent, err := s.cfg.App.GetEntityByID(r.Context(), form.ParentID)
+		if errors.Is(err, app.ErrNotFound) {
+			form.ParentID = ""
+			s.renderBorrowFormError(w, form, "That location no longer exists — choose another.")
+			return
+		}
+		if err != nil {
+			s.serverError(w, "get parent entity", err)
+			return
+		}
+		form.ParentPath = parent.FullPathDisplay
+	}
+
+	results, err := s.cfg.App.BorrowEntities(r.Context(), []app.BorrowEntityRequest{{
+		DisplayName:   form.DisplayName,
+		ParentPath:    form.ParentPath,
+		StatusContext: form.From,
+		ActorID:       s.actorFor(r),
+		Note:          form.Note,
+	}})
+	if err != nil {
+		s.cfg.Logger.Error("borrow entity", "error", err)
+		s.renderBorrowFormError(w, form, borrowErrorMessage(err))
+		return
+	}
+	if len(results) == 0 {
+		s.serverError(w, "borrow entity", errNoBorrowResult)
+		return
+	}
+	created := results[0]
+
+	data, err := s.buildDetailData(r.Context(), created.EntityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	trigger, err := json.Marshal(map[string]entityCreatedEvent{
+		"entity-created": {EntityID: created.EntityID, ParentID: form.ParentID},
+	})
+	if err != nil {
+		s.serverError(w, "marshal trigger", err)
+		return
+	}
+
+	w.Header().Set("Hx-Push-Url", "/entities/"+created.EntityID)
+	w.Header().Set("Hx-Trigger", string(trigger))
+	s.renderHTML(w, "detail_section", data)
+}
+
+// renderBorrowFormError re-renders the borrow form in the modal with msg shown.
+func (s *Server) renderBorrowFormError(w http.ResponseWriter, form borrowFormData, msg string) {
+	form.Error = msg
+	w.Header().Set("Hx-Retarget", "#add-modal-body")
+	w.Header().Set("Hx-Reswap", "innerHTML")
+	s.renderHTML(w, "borrow_form", form)
+}
+
+// borrowErrorMessage maps app-layer validation errors to form messages.
+func borrowErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, app.ErrLenderRequired):
+		return "Borrowed from is required."
+	case errors.Is(err, entitypath.ErrEmptySegment):
+		return "Name is required."
+	case errors.Is(err, entitypath.ErrSegmentContainsSeparator):
+		return `Name cannot contain ":".`
+	case errors.Is(err, entitypath.ErrInvalidSegment):
+		return "Name contains invalid characters."
+	default:
+		return "borrow failed"
+	}
 }

@@ -1,0 +1,5 @@
+kind: Added
+body: 'Web UI: Borrow button in the header creates a borrowed entity, with a searchable location picker defaulting to the entity being viewed'
+time: 2026-10-26T01:43:37.000000000Z
+custom:
+    Issue: ""

@@ -148,6 +148,7 @@
     if (!e.detail || !e.detail.successful) return;
     var form = e.target.closest && e.target.closest('form');
     if (!form || !form.matches('#add-modal-body form')) return;
+    if (form.dataset.form === 'borrow') return; // closed by onEntityCreated instead
     document.getElementById('add-modal').close();
     form.reset();
     var targetSelector = form.getAttribute('hx-target');
@@ -189,6 +190,50 @@
     if (dialog) dialog.close();
   }
 
+  // Borrow modal: picking a type-ahead result fills the hidden parent_id and
+  // the visible label; the ✕ button resets to root.
+  function onParentPick(e) {
+    var pick = e.target.closest && e.target.closest('[data-action="pick-parent"]');
+    var clear = e.target.closest && e.target.closest('[data-action="clear-parent"]');
+    if (!pick && !clear) return;
+    var form = e.target.closest('form');
+    if (!form) return;
+    form.querySelector('#borrow_parent_id').value = pick ? pick.dataset.parentId : '';
+    form.querySelector('#borrow_parent_label').textContent = pick ? pick.dataset.parentPath : '(root)';
+    form.querySelector('#borrow_parent_options').innerHTML = '';
+    form.querySelector('#borrow_parent_q').value = '';
+  }
+
+  // Enter in the parent search box must not submit the borrow form.
+  function onParentSearchKeydown(e) {
+    if (e.key === 'Enter' && e.target.id === 'borrow_parent_q') e.preventDefault();
+  }
+
+  // After a borrow: close the modal and insert the new node when its parent's
+  // child list is already loaded (root, or a parent expanded at least once).
+  // A never-expanded parent only needs its chevron revealed; children load on expand.
+  function onEntityCreated(e) {
+    var dialog = document.getElementById('add-modal');
+    if (dialog) dialog.close();
+    var parentId = e.detail.parentId;
+    var listId = parentId ? 'tree-children-' + parentId : 'tree-root-list';
+    if (!document.getElementById(listId)) return;
+    if (parentId) {
+      var parentItem = document.querySelector('.tree-item[data-entity-id="' + parentId + '"]');
+      if (parentItem && !parentItem.dataset.expanded) {
+        var li = parentItem.closest('li');
+        if (li && li.getAttribute('aria-expanded') === null) li.setAttribute('aria-expanded', 'false');
+        var ch = parentItem.querySelector('.chevron');
+        if (ch) ch.classList.remove('chevron-hidden');
+        return;
+      }
+    }
+    htmx.ajax('GET', '/entities/' + e.detail.entityId + '/tree-node', {
+      target: '#' + listId,
+      swap: 'beforeend',
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     var root = document.getElementById('tree-root-list');
     if (root) {
@@ -201,5 +246,8 @@
     document.body.addEventListener('htmx:afterRequest', onAddRootAfterRequest);
     document.body.addEventListener('click', onDetailAddClick);
     document.body.addEventListener('click', onAddModalCancel);
+    document.body.addEventListener('click', onParentPick);
+    document.body.addEventListener('keydown', onParentSearchKeydown);
+    document.body.addEventListener('entity-created', onEntityCreated);
   });
 }());

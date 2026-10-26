@@ -1,14 +1,20 @@
 package web_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -80,4 +86,111 @@ func TestHeader_HasBorrowButton(t *testing.T) {
 
 	assert.Contains(t, string(body), `hx-get="/entities/borrow"`)
 	assert.Contains(t, string(body), ">Borrow</button>")
+}
+
+func postBorrow(t *testing.T, ts *httptest.Server, form url.Values) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/entities/borrow", strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func TestHandleBorrow_CreatesUnderParent(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		},
+		borrowResults: []app.EntityResult{
+			{EntityID: "n", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postBorrow(t, ts, url.Values{
+		"display_name": {" Drill "}, "from": {"Alice"}, "parent_id": {"g"}, "note": {"weekend"},
+	})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "Drill", fake.lastBorrowReq.DisplayName)
+	assert.Equal(t, "Garage", fake.lastBorrowReq.ParentPath)
+	assert.Equal(t, "Alice", fake.lastBorrowReq.StatusContext)
+	assert.Equal(t, "weekend", fake.lastBorrowReq.Note)
+	assert.Equal(t, "/entities/n", resp.Header.Get("Hx-Push-Url"))
+	assert.Empty(t, resp.Header.Get("Hx-Retarget"))
+
+	var trigger map[string]map[string]string
+	require.NoError(t, json.Unmarshal([]byte(resp.Header.Get("Hx-Trigger")), &trigger))
+	assert.Equal(t, map[string]string{"entityId": "n", "parentId": "g"}, trigger["entity-created"])
+	assert.Contains(t, body, "<h2>Drill</h2>")
+}
+
+func TestHandleBorrow_Root(t *testing.T) {
+	fake := &fakeApp{borrowResults: []app.EntityResult{
+		{EntityID: "n", DisplayName: "Ladder", FullPathDisplay: "Ladder", Status: inventory.EntityStatusBorrowed},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postBorrow(t, ts, url.Values{"display_name": {"Ladder"}, "from": {"Bob"}, "parent_id": {""}})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Empty(t, fake.lastBorrowReq.ParentPath)
+	assert.Contains(t, resp.Header.Get("Hx-Trigger"), `"parentId":""`)
+}
+
+// Review Focus #3: parent removed between opening the form and submitting it.
+func TestHandleBorrow_StaleParent(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "gone", DisplayName: "Old Shelf", FullPathDisplay: "Old Shelf",
+			Status: inventory.EntityStatusRemoved},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postBorrow(t, ts, url.Values{"display_name": {"Drill"}, "from": {"Alice"}, "parent_id": {"gone"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "#add-modal-body", resp.Header.Get("Hx-Retarget"))
+	assert.Equal(t, "innerHTML", resp.Header.Get("Hx-Reswap"))
+	assert.Contains(t, body, "no longer exists")
+	assert.Contains(t, body, `name="parent_id" value=""`)
+	assert.Zero(t, fake.borrowCalls)
+}
+
+// Review Focus #1 and #2: app validation errors become inline form errors.
+func TestHandleBorrow_AppValidationErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		wantMsg string
+	}{
+		{"blank lender", app.ErrLenderRequired, "Borrowed from is required"},
+		{"empty name", entitypath.ErrEmptySegment, "Name is required"},
+		{"separator", entitypath.ErrSegmentContainsSeparator, "Name cannot contain"},
+		{"invalid", entitypath.ErrInvalidSegment, "Name contains invalid characters"},
+		{"other", errTest, "borrow failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeApp{borrowErr: fmt.Errorf("borrow: %w", tt.err)}
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			resp, body := postBorrow(t, ts, url.Values{"display_name": {"Drill"}, "from": {"   "}})
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "#add-modal-body", resp.Header.Get("Hx-Retarget"))
+			assert.Contains(t, body, tt.wantMsg)
+			assert.Contains(t, body, `value="Drill"`, "entered name is echoed back")
+			assert.Empty(t, resp.Header.Get("Hx-Trigger"))
+		})
+	}
 }

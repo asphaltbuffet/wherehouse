@@ -36,6 +36,11 @@ type fakeApp struct {
 	parentResults   []app.FindResult
 	parentCalls     int
 	lastParentQuery string
+
+	borrowResults []app.EntityResult
+	borrowErr     error
+	borrowCalls   int
+	lastBorrowReq app.BorrowEntityRequest
 }
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
@@ -114,6 +119,19 @@ func (f *fakeApp) FindParentCandidates(_ context.Context, req app.FindEntitiesRe
 	f.parentCalls++
 	f.lastParentQuery = req.Query
 	return f.parentResults, f.findErr
+}
+
+func (f *fakeApp) BorrowEntities(_ context.Context, reqs []app.BorrowEntityRequest) ([]app.EntityResult, error) {
+	f.borrowCalls++
+	if len(reqs) > 0 {
+		f.lastActor = reqs[0].ActorID
+		f.lastBorrowReq = reqs[0]
+	}
+	if f.borrowErr != nil {
+		return nil, f.borrowErr
+	}
+	f.entities = append(f.entities, f.borrowResults...)
+	return f.borrowResults, nil
 }
 
 func newTestServer(t *testing.T, a web.App) *httptest.Server {
