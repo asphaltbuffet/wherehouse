@@ -59,7 +59,9 @@ func TestSecurityHeaders_Present(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert.NotEmpty(t, resp.Header.Get("Content-Security-Policy"))
+	csp := resp.Header.Get("Content-Security-Policy")
+	assert.Contains(t, csp, "style-src 'self';")
+	assert.NotContains(t, csp, "unsafe-inline")
 	assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 	assert.Equal(t, "no-referrer", resp.Header.Get("Referrer-Policy"))
 }

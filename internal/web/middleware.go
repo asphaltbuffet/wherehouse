@@ -67,9 +67,9 @@ func originMatches(r *http.Request) bool {
 }
 
 // securityHeaders sets a baseline set of defensive response headers on
-// every response. CSP allows inline scripts/handlers because the
-// templates currently embed onclick/hx-on attributes; tighten once those
-// move into tree.js.
+// every response. The CSP is strict 'self' for scripts and styles: no
+// inline handlers or <style> blocks. htmx's own indicator-style injection
+// is disabled via the htmx-config meta tag in partial_head.html.
 func securityHeaders(next http.Handler) http.Handler {
 	const csp = "default-src 'self'; " +
 		"script-src 'self'; " +
