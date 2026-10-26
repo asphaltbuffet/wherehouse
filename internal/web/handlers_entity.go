@@ -19,7 +19,9 @@ type detailData struct {
 	History        []app.HistoryResult
 	CanAddChild    bool
 	CanMarkMissing bool
-	IsMissing      bool // true when Status == EntityStatusMissing
+	IsMissing      bool   // true when Status == EntityStatusMissing
+	CanReturn      bool   // borrowed or loaned
+	ReturnConfirm  string // non-empty only for borrowed: returning removes the entity
 	Breadcrumbs    []Breadcrumb
 	Error          string // populated by edit POST handlers; rendered inline above the detail dl
 }
@@ -104,7 +106,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		history[i], history[j] = history[j], history[i]
 	}
 
-	// borrowed and loaned transitions require dedicated flows with relationship data.
+	// Missing toggles apply only to ok/missing; borrowed/loaned use Return.
 	editable := entity.Status == inventory.EntityStatusOk ||
 		entity.Status == inventory.EntityStatusMissing
 
@@ -115,8 +117,23 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		CanAddChild:    !entity.Discrete,
 		CanMarkMissing: !entity.Locked && editable,
 		IsMissing:      entity.Status == inventory.EntityStatusMissing,
-		Breadcrumbs:    BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
+		CanReturn: entity.Status == inventory.EntityStatusBorrowed ||
+			entity.Status == inventory.EntityStatusLoaned,
+		ReturnConfirm: returnConfirm(entity),
+		Breadcrumbs:   BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
 	}, nil
+}
+
+// returnConfirm builds the confirmation prompt for returning a borrowed entity.
+// Loaned returns are low-stakes and get no prompt.
+func returnConfirm(e app.EntityResult) string {
+	if e.Status != inventory.EntityStatusBorrowed {
+		return ""
+	}
+	if e.StatusContext == "" {
+		return fmt.Sprintf("Return %s? It will be removed from the inventory.", e.DisplayName)
+	}
+	return fmt.Sprintf("Return %s to %s? It will be removed from the inventory.", e.DisplayName, e.StatusContext)
 }
 
 func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
@@ -274,4 +291,77 @@ func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Hx-Request") == htmxHeaderVal {
 		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
 	}
+}
+
+// handleReturn handles POST /entities/{entityID}/actions/return.
+// A borrowed entity is removed, so the response navigates to its parent;
+// a loaned entity goes back to ok and is re-rendered in place.
+func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.CanReturn {
+		http.Error(w, "entity cannot be returned", http.StatusForbidden)
+		return
+	}
+
+	_, err = s.cfg.App.MarkReturned(r.Context(), []app.ChangeStatusRequest{{
+		EntityID: entityID,
+		ActorID:  s.actorFor(r),
+	}})
+	if err != nil {
+		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
+		data.Error = "return failed"
+		if errors.Is(err, app.ErrHasChildren) {
+			data.Error = "return failed: it still contains other entities — return or move them first"
+		}
+		s.renderDetailSection(w, r, data)
+		return
+	}
+
+	if data.Entity.Status == inventory.EntityStatusBorrowed {
+		s.renderAfterRemoval(w, r, data.Entity)
+		return
+	}
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	s.renderDetailSection(w, r, fresh)
+	if r.Header.Get("Hx-Request") == htmxHeaderVal {
+		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
+	}
+}
+
+// renderAfterRemoval shows the removed entity's parent (or the empty state for a
+// root entity), pushes the matching URL, and deletes the entity's tree node.
+func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, removed app.EntityResult) {
+	var parent detailData
+	if removed.ParentID != "" {
+		var err error
+		parent, err = s.buildDetailData(r.Context(), removed.ParentID)
+		if err != nil {
+			s.serverError(w, "build parent detail data", err)
+			return
+		}
+	}
+
+	if parent.Entity.EntityID == "" {
+		w.Header().Set("Hx-Push-Url", "/")
+		s.renderHTML(w, "detail_empty", nil)
+	} else {
+		w.Header().Set("Hx-Push-Url", "/entities/"+parent.Entity.EntityID)
+		s.renderHTML(w, "detail_section", parent)
+	}
+	s.renderHTMLAppend(w, "tree_node_delete_oob", removed)
 }

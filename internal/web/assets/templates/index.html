@@ -21,10 +21,7 @@
       </ul>
     </nav>
     <main id="detail-panel" tabindex="-1">
-      <div class="empty-state">
-        <span class="empty-icon">📦</span>
-        <span>Select an item to see details.</span>
-      </div>
+      {{template "detail_empty"}}
     </main>
   </div>
 
@@ -34,3 +31,10 @@
   {{template "footer" .}}
 </body>
 </html>{{end}}
+
+{{define "detail_empty"}}
+<div class="empty-state">
+  <span class="empty-icon">📦</span>
+  <span>Select an item to see details.</span>
+</div>
+{{end}}

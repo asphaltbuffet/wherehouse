@@ -28,6 +28,9 @@ type fakeApp struct {
 	findResults  []app.FindResult
 	findErr      error
 	lastActor    string // ActorID from the most recent mutating call
+
+	returnErr     error
+	lastReturnReq app.ChangeStatusRequest
 }
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
@@ -80,6 +83,14 @@ func (f *fakeApp) ChangeStatus(_ context.Context, req app.ChangeStatusRequest) (
 
 func (f *fakeApp) FindEntities(_ context.Context, _ app.FindEntitiesRequest) ([]app.FindResult, error) {
 	return f.findResults, f.findErr
+}
+
+func (f *fakeApp) MarkReturned(_ context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error) {
+	if len(reqs) > 0 {
+		f.lastActor = reqs[0].ActorID
+		f.lastReturnReq = reqs[0]
+	}
+	return nil, f.returnErr
 }
 
 func newTestServer(t *testing.T, a web.App) *httptest.Server {

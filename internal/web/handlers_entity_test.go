@@ -1,8 +1,10 @@
 package web_test
 
 import (
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -283,4 +285,155 @@ func TestHandleToggleMissing_AppError(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "status change failed")
+}
+
+func postHTMX(t *testing.T, ts *httptest.Server, path string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+path, nil)
+	require.NoError(t, err)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	return resp
+}
+
+func TestHandleReturn_LoanedRerendersInPlace(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+			Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "abc", fake.lastReturnReq.EntityID)
+	assert.Contains(t, string(body), `id="tree-badge-abc"`)
+	assert.Empty(t, resp.Header.Get("Hx-Push-Url"))
+}
+
+func TestHandleReturn_BorrowedShowsParentAndDeletesNode(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+			Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "/entities/g", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, string(body), "<h2>Garage</h2>")
+	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+}
+
+func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+			Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, string(body), "Select an item to see details.")
+	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+}
+
+func TestHandleReturn_OkForbidden(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: inventory.EntityStatusOk},
+	}})
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+}
+
+// Review Focus #4: a second click after the borrowed entity was removed.
+func TestHandleReturn_AlreadyReturnedNotFound(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleReturn_HasChildrenShowsMessage(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Case", FullPathDisplay: "Case",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+		returnErr: fmt.Errorf("return: %w", app.ErrHasChildren),
+	})
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), "still contains other entities")
+}
+
+func TestEntityDetail_ReturnButton(t *testing.T) {
+	tests := []struct {
+		name        string
+		entity      app.EntityResult
+		wantButton  bool
+		wantConfirm string
+	}{
+		{
+			name: "borrowed confirms with lender",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+			wantButton:  true,
+			wantConfirm: `hx-confirm="Return Drill to Alice? It will be removed from the inventory."`,
+		},
+		{
+			name: "loaned has no confirm",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+			wantButton: true,
+		},
+		{
+			name: "ok has no return",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{tt.entity}})
+			defer ts.Close()
+
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
+			req.Header.Set("Hx-Request", "true")
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			assert.Equal(t, tt.wantButton, strings.Contains(string(body), "/actions/return"))
+			if tt.wantConfirm != "" {
+				assert.Contains(t, string(body), tt.wantConfirm)
+			} else {
+				assert.NotContains(t, string(body), "hx-confirm")
+			}
+		})
+	}
 }

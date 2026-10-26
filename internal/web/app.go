@@ -18,4 +18,5 @@ type App interface {
 	RenameEntity(ctx context.Context, req app.RenameEntityRequest) (app.EntityResult, error)
 	ChangeStatus(ctx context.Context, req app.ChangeStatusRequest) (app.EntityResult, error)
 	FindEntities(ctx context.Context, req app.FindEntitiesRequest) ([]app.FindResult, error)
+	MarkReturned(ctx context.Context, reqs []app.ChangeStatusRequest) ([]app.EntityResult, error)
 }

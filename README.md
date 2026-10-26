@@ -286,8 +286,8 @@ stateDiagram-v2
     missing --> ok: found [web]
     ok --> loaned: loan
     missing --> loaned: loan
-    loaned --> ok: return
-    borrowed --> removed: return
+    loaned --> ok: return [web]
+    borrowed --> removed: return [web]
     ok --> removed: remove
     missing --> removed: remove
     loaned --> removed: remove
@@ -308,7 +308,8 @@ Non-status actions, by interface:
 | move | ✅ | ❌ | |
 | remove | ✅ | ❌ | |
 | lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities, so a locked entity marked `missing` cannot be found from the web |
-| loan / return / borrow | ✅ | ❌ | |
+| loan / borrow | ✅ | ❌ | |
+| return | ✅ | ✅ | web asks for confirmation before returning a borrowed entity |
 | scry / list | ✅ | ✅ | web has search and tree browsing; no status filter |
 | history | ✅ | ❌ | |
 | export / doctor | ✅ | ❌ | |
