@@ -24,6 +24,12 @@ type EntityResult struct {
 	UpdatedAt       time.Time
 }
 
+// IsEligibleParent reports whether the entity may receive a new child:
+// any entity that is neither removed nor discrete (see CONTEXT.md "Eligible parent").
+func (r EntityResult) IsEligibleParent() bool {
+	return r.Status != inventory.EntityStatusRemoved && !r.Discrete
+}
+
 // HistoryResult is the output representation of a single history event.
 type HistoryResult struct {
 	EventID      int64
