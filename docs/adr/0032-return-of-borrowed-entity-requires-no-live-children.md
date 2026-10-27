@@ -9,4 +9,4 @@ Returning a `borrowed` entity sets it to `removed`. If it still has non-removed 
 
 ## Consequences
 
-The same orphaning hazard exists for `remove`; extending this guard there is a separate behavior change, tracked in [#287](https://github.com/asphaltbuffet/wherehouse/issues/287).
+The same orphaning hazard existed for `remove`; the guard was extended there in [#287](https://github.com/asphaltbuffet/wherehouse/issues/287), so no command can leave a live entity under a removed parent. Read paths still tolerate such entities, because data written before #287 may contain them.

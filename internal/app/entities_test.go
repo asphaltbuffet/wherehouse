@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
@@ -700,7 +702,7 @@ func TestReparentEntity_DescendantUnderRemovedAncestor(t *testing.T) {
 		app.CreateEntityRequest{DisplayName: "Bit", ParentPath: "Garage:Box", ActorID: "alice"},
 	)
 	require.NoError(t, err)
-	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"}))
+	apptesting.RemoveLeavingLiveChildren(t, a, box.EntityID) // pre-#287 data: live child under removed parent
 
 	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
 		EntityID: garage.EntityID, NewParentID: bit.EntityID, ActorID: "alice",
@@ -727,4 +729,51 @@ func TestReparentEntity_ExistingCycleDoesNotHang(t *testing.T) {
 	})
 
 	assert.ErrorContains(t, err, "loops")
+}
+
+func TestRemoveEntity_LiveChildrenRejected(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "alice"})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Nail", ParentPath: "Box", ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	err = a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"})
+	require.ErrorIs(t, err, app.ErrHasChildren)
+	assert.Contains(t, err.Error(), `cannot remove "Box" (1 inside; remove or move them first)`)
+
+	got, err := a.GetEntityByID(ctx, box.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, inventory.EntityStatusOk, got.Status, "a rejected remove must not write an event")
+}
+
+func TestRemoveEntity_RemovedChildrenDoNotBlock(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "alice"})
+	require.NoError(t, err)
+	nail, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Nail", ParentPath: "Box", ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: nail.EntityID, ActorID: "alice"}))
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"}))
+}
+
+func TestRemoveEntity_AlreadyRemovedNotFound(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "alice"})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"}))
+
+	err = a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"})
+	require.ErrorIs(t, err, app.ErrNotFound, "web relies on this to detect a concurrent remove")
 }

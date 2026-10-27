@@ -163,33 +163,43 @@ func (a *App) isSelfOrDescendant(ctx context.Context, entityID, candidateID stri
 	return false, nil
 }
 
-// RemoveEntity permanently marks an entity as removed.
+// RemoveEntity permanently marks an entity as removed. It refuses an entity
+// that still contains non-removed entities (#287): they would be left live
+// under a removed parent, unreachable from the tree.
 func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
-	if err != nil {
-		return wrapEntityError(req.EntityID, err)
-	}
-
-	if entity.Status == inventory.EntityStatusBorrowed {
-		return fmt.Errorf("cannot remove %q: entity is borrowed — use 'return' instead", entity.FullPathDisplay)
-	}
-
-	payload := eventbus.EntityRemovedPayload{EntityID: entity.EntityID}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-
 	var note *string
 	if req.Note != "" {
 		note = &req.Note
 	}
 
-	if _, err = a.bus.Dispatch(ctx, inventory.EntityRemovedEvent, req.ActorID, raw, note); err != nil {
-		return fmt.Errorf("remove entity: %w", err)
-	}
+	return a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		if err != nil {
+			return wrapEntityError(req.EntityID, err)
+		}
 
-	return nil
+		if entity.Status == inventory.EntityStatusBorrowed {
+			return fmt.Errorf("cannot remove %q: entity is borrowed — use 'return' instead", entity.FullPathDisplay)
+		}
+
+		n, err := a.store.CountLiveChildrenTx(ctx, tx, entity.EntityID)
+		if err != nil {
+			return fmt.Errorf("remove %q: %w", entity.FullPathDisplay, err)
+		}
+		if n > 0 {
+			return fmt.Errorf("cannot remove %q (%d inside; remove or move them first): %w",
+				entity.FullPathDisplay, n, ErrHasChildren)
+		}
+
+		raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: entity.EntityID})
+		if err != nil {
+			return fmt.Errorf("marshal payload: %w", err)
+		}
+		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityRemovedEvent, req.ActorID, raw, note); err != nil {
+			return fmt.Errorf("remove entity: %w", err)
+		}
+		return nil
+	})
 }
 
 // LookupEntityStatus returns all entities ever at the given path (any status, including removed),

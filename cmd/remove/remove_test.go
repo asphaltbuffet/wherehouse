@@ -99,3 +99,15 @@ func TestRunRemove_Quiet_SuppressesSuccess(t *testing.T) {
 	assert.Empty(t, stdout.String())
 	assert.Empty(t, stderr.String())
 }
+
+func TestRunRemove_ContainerWithLiveChildrenFails(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForRemove(t, a)
+
+	cmd := remove.NewRemoveCmd(a)
+	cmd.SetArgs([]string{"Garage:Toolbox"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	require.ErrorIs(t, err, app.ErrHasChildren)
+}

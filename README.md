@@ -346,6 +346,8 @@ wherehouse rename "Garage:Toolbox" --to "Tool Chest"
 
 ### 9. Remove Entities
 
+An entity that still contains other entities cannot be removed; remove or move them first.
+
 ```bash
 wherehouse remove "Garage:Tool Chest:Broken Wrench"
 wherehouse remove "Garage:Old Box" --note "disposed"

@@ -38,7 +38,7 @@ The lifecycle state of an entity. Valid values:
 | `EntityStatusMissing` | `"missing"` | Location unknown |
 | `EntityStatusBorrowed` | `"borrowed"` | An external item brought into the inventory temporarily (a new entity is created to represent it). `borrowed` is a terminal status — the only valid transition is `return`, which sets the entity to `removed`, and only when it has no non-removed children ([ADR 0032](docs/adr/0032-return-of-borrowed-entity-requires-no-live-children.md)). All other status changes (including `ok`, `missing`, `loaned`) and direct `remove` are blocked. |
 | `EntityStatusLoaned` | `"loaned"` | An existing inventory entity given out to someone else (the entity already exists; no new entity is created) |
-| `EntityStatusRemoved` | `"removed"` | Soft-deleted from the inventory |
+| `EntityStatusRemoved` | `"removed"` | Soft-deleted from the inventory. A removed entity never has non-removed children: `remove`, and `return` of a `borrowed` entity, are rejected while any remain ([ADR 0032](docs/adr/0032-return-of-borrowed-entity-requires-no-live-children.md)). |
 
 Status changes may carry an optional `StatusContext` (free-text, e.g. borrower name). For `loaned`, the recipient (`loan --to`) is **required**, mirroring `borrow --from`.
 

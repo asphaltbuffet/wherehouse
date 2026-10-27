@@ -151,7 +151,7 @@ func TestFindMoveDestinations_ExcludesDescendantUnderRemovedAncestor(t *testing.
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bit", ParentPath: "Garage:Box", ActorID: "test"})
 	require.NoError(t, err)
-	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "test"}))
+	apptesting.RemoveLeavingLiveChildren(t, a, box.EntityID) // pre-#287 data: live child under removed parent
 
 	results, err := a.FindMoveDestinations(ctx, garage.EntityID, app.FindEntitiesRequest{Query: "bit"})
 
