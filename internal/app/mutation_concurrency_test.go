@@ -68,6 +68,19 @@ func lastEventID(t *testing.T, a *app.App, entityID string, typ inventory.EventT
 	return last
 }
 
+func countEvents(t *testing.T, a *app.App, entityID string, typ inventory.EventType) int {
+	t.Helper()
+	h, err := a.GetHistory(t.Context(), app.GetHistoryRequest{EntityID: entityID})
+	require.NoError(t, err)
+	n := 0
+	for _, ev := range h {
+		if ev.EventType == typ {
+			n++
+		}
+	}
+	return n
+}
+
 // #301: moving X into P while P is removed must not leave X live under a
 // removed parent. Either order is legal; both succeeding is the bug.
 func TestReparentEntity_ConcurrentRemoveOfDestination(t *testing.T) {
@@ -228,6 +241,47 @@ func TestRenameEntity_ConcurrentRemove(t *testing.T) {
 		} else {
 			require.ErrorIs(t, renameErr, app.ErrNotFound, "round %d", i)
 			assert.Zero(t, renamed, "round %d: failed rename must not write an event", i)
+		}
+	}
+}
+
+// #301: tagging X while X is removed must not append tag events after the
+// removal, and one call's tag events commit together or not at all.
+func TestTagEntity_ConcurrentRemove(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+
+	ids := make([]string, raceRounds)
+	fns := make([]func() error, 0, 2*raceRounds)
+	for i := range raceRounds {
+		ids[i] = newRoot(t, a, fmt.Sprintf("Tagged%d", i))
+		fns = append(fns,
+			func() error {
+				return a.TagEntity(ctx, app.TagEntityRequest{
+					EntityID: ids[i], Add: []string{"red", "blue"}, ActorID: "test",
+				})
+			},
+			func() error {
+				return a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: ids[i], ActorID: "test"})
+			},
+		)
+	}
+	errs := race(fns...)
+	assertNoBusy(t, errs...)
+
+	for i := range raceRounds {
+		tagErr, removeErr := errs[2*i], errs[2*i+1]
+		require.NoError(t, removeErr, "round %d: tagging never blocks removal", i)
+
+		added := countEvents(t, a, ids[i], inventory.EntityTagAddedEvent)
+		removed := lastEventID(t, a, ids[i], inventory.EntityRemovedEvent)
+		if tagErr == nil {
+			assert.Equal(t, 2, added, "round %d: both tags commit together", i)
+			assert.Less(t, lastEventID(t, a, ids[i], inventory.EntityTagAddedEvent), removed,
+				"round %d: tag events must precede removal", i)
+		} else {
+			require.ErrorIs(t, tagErr, app.ErrNotFound, "round %d", i)
+			assert.Zero(t, added, "round %d: failed tag call must write no events", i)
 		}
 	}
 }
