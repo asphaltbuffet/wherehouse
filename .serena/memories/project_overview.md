@@ -5,7 +5,7 @@ Event-sourced CLI inventory tracker: "Where did I put my 10mm socket?"
 Answers location questions with full audit trail. Alpha stage (v0.1.x).
 
 ## Tech Stack
-- **Language**: Go 1.25
+- **Language**: Go 1.26
 - **Database**: SQLite via modernc.org/sqlite (pure Go, no CGo), WAL mode
 - **CLI**: spf13/cobra + spf13/viper (TOML config)
 - **Terminal styling**: charm.land/lipgloss/v2
@@ -46,7 +46,7 @@ wherehouse/
 │   ├── inventory/       # Pure domain types: EntityType, EntityStatus, Entity, Event, EventType iota
 │   ├── logging/         # Structured logging + rotation
 │   ├── nanoid/          # 10-char alphanumeric NanoID generation
-│   ├── store/           # SQLite persistence layer (Store, ExecInTransaction, WithRetry)
+│   ├── store/           # SQLite persistence layer (Store, ExecInTransaction)
 │   │   └── migrations/  # SQL schema (golang-migrate)
 │   ├── styles/          # lipgloss appStyles singleton
 │   ├── version/         # Build version info
@@ -60,7 +60,7 @@ wherehouse/
 
 ## Package Responsibilities (former internal/database/ is now split)
 - `internal/inventory/` — pure domain types + EventType iota + `eventTypeByName` map + stringer
-- `internal/store/` — raw SQLite I/O: Store struct, migrations, ExecInTransaction, WithRetry
+- `internal/store/` — raw SQLite I/O: Store struct, migrations, ExecInTransaction
 - `internal/eventbus/` — Bus struct, Dispatch, per-event handlers (handlers.go), path propagation
 - `internal/app/` — App struct, business logic above the store layer
 

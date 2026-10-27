@@ -1,6 +1,6 @@
 # Tech Stack
 
-- Language: Go 1.25, no CGo
+- Language: Go 1.26, no CGo
 - CLI framework: cobra
 - DB: SQLite (via internal/store, migrations auto-apply)
 - Config: viper-backed TOML, XDG paths

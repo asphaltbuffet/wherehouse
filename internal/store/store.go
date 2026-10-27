@@ -4,19 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/rand/v2"
-	"strings"
-	"time"
 
 	_ "modernc.org/sqlite" // register sqlite driver
 )
 
-const (
-	// DefaultBusyTimeout is the SQLite busy timeout in milliseconds.
-	DefaultBusyTimeout = 5000
-	// DefaultBaseRetryDelay is the base delay for the first retry in WithRetry.
-	DefaultBaseRetryDelay = 50 * time.Millisecond
-)
+// DefaultBusyTimeout is the SQLite busy timeout in milliseconds.
+const DefaultBusyTimeout = 5000
 
 // Tx is the interface passed to functions running inside ExecInTransaction.
 // It exposes only the query methods needed by store operations.
@@ -102,37 +95,4 @@ func (s *Store) ExecInTransaction(ctx context.Context, fn func(Tx) error) error 
 		return fmt.Errorf("commit transaction: %w", commitErr)
 	}
 	return nil
-}
-
-// WithRetry retries fn on SQLite BUSY/LOCKED errors with jittered backoff.
-func (s *Store) WithRetry(ctx context.Context, fn func() error) error {
-	delay := DefaultBaseRetryDelay
-	for {
-		err := fn()
-		if err == nil {
-			return nil
-		}
-		if !isRetryableError(err) {
-			return err
-		}
-		jitter := time.Duration(
-			rand.Int64N(int64(delay)), //nolint:gosec // jitter does not need crypto-quality randomness
-		)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(delay + jitter):
-		}
-		delay *= 2
-	}
-}
-
-func isRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "SQLITE_BUSY") ||
-		strings.Contains(msg, "SQLITE_LOCKED") ||
-		strings.Contains(msg, "database is locked")
 }

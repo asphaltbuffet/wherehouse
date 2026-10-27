@@ -1,7 +1,7 @@
 # Code Style and Conventions
 
 ## General
-- Go 1.25; no CGo
+- Go 1.26; no CGo
 - ASCII-only files by default (no non-ASCII unless justified)
 - Succinct comments only where code is not self-explanatory
 - No magic numbers — use stdlib/codebase constants (e.g. `math.MaxInt64`)
@@ -40,7 +40,7 @@ All server logic lives in `internal/web`. Tests use `httptest.NewServer(srv.Hand
 
 ## Error Handling
 - Return `error` types; wrap with `fmt.Errorf("...: %w", err)`
-- All DB operations use transactions via `ExecInTransaction` and `WithRetry` helpers
+- All DB operations use transactions via `ExecInTransaction`; lock contention is handled by SQLite busy timeout, never app-level retry
 - Retry logic for SQL BUSY/LOCKED errors
 - No broad catches or silent defaults — propagate explicitly
 
@@ -55,7 +55,7 @@ All server logic lives in `internal/web`. Tests use `httptest.NewServer(srv.Hand
 - Every `ORDER BY` that could tie MUST include `event_id ASC` tiebreaker
 - Timestamps use RFC3339 (1-second resolution) — never rely on `timestamp_utc` alone for ordering
 - Foreign key constraints enabled via PRAGMA
-- Use `ExecInTransaction` and `WithRetry` helpers on `*store.Store`
+- Use `ExecInTransaction` on `*store.Store`
 
 ## UI/UX
 - Silence is success (no empty-state placeholders or success confirmations by default)
