@@ -106,6 +106,14 @@ func TestGetRootCmd_VersionSet(t *testing.T) {
 	assert.NotEmpty(t, cmd.Version)
 }
 
+// TestGetRootCmd_NotRunnable verifies bare invocation falls through to Cobra's help output.
+func TestGetRootCmd_NotRunnable(t *testing.T) {
+	rootCmd = nil
+	cmd := GetRootCmd()
+
+	assert.False(t, cmd.Runnable())
+}
+
 // TestInitConfig_NoConfigFlagLogic tests the --no-config flag business logic.
 // Verifies that when noConfig is true, defaults are used regardless of other inputs.
 func TestInitConfig_NoConfigFlagLogic(t *testing.T) {

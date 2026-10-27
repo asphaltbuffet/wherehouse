@@ -1,5 +1,7 @@
 # TUI as default root command using bubbletea and bubbles/list
 
+Status: superseded by ADR-0036
+
 When `wherehouse` is invoked without a subcommand, it launches a read-only interactive TUI for navigating the inventory hierarchy. We set `RunE` on the root cobra command (previously `nil`, falling through to help text) rather than adding a named subcommand, because the TUI is the natural default experience — typing the bare binary name should show you your inventory, not a help screen.
 
 ## Package structure

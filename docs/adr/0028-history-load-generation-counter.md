@@ -1,5 +1,7 @@
 # History pane uses a generation counter to discard stale loads
 
+Status: superseded by ADR-0036
+
 When the history pane is open and the user navigates with Up/Down, each keypress reinitialises `historyModel` and fires a new `loadCmd()` DB fetch. Because multiple fetches can be in-flight simultaneously, out-of-order `historyLoadedMsg` responses could briefly display history for the wrong entity.
 
 We stamp each `historyModel` with a monotonically incrementing `gen int` counter. `historyLoadedMsg` carries the `gen` value active when the load was fired. `updateBrowse` silently discards any `historyLoadedMsg` whose `gen` does not match `m.history.gen`.

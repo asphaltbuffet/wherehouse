@@ -15,7 +15,7 @@ It is:
 - Projection-driven for fast reads
 - Strict about integrity and concurrency
 - Explicit about lifecycle transitions
-- CLI-first, with a TUI wrapper over the CLI layer
+- CLI-first, with a local web UI over the same app layer
 
 Wherehouse favors:
 
@@ -428,16 +428,16 @@ Configurable:
 
 Env override supported.
 
-## TUI
+## Web UI
 
-- Thin wrapper over CLI layer.
+- Thin layer over the app layer (`wherehouse serve`).
 - No direct event writes.
 - No duplicated domain logic.
 
 Architecture:
 
 ```
-TUI -> CLI Layer -> Domain Engine
+CLI / Web UI -> App Layer -> Domain Engine
 ```
 
 ## EXPORT / IMPORT

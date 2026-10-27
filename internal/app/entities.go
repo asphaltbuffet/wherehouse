@@ -344,31 +344,6 @@ func (a *App) HasLiveChildren(ctx context.Context, parentID string) (bool, error
 	return n > 0, nil
 }
 
-// GetRootEntities returns all non-removed entities at the root of the hierarchy (no parent).
-func (a *App) GetRootEntities(ctx context.Context) ([]EntityResult, error) {
-	rows, err := a.store.GetRootEntities(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get root entities: %w", err)
-	}
-
-	ids := make([]string, len(rows))
-	for i, row := range rows {
-		ids[i] = row.Entity.EntityID
-	}
-
-	tagsByID, err := a.store.GetTagsByEntities(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("get root entities tags: %w", err)
-	}
-
-	results := make([]EntityResult, len(rows))
-	for i, row := range rows {
-		results[i] = entityToResult(row.Entity, tagsByID[row.Entity.EntityID])
-		results[i].HasChildren = row.HasChildren
-	}
-	return results, nil
-}
-
 // resolveEntityPath looks up an entity by its colon-separated display path.
 // Returns ErrNotFound if no match exists.
 func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.Entity, error) {
@@ -378,9 +353,9 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 }
 
 // LookupEntityByPath resolves a colon-separated path to an EntityResult.
-// This is the single PathResolution entry point for CLI callers. Web and TUI
-// callers that already hold an entity_id should pass it directly to request
-// structs and skip this call entirely.
+// This is the single PathResolution entry point for CLI callers. Web callers
+// that already hold an entity_id should pass it directly to request structs
+// and skip this call entirely.
 func (a *App) LookupEntityByPath(ctx context.Context, path string) (EntityResult, error) {
 	entity, err := a.resolveEntityPath(ctx, path)
 	if err != nil {

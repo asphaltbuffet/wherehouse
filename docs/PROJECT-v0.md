@@ -2,7 +2,7 @@
 
 ## Product Overview
 
-Wherehouse is a CLI/TUI application designed to solve the universal problem of misplaced items. It answers questions like "Where did I put my 10mm socket wrench?", "Who borrowed my pencil?", and "What is missing?" by maintaining a structured inventory of personal items and their locations.
+Wherehouse is a CLI application designed to solve the universal problem of misplaced items. It answers questions like "Where did I put my 10mm socket wrench?", "Who borrowed my pencil?", and "What is missing?" by maintaining a structured inventory of personal items and their locations.
 
 ### Core Value Proposition
 
@@ -134,13 +134,6 @@ wherehouse missing list
 wherehouse search "wrench"
 wherehouse suggest "10mm socket"
 ```
-
-#### TUI Interface
-- Interactive text-based UI for browsing and managing items
-- Tree view of location hierarchy
-- Item list with filters
-- Project dashboard
-- Movement history view
 
 ## User Roles and Permissions
 
@@ -402,7 +395,7 @@ Project {
 **Rationale**:
 - SQLite is serverless, requires no setup
 - Single file is easy to backup and move
-- Supports concurrent reads (important for TUI)
+- Supports concurrent reads (important for the web UI)
 - Sufficient for personal use (single user, moderate item count)
 - Works on network storage with caveats (locking)
 
@@ -425,9 +418,6 @@ path = "~/.wherehouse/wherehouse.db"
 [user]
 default_username = "auto"  # "auto" = use OS username
 
-[ui]
-default_view = "tui"  # or "cli"
-
 [suggestions]
 max_suggestions = 5
 ```
@@ -435,7 +425,7 @@ max_suggestions = 5
 ## Technology Stack
 
 ### Language
-- **Go**: For CLI/TUI application
+- **Go**: For CLI application
   - Cross-platform
   - Single binary distribution
   - Excellent CLI library ecosystem
@@ -443,7 +433,6 @@ max_suggestions = 5
 
 ### Key Libraries
 - **CLI Framework**: [cobra](https://github.com/spf13/cobra) - industry standard for Go CLIs
-- **TUI Framework**: [bubbletea](https://github.com/charmbracelet/bubbletea) - modern, composable TUI
 - **Database**: [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) or [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
 - **UUID**: [google/uuid](https://github.com/google/uuid)
 - **Configuration**: [viper](https://github.com/spf13/viper)
@@ -456,7 +445,6 @@ wherehouse/
 │   ├── models/       # Data models
 │   ├── database/     # SQLite interactions
 │   ├── service/      # Business logic
-│   ├── tui/          # TUI components
 │   └── suggestions/  # Suggestion engine
 ├── pkg/              # Public packages (if any)
 ├── migrations/       # Database migrations
@@ -518,9 +506,8 @@ Version 1.0 is successful when:
 5. ✅ User can complete projects and see items to return
 6. ✅ User can mark items missing and get suggestions
 7. ✅ Database persists reliably on local and network storage
-8. ✅ TUI is responsive and intuitive for common operations
-9. ✅ CLI commands are well-documented and consistent
-10. ✅ Application works on Linux, macOS, and Windows
+8. ✅ CLI commands are well-documented and consistent
+9. ✅ Application works on Linux, macOS, and Windows
 
 ## Future Considerations (Post-v1)
 
@@ -561,13 +548,7 @@ Potential features for future versions:
 - Basic suggestion heuristics
 - Suggestion ranking
 
-### Phase 6: TUI
-- Interactive TUI interface
-- Tree views for locations
-- List views for items
-- Project dashboard
-
-### Phase 7: Polish
+### Phase 6: Polish
 - Configuration system
 - Documentation
 - Testing

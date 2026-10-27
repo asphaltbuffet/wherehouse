@@ -13,10 +13,6 @@ component_management:
         branches:
           - "!main"
   individual_components:
-    - component_id: module_tui
-      name: tui
-      paths:
-        - internal/tui/**
     - component_id: module_cli
       name: cli
       paths:
