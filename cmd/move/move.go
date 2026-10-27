@@ -37,7 +37,9 @@ func buildMoveCmd() *cobra.Command {
 		Short: "Move an entity to a new parent",
 		Long: `Move an entity to a new parent entity.
 
-Place-type entities cannot be moved. Only containers and leaf entities are movable.
+Locked entities cannot be moved. Missing entities must be found first, and
+loaned entities must be returned first. The destination cannot be the entity
+itself, anything inside it, or its current parent.
 
 Examples:
   wherehouse move "Garage:Toolbox:Wrench" --to "Workshop"

@@ -124,7 +124,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}{Roots: roots, Search: searchData, Actor: s.actorView(r)})
 }
 
-// handleParentOptions returns eligible-parent matches for the borrow form's parent picker.
+// handleParentOptions returns eligible-parent matches for a parent picker.
+// With ?moving=<id> (the move form) it returns only valid move destinations.
 func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if len(q) > maxQueryLen {
@@ -135,11 +136,17 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 
 	var results []app.FindResult
 	if q != "" {
+		req := app.FindEntitiesRequest{Query: q, Limit: parentOptionsLimit}
 		var err error
-		results, err = s.cfg.App.FindParentCandidates(r.Context(), app.FindEntitiesRequest{
-			Query: q,
-			Limit: parentOptionsLimit,
-		})
+		if moving := r.URL.Query().Get("moving"); moving != "" {
+			results, err = s.cfg.App.FindMoveDestinations(r.Context(), moving, req)
+		} else {
+			results, err = s.cfg.App.FindParentCandidates(r.Context(), req)
+		}
+		if errors.Is(err, app.ErrNotFound) {
+			http.Error(w, "entity not found", http.StatusNotFound)
+			return
+		}
 		if err != nil {
 			s.serverError(w, "find parent candidates", err)
 			return
@@ -152,7 +159,7 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 	}{Query: q, Results: results})
 }
 
-// handleTreeNode returns a single tree_node fragment for inserting a newly created entity.
+// handleTreeNode returns a single tree_node fragment for inserting a new or moved entity.
 func (s *Server) handleTreeNode(w http.ResponseWriter, r *http.Request) {
 	e, err := s.cfg.App.GetEntityByID(r.Context(), r.PathValue("entityID"))
 	if errors.Is(err, app.ErrNotFound) {
@@ -161,6 +168,12 @@ func (s *Server) handleTreeNode(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.serverError(w, "get entity", err)
+		return
+	}
+	// GetEntityByID leaves HasChildren false; a moved entity may have children.
+	e.HasChildren, err = s.cfg.App.HasLiveChildren(r.Context(), e.EntityID)
+	if err != nil {
+		s.serverError(w, "count children", err)
 		return
 	}
 	s.renderHTML(w, "tree_node", e)

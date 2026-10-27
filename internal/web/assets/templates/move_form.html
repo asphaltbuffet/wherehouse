@@ -1,0 +1,33 @@
+{{define "move_form"}}
+<form class="loan-form" data-action="move"
+      hx-post="/entities/{{.EntityID}}/actions/move"
+      hx-target="#entity-detail" hx-swap="outerHTML">
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+  <label for="move_parent_q">Move to</label>
+  <input type="hidden" name="destination" value="" data-parent-input>
+  <div class="parent-chosen">
+    <span data-parent-label>(choose a destination)</span>
+    {{if not .AtRoot}}
+    <button type="button" class="btn-link" data-action="clear-parent"
+            data-parent-value="root">Move to root</button>
+    {{end}}
+  </div>
+  <input id="move_parent_q" type="search" name="q" autocomplete="off" autofocus
+         placeholder="Search locations…" data-parent-search
+         hx-get="/entities/parent-options"
+         hx-vals='{"moving": "{{.EntityID}}"}'
+         hx-trigger="input changed delay:200ms"
+         hx-target="#move_parent_options"
+         hx-swap="innerHTML"
+         hx-include="this">
+  <ul id="move_parent_options" class="parent-options" aria-label="Matching locations" data-parent-options></ul>
+  <label for="move_note">Note (optional)</label>
+  <input id="move_note" type="text" name="note" value="{{.Note}}">
+  <div class="loan-form-buttons">
+    <button type="submit" class="btn-link" aria-label="Move">✓</button>
+    <button type="button" class="btn-link" aria-label="Cancel"
+            hx-get="/entities/{{.EntityID}}"
+            hx-target="#entity-detail" hx-swap="outerHTML">✕</button>
+  </div>
+</form>
+{{end}}

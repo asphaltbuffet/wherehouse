@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -526,4 +527,204 @@ func TestRenameEntity_UnknownID_Error(t *testing.T) {
 		ActorID:  "alice",
 	})
 	assert.ErrorIs(t, err, app.ErrNotFound)
+}
+
+func TestReparentEntity_SourceStatusPreconditions(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, a *app.App, id string)
+		wantErr string
+	}{
+		{name: "ok moves"},
+		{
+			name: "missing rejected",
+			setup: func(t *testing.T, a *app.App, id string) {
+				t.Helper()
+				_, err := a.MarkLost(t.Context(), []app.ChangeStatusRequest{{EntityID: id, ActorID: "alice"}})
+				require.NoError(t, err)
+			},
+			wantErr: "mark it found first",
+		},
+		{
+			name: "loaned rejected",
+			setup: func(t *testing.T, a *app.App, id string) {
+				t.Helper()
+				_, err := a.MarkLoaned(t.Context(), []app.ChangeStatusRequest{
+					{EntityID: id, StatusContext: "Bob", ActorID: "alice"},
+				})
+				require.NoError(t, err)
+			},
+			wantErr: "return it first",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := openTestApp(t)
+			ctx := t.Context()
+			wrench, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Wrench", ActorID: "alice"})
+			require.NoError(t, err)
+			office, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Office", ActorID: "alice"})
+			require.NoError(t, err)
+			if tt.setup != nil {
+				tt.setup(t, a, wrench.EntityID)
+			}
+
+			_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+				EntityID: wrench.EntityID, NewParentID: office.EntityID, ActorID: "alice",
+			})
+
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestReparentEntity_BorrowedMoves(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	borrowed, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{DisplayName: "Drill", StatusContext: "Alice", ActorID: "alice"},
+	})
+	require.NoError(t, err)
+	office, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Office", ActorID: "alice"})
+	require.NoError(t, err)
+
+	moved, err := a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: borrowed[0].EntityID, NewParentID: office.EntityID, ActorID: "alice",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Office:Drill", moved.FullPathDisplay)
+}
+
+func TestReparentEntity_InvalidDestinations(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+	toolbox, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Toolbox", ParentPath: "Garage", ActorID: "alice",
+	})
+	require.NoError(t, err)
+	drawer, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Drawer", ParentPath: "Garage:Toolbox", ActorID: "alice",
+	})
+	require.NoError(t, err)
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box of Nails", Discrete: true, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		entityID    string
+		newParentID string
+	}{
+		{"into itself", garage.EntityID, garage.EntityID},
+		{"into child", garage.EntityID, toolbox.EntityID},
+		{"into grandchild", garage.EntityID, drawer.EntityID},
+		{"into current parent", toolbox.EntityID, garage.EntityID},
+		{"root entity to root", garage.EntityID, ""},
+		{"into discrete", toolbox.EntityID, box.EntityID},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, moveErr := a.ReparentEntity(ctx, app.ReparentEntityRequest{
+				EntityID: tt.entityID, NewParentID: tt.newParentID, ActorID: "alice",
+			})
+			require.ErrorIs(t, moveErr, app.ErrInvalidDestination)
+		})
+	}
+
+	got, err := a.GetEntityByID(ctx, garage.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, "Garage", got.FullPathDisplay, "rejected moves must not change the hierarchy")
+}
+
+func TestReparentEntity_ToRoot(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+	toolbox, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Toolbox", ParentPath: "Garage", ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	moved, err := a.ReparentEntity(ctx, app.ReparentEntityRequest{EntityID: toolbox.EntityID, ActorID: "alice"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Toolbox", moved.FullPathDisplay)
+	assert.Empty(t, moved.ParentID)
+}
+
+// Names are not unique, so the cycle check must not use path prefixes.
+func TestReparentEntity_SameNameSiblingIsNotDescendant(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Shelf", ActorID: "alice"})
+	require.NoError(t, err)
+	box1, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentPath: "Shelf", ActorID: "alice"})
+	require.NoError(t, err)
+	box2, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentPath: "Shelf", ActorID: "alice"})
+	require.NoError(t, err)
+	// "Shelf:Box" is ambiguous as a ParentPath, so place Tray under box2 by ID.
+	tray, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Tray", ActorID: "alice"})
+	require.NoError(t, err)
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: tray.EntityID, NewParentID: box2.EntityID, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	moved, err := a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: box1.EntityID, NewParentID: tray.EntityID, ActorID: "alice",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Shelf:Box:Tray:Box", moved.FullPathDisplay)
+}
+
+// A live entity under a removed ancestor (#287) is still a descendant.
+func TestReparentEntity_DescendantUnderRemovedAncestor(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentPath: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+	bit, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Bit", ParentPath: "Garage:Box", ActorID: "alice"},
+	)
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"}))
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: garage.EntityID, NewParentID: bit.EntityID, ActorID: "alice",
+	})
+
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+}
+
+// A projection already damaged by the pre-ADR-0034 cycle bug must not hang a move.
+func TestReparentEntity_ExistingCycleDoesNotHang(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	looped, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Looped", ActorID: "alice"})
+	require.NoError(t, err)
+	wrench, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Wrench", ActorID: "alice"})
+	require.NoError(t, err)
+	_, err = s.DB().ExecContext(ctx,
+		`UPDATE entities_current SET parent_id = entity_id WHERE entity_id = ?`, looped.EntityID)
+	require.NoError(t, err)
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: wrench.EntityID, NewParentID: looped.EntityID, ActorID: "alice",
+	})
+
+	assert.ErrorContains(t, err, "loops")
 }

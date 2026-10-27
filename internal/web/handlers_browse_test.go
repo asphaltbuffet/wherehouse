@@ -196,3 +196,55 @@ func TestHandleTreeNode(t *testing.T) {
 	defer resp2.Body.Close()
 	assert.Equal(t, http.StatusNotFound, resp2.StatusCode)
 }
+
+func TestHandleParentOptions_MovingUsesMoveDestinations(t *testing.T) {
+	fake := &fakeApp{parentResults: []app.FindResult{
+		{Entity: app.EntityResult{EntityID: "w", DisplayName: "Workshop", FullPathDisplay: "Workshop"}},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=work&moving=abc")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "abc", fake.lastMovingID)
+	assert.Equal(t, "work", fake.lastParentQuery)
+	assert.Contains(t, string(body), `data-parent-id="w"`)
+}
+
+func TestHandleParentOptions_WithoutMovingUsesParentCandidates(t *testing.T) {
+	fake := &fakeApp{}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=work")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Empty(t, fake.lastMovingID)
+	assert.Equal(t, 1, fake.parentCalls)
+}
+
+// A moved entity may have children; its re-inserted tree node needs a chevron.
+func TestHandleTreeNode_ShowsChevronWhenEntityHasChildren(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Toolbox", FullPathDisplay: "Toolbox",
+			Status: inventory.EntityStatusOk}},
+		hasChildren: map[string]bool{"abc": true},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/abc/tree-node")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), `aria-expanded="false"`)
+	assert.NotContains(t, string(body), "chevron-hidden")
+}

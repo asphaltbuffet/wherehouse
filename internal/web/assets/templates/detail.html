@@ -67,6 +67,20 @@
         Loan
       </button>
       {{end}}
+      {{if .MoveForm}}
+      {{template "move_form" .MoveForm}}
+      {{else if .CanMove}}
+      <button class="btn-ghost detail-action-btn" data-action="move"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/move"
+              hx-target="this" hx-swap="outerHTML">
+        Move
+      </button>
+      {{else}}
+      <button class="btn-ghost detail-action-btn" data-action="move" disabled aria-disabled="true"
+              title="{{.MoveBlockedReason}}">
+        Move
+      </button>
+      {{end}}
       {{template "attr_button" .LockAction}}
       {{template "attr_button" .DiscreteAction}}
     </aside>

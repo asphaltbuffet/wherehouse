@@ -73,8 +73,10 @@ func (s *Server) defaultBorrowParent(ctx context.Context, entityID string) (app.
 
 var errNoBorrowResult = errors.New("borrow returned no result")
 
-// entityCreatedEvent is the HX-Trigger detail tree.js uses to insert the new node.
-type entityCreatedEvent struct {
+// treeNodeAttachedEvent is the trigger detail tree.js uses to insert a node
+// that joined ParentID's list ("" for the root): sent as entity-created after
+// a borrow and tree-node-attached after a move.
+type treeNodeAttachedEvent struct {
 	EntityID string `json:"entityId"`
 	ParentID string `json:"parentId"`
 }
@@ -130,7 +132,7 @@ func (s *Server) handleBorrow(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, "build detail data", err)
 		return
 	}
-	trigger, err := json.Marshal(map[string]entityCreatedEvent{
+	trigger, err := json.Marshal(map[string]treeNodeAttachedEvent{
 		"entity-created": {EntityID: created.EntityID, ParentID: created.ParentID},
 	})
 	if err != nil {
