@@ -1,5 +1,0 @@
-kind: Changed
-body: 'borrow rejects a blank lender and names containing '':'' or leading/trailing whitespace'
-time: 2026-10-26T01:31:55.000000000Z
-custom:
-    Issue: ""

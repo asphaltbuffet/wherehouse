@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'Web add-item form: replace the non-functional Type select with Locked and Discrete checkboxes'
-time: 2026-10-26T09:13:53.901880219-04:00
-custom:
-    Issue: "284"

@@ -1,5 +1,0 @@
-kind: Fixed
-body: Web UI no longer logs a Content-Security-Policy error on every page load
-time: 2026-10-25T22:49:00.082955907-04:00
-custom:
-    Issue: "286"

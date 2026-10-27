@@ -1,5 +1,0 @@
-kind: Fixed
-body: Concurrent move, rename, and tag operations (e.g. web UI and CLI at once) can no longer move an entity into a just-removed parent, create a parent cycle, or change a just-removed entity; a tag command now applies all of its changes or none
-time: 2026-10-26T23:01:31.553066326-04:00
-custom:
-    Issue: '#301'

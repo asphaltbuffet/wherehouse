@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'web: a Return click that races another Return now shows the returned state instead of ''return failed'''
-time: 2026-10-25T23:19:00.414632611-04:00
-custom:
-    Issue: "292"

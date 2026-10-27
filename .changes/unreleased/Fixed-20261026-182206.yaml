@@ -1,5 +1,0 @@
-kind: Fixed
-body: move no longer accepts the entity itself or one of its descendants as the destination, which corrupted the hierarchy
-time: 2026-10-26T22:22:06.000000000Z
-custom:
-    Issue: ""
