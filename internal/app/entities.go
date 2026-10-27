@@ -353,9 +353,9 @@ func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.En
 }
 
 // LookupEntityByPath resolves a colon-separated path to an EntityResult.
-// This is the single PathResolution entry point for CLI callers. Web and TUI
-// callers that already hold an entity_id should pass it directly to request
-// structs and skip this call entirely.
+// This is the single PathResolution entry point for CLI callers. Web callers
+// that already hold an entity_id should pass it directly to request structs
+// and skip this call entirely.
 func (a *App) LookupEntityByPath(ctx context.Context, path string) (EntityResult, error) {
 	entity, err := a.resolveEntityPath(ctx, path)
 	if err != nil {

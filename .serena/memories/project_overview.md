@@ -70,7 +70,6 @@ wherehouse/
 Use `FullPathDisplay` when checking entity depth or path structure.
 
 ## What Does NOT Exist
-- `internal/tui/` (TUI is planned, not implemented)
 - Tags/tagging (no ItemTaggedEvent, no tags column)
 - `internal/database/` package (decomposed — see Package Responsibilities above)
 - `ai-docs/` directory
