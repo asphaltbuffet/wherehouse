@@ -22,37 +22,37 @@ func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (Entity
 	return results[0], nil
 }
 
-// RenameEntity renames an entity resolved by its current path.
+// RenameEntity renames an entity. The liveness check reads through the same
+// transaction that writes the event (ADR 0035).
 func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (EntityResult, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
-	if err != nil {
-		return EntityResult{}, wrapEntityError(req.EntityID, err)
-	}
-
-	payload := eventbus.EntityRenamedPayload{
-		EntityID:    entity.EntityID,
-		DisplayName: req.NewName,
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("marshal payload: %w", err)
-	}
-
 	var note *string
 	if req.Note != "" {
 		note = &req.Note
 	}
 
-	if _, err = a.bus.Dispatch(ctx, inventory.EntityRenamedEvent, req.ActorID, raw, note); err != nil {
-		return EntityResult{}, fmt.Errorf("rename entity: %w", err)
+	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		if err != nil {
+			return wrapEntityError(req.EntityID, err)
+		}
+
+		raw, err := json.Marshal(eventbus.EntityRenamedPayload{
+			EntityID:    entity.EntityID,
+			DisplayName: req.NewName,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal payload: %w", err)
+		}
+		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityRenamedEvent, req.ActorID, raw, note); err != nil {
+			return fmt.Errorf("rename entity: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return EntityResult{}, err
 	}
 
-	updated, err := a.store.GetEntity(ctx, entity.EntityID)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("get renamed entity: %w", err)
-	}
-
-	return a.entityWithTags(ctx, updated)
+	// AnyStatus: a concurrent remove may commit between our commit and this read.
+	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
 }
 
 // ReparentEntity moves an entity to a new parent. Every guard reads through

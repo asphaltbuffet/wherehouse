@@ -190,3 +190,44 @@ func TestReparentEntity_ConcurrentRemoveOfSelf(t *testing.T) {
 		}
 	}
 }
+
+// #301: renaming X while X is removed must not append a rename after the
+// removal, and a rename that committed must report success.
+func TestRenameEntity_ConcurrentRemove(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+
+	ids := make([]string, raceRounds)
+	fns := make([]func() error, 0, 2*raceRounds)
+	for i := range raceRounds {
+		ids[i] = newRoot(t, a, fmt.Sprintf("Old%d", i))
+		fns = append(fns,
+			func() error {
+				_, err := a.RenameEntity(ctx, app.RenameEntityRequest{
+					EntityID: ids[i], NewName: fmt.Sprintf("New%d", i), ActorID: "test",
+				})
+				return err
+			},
+			func() error {
+				return a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: ids[i], ActorID: "test"})
+			},
+		)
+	}
+	errs := race(fns...)
+	assertNoBusy(t, errs...)
+
+	for i := range raceRounds {
+		renameErr, removeErr := errs[2*i], errs[2*i+1]
+		require.NoError(t, removeErr, "round %d: a rename never blocks removal", i)
+
+		renamed := lastEventID(t, a, ids[i], inventory.EntityRenamedEvent)
+		removed := lastEventID(t, a, ids[i], inventory.EntityRemovedEvent)
+		if renameErr == nil {
+			require.NotZero(t, renamed, "round %d: successful rename must have written its event", i)
+			assert.Less(t, renamed, removed, "round %d: rename event must precede removal", i)
+		} else {
+			require.ErrorIs(t, renameErr, app.ErrNotFound, "round %d", i)
+			assert.Zero(t, renamed, "round %d: failed rename must not write an event", i)
+		}
+	}
+}
