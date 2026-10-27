@@ -24,6 +24,6 @@ Go CLI tool (wherehouse) for inventory management via event sourcing. Single SQL
 - No undo — corrections via compensating events.
 - Replay order: strictly by `event_id ASC`.
 - Every `ORDER BY` that could tie must include `event_id ASC` as tiebreaker.
-- No CGo. Go 1.25.
+- No CGo. Go 1.26.
 
 See `mem:conventions` for code patterns, `mem:tech_stack` for tooling, `mem:task_completion` for done criteria.

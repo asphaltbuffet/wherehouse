@@ -57,7 +57,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 
 ### Build from Source
 
-**Requirements**: Go 1.25+, SQLite 3.x (embedded via `modernc.org/sqlite`)
+**Requirements**: Go 1.26+, SQLite 3.x (embedded via `modernc.org/sqlite`)
 
 ```bash
 git clone https://github.com/asphaltbuffet/wherehouse.git
@@ -577,7 +577,7 @@ CREATE TABLE events (
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - [mise](https://mise.jdx.dev/) (recommended for task automation)
 
 ### Build & Test

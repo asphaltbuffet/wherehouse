@@ -12,7 +12,7 @@
 
 ## Error handling
 - Wrap: `fmt.Errorf("context: %w", err)`
-- All DB ops use `ExecInTransaction` + `WithRetry` helpers.
+- All DB ops use `ExecInTransaction`; lock contention handled by SQLite busy timeout, never app-level retry.
 
 ## Styles
 - All styles on `Styles` struct in `internal/styles/styles.go`, accessed via public accessor methods on `appStyles` singleton.

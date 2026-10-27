@@ -133,11 +133,11 @@ All styles live as private fields on the `Styles` struct in `internal/styles/sty
 
 ## Code Conventions
 
-- Go 1.25, no CGo
+- Go 1.26, no CGo
 - **Never redeclare a persistent flag as a local flag.** Persistent flags (`--quiet`/`-q`, `--json`, `--db`, `--as`, `--config`, `--no-config`) are defined on the root command and flow into the config via context. Read them via `cfg.IsQuiet()`, `cfg.IsJSON()`, etc. — never via `cmd.Flags().BoolP("quiet", ...)`.
 - `testify/assert` for non-fatal assertions, `testify/require` for preconditions
 - Wrap errors: `fmt.Errorf("context: %w", err)`
-- All DB operations use transactions via `ExecInTransaction` and `WithRetry` helpers
+- All DB operations use transactions via `ExecInTransaction`; lock contention is handled by SQLite's busy timeout, never app-level retry
 - Timestamps: RFC3339 with UTC `Z` suffix
 - No type assertions / `any` casts — prefer typed interfaces
 - No magic numbers — use stdlib constants

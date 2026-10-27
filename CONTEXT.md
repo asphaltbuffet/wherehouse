@@ -160,6 +160,6 @@ A user-assigned display label for a database file, stored in `schema_metadata` u
 - Entity canonical names are not globally unique and uniqueness within a parent is not enforced. Multiple entities may share a name (e.g. three identical "10mm socket" entities in the same drawer) — each is distinct by `entity_id` and has its own history and status. Disambiguation between same-name entities is a UI concern, not a data model concern.
 - Path propagation is recursive: reparenting an entity triggers `EntityPathChangedEvent` for all descendants.
 - `EntityRemovedEvent` sets `status = "removed"`. Removed entities remain in `entities_current` (soft delete).
-- No silent repair. No auto-retry beyond the `WithRetry` helper for SQLite locking.
+- No silent repair. No application-level auto-retry: SQLite lock contention is absorbed only by the connection's busy timeout, after which the operation fails.
 - Timestamps stored as RFC3339 UTC with `Z` suffix.
-- DB path must be absolute. SQLite is canonical storage, compatible with network mounts.
+- DB path must be absolute. SQLite is canonical storage.
