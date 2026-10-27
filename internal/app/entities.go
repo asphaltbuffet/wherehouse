@@ -22,118 +22,139 @@ func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (Entity
 	return results[0], nil
 }
 
-// RenameEntity renames an entity resolved by its current path.
+// RenameEntity renames an entity. The liveness check reads through the same
+// transaction that writes the event (ADR 0035).
 func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (EntityResult, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
-	if err != nil {
-		return EntityResult{}, wrapEntityError(req.EntityID, err)
-	}
-
-	payload := eventbus.EntityRenamedPayload{
-		EntityID:    entity.EntityID,
-		DisplayName: req.NewName,
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("marshal payload: %w", err)
-	}
-
 	var note *string
 	if req.Note != "" {
 		note = &req.Note
 	}
 
-	if _, err = a.bus.Dispatch(ctx, inventory.EntityRenamedEvent, req.ActorID, raw, note); err != nil {
-		return EntityResult{}, fmt.Errorf("rename entity: %w", err)
+	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		if err != nil {
+			return wrapEntityError(req.EntityID, err)
+		}
+
+		raw, err := json.Marshal(eventbus.EntityRenamedPayload{
+			EntityID:    entity.EntityID,
+			DisplayName: req.NewName,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal payload: %w", err)
+		}
+		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityRenamedEvent, req.ActorID, raw, note); err != nil {
+			return fmt.Errorf("rename entity: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return EntityResult{}, err
 	}
 
-	updated, err := a.store.GetEntity(ctx, entity.EntityID)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("get renamed entity: %w", err)
-	}
-
-	return a.entityWithTags(ctx, updated)
+	// AnyStatus: a concurrent remove may commit between our commit and this read.
+	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
 }
 
-// ReparentEntity moves an entity to a new parent, resolved by paths.
+// ReparentEntity moves an entity to a new parent. Every guard reads through
+// the same transaction that writes the event, so a concurrent remove or a
+// crossing move cannot slip between check and write (ADR 0035).
 func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (EntityResult, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
-	if err != nil {
-		return EntityResult{}, wrapEntityError(req.EntityID, err)
+	var note *string
+	if req.Note != "" {
+		note = &req.Note
 	}
 
+	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		if err != nil {
+			return wrapEntityError(req.EntityID, err)
+		}
+		if err = checkMoveSource(entity, req.NewParentID); err != nil {
+			return err
+		}
+
+		var newParentID *string
+		if req.NewParentID != "" {
+			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID); err != nil {
+				return err
+			}
+			newParentID = &req.NewParentID
+		}
+
+		raw, err := json.Marshal(eventbus.EntityReparentedPayload{
+			EntityID:    entity.EntityID,
+			NewParentID: newParentID,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal payload: %w", err)
+		}
+		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityReparentedEvent, req.ActorID, raw, note); err != nil {
+			return fmt.Errorf("reparent entity: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return EntityResult{}, err
+	}
+
+	// AnyStatus: a concurrent remove may commit between our commit and this read.
+	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
+}
+
+// checkMoveSource rejects a source entity that may not move to newParentID
+// (ADR 0034): locked, missing, loaned, or already there.
+func checkMoveSource(entity *inventory.Entity, newParentID string) error {
 	if entity.Locked {
-		return EntityResult{}, fmt.Errorf("cannot move %q: entity is locked", entity.FullPathDisplay)
+		return fmt.Errorf("cannot move %q: entity is locked", entity.FullPathDisplay)
 	}
 	if entity.Status == inventory.EntityStatusMissing {
-		return EntityResult{}, fmt.Errorf(
+		return fmt.Errorf(
 			"cannot move %q: entity is missing — mark it found first",
 			entity.FullPathDisplay,
 		)
 	}
 	if entity.Status == inventory.EntityStatusLoaned {
-		return EntityResult{}, fmt.Errorf("cannot move %q: entity is loaned — return it first", entity.FullPathDisplay)
+		return fmt.Errorf("cannot move %q: entity is loaned — return it first", entity.FullPathDisplay)
 	}
 
 	currentParentID := ""
 	if entity.ParentID != nil {
 		currentParentID = *entity.ParentID
 	}
-	if req.NewParentID == currentParentID {
-		return EntityResult{}, fmt.Errorf(
+	if newParentID == currentParentID {
+		return fmt.Errorf(
 			"cannot move %q: already there: %w",
 			entity.FullPathDisplay,
 			ErrInvalidDestination,
 		)
 	}
+	return nil
+}
 
-	var newParentID *string
-	if req.NewParentID != "" {
-		var parentEntity *inventory.Entity
-		parentEntity, err = a.store.GetEntity(ctx, req.NewParentID)
-		if err != nil {
-			return EntityResult{}, wrapEntityError(req.NewParentID, err)
-		}
-		if parentEntity.Discrete {
-			return EntityResult{}, fmt.Errorf("cannot move into %q: entity is discrete: %w",
-				parentEntity.FullPathDisplay, ErrInvalidDestination)
-		}
-		var inside bool
-		inside, err = a.isSelfOrDescendant(ctx, entity.EntityID, parentEntity.EntityID)
-		if err != nil {
-			return EntityResult{}, err
-		}
-		if inside {
-			return EntityResult{}, fmt.Errorf("cannot move %q into itself or its own contents: %w",
-				entity.FullPathDisplay, ErrInvalidDestination)
-		}
-		newParentID = &parentEntity.EntityID
-	}
-
-	payload := eventbus.EntityReparentedPayload{
-		EntityID:    entity.EntityID,
-		NewParentID: newParentID,
-	}
-	raw, err := json.Marshal(payload)
+// checkMoveDestinationTx rejects a non-root destination that is removed,
+// discrete, or the entity itself or one of its descendants.
+func (a *App) checkMoveDestinationTx(
+	ctx context.Context,
+	tx store.Tx,
+	entity *inventory.Entity,
+	parentID string,
+) error {
+	parent, err := a.store.GetLiveEntityTx(ctx, tx, parentID)
 	if err != nil {
-		return EntityResult{}, fmt.Errorf("marshal payload: %w", err)
+		return wrapEntityError(parentID, err)
 	}
-
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
+	if parent.Discrete {
+		return fmt.Errorf("cannot move into %q: entity is discrete: %w",
+			parent.FullPathDisplay, ErrInvalidDestination)
 	}
-
-	if _, err = a.bus.Dispatch(ctx, inventory.EntityReparentedEvent, req.ActorID, raw, note); err != nil {
-		return EntityResult{}, fmt.Errorf("reparent entity: %w", err)
-	}
-
-	updated, err := a.store.GetEntity(ctx, entity.EntityID)
+	inside, err := a.isSelfOrDescendant(ctx, tx, entity.EntityID, parent.EntityID)
 	if err != nil {
-		return EntityResult{}, fmt.Errorf("get reparented entity: %w", err)
+		return err
 	}
-
-	return a.entityWithTags(ctx, updated)
+	if inside {
+		return fmt.Errorf("cannot move %q into itself or its own contents: %w",
+			entity.FullPathDisplay, ErrInvalidDestination)
+	}
+	return nil
 }
 
 // isSelfOrDescendant reports whether candidateID is entityID or lies beneath it.
@@ -141,7 +162,8 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 // prefixes cannot be trusted — and reads removed ancestors too, because a live
 // entity may sit under a removed one (#287). A projection already damaged by
 // the pre-ADR-0034 cycle bug is reported as an error instead of looping forever.
-func (a *App) isSelfOrDescendant(ctx context.Context, entityID, candidateID string) (bool, error) {
+// It reads through tx so the walk sees the same tree the move will commit to (#301).
+func (a *App) isSelfOrDescendant(ctx context.Context, tx store.Tx, entityID, candidateID string) (bool, error) {
 	seen := make(map[string]bool)
 	for id := candidateID; id != ""; {
 		if id == entityID {
@@ -151,7 +173,7 @@ func (a *App) isSelfOrDescendant(ctx context.Context, entityID, candidateID stri
 			return false, fmt.Errorf("ancestor chain of %q loops at %q", candidateID, id)
 		}
 		seen[id] = true
-		e, err := a.store.GetEntityAnyStatus(ctx, id)
+		e, err := a.store.GetEntityTx(ctx, tx, id)
 		if err != nil {
 			return false, wrapEntityError(id, err)
 		}
