@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'loan: a blank or whitespace-only --to is rejected, and the recipient is stored without surrounding spaces'
-time: 2026-10-26T00:55:07.010151466-04:00
-custom:
-    Issue: '#289'

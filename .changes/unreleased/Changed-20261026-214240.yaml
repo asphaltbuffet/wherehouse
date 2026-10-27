@@ -1,5 +1,0 @@
-kind: Changed
-body: remove now refuses an entity that still contains other entities; remove or move them first
-time: 2026-10-26T21:42:40.932076763-04:00
-custom:
-    Issue: '#287'
