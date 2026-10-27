@@ -1,18 +1,9 @@
 schema = 3
 
 [mod]
-  [mod."charm.land/bubbles/v2"]
-    version = "v2.2.1"
-    hash = "sha256-0PFf3lMornz1C2eR7WRZ1iTEu59AD+1fdwPS6j+AQ2c="
-  [mod."charm.land/bubbletea/v2"]
-    version = "v2.1.0"
-    hash = "sha256-EI/ogYeGZqYnE+f4wYoCEhYSF5RpvAkqgsgYjEhLpKQ="
   [mod."charm.land/lipgloss/v2"]
     version = "v2.0.6"
     hash = "sha256-w9yU+7P0lEcTshjZbhOfaHIaZkL3YdM+vS7e1J8lALE="
-  [mod."github.com/atotto/clipboard"]
-    version = "v0.1.4"
-    hash = "sha256-ZZ7U5X0gWOu8zcjZcWbcpzGOGdycwq0TjTFh/eZHjXk="
   [mod."github.com/charmbracelet/colorprofile"]
     version = "v0.4.3"
     hash = "sha256-y+QDUxGOKhugEMQLRUTZYT2C+wKqYHnMLJ44jbh7+JA="
@@ -100,9 +91,6 @@ schema = 3
   [mod."github.com/sagikazarmark/locafero"]
     version = "v0.12.0"
     hash = "sha256-EXk9S5Z5sYyApAzCgHIugsGMbt/pHWRfHYFZH5D+5Ws="
-  [mod."github.com/sahilm/fuzzy"]
-    version = "v0.1.3"
-    hash = "sha256-iIUiVfjmgB927jbdLrtrQrrXKcOfhvMHnC+65UZAyNY="
   [mod."github.com/spf13/afero"]
     version = "v1.15.0"
     hash = "sha256-LhcezbOqfuBzacytbqck0hNUxi6NbWNhifUc5/9uHQ8="

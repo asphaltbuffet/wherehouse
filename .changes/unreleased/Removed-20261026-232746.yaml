@@ -1,0 +1,5 @@
+kind: Removed
+body: Interactive TUI; running `wherehouse` without a subcommand now prints help. Use `wherehouse serve` for interactive browsing.
+time: 2026-10-26T23:27:46.000000-04:00
+custom:
+    Issue: ""
