@@ -1,5 +1,7 @@
 # TUI uses a mode enum for view switching, not separate tea.Program instances
 
+Status: superseded by ADR-0036
+
 When adding interactive actions (forms, confirm prompts, history view, scry search) to the TUI, we needed a way to swap what is rendered and what `Update` routes. We use a `tuiMode` integer enum on the single `Model` struct rather than launching separate `tea.Program` instances or composing separate top-level bubbles.
 
 The modes are: `modeBrowse` (the two-pane navigator), `modeForm` (text-input form for `add`/`loan`/`borrow`), `modeConfirm` (y/n prompt with optional inline note for `lost`/`found`/`return`), and `modeScry` (inventory-wide Levenshtein search). History is not a separate mode — see below.

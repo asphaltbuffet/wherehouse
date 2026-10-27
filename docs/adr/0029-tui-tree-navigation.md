@@ -1,5 +1,7 @@
 # TUI navigation replaces drill-in/out list with a persistent expand/collapse tree
 
+Status: superseded by ADR-0036
+
 The current TUI navigation shows exactly one level at a time: drilling into a node replaces the entire list with that node's children; drilling out reloads the parent level. This is disorienting because the user loses spatial context — they cannot see where they are in the hierarchy relative to siblings or ancestors.
 
 The web UI shows a persistent left-panel tree where nodes expand and collapse in place. This ADR aligns the TUI with that model.

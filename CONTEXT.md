@@ -98,7 +98,7 @@ The normalized form of a name used for matching. Rules (from `CanonicalizeString
 
 ### PathResolution
 
-The act of translating a user-supplied colon-separated path string into an `entity_id` by canonical-name lookup. PathResolution is a CLI/UI concern — the app layer's `LookupEntityByPath` method is the single authoritative entry point. Internal mutations (rename, reparent, remove, status change, tag, history) accept only `entity_id`; CLI commands that receive a path from the user perform PathResolution before constructing a request. Web and TUI callers that already hold an `entity_id` bypass PathResolution entirely.
+The act of translating a user-supplied colon-separated path string into an `entity_id` by canonical-name lookup. PathResolution is a CLI/UI concern — the app layer's `LookupEntityByPath` method is the single authoritative entry point. Internal mutations (rename, reparent, remove, status change, tag, history) accept only `entity_id`; CLI commands that receive a path from the user perform PathResolution before constructing a request. Web callers that already hold an `entity_id` bypass PathResolution entirely.
 
 ### Scry
 

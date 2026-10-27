@@ -1,5 +1,7 @@
 # TUI action keybindings avoid vim-navigation conflicts
 
+Status: superseded by ADR-0036
+
 The TUI uses `h`/`j`/`k`/`l` for vim-style navigation (back/down/up/open). When adding action keybindings for `add`, `loan`, `borrow`, `lost`, `return`, `found`, `history`, and `scry`, mnemonic single-key assignments for `loan` (`l`) and `history` (`h`) would directly conflict with DrillIn and DrillOut. We resolved this by using shifted variants (`L` for loan, `H` for history) rather than dropping the vim navigation aliases.
 
 ## Keybinding table
