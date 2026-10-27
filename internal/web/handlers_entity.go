@@ -33,8 +33,12 @@ type detailData struct {
 	MoveForm          *moveFormData // non-nil re-opens the move form (validation error)
 	LockAction        attrAction    // Lock / Unlock button
 	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
-	Breadcrumbs       []Breadcrumb
-	Error             string // populated by edit POST handlers; rendered inline above the detail dl
+	// CanRemove is false for borrowed: a borrowed entity exits via Return (ADR 0022).
+	CanRemove           bool
+	RemoveBlockedReason string          // non-empty when Remove is shown disabled
+	RemoveForm          *removeFormData // non-nil re-opens the remove form (guard tripped at submit)
+	Breadcrumbs         []Breadcrumb
+	Error               string // populated by edit POST handlers; rendered inline above the detail dl
 }
 
 // loanFormData is the view model for the inline loan form.
@@ -76,6 +80,17 @@ func moveBlockedReason(e app.EntityResult) string {
 	return ""
 }
 
+// removeFormData is the view model for the inline remove form.
+type removeFormData struct {
+	EntityID    string
+	DisplayName string
+	Note        string
+	Error       string
+}
+
+// removeHasChildrenReason is the tooltip on a disabled Remove button (#287).
+const removeHasChildrenReason = "Contains other entities — remove or move them first"
+
 // attrAction is the view model for one attribute button on the detail panel.
 // The button posts Field=Value: the explicit target, never a toggle, so a
 // stale click fails with ErrNoChange instead of flipping the attribute.
@@ -105,22 +120,28 @@ func lockAction(e app.EntityResult) attrAction {
 	return a
 }
 
-// discreteAction queries live children only when marking is possible. A failed
-// count leaves the button enabled: the app enforces the rule on submit.
-func (s *Server) discreteAction(ctx context.Context, e app.EntityResult) attrAction {
+// discreteAction builds the Mark/Clear discrete button. The caller sets
+// BlockedReason when the entity has live children.
+func discreteAction(e app.EntityResult) attrAction {
 	if e.Discrete {
 		return attrAction{EntityID: e.EntityID, Label: "Clear discrete", Field: "discrete", Value: "false"}
 	}
-	a := attrAction{EntityID: e.EntityID, Label: "Mark discrete", Field: "discrete", Value: "true"}
+	return attrAction{EntityID: e.EntityID, Label: "Mark discrete", Field: "discrete", Value: "true"}
+}
+
+// hasLiveChildren reports whether e has non-removed children. A discrete
+// entity never does, so it skips the query. A failed count reports false: the
+// buttons stay enabled and the app-layer guards still reject the write.
+func (s *Server) hasLiveChildren(ctx context.Context, e app.EntityResult) bool {
+	if e.Discrete {
+		return false
+	}
 	has, err := s.cfg.App.HasLiveChildren(ctx, e.EntityID)
 	if err != nil {
-		s.cfg.Logger.Warn("count children for discrete action", "error", err, "entity_id", e.EntityID)
-		return a
+		s.cfg.Logger.Warn("count live children", "error", err, "entity_id", e.EntityID)
+		return false
 	}
-	if has {
-		a.BlockedReason = discreteBlockedReason
-	}
-	return a
+	return has
 }
 
 // parseAttrForm reads locked and/or discrete as explicit booleans. ok is false
@@ -278,6 +299,17 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		loanBlockedReason = loanLockedReason
 	}
 
+	// Borrowed entities leave the inventory only via Return (ADR 0022).
+	canRemove := entity.Status != inventory.EntityStatusBorrowed
+	discrete := discreteAction(entity)
+	removeBlockedReason := ""
+	if s.hasLiveChildren(ctx, entity) {
+		discrete.BlockedReason = discreteBlockedReason
+		if canRemove {
+			removeBlockedReason = removeHasChildrenReason
+		}
+	}
+
 	return detailData{
 		Entity:         entity,
 		DateAdded:      dateAdded,
@@ -287,14 +319,16 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		IsMissing:      entity.Status == inventory.EntityStatusMissing,
 		CanReturn: entity.Status == inventory.EntityStatusBorrowed ||
 			entity.Status == inventory.EntityStatusLoaned,
-		ReturnConfirm:     returnConfirm(entity),
-		CanLoan:           !entity.Locked && editable,
-		LoanBlockedReason: loanBlockedReason,
-		CanMove:           entity.CanMove(),
-		MoveBlockedReason: moveBlockedReason(entity),
-		LockAction:        lockAction(entity),
-		DiscreteAction:    s.discreteAction(ctx, entity),
-		Breadcrumbs:       BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
+		ReturnConfirm:       returnConfirm(entity),
+		CanLoan:             !entity.Locked && editable,
+		LoanBlockedReason:   loanBlockedReason,
+		CanMove:             entity.CanMove(),
+		MoveBlockedReason:   moveBlockedReason(entity),
+		LockAction:          lockAction(entity),
+		DiscreteAction:      discrete,
+		CanRemove:           canRemove,
+		RemoveBlockedReason: removeBlockedReason,
+		Breadcrumbs:         BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
 	}, nil
 }
 
@@ -650,6 +684,121 @@ func (s *Server) renderLoanFailure(
 	}
 	fresh.Error = "loan failed"
 	s.renderStatusChanged(w, r, fresh)
+}
+
+// handleRemoveForm handles GET /entities/{entityID}/actions/remove, swapping
+// the Remove button for the inline remove form.
+func (s *Server) handleRemoveForm(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if !data.CanRemove || data.RemoveBlockedReason != "" {
+		http.Error(w, "entity cannot be removed", http.StatusForbidden)
+		return
+	}
+
+	s.renderHTML(w, "remove_form", removeFormData{EntityID: entityID, DisplayName: data.Entity.DisplayName})
+}
+
+// handleRemove handles POST /entities/{entityID}/actions/remove. The live
+// children guard is left to the app layer (#287) so a stale panel still gets
+// the inline error rather than a bare 403.
+func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	data, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if data.Entity.EntityID == "" {
+		s.renderRemoveAlreadyApplied(w, r, entityID)
+		return
+	}
+	if !data.CanRemove {
+		http.Error(w, "entity cannot be removed", http.StatusForbidden)
+		return
+	}
+
+	form := removeFormData{
+		EntityID:    entityID,
+		DisplayName: data.Entity.DisplayName,
+		Note:        strings.TrimSpace(r.FormValue("note")),
+	}
+	err = s.cfg.App.RemoveEntity(r.Context(), app.RemoveEntityRequest{
+		EntityID: entityID,
+		ActorID:  s.actorFor(r),
+		Note:     form.Note,
+	})
+	if err != nil {
+		s.renderRemoveFailure(w, r, data, form, err)
+		return
+	}
+
+	s.renderAfterRemoval(w, r, data.Entity)
+}
+
+// renderRemoveFailure handles a failed RemoveEntity. Live children re-open the
+// form with the user's note on a fresh read (the panel may be stale). A
+// concurrent remove is this request's outcome, as with Return (#292).
+func (s *Server) renderRemoveFailure(
+	w http.ResponseWriter, r *http.Request, stale detailData, form removeFormData, err error,
+) {
+	entityID := stale.Entity.EntityID
+
+	switch {
+	case errors.Is(err, app.ErrNotFound):
+		s.renderRemoveAlreadyApplied(w, r, entityID)
+	case errors.Is(err, app.ErrHasChildren):
+		s.cfg.Logger.Info("remove rejected: entity has live children", "error", err, "entity_id", entityID)
+		fresh, ferr := s.buildDetailData(r.Context(), entityID)
+		if ferr != nil {
+			s.serverError(w, "build detail data", ferr)
+			return
+		}
+		if fresh.Entity.EntityID == "" {
+			s.renderRemoveAlreadyApplied(w, r, entityID)
+			return
+		}
+		form.Error = "remove failed: it still contains other entities — remove or move them first"
+		fresh.RemoveForm = &form
+		s.renderDetailSection(w, r, fresh)
+	default:
+		s.cfg.Logger.Error("remove entity", "error", err, "entity_id", entityID)
+		stale.Error = "remove failed"
+		s.renderDetailSection(w, r, stale)
+	}
+}
+
+// renderRemoveAlreadyApplied handles a Remove for an entity that is no longer
+// live. If it was removed elsewhere (another tab, the CLI), the user's intent
+// already holds, so show the removal outcome. This request's note is dropped;
+// history records the removal that won.
+func (s *Server) renderRemoveAlreadyApplied(w http.ResponseWriter, r *http.Request, entityID string) {
+	removed, err := s.cfg.App.GetEntityByIDAnyStatus(r.Context(), entityID)
+	if errors.Is(err, app.ErrNotFound) {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.serverError(w, "get entity", err)
+		return
+	}
+	s.cfg.Logger.Info("remove already applied concurrently", "entity_id", entityID)
+	s.renderAfterRemoval(w, r, removed)
 }
 
 // handleMoveForm handles GET /entities/{entityID}/actions/move, swapping the

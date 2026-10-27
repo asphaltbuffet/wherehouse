@@ -297,9 +297,9 @@ stateDiagram-v2
     missing --> loaned: loan [web]
     loaned --> ok: return [web]
     borrowed --> removed: return [web]
-    ok --> removed: remove
-    missing --> removed: remove
-    loaned --> removed: remove
+    ok --> removed: remove [web]
+    missing --> removed: remove [web]
+    loaned --> removed: remove [web]
     removed --> [*]
 
     note right of ok
@@ -316,7 +316,7 @@ Non-status actions, by interface:
 | rename | ✅ | ✅ | |
 | attr (lock / discrete) | ✅ | ✅ | web has one button per attribute; disabled with a tooltip when blocked |
 | move | ✅ | ✅ | web form has a searchable destination picker and a "Move to root" choice; disabled with a tooltip for locked, missing, or loaned entities |
-| remove | ✅ | ❌ | |
+| remove | ✅ | ✅ | web form asks for an optional note; hidden for borrowed entities (use Return); disabled with a tooltip while the entity contains other entities |
 | lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities (a locked entity can never be `missing`; unlock it first) |
 | loan | ✅ | ✅ | web form asks for "Loaned to" and an optional note; disabled for locked entities |
 | borrow | ✅ | ✅ | web creates one entity per submit, with a searchable location picker defaulting to the entity being viewed |

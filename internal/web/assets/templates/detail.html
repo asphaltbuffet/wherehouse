@@ -83,6 +83,20 @@
       {{end}}
       {{template "attr_button" .LockAction}}
       {{template "attr_button" .DiscreteAction}}
+      {{if .RemoveForm}}
+      {{template "remove_form" .RemoveForm}}
+      {{else if .RemoveBlockedReason}}
+      <button class="btn-ghost detail-action-btn" data-action="remove" disabled aria-disabled="true"
+              title="{{.RemoveBlockedReason}}">
+        Remove
+      </button>
+      {{else if .CanRemove}}
+      <button class="btn-ghost detail-action-btn" data-action="remove"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/remove"
+              hx-target="this" hx-swap="outerHTML">
+        Remove
+      </button>
+      {{end}}
     </aside>
   </div>
 

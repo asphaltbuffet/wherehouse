@@ -82,6 +82,10 @@ func (f *fakeApp) FindMoveDestinations(
 	return nil, nil
 }
 
+func (f *fakeApp) RemoveEntity(_ context.Context, _ app.RemoveEntityRequest) error {
+	return nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

@@ -1,0 +1,16 @@
+{{define "remove_form"}}
+<form class="remove-form" data-action="remove"
+      hx-post="/entities/{{.EntityID}}/actions/remove"
+      hx-target="#detail-panel" hx-swap="innerHTML">
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+  <p>Remove {{.DisplayName}} from the inventory? This cannot be undone.</p>
+  <label for="remove_note">Note (optional)</label>
+  <input id="remove_note" type="text" name="note" value="{{.Note}}" autofocus>
+  <div class="remove-form-buttons">
+    <button type="submit" class="btn-link" aria-label="Remove">✓</button>
+    <button type="button" class="btn-link" aria-label="Cancel"
+            hx-get="/entities/{{.EntityID}}"
+            hx-target="#entity-detail" hx-swap="outerHTML">✕</button>
+  </div>
+</form>
+{{end}}
