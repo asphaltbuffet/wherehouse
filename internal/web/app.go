@@ -28,4 +28,5 @@ type App interface {
 	SetAttributes(ctx context.Context, reqs []app.SetAttributesRequest) ([]app.EntityResult, error)
 	ReparentEntity(ctx context.Context, req app.ReparentEntityRequest) (app.EntityResult, error)
 	FindMoveDestinations(ctx context.Context, entityID string, req app.FindEntitiesRequest) ([]app.FindResult, error)
+	RemoveEntity(ctx context.Context, req app.RemoveEntityRequest) error
 }

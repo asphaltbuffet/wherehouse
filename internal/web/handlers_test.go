@@ -66,6 +66,30 @@ type fakeApp struct {
 	onMove      func(*fakeApp) // runs inside ReparentEntity; simulates a concurrent writer
 
 	lastMovingID string // entityID from the most recent FindMoveDestinations call
+
+	removeErr     error
+	removeCalls   int
+	lastRemoveReq app.RemoveEntityRequest
+	onRemove      func(*fakeApp) // runs inside RemoveEntity; simulates a concurrent writer
+}
+
+func (f *fakeApp) RemoveEntity(_ context.Context, req app.RemoveEntityRequest) error {
+	f.removeCalls++
+	f.lastRemoveReq = req
+	f.lastActor = req.ActorID
+	if f.onRemove != nil {
+		f.onRemove(f)
+	}
+	if f.removeErr != nil {
+		return f.removeErr
+	}
+	for i := range f.entities {
+		if f.entities[i].EntityID == req.EntityID && f.entities[i].Status != inventory.EntityStatusRemoved {
+			f.entities[i].Status = inventory.EntityStatusRemoved
+			return nil
+		}
+	}
+	return app.ErrNotFound
 }
 
 // ReparentEntity records the request and, on success, re-parents the entity in

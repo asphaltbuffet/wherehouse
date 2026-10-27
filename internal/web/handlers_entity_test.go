@@ -1094,3 +1094,290 @@ func TestHandleMove_Rejected(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	assert.Equal(t, 0, fake.moveCalls)
 }
+
+func TestEntityDetail_RemoveButton(t *testing.T) {
+	drill := func(status inventory.EntityStatus) app.EntityResult {
+		return app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill", Status: status}
+	}
+	ok := drill(inventory.EntityStatusOk)
+	borrowed := drill(inventory.EntityStatusBorrowed)
+	missing := drill(inventory.EntityStatusMissing)
+	loaned := drill(inventory.EntityStatusLoaned)
+	locked := ok
+	locked.Locked = true
+
+	tests := []struct {
+		name        string
+		entity      app.EntityResult
+		hasChildren bool
+		wantButton  bool
+		wantEnabled bool
+	}{
+		{name: "ok leaf is removable", entity: ok, wantButton: true, wantEnabled: true},
+		{name: "missing is removable", entity: missing, wantButton: true, wantEnabled: true},
+		{name: "loaned is removable", entity: loaned, wantButton: true, wantEnabled: true},
+		{name: "locked is removable", entity: locked, wantButton: true, wantEnabled: true},
+		{name: "live children disable it", entity: ok, hasChildren: true, wantButton: true},
+		{name: "borrowed has no remove button", entity: borrowed},
+		// Review Focus #1: Return is the exit; a disabled Remove would be noise.
+		{name: "borrowed with children has no remove button", entity: borrowed, hasChildren: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{
+				entities:    []app.EntityResult{tt.entity},
+				hasChildren: map[string]bool{"abc": tt.hasChildren},
+			})
+			defer ts.Close()
+
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
+			req.Header.Set("Hx-Request", "true")
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			assert.Equal(t, tt.wantButton, strings.Contains(string(body), `data-action="remove"`))
+			assert.Equal(t, tt.wantEnabled, strings.Contains(string(body), `hx-get="/entities/abc/actions/remove"`))
+			assert.Equal(t, tt.wantButton && !tt.wantEnabled,
+				strings.Contains(string(body), `title="Contains other entities — remove or move them first"`))
+		})
+	}
+}
+
+// Review Focus #2: Discrete and Remove share one child-count query.
+func TestEntityDetail_SingleChildCountQuery(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Box", FullPathDisplay: "Box", Status: inventory.EntityStatusOk},
+		},
+		hasChildren: map[string]bool{"abc": true},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, 1, fake.hasChildrenCalls)
+	assert.Contains(t, string(body), `title="Entities with children cannot be marked discrete"`)
+	assert.Contains(t, string(body), `title="Contains other entities — remove or move them first"`)
+}
+
+// Review Focus #3: a failed count must not break the page; the app guard is the backstop.
+func TestEntityDetail_ChildCountErrorKeepsRemoveEnabled(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Box", FullPathDisplay: "Box", Status: inventory.EntityStatusOk},
+		},
+		hasChildrenErr: errTest,
+	})
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), `hx-get="/entities/abc/actions/remove"`)
+}
+
+func TestHandleRemoveForm(t *testing.T) {
+	hammer := func(status inventory.EntityStatus) []app.EntityResult {
+		return []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: status}}
+	}
+	tests := []struct {
+		name        string
+		entities    []app.EntityResult
+		hasChildren bool
+		wantCode    int
+	}{
+		{name: "ok renders form", entities: hammer(inventory.EntityStatusOk), wantCode: http.StatusOK},
+		{name: "borrowed forbidden", entities: hammer(inventory.EntityStatusBorrowed), wantCode: http.StatusForbidden},
+		{
+			name:        "live children forbidden",
+			entities:    hammer(inventory.EntityStatusOk),
+			hasChildren: true,
+			wantCode:    http.StatusForbidden,
+		},
+		{name: "not found", wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: tt.entities, hasChildren: map[string]bool{"abc": tt.hasChildren}})
+			defer ts.Close()
+
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc/actions/remove", nil)
+			req.Header.Set("Hx-Request", "true")
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			if tt.wantCode == http.StatusOK {
+				assert.Contains(t, string(body), `hx-post="/entities/abc/actions/remove"`)
+				// renderAfterRemoval may return detail_empty, which has no #entity-detail wrapper.
+				assert.Contains(t, string(body), `hx-target="#detail-panel"`)
+				assert.Contains(t, string(body), `name="note"`)
+				assert.Contains(t, string(body), "Remove Hammer from the inventory? This cannot be undone.")
+				assert.NotContains(t, string(body), "hx-confirm")
+			}
+		})
+	}
+}
+
+func postRemove(t *testing.T, ts *httptest.Server, form url.Values) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(
+		http.MethodPost, ts.URL+"/entities/abc/actions/remove", strings.NewReader(form.Encode()),
+	)
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func hammerInGarage(status inventory.EntityStatus) []app.EntityResult {
+	return []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer", ParentID: "g", Status: status},
+	}
+}
+
+func TestHandleRemove_ShowsParentAndDeletesNode(t *testing.T) {
+	fake := &fakeApp{entities: hammerInGarage(inventory.EntityStatusOk)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postRemove(t, ts, url.Values{"note": {"  broken handle  "}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "abc", fake.lastRemoveReq.EntityID)
+	assert.Equal(t, "broken handle", fake.lastRemoveReq.Note)
+	assert.Equal(t, "/entities/g", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, body, "<h2>Garage</h2>")
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: "g", ParentHasChildren: false}, detachedTrigger(t, resp))
+}
+
+func TestHandleRemove_RootShowsEmptyState(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: inventory.EntityStatusOk},
+	}})
+	defer ts.Close()
+
+	resp, body := postRemove(t, ts, url.Values{})
+
+	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, body, "Select an item to see details.")
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+}
+
+// Review Focus #4: a whitespace-only note is stored as no note.
+func TestHandleRemove_BlankNoteStoredEmpty(t *testing.T) {
+	fake := &fakeApp{entities: hammerInGarage(inventory.EntityStatusOk)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	postRemove(t, ts, url.Values{"note": {"   "}})
+
+	assert.Equal(t, 1, fake.removeCalls)
+	assert.Empty(t, fake.lastRemoveReq.Note)
+}
+
+func TestHandleRemove_BorrowedForbidden(t *testing.T) {
+	fake := &fakeApp{entities: hammerInGarage(inventory.EntityStatusBorrowed)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postRemove(t, ts, url.Values{})
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	assert.Zero(t, fake.removeCalls)
+}
+
+// #287 guard tripped at submit (a child was added after the form opened).
+func TestHandleRemove_HasChildrenReopensFormWithNote(t *testing.T) {
+	fake := &fakeApp{
+		entities:  hammerInGarage(inventory.EntityStatusOk),
+		removeErr: fmt.Errorf("remove: %w", app.ErrHasChildren),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postRemove(t, ts, url.Values{"note": {"keep me"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, "remove failed: it still contains other entities — remove or move them first")
+	assert.Contains(t, body, `hx-post="/entities/abc/actions/remove"`)
+	assert.Contains(t, body, `value="keep me"`)
+	assert.NotContains(t, body, `hx-swap-oob="delete"`)
+	assert.Empty(t, resp.Header.Get("Hx-Push-Url"))
+	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
+}
+
+// Review Focus #5: double submit / stale tab after the entity is already removed.
+func TestHandleRemove_AlreadyRemovedShowsRemoval(t *testing.T) {
+	fake := &fakeApp{entities: hammerInGarage(inventory.EntityStatusRemoved)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postRemove(t, ts, url.Values{"note": {"late"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Zero(t, fake.removeCalls, "nothing to write: the intent already holds")
+	assert.Equal(t, "/entities/g", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+}
+
+// A concurrent remove committed between our detail read and our write (#292 pattern).
+func TestHandleRemove_ConcurrentRemoveShowsRemoval(t *testing.T) {
+	fake := &fakeApp{
+		entities:  hammerInGarage(inventory.EntityStatusOk),
+		removeErr: fmt.Errorf("remove: %w", app.ErrNotFound),
+		onRemove:  func(f *fakeApp) { f.entities[1].Status = inventory.EntityStatusRemoved },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postRemove(t, ts, url.Values{})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "/entities/g", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+}
+
+func TestHandleRemove_UnknownEntityNotFound(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{})
+	defer ts.Close()
+
+	resp, _ := postRemove(t, ts, url.Values{})
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleRemove_GenericFailureShowsError(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{
+		entities:  hammerInGarage(inventory.EntityStatusOk),
+		removeErr: errTest,
+	})
+	defer ts.Close()
+
+	resp, body := postRemove(t, ts, url.Values{})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, "remove failed")
+	assert.Contains(t, body, "<h2>Hammer</h2>")
+	assert.NotContains(t, body, `hx-swap-oob="delete"`)
+}

@@ -117,7 +117,7 @@ A command's `--json` shape is an **app-owned** type with JSON tags in `internal/
 
 **Handler test layout** — `handlers_test.go` holds shared fixtures only (`fakeApp`, `newTestServer`, `errTest`); test functions mirror the production file they cover (`handlers_browse_test.go`, `handlers_entity_test.go`, etc.).
 
-**Web layer growth intent** — `internal/web` is planned to reach parity with the CLI: move, remove, full status transitions (borrowed/loaned), import, export, and history views are all forthcoming. This is why the handler split happened before the file was critically large.
+**Web layer growth intent** — `internal/web` is planned to reach parity with the CLI: move, full status transitions (borrowed/loaned), import, export, and history views are all forthcoming. This is why the handler split happened before the file was critically large.
 
 **`EntityResult` field pitfall:** `CanonicalName` is the normalized *leaf name only* (no colons). `FullPathDisplay` is the full colon-separated path (e.g. `"Garage:Toolbox"`). Use `FullPathDisplay` when checking entity depth or path structure.
 

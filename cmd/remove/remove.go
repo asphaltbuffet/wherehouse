@@ -37,6 +37,9 @@ func buildRemoveCmd() *cobra.Command {
 		Short: "Remove an entity from the inventory",
 		Long: `Remove an entity by its full colon-separated path.
 
+An entity that still contains other (non-removed) entities cannot be removed;
+remove or move them first.
+
 Examples:
   wherehouse remove "Garage:Toolbox:Wrench"
   wherehouse remove "Garage:Toolbox" --note "disposed"`,
