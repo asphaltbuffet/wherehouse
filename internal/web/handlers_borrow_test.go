@@ -32,38 +32,31 @@ func TestHandleBorrowForm_DefaultParent(t *testing.T) {
 			Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 	}
 	tests := []struct {
-		name       string
-		currentURL string // path appended to ts.URL; "" sends no header
-		rawHeader  string // used verbatim when non-empty
-		wantID     string
-		wantLabel  string
+		name      string
+		parent    string // value of ?parent=; "" sends none
+		wantID    string
+		wantLabel string
 	}{
-		{"eligible current entity", "/entities/g", "", "g", "Garage"},
-		{"borrowed entity is eligible", "/entities/case", "", "case", "Drill Case"},
-		{"discrete falls back to parent", "/entities/nails", "", "g", "Garage"},
-		{"removed falls back to parent", "/entities/old", "", "g", "Garage"},
-		{"discrete root falls back to root", "/entities/rootbox", "", "", "(root)"},
-		{"no header", "", "", "", "(root)"},
-		{"index page", "/", "", "", "(root)"},
-		{"search page", "/search?q=x", "", "", "(root)"},
-		{"sub-route", "/entities/g/edit/name", "", "", "(root)"},
-		{"unknown id", "/entities/nope", "", "", "(root)"},
-		{"malformed url", "", "%zz", "", "(root)"},
+		{"eligible entity", "g", "g", "Garage"},
+		{"borrowed entity is eligible", "case", "case", "Drill Case"},
+		{"discrete falls back to parent", "nails", "g", "Garage"},
+		{"removed falls back to parent", "old", "g", "Garage"},
+		{"discrete root falls back to root", "rootbox", "", "(root)"},
+		{"no param", "", "", "(root)"},
+		{"unknown id", "nope", "", "(root)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := newTestServer(t, &fakeApp{entities: entities})
 			defer ts.Close()
 
-			req, err := http.NewRequest(http.MethodGet, ts.URL+"/entities/borrow", nil)
+			target := ts.URL + "/entities/borrow"
+			if tt.parent != "" {
+				target += "?parent=" + url.QueryEscape(tt.parent)
+			}
+			req, err := http.NewRequest(http.MethodGet, target, nil)
 			require.NoError(t, err)
 			req.Header.Set("Hx-Request", "true")
-			switch {
-			case tt.rawHeader != "":
-				req.Header.Set("Hx-Current-Url", tt.rawHeader)
-			case tt.currentURL != "":
-				req.Header.Set("Hx-Current-Url", ts.URL+tt.currentURL)
-			}
 			resp, err := ts.Client().Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
@@ -76,17 +69,31 @@ func TestHandleBorrowForm_DefaultParent(t *testing.T) {
 	}
 }
 
-func TestHeader_HasBorrowButton(t *testing.T) {
-	ts := newTestServer(t, &fakeApp{})
+func TestBorrowActions(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "n", DisplayName: "Nails", FullPathDisplay: "Nails", Discrete: true,
+			Status: inventory.EntityStatusOk},
+	}}
+	ts := newTestServer(t, fake)
 	defer ts.Close()
 
 	resp, err := ts.Client().Get(ts.URL + "/")
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	home := readBody(t, resp)
+	_, afterOpen, _ := strings.Cut(home, "<header")
+	header, _, _ := strings.Cut(afterOpen, "</header>")
 
-	assert.Contains(t, string(body), `hx-get="/entities/borrow"`)
-	assert.Contains(t, string(body), ">Borrow</button>")
+	assert.NotContains(t, header, "/entities/borrow", "header has no Borrow button")
+	assert.NotContains(t, header, "Add root", "header has no Add root button")
+	assert.NotContains(t, header, "acting as")
+	assert.Contains(t, home,
+		`hx-get="/entities/borrow" hx-target="#add-modal-body" hx-swap="innerHTML">Borrow</button>`)
+
+	assert.Contains(t, getDetail(t, ts, "g"),
+		`hx-get="/entities/borrow?parent=g" hx-target="#add-modal-body" hx-swap="innerHTML">Borrow into here</button>`)
+	assert.NotContains(t, getDetail(t, ts, "n"), "Borrow into here", "discrete entities cannot receive a borrow")
 }
 
 func postBorrow(t *testing.T, ts *httptest.Server, form url.Values) (*http.Response, string) {

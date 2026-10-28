@@ -41,6 +41,9 @@
         Add child
       </button>
       {{end}}
+      {{if .CanAddChild}}
+      <button class="btn-ghost detail-action-btn" type="button" aria-haspopup="dialog" aria-controls="add-modal" hx-get="/entities/borrow?parent={{.Entity.EntityID}}" hx-target="#add-modal-body" hx-swap="innerHTML">Borrow into here</button>
+      {{end}}
       {{if .CanMarkFound}}
       <button class="btn-primary detail-action-btn"
               hx-post="/entities/{{.Entity.EntityID}}/actions/found"

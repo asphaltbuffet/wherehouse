@@ -11,21 +11,5 @@
     <label for="q" class="visually-hidden">Search inventory</label>
     <input id="q" name="q" type="search" placeholder="Search items and locations…" autocomplete="off">
   </form>
-  <div class="app-actions">
-    <button class="btn-ghost"
-            aria-label="Add root location"
-            aria-haspopup="dialog"
-            aria-controls="add-modal"
-            hx-get="/entities/add"
-            hx-target="#add-modal-body"
-            hx-swap="innerHTML">+ Add root</button>
-    <button class="btn-ghost"
-            aria-label="Borrow an item"
-            aria-haspopup="dialog"
-            aria-controls="add-modal"
-            hx-get="/entities/borrow"
-            hx-target="#add-modal-body"
-            hx-swap="innerHTML">Borrow</button>
-  </div>
 </header>
 {{end}}

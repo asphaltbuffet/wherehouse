@@ -240,13 +240,6 @@ h1, h2, h3 {
   border-radius: var(--radius-md);
 }
 
-.app-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
 .app-actor {
   color: var(--color-text-muted);
   font-size: inherit;

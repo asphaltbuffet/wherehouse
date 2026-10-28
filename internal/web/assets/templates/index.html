@@ -10,6 +10,7 @@
   <h3 class="visually-hidden">Actions</h3>
   <div class="detail-actions" role="group" aria-label="Actions">
     <button class="btn-ghost detail-action-btn" type="button" data-action="add-child" data-parent-id="">Add root</button>
+    <button class="btn-ghost detail-action-btn" type="button" aria-haspopup="dialog" aria-controls="add-modal" hx-get="/entities/borrow" hx-target="#add-modal-body" hx-swap="innerHTML">Borrow</button>
   </div>
   {{template "children_list" .ChildList}}
 </section>
