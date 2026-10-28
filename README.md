@@ -47,7 +47,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
 - **Web UI** — local HTTP server for browsing (including tags), searching, adding, editing, locking, marking discrete, borrowing, loaning, and returning inventory
-- **Network Storage Ready** — SQLite WAL mode works with NFS/SMB mounts
+- **Single-Host Storage** — one SQLite file in WAL mode; share an inventory across machines through the web UI, not by opening the file from more than one host
 - **Multi-User Attribution** — trust-based; tracks who made changes, no permissions enforcement
 - **Single File Database** — entire inventory in one portable SQLite file
 
@@ -120,6 +120,7 @@ docker run -d --name wherehouse \
 - **Tags**: `X.Y.Z` (exact), `X.Y` (latest patch), `latest` (latest stable). Prereleases get only `X.Y.Z-rc.N`.
 - **Data**: the database is `/data/wherehouse.db`. Keep `/data` on a volume, or you lose the event log when the container is removed.
 - **Bind mounts**: the image runs as uid `65532`. To mount a host directory, either `chown 65532:65532` it or run with `--user "$(id -u):$(id -g)"`; otherwise startup fails with `unable to open database file`.
+- **Docker Desktop (macOS/Windows)**: containers run in a VM, so a host bind mount counts as a second host. Don't run the host CLI and the container against the same bind-mounted database; use a named volume and `docker exec`/`docker run` for CLI commands.
 - **Arguments**: anything after the image name is passed to `wherehouse serve`, e.g. `... wherehouse:latest --port 9090`.
 - **Configuration**: set `WHEREHOUSE_*` environment variables (see [Environment Variables](#environment-variables)), or put a `wherehouse.toml` in `/data` (found as `./wherehouse.toml` because the working directory is `/data`). The image presets `WHEREHOUSE_DATABASE_PATH` and `WHEREHOUSE_LOGGING_FILE_PATH`, and environment variables override the file, so `database.path` and `logging.file_path` in the file are ignored; change them with `-e` instead.
 - **Identity**: web edits are recorded as actor `webui`. Only when the container sits behind an authenticating proxy that is its sole ingress (e.g. the sidecar recipe), set `WHEREHOUSE_WEB_ACTOR_HEADER=<header>` to record the proxy's user instead. Never set it together with `-p` publishing the port directly: anyone who reaches the port can forge the header. See [Behind Tailscale Serve](#behind-tailscale-serve).
@@ -630,13 +631,15 @@ When the tag push lands, CI:
 
 ### `SQLITE_BUSY` / lock errors
 
-Multiple processes accessing the same database, or a network mount with locking issues.
+Another process is holding a write lock longer than the busy timeout.
 
 ```bash
 ps aux | grep wherehouse
 ```
 
-For network storage, verify NFSv4/SMB file locking support.
+### Network mounts
+
+The database may live on NFS/SMB only if every process that opens it runs on the same host. WAL mode keeps a shared-memory index (`wherehouse.db-shm`) that cannot be shared between machines; two hosts opening the same file can corrupt it, and file locking does not prevent that. To share an inventory between machines, run `wherehouse serve` on one host.
 
 ### Performance degradation
 

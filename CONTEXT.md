@@ -163,3 +163,4 @@ A user-assigned display label for a database file, stored in `schema_metadata` u
 - No silent repair. No application-level auto-retry: SQLite lock contention is absorbed only by the connection's busy timeout, after which the operation fails.
 - Timestamps stored as RFC3339 UTC with `Z` suffix.
 - DB path must be absolute. SQLite is canonical storage.
+- Single host: every process that opens a database must run on the same host. The file may live on a network mount only if no other host opens it. Users on other machines share an inventory through `serve`, not by opening the file.

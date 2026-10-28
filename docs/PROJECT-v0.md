@@ -390,14 +390,14 @@ Project {
 - Single database file
 - Path configurable via config file or environment variable
 - Default path: `~/.wherehouse/wherehouse.db`
-- Must support network storage (NFS, SMB compatible)
+- Single host only: may live on NFS/SMB only if no other host opens it
 
 **Rationale**:
 - SQLite is serverless, requires no setup
 - Single file is easy to backup and move
 - Supports concurrent reads (important for the web UI)
 - Sufficient for personal use (single user, moderate item count)
-- Works on network storage with caveats (locking)
+- WAL mode requires every connection on one host; share across machines via the web UI
 
 **Performance Considerations**:
 - Expect up to 10,000 items (typical user)
@@ -505,7 +505,7 @@ Version 1.0 is successful when:
 4. ✅ User can create projects and associate item movements
 5. ✅ User can complete projects and see items to return
 6. ✅ User can mark items missing and get suggestions
-7. ✅ Database persists reliably on local and network storage
+7. ✅ Database persists reliably on local storage (or a network mount used by a single host)
 8. ✅ CLI commands are well-documented and consistent
 9. ✅ Application works on Linux, macOS, and Windows
 
