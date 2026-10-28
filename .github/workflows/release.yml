@@ -27,6 +27,8 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.2
+        with:
+          cache: false
 
       - uses: crazy-max/ghaction-upx@v4
         with:
