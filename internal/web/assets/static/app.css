@@ -803,3 +803,28 @@ dialog#add-modal input[type="checkbox"],
   .tape h2, .tape-id { overflow-wrap: anywhere; }
   .app-footer { flex-wrap: wrap; row-gap: var(--space-1); }
 }
+
+/* ── Narrow viewports: history rows as stacked cards ─────────────────── */
+@media (max-width: 48rem) {
+  .history-table thead {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+  }
+  .history-table, .history-table tbody { display: block; }
+  .history-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .history-table td { border: 0; padding: 0; overflow-wrap: anywhere; }
+  .history-table .h-event { grid-area: 1 / 1; font-weight: 600; }
+  .history-table .num { grid-area: 1 / 2; width: auto; text-align: right; }
+  .history-table .h-actor { grid-area: 2 / 1; color: var(--color-text-muted); }
+  .history-table .h-when { grid-area: 2 / 2; color: var(--color-text-muted); }
+  .history-table .h-note { grid-column: 1 / -1; }
+  .history-table .h-note:empty { display: none; }
+}

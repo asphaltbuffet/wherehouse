@@ -121,17 +121,11 @@
 
   {{if .History}}
   <h3 class="history-heading">History</h3>
-  <table class="history-table">
-    <thead><tr><th scope="col" class="num">#</th><th scope="col">Event</th><th scope="col">By</th><th scope="col">When</th><th scope="col">Note</th></tr></thead>
-    <tbody>
+  <table class="history-table" role="table">
+    <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col" class="num">#</th><th role="columnheader" scope="col">Event</th><th role="columnheader" scope="col">By</th><th role="columnheader" scope="col">When</th><th role="columnheader" scope="col">Note</th></tr></thead>
+    <tbody role="rowgroup">
     {{range .History}}
-      <tr>
-        <td class="num mono">{{.EventID}}</td>
-        <td>{{.EventType}}</td>
-        <td>{{.ActorUserID}}</td>
-        <td class="mono">{{.TimestampUTC}}</td>
-        <td>{{.Note}}</td>
-      </tr>
+      <tr role="row"><td role="cell" class="num mono">{{.EventID}}</td><td role="cell" class="h-event">{{.EventType}}</td><td role="cell" class="h-actor">{{.ActorUserID}}</td><td role="cell" class="h-when mono">{{.TimestampUTC}}</td><td role="cell" class="h-note">{{.Note}}</td></tr>
     {{end}}
     </tbody>
   </table>

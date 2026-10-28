@@ -864,7 +864,7 @@ func TestDetail_PrimaryActionAndLedger(t *testing.T) {
 		Status: inventory.EntityStatusLoaned, StatusContext: "Dana"})
 
 	assert.Contains(t, body, `class="btn-primary detail-action-btn"`) // Return is primary
-	assert.Contains(t, body, `<td class="num mono">412</td>`)
+	assert.Contains(t, body, `<td role="cell" class="num mono">412</td>`)
 	assert.Contains(t, body, `class="detail-actions"`)
 }
 
@@ -1961,4 +1961,18 @@ func TestDetail_BreadcrumbsStartAtInventory(t *testing.T) {
 	require.True(t, inv >= 0 && garage >= 0)
 	assert.Less(t, inv, garage)
 	assert.Contains(t, nested, `<span aria-current="page">Toolbox</span>`)
+}
+
+func TestDetail_HistoryHasExplicitTableRoles(t *testing.T) {
+	ts := newTestServer(t, garageWithChildren())
+	defer ts.Close()
+
+	body := getDetail(t, ts, "g")
+
+	assert.Contains(t, body, `<table class="history-table" role="table">`)
+	assert.Contains(t, body, `<tr role="row"><td role="cell" class="num mono">1</td>`)
+	for _, cls := range []string{"h-event", "h-actor", "h-when mono", "h-note"} {
+		assert.Contains(t, body, `<td role="cell" class="`+cls+`">`)
+	}
+	assert.Contains(t, body, `<th role="columnheader" scope="col" class="num">#</th>`)
 }
