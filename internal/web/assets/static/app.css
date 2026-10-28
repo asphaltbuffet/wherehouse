@@ -752,7 +752,7 @@ dialog#add-modal input[type="checkbox"],
     box-sizing: border-box;
   }
   .breadcrumbs a, .parent-options li > * { display: inline-flex; align-items: center; }
-  .tree-item .add-btn { min-width: 2.75rem; min-height: 2.75rem; }
+  .tree-item .add-btn { min-width: 2.75rem; min-height: 2.75rem; opacity: 1; } /* no hover to reveal it */
   .tree-item .chevron:not(.chevron-hidden) {
     min-width: 2.75rem;
     align-self: stretch;
