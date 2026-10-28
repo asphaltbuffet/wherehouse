@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	htmxConfigMeta   = `<meta name="htmx-config" content='{"includeIndicatorStyles":false}'>`
+	htmxConfigMeta   = `<meta name="htmx-config" content='{"includeIndicatorStyles":false,"historyCacheSize":0}'>`
 	htmxScriptTag    = `<script src="/static/htmx.min.js" defer></script>`
 	htmxConfigMarker = `name="htmx-config"`
 	mainTitle        = "<title>Wherehouse</title>"
