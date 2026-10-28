@@ -474,8 +474,8 @@ path = "~/.local/share/wherehouse/wherehouse.db"
 level = "warn"
 # file_path = "~/.local/state/wherehouse/wherehouse.log"
 # file_path = "-"   # log to stderr; max_size_mb must stay 0
-# max_size_mb = 10
-# max_backups = 3
+# max_size_mb = 10   # must be >= 0
+# max_backups = 3    # must be >= 0
 
 [user]
 default_identity = ""
@@ -483,7 +483,7 @@ os_username_map = {}
 
 [output]
 default_format = "human"
-quiet = false
+quiet = 0   # 0 = normal, 1 = minimal (-q), 2 = silent (-qq)
 
 [web]
 actor_header = ""
@@ -521,7 +521,7 @@ programs.wherehouse = {
 
     output = {
       defaultFormat = "human";
-      quiet = false;
+      quiet = 0;
     };
 
     web = {
@@ -536,12 +536,12 @@ programs.wherehouse = {
 | `settings.database.path` | string | XDG data dir | Path to SQLite database file |
 | `settings.logging.filePath` | string | XDG state dir | Path to log file, or `"-"` for stderr |
 | `settings.logging.level` | `"debug"`…`"error"` | `"warn"` | Minimum log level |
-| `settings.logging.maxSizeMB` | int | `0` (disabled) | Max log size before rotation |
-| `settings.logging.maxBackups` | int | `3` | Old rotated files to keep |
+| `settings.logging.maxSizeMB` | unsigned int | `0` (disabled) | Max log size before rotation |
+| `settings.logging.maxBackups` | unsigned int | `3` | Old rotated files to keep |
 | `settings.user.defaultIdentity` | string | OS username | Display name for attribution |
 | `settings.user.osUsernameMap` | attrset | `{}` | Map OS usernames to display names |
 | `settings.output.defaultFormat` | `"human"` \| `"json"` | `"human"` | Default output format |
-| `settings.output.quiet` | bool | `false` | Suppress non-essential output |
+| `settings.output.quiet` | `0`…`2` | `0` | Quiet level: 1 = minimal (`-q`), 2 = silent (`-qq`) |
 | `settings.web.actorHeader` | string \| `null` | `null` | Trusted reverse-proxy header whose value is recorded as the web actor (see [Behind Tailscale Serve](#behind-tailscale-serve)) |
 
 ---

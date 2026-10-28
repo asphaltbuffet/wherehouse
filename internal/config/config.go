@@ -22,6 +22,9 @@ const (
 	OutputFormatHuman = "human"
 )
 
+// MaxQuietLevel is the highest supported output.quiet level (-qq = silent).
+const MaxQuietLevel = 2
+
 // Config represents the complete wherehouse configuration.
 type Config struct {
 	Database DatabaseConfig `mapstructure:"database" toml:"database"`

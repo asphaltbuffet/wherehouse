@@ -146,16 +146,16 @@ func TestSet_UpdatesValue(t *testing.T) {
 			want:  "json",
 		},
 		{
-			name:  "output.quiet true",
+			name:  "output.quiet 1",
 			key:   "output.quiet",
-			value: "true",
-			want:  true,
+			value: "1",
+			want:  1,
 		},
 		{
-			name:  "output.quiet false",
+			name:  "output.quiet 0",
 			key:   "output.quiet",
-			value: "false",
-			want:  false,
+			value: "0",
+			want:  0,
 		},
 		{
 			name:  "web.actor_header",
@@ -207,10 +207,22 @@ func TestSet_Invalid(t *testing.T) {
 			errorText: "must be one of",
 		},
 		{
-			name:      "output.quiet invalid bool",
+			name:      "output.quiet non-numeric",
 			key:       "output.quiet",
-			value:     "maybe",
-			errorText: "must be 'true' or 'false'",
+			value:     "true",
+			errorText: "must be an integer between 0 and 2",
+		},
+		{
+			name:      "output.quiet negative",
+			key:       "output.quiet",
+			value:     "-1",
+			errorText: "must be an integer between 0 and 2",
+		},
+		{
+			name:      "output.quiet above max",
+			key:       "output.quiet",
+			value:     "3",
+			errorText: "must be an integer between 0 and 2",
 		},
 		{
 			name:      "output.default_format invalid",
@@ -430,7 +442,7 @@ func TestSet_PreservesOtherValues(t *testing.T) {
 	require.NoError(t, Set(testFs, defaultCfgFile, "database.path", "/custom/db.sqlite"))
 
 	// Set another key and verify the first is preserved
-	require.NoError(t, Set(testFs, defaultCfgFile, "output.quiet", "true"))
+	require.NoError(t, Set(testFs, defaultCfgFile, "output.quiet", "2"))
 
 	// Re-read and verify both values
 	v := viper.New()
@@ -440,7 +452,7 @@ func TestSet_PreservesOtherValues(t *testing.T) {
 	require.NoError(t, v.ReadInConfig())
 
 	assert.Equal(t, "/custom/db.sqlite", v.GetString("database.path"))
-	assert.True(t, v.GetBool("output.quiet"))
+	assert.Equal(t, 2, v.GetInt("output.quiet"))
 }
 
 // TestCheck_EmptyFile verifies Check handles empty TOML file gracefully.
@@ -467,7 +479,7 @@ func TestSet_MultipleUpdates(t *testing.T) {
 	}{
 		{"database.path", "/path/1.db"},
 		{"logging.level", "debug"},
-		{"output.quiet", "true"},
+		{"output.quiet", "2"},
 		{"database.path", "/path/2.db"}, // Update again
 	}
 
@@ -484,7 +496,7 @@ func TestSet_MultipleUpdates(t *testing.T) {
 
 	assert.Equal(t, "/path/2.db", v.GetString("database.path"))
 	assert.Equal(t, "debug", v.GetString("logging.level"))
-	assert.True(t, v.GetBool("output.quiet"))
+	assert.Equal(t, 2, v.GetInt("output.quiet"))
 }
 
 // TestWriteDefault_AllKeysPresent verifies all expected keys are in the output.
