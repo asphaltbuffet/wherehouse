@@ -17,6 +17,10 @@ const (
 	historyRestoreHeader = "Hx-History-Restore-Request"
 )
 
+// staleMessage is the inline error shown when an action's panel was stale:
+// the entity changed elsewhere, so its fresh state is rendered instead.
+const staleMessage = "Already changed elsewhere; showing current state."
+
 // serverError logs the internal detail and returns a generic 500 to the client.
 // Use this for any failure that originates inside the server (DB, template, app
 // layer) — never expose the wrapped error text in the response.

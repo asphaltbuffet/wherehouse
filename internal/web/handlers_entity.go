@@ -22,8 +22,8 @@ type detailData struct {
 	DateAdded         string
 	History           []app.HistoryResult
 	CanAddChild       bool
-	CanMarkMissing    bool
-	IsMissing         bool          // true when Status == EntityStatusMissing
+	CanMarkLost       bool          // ok and not locked (ADR 0024)
+	CanMarkFound      bool          // missing; found has no locked guard (ADR 0024)
 	CanReturn         bool          // borrowed or loaned
 	ReturnConfirm     string        // non-empty only for borrowed: returning removes the entity
 	CanLoan           bool          // ok/missing and not locked (ADR 0024)
@@ -36,8 +36,9 @@ type detailData struct {
 	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
 	// CanRemove is false for borrowed: a borrowed entity exits via Return (ADR 0022).
 	CanRemove           bool
-	RemoveBlockedReason string          // non-empty when Remove is shown disabled
-	RemoveForm          *removeFormData // non-nil re-opens the remove form (guard tripped at submit)
+	RemoveBlockedReason string            // non-empty when Remove is shown disabled
+	RemoveForm          *removeFormData   // non-nil re-opens the remove form (guard tripped at submit)
+	EditNameForm        *editNameFormData // non-nil swaps the name tape for the rename form
 	Breadcrumbs         []Breadcrumb
 	Error               string // populated by edit POST handlers; rendered inline above the detail dl
 	Removed             bool   // read-only view of a removed entity: last location + history, no actions
@@ -93,6 +94,12 @@ type removeFormData struct {
 // removeHasChildrenReason is the tooltip on a disabled Remove button (#287).
 const removeHasChildrenReason = "Contains other entities — remove or move them first"
 
+// editNameFormData is the view model for the inline rename form.
+type editNameFormData struct {
+	EntityID    string
+	CurrentName string
+}
+
 // attrAction is the view model for one attribute button on the detail panel.
 // The button posts Field=Value: the explicit target, never a toggle, so a
 // stale click fails with ErrNoChange instead of flipping the attribute.
@@ -107,7 +114,6 @@ type attrAction struct {
 const (
 	lockBlockedReason     = "Missing or loaned entities cannot be locked"
 	discreteBlockedReason = "Entities with children cannot be marked discrete"
-	attrStaleMessage      = "Already changed elsewhere; showing current state."
 	attrFailedMessage     = "attribute change failed"
 )
 
@@ -191,7 +197,7 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -199,7 +205,7 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 	case setErr == nil:
 	case errors.Is(setErr, app.ErrNoChange):
 		s.cfg.Logger.Info("attribute unchanged: panel was stale", "error", setErr, "entity_id", entityID)
-		fresh.Error = attrStaleMessage
+		fresh.Error = staleMessage
 	default:
 		s.cfg.Logger.Error("set attributes", "error", setErr, "entity_id", entityID)
 		fresh.Error = attrFailedMessage
@@ -328,7 +334,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		return detailData{}, err
 	}
 
-	// Missing toggles and Loan apply only to ok/missing (ADR 0024);
+	// Loan applies only to ok/missing (ADR 0024);
 	// borrowed/loaned use Return.
 	editable := entity.Status == inventory.EntityStatusOk ||
 		entity.Status == inventory.EntityStatusMissing
@@ -350,12 +356,12 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	}
 
 	return detailData{
-		Entity:         entity,
-		DateAdded:      dateAdded,
-		History:        history,
-		CanAddChild:    !entity.Discrete,
-		CanMarkMissing: !entity.Locked && editable,
-		IsMissing:      entity.Status == inventory.EntityStatusMissing,
+		Entity:       entity,
+		DateAdded:    dateAdded,
+		History:      history,
+		CanAddChild:  !entity.Discrete,
+		CanMarkLost:  entity.Status == inventory.EntityStatusOk && !entity.Locked,
+		CanMarkFound: entity.Status == inventory.EntityStatusMissing,
 		CanReturn: entity.Status == inventory.EntityStatusBorrowed ||
 			entity.Status == inventory.EntityStatusLoaned,
 		ReturnConfirm:       returnConfirm(entity),
@@ -426,28 +432,17 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 	s.renderHTML(w, "detail", detailPageData{Detail: data, Roots: roots, Actor: s.actorView(r)})
 }
 
+// handleEditNameForm handles GET /entities/{entityID}/edit/name, re-rendering
+// the detail section with the rename form in place of the name tape.
 func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-
-	s.renderHTML(w, "edit_name_form", struct {
-		EntityID    string
-		CurrentName string
-	}{
-		EntityID:    entityID,
-		CurrentName: data.Entity.DisplayName,
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		d.EditNameForm = &editNameFormData{EntityID: d.Entity.EntityID, CurrentName: d.Entity.DisplayName}
+		return true
 	})
 }
 
+// handleEditName handles POST /entities/{entityID}/edit/name. Liveness is left
+// to the app layer (ADR 0035); the result is always rendered from a fresh read.
 func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -455,97 +450,91 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-
 	newName := strings.TrimSpace(r.FormValue("display_name"))
 	if newName == "" {
 		http.Error(w, "display_name is required", http.StatusBadRequest)
 		return
 	}
 
-	_, err = s.cfg.App.RenameEntity(r.Context(), app.RenameEntityRequest{
+	_, renameErr := s.cfg.App.RenameEntity(r.Context(), app.RenameEntityRequest{
 		EntityID: entityID,
 		NewName:  newName,
 		ActorID:  s.actorFor(r),
 	})
-	if err != nil {
-		s.cfg.Logger.Error("rename entity", "error", err, "entity_id", entityID)
-		data.Error = "rename failed"
-		s.renderDetailSection(w, r, data)
-		return
-	}
 
-	// Re-fetch so the rendered section reflects the new name.
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
 		s.serverError(w, "build detail data", err)
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
+	if renameErr != nil {
+		s.cfg.Logger.Error("rename entity", "error", renameErr, "entity_id", entityID)
+		fresh.Error = "rename failed"
+		s.renderDetailSection(w, r, fresh)
+		return
+	}
+
 	s.renderDetailSection(w, r, fresh)
 	if wantsFragment(r) {
 		s.renderHTMLAppend(w, "tree_label_oob", fresh.Entity)
 	}
 }
 
-// handleToggleMissing handles POST /entities/{entityID}/actions/toggle-missing.
-// It toggles the entity's status between Ok and Missing.
-func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
+// missingChange is app.MarkLost or app.MarkFound.
+type missingChange func(context.Context, []app.ChangeStatusRequest) ([]app.EntityResult, error)
+
+// handleLost handles POST /entities/{entityID}/actions/lost.
+func (s *Server) handleLost(w http.ResponseWriter, r *http.Request) {
+	s.changeMissing(w, r, s.cfg.App.MarkLost, func(d detailData) bool { return d.CanMarkLost })
+}
+
+// handleFound handles POST /entities/{entityID}/actions/found.
+func (s *Server) handleFound(w http.ResponseWriter, r *http.Request) {
+	s.changeMissing(w, r, s.cfg.App.MarkFound, func(d detailData) bool { return d.CanMarkFound })
+}
+
+// changeMissing applies an explicit lost/found change. The button names its
+// target, so a stale click fails the app layer's source-status guard (ADR
+// 0024, 0035) instead of flipping the status the other way (#306). offered
+// reports whether the fresh panel still offers this change: if not, the
+// failure was a stale panel, not an error.
+func (s *Server) changeMissing(
+	w http.ResponseWriter, r *http.Request, change missingChange, offered func(detailData) bool,
+) {
 	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanMarkMissing {
-		http.Error(w, "status cannot be changed here", http.StatusForbidden)
-		return
-	}
-
-	reqs := []app.ChangeStatusRequest{{EntityID: entityID, ActorID: s.actorFor(r)}}
-	if data.IsMissing {
-		_, err = s.cfg.App.MarkFound(r.Context(), reqs)
-	} else {
-		_, err = s.cfg.App.MarkLost(r.Context(), reqs)
-	}
-	if err != nil {
-		s.cfg.Logger.Error("change status", "error", err, "entity_id", entityID)
-		data.Error = "status change failed"
-		s.renderDetailSection(w, r, data)
-		return
-	}
+	_, changeErr := change(r.Context(), []app.ChangeStatusRequest{{EntityID: entityID, ActorID: s.actorFor(r)}})
 
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
 		s.serverError(w, "build detail data", err)
 		return
 	}
-	s.renderDetailSection(w, r, fresh)
-	if wantsFragment(r) {
-		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
+	if fresh.Entity.EntityID == "" {
+		s.renderGone(w, r, entityID)
+		return
 	}
+
+	switch {
+	case changeErr == nil:
+	case offered(fresh):
+		s.cfg.Logger.Error("change status", "error", changeErr, "entity_id", entityID)
+		fresh.Error = "status change failed"
+	default:
+		s.cfg.Logger.Info("status change rejected: panel was stale", "error", changeErr, "entity_id", entityID)
+		fresh.Error = staleMessage
+	}
+	s.renderStatusChanged(w, r, fresh)
 }
 
 // handleReturn handles POST /entities/{entityID}/actions/return.
 // A borrowed entity is removed, so the response navigates to its parent;
-// a loaned entity goes back to ok and is re-rendered in place.
+// a loaned entity goes back to ok and is re-rendered in place. Eligibility is
+// left to the app layer (ADR 0035), so a stale panel reaches
+// renderReturnFailure instead of a bare 403 (#306).
 func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -555,11 +544,7 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanReturn {
-		http.Error(w, "entity cannot be returned", http.StatusForbidden)
+		s.renderAlreadyRemoved(w, r, entityID)
 		return
 	}
 
@@ -628,9 +613,11 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 	}
 }
 
-// handleLoanForm handles GET /entities/{entityID}/actions/loan, swapping the
-// Loan button for the inline loan form.
-func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
+// renderFormOpen answers a form-opening GET with the fresh detail section, so
+// a stale panel is refreshed rather than left to fail silently (#306). open
+// sets the form on data and reports whether the entity still allows the
+// action; if not, the panel was stale and staleMessage is shown instead.
+func (s *Server) renderFormOpen(w http.ResponseWriter, r *http.Request, open func(*detailData) bool) {
 	entityID := r.PathValue("entityID")
 
 	data, err := s.buildDetailData(r.Context(), entityID)
@@ -639,18 +626,30 @@ func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
-	if !data.CanLoan {
-		http.Error(w, "entity cannot be loaned", http.StatusForbidden)
-		return
+	if !open(&data) {
+		s.cfg.Logger.Info("form not opened: panel was stale", "entity_id", entityID)
+		data.Error = staleMessage
 	}
-
-	s.renderHTML(w, "loan_form", loanFormData{EntityID: entityID})
+	s.renderDetailSection(w, r, data)
 }
 
-// handleLoan handles POST /entities/{entityID}/actions/loan.
+// handleLoanForm handles GET /entities/{entityID}/actions/loan, re-rendering
+// the detail section with the inline loan form open.
+func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		if !d.CanLoan {
+			return false
+		}
+		d.LoanForm = &loanFormData{EntityID: d.Entity.EntityID}
+		return true
+	})
+}
+
+// handleLoan handles POST /entities/{entityID}/actions/loan. Eligibility is
+// left to the app layer (ADR 0035), so a stale panel reaches renderLoanFailure.
 func (s *Server) handleLoan(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -665,11 +664,7 @@ func (s *Server) handleLoan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanLoan {
-		http.Error(w, "entity cannot be loaned", http.StatusForbidden)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -718,45 +713,35 @@ func (s *Server) renderLoanFailure(
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		s.cfg.Logger.Info("loan target removed concurrently", "error", err, "entity_id", entityID)
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
 	if fresh.CanLoan {
 		s.cfg.Logger.Error("loan entity", "error", err, "entity_id", entityID)
+		fresh.Error = "loan failed"
 	} else {
-		s.cfg.Logger.Info("loan rejected: entity changed concurrently", "error", err, "entity_id", entityID)
+		s.cfg.Logger.Info("loan rejected: panel was stale", "error", err, "entity_id", entityID)
+		fresh.Error = staleMessage
 	}
-	fresh.Error = "loan failed"
 	s.renderStatusChanged(w, r, fresh)
 }
 
-// handleRemoveForm handles GET /entities/{entityID}/actions/remove, swapping
-// the Remove button for the inline remove form.
+// handleRemoveForm handles GET /entities/{entityID}/actions/remove,
+// re-rendering the detail section with the inline remove form open.
 func (s *Server) handleRemoveForm(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanRemove || data.RemoveBlockedReason != "" {
-		http.Error(w, "entity cannot be removed", http.StatusForbidden)
-		return
-	}
-
-	s.renderHTML(w, "remove_form", removeFormData{EntityID: entityID, DisplayName: data.Entity.DisplayName})
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		if !d.CanRemove || d.RemoveBlockedReason != "" {
+			return false
+		}
+		d.RemoveForm = &removeFormData{EntityID: d.Entity.EntityID, DisplayName: d.Entity.DisplayName}
+		return true
+	})
 }
 
-// handleRemove handles POST /entities/{entityID}/actions/remove. The live
-// children guard is left to the app layer (#287) so a stale panel still gets
-// the inline error rather than a bare 403.
+// handleRemove handles POST /entities/{entityID}/actions/remove. Eligibility,
+// including the live children guard (#287), is left to the app layer (ADR
+// 0035), so a stale panel gets an inline error rather than a bare 403.
 func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -771,11 +756,7 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		s.renderRemoveAlreadyApplied(w, r, entityID)
-		return
-	}
-	if !data.CanRemove {
-		http.Error(w, "entity cannot be removed", http.StatusForbidden)
+		s.renderAlreadyRemoved(w, r, entityID)
 		return
 	}
 
@@ -797,8 +778,8 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 	s.renderAfterRemoval(w, r, data.Entity)
 }
 
-// renderRemoveFailure handles a failed RemoveEntity. Live children re-open the
-// form with the user's note on a fresh read (the panel may be stale). A
+// renderRemoveFailure handles a failed RemoveEntity on a fresh read (the panel
+// may be stale). Live children re-open the form with the user's note; a
 // concurrent remove is this request's outcome, as with Return (#292).
 func (s *Server) renderRemoveFailure(
 	w http.ResponseWriter, r *http.Request, stale detailData, form removeFormData, err error,
@@ -807,7 +788,7 @@ func (s *Server) renderRemoveFailure(
 
 	switch {
 	case errors.Is(err, app.ErrNotFound):
-		s.renderRemoveAlreadyApplied(w, r, entityID)
+		s.renderAlreadyRemoved(w, r, entityID)
 	case errors.Is(err, app.ErrHasChildren):
 		s.cfg.Logger.Info("remove rejected: entity has live children", "error", err, "entity_id", entityID)
 		fresh, ferr := s.buildDetailData(r.Context(), entityID)
@@ -816,24 +797,38 @@ func (s *Server) renderRemoveFailure(
 			return
 		}
 		if fresh.Entity.EntityID == "" {
-			s.renderRemoveAlreadyApplied(w, r, entityID)
+			s.renderAlreadyRemoved(w, r, entityID)
 			return
 		}
 		form.Error = "remove failed: it still contains other entities — remove or move them first"
 		fresh.RemoveForm = &form
 		s.renderDetailSection(w, r, fresh)
 	default:
-		s.cfg.Logger.Error("remove entity", "error", err, "entity_id", entityID)
-		stale.Error = "remove failed"
-		s.renderDetailSection(w, r, stale)
+		fresh, ferr := s.buildDetailData(r.Context(), entityID)
+		if ferr != nil {
+			s.serverError(w, "build detail data", ferr)
+			return
+		}
+		if fresh.Entity.EntityID == "" {
+			s.renderAlreadyRemoved(w, r, entityID)
+			return
+		}
+		if fresh.CanRemove {
+			s.cfg.Logger.Error("remove entity", "error", err, "entity_id", entityID)
+			fresh.Error = "remove failed"
+		} else {
+			s.cfg.Logger.Info("remove rejected: panel was stale", "error", err, "entity_id", entityID)
+			fresh.Error = staleMessage
+		}
+		s.renderDetailSection(w, r, fresh)
 	}
 }
 
-// renderRemoveAlreadyApplied handles a Remove for an entity that is no longer
-// live. If it was removed elsewhere (another tab, the CLI), the user's intent
-// already holds, so show the removal outcome. This request's note is dropped;
-// history records the removal that won.
-func (s *Server) renderRemoveAlreadyApplied(w http.ResponseWriter, r *http.Request, entityID string) {
+// renderAlreadyRemoved handles a Remove or Return for an entity that is no
+// longer live. If it left the inventory elsewhere (another tab, the CLI), the
+// user's intent already holds, so show the removal outcome. This request's
+// note is dropped; history records the event that won.
+func (s *Server) renderAlreadyRemoved(w http.ResponseWriter, r *http.Request, entityID string) {
 	removed, err := s.cfg.App.GetEntityByIDAnyStatus(r.Context(), entityID)
 	if errors.Is(err, app.ErrNotFound) {
 		http.Error(w, "entity not found", http.StatusNotFound)
@@ -843,37 +838,28 @@ func (s *Server) renderRemoveAlreadyApplied(w http.ResponseWriter, r *http.Reque
 		s.serverError(w, "get entity", err)
 		return
 	}
-	s.cfg.Logger.Info("remove already applied concurrently", "entity_id", entityID)
+	s.cfg.Logger.Info("entity already removed concurrently", "entity_id", entityID)
 	s.renderAfterRemoval(w, r, removed)
 }
 
-// handleMoveForm handles GET /entities/{entityID}/actions/move, swapping the
-// Move button for the inline move form.
+// handleMoveForm handles GET /entities/{entityID}/actions/move, re-rendering
+// the detail section with the inline move form open.
 func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanMove {
-		http.Error(w, "entity cannot be moved", http.StatusForbidden)
-		return
-	}
-
-	s.renderHTML(w, "move_form", moveFormData{EntityID: entityID, AtRoot: isRootEntity(data.Entity)})
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		if !d.CanMove {
+			return false
+		}
+		d.MoveForm = &moveFormData{EntityID: d.Entity.EntityID, AtRoot: isRootEntity(d.Entity)}
+		return true
+	})
 }
 
 // moveRootValue is the destination form value meaning "move to the root".
 // Entity IDs are 10-char NanoIDs, so it cannot collide with one.
 const moveRootValue = "root"
 
-// handleMove handles POST /entities/{entityID}/actions/move.
+// handleMove handles POST /entities/{entityID}/actions/move. Eligibility is
+// left to the app layer (ADR 0035), so a stale panel reaches renderMoveFailure.
 func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -888,11 +874,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanMove {
-		http.Error(w, "entity cannot be moved", http.StatusForbidden)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -903,6 +885,14 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	}
 	destination := strings.TrimSpace(r.FormValue("destination"))
 	if destination == "" {
+		// No write to fail, so re-check here: never re-open the form on a
+		// stale panel whose entity can no longer move.
+		if !data.CanMove {
+			s.cfg.Logger.Info("move rejected: panel was stale", "entity_id", entityID)
+			data.Error = staleMessage
+			s.renderStatusChanged(w, r, data)
+			return
+		}
 		form.Error = "Choose a destination."
 		data.MoveForm = &form
 		s.renderDetailSection(w, r, data)
@@ -947,8 +937,7 @@ func (s *Server) renderMoveFailure(
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		s.cfg.Logger.Info("move target removed concurrently", "error", err, "entity_id", entityID)
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -961,10 +950,11 @@ func (s *Server) renderMoveFailure(
 
 	if fresh.CanMove {
 		s.cfg.Logger.Error("move entity", "error", err, "entity_id", entityID)
+		fresh.Error = "move failed"
 	} else {
-		s.cfg.Logger.Info("move rejected: entity changed concurrently", "error", err, "entity_id", entityID)
+		s.cfg.Logger.Info("move rejected: panel was stale", "error", err, "entity_id", entityID)
+		fresh.Error = staleMessage
 	}
-	fresh.Error = "move failed"
 	s.renderStatusChanged(w, r, fresh)
 }
 
@@ -1058,4 +1048,27 @@ func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, remo
 		s.renderHTML(w, "detail_section", parent)
 	}
 	s.renderHTMLAppend(w, "tree_node_delete_oob", removed)
+}
+
+// renderGone answers an action on an entity that is no longer live. A removed
+// entity gets its read-only panel with staleMessage, and its stale tree node is
+// dropped. An ID that never existed is a plain 404: no real panel links to it.
+func (s *Server) renderGone(w http.ResponseWriter, r *http.Request, entityID string) {
+	removed, err := s.buildRemovedDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build removed detail data", err)
+		return
+	}
+	if removed.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+
+	s.cfg.Logger.Info("action on removed entity: panel was stale", "entity_id", entityID)
+	removed.Error = staleMessage
+	s.setTreeNodeDetachedTrigger(w, r, removed.Entity)
+	s.renderDetailSection(w, r, removed)
+	if wantsFragment(r) {
+		s.renderHTMLAppend(w, "tree_node_delete_oob", removed.Entity)
+	}
 }

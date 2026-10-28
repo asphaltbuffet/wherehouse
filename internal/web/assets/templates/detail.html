@@ -1,6 +1,9 @@
 {{define "detail_section"}}
 <section id="entity-detail">
   {{template "breadcrumbs" .Breadcrumbs}}
+  {{if .EditNameForm}}
+  {{template "edit_name_form" .EditNameForm}}
+  {{else}}
   <div class="tape-row">
     <div class="tape">
       <h2>{{.Entity.DisplayName}}</h2>
@@ -9,9 +12,10 @@
     {{if not .Removed}}
     <button class="btn-link tape-edit"
             hx-get="/entities/{{.Entity.EntityID}}/edit/name"
-            hx-target="closest .tape-row" hx-swap="outerHTML">Edit name</button>
+            hx-target="#entity-detail" hx-swap="outerHTML">Edit name</button>
     {{end}}
   </div>
+  {{end}}
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
   {{template "status_line" .Entity}}
   {{with .Entity.Tags}}<ul class="tag-list" aria-label="Tags">{{range .}}<li class="tag">{{.}}</li>{{end}}</ul>{{end}}
@@ -37,11 +41,17 @@
         Add child
       </button>
       {{end}}
-      {{if .CanMarkMissing}}
-      <button class="{{if .IsMissing}}btn-primary{{else}}btn-ghost{{end}} detail-action-btn"
-              hx-post="/entities/{{.Entity.EntityID}}/actions/toggle-missing"
+      {{if .CanMarkFound}}
+      <button class="btn-primary detail-action-btn"
+              hx-post="/entities/{{.Entity.EntityID}}/actions/found"
               hx-target="#entity-detail" hx-swap="outerHTML">
-        {{if .IsMissing}}Mark found{{else}}Mark missing{{end}}
+        Mark found
+      </button>
+      {{else if .CanMarkLost}}
+      <button class="btn-ghost detail-action-btn"
+              hx-post="/entities/{{.Entity.EntityID}}/actions/lost"
+              hx-target="#entity-detail" hx-swap="outerHTML">
+        Mark missing
       </button>
       {{else}}
       <button class="btn-ghost detail-action-btn" disabled aria-disabled="true"
@@ -62,7 +72,7 @@
       {{else if .CanLoan}}
       <button class="btn-ghost detail-action-btn" data-action="loan"
               hx-get="/entities/{{.Entity.EntityID}}/actions/loan"
-              hx-target="this" hx-swap="outerHTML">
+              hx-target="#entity-detail" hx-swap="outerHTML">
         Loan
       </button>
       {{else if .LoanBlockedReason}}
@@ -76,7 +86,7 @@
       {{else if .CanMove}}
       <button class="btn-ghost detail-action-btn" data-action="move"
               hx-get="/entities/{{.Entity.EntityID}}/actions/move"
-              hx-target="this" hx-swap="outerHTML">
+              hx-target="#entity-detail" hx-swap="outerHTML">
         Move
       </button>
       {{else}}
@@ -97,7 +107,7 @@
       {{else if .CanRemove}}
       <button class="btn-ghost detail-action-btn" data-action="remove"
               hx-get="/entities/{{.Entity.EntityID}}/actions/remove"
-              hx-target="this" hx-swap="outerHTML">
+              hx-target="#entity-detail" hx-swap="outerHTML">
         Remove
       </button>
       {{end}}

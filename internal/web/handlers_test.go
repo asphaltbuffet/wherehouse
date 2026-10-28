@@ -20,6 +20,9 @@ import (
 // errTest is a sentinel error used across handler tests.
 var errTest = errors.New("test error")
 
+// staleText mirrors web.staleMessage (unexported) for body assertions.
+const staleText = "Already changed elsewhere; showing current state."
+
 // recordingLogger satisfies logging.Logger and keeps the messages of Error calls.
 type recordingLogger struct {
 	mu     sync.Mutex

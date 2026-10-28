@@ -10,3 +10,5 @@ Every precondition on a mutation (liveness, `locked`, `discrete`, status, cycle 
 ## Consequences
 
 Detecting already-corrupt state (a live entity under a removed parent, a parent cycle) is `doctor`'s job, not the write path's. A mutation that composes several events (e.g. `tag` with multiple adds/removes) commits them in one transaction, so a failure applies none of them.
+
+Web action handlers follow the same rule: a POST does not pre-check eligibility before calling the app layer. The in-transaction guard decides, and a rejected write re-reads the entity to render its fresh state with an inline error (#306). The detail view's `Can*` flags are render decisions only — which buttons and forms to show.

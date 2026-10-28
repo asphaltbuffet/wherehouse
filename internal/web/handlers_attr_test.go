@@ -177,3 +177,24 @@ func TestHandleAttr_OtherErrorShowsGenericMessage(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
 	assert.Contains(t, body, "attribute change failed")
 }
+
+// #306: a panel left open after the entity was removed elsewhere shows the
+// removed view instead of a silent 404, and drops the stale tree node. The
+// entity is a root, so the detached trigger names no parent.
+func TestHandleAttr_RemovedEntityShowsRemovedPanel(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{attrEntity(inventory.EntityStatusRemoved, false, false)},
+		attrErr:  fmt.Errorf("set attributes: %w", app.ErrNotFound),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postAttr(t, ts, "abc", "locked=true")
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	assert.Contains(t, body, staleText)
+	assert.Contains(t, body, "Last location")
+	assert.NotContains(t, body, "/entities/abc/actions/")
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.Equal(t, detachedEvent{EntityID: "abc"}, detachedTrigger(t, resp))
+}
