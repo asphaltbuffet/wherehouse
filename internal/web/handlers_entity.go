@@ -885,6 +885,14 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	}
 	destination := strings.TrimSpace(r.FormValue("destination"))
 	if destination == "" {
+		// No write to fail, so re-check here: never re-open the form on a
+		// stale panel whose entity can no longer move.
+		if !data.CanMove {
+			s.cfg.Logger.Info("move rejected: panel was stale", "entity_id", entityID)
+			data.Error = staleMessage
+			s.renderStatusChanged(w, r, data)
+			return
+		}
 		form.Error = "Choose a destination."
 		data.MoveForm = &form
 		s.renderDetailSection(w, r, data)

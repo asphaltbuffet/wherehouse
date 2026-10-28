@@ -1821,3 +1821,23 @@ func TestHandleEditName_RemovedShowsRemovedPanel(t *testing.T) {
 	assert.Contains(t, string(body), "Last location")
 	assert.NotContains(t, string(body), "rename failed")
 }
+
+// Final review: a blank destination on a stale panel must not re-open the
+// move form on an entity that can no longer move; no write is attempted.
+func TestHandleMove_BlankDestinationOnStalePanelShowsCurrentState(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill", Status: inventory.EntityStatusLoaned,
+			StatusContext: "Bob"},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postMove(t, ts, url.Values{"destination": {""}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Zero(t, fake.moveCalls)
+	assert.Contains(t, body, staleText)
+	assert.NotContains(t, body, "Choose a destination.")
+	assert.NotContains(t, body, `hx-post="/entities/abc/actions/move"`)
+	assert.Contains(t, body, `id="tree-badge-abc"`)
+}
