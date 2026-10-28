@@ -628,9 +628,11 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 	}
 }
 
-// handleLoanForm handles GET /entities/{entityID}/actions/loan, swapping the
-// Loan button for the inline loan form.
-func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
+// renderFormOpen answers a form-opening GET with the fresh detail section, so
+// a stale panel is refreshed rather than left to fail silently (#306). open
+// sets the form on data and reports whether the entity still allows the
+// action; if not, the panel was stale and staleMessage is shown instead.
+func (s *Server) renderFormOpen(w http.ResponseWriter, r *http.Request, open func(*detailData) bool) {
 	entityID := r.PathValue("entityID")
 
 	data, err := s.buildDetailData(r.Context(), entityID)
@@ -639,18 +641,30 @@ func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
-	if !data.CanLoan {
-		http.Error(w, "entity cannot be loaned", http.StatusForbidden)
-		return
+	if !open(&data) {
+		s.cfg.Logger.Info("form not opened: panel was stale", "entity_id", entityID)
+		data.Error = staleMessage
 	}
-
-	s.renderHTML(w, "loan_form", loanFormData{EntityID: entityID})
+	s.renderDetailSection(w, r, data)
 }
 
-// handleLoan handles POST /entities/{entityID}/actions/loan.
+// handleLoanForm handles GET /entities/{entityID}/actions/loan, re-rendering
+// the detail section with the inline loan form open.
+func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		if !d.CanLoan {
+			return false
+		}
+		d.LoanForm = &loanFormData{EntityID: d.Entity.EntityID}
+		return true
+	})
+}
+
+// handleLoan handles POST /entities/{entityID}/actions/loan. Eligibility is
+// left to the app layer (ADR 0035), so a stale panel reaches renderLoanFailure.
 func (s *Server) handleLoan(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -665,11 +679,7 @@ func (s *Server) handleLoan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanLoan {
-		http.Error(w, "entity cannot be loaned", http.StatusForbidden)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -718,17 +728,17 @@ func (s *Server) renderLoanFailure(
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		s.cfg.Logger.Info("loan target removed concurrently", "error", err, "entity_id", entityID)
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
 	if fresh.CanLoan {
 		s.cfg.Logger.Error("loan entity", "error", err, "entity_id", entityID)
+		fresh.Error = "loan failed"
 	} else {
-		s.cfg.Logger.Info("loan rejected: entity changed concurrently", "error", err, "entity_id", entityID)
+		s.cfg.Logger.Info("loan rejected: panel was stale", "error", err, "entity_id", entityID)
+		fresh.Error = staleMessage
 	}
-	fresh.Error = "loan failed"
 	s.renderStatusChanged(w, r, fresh)
 }
 
