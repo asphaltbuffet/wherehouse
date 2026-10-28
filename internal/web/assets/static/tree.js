@@ -70,7 +70,9 @@
   function onTreeClick(e) {
     var addBtn = e.target.closest('.add-btn');
     if (addBtn) {
-      e.stopPropagation();
+      // Listeners share document.body (see onTreeEvent), so stop the later
+      // ones (e.g. onDetailAddClick) from also seeing this click.
+      e.stopImmediatePropagation();
       openAddModal(addBtn.dataset.parentId || '');
       return;
     }
@@ -261,13 +263,21 @@
     if (list) list.classList.remove('collapsed');
   }
 
+  // onTreeEvent delegates an event from document.body to handler(root, e) when
+  // it originates inside the tree. Binding to #tree-root-list directly would
+  // be lost whenever htmx restores history, which replaces body's contents.
+  function onTreeEvent(handler) {
+    return function (e) {
+      var root = e.target.closest && e.target.closest('#tree-root-list');
+      if (root) handler(root, e);
+    };
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
-    var root = document.getElementById('tree-root-list');
-    if (root) {
-      root.addEventListener('click', onTreeClick);
-      root.addEventListener('htmx:afterRequest', onTreeAfterRequest);
-      root.addEventListener('keydown', function (e) { onTreeKeydown(root, e); });
-    }
+    // Tree listeners first: onTreeClick stops later body listeners for .add-btn.
+    document.body.addEventListener('click', onTreeEvent(function (root, e) { onTreeClick(e); }));
+    document.body.addEventListener('htmx:afterRequest', onTreeEvent(function (root, e) { onTreeAfterRequest(e); }));
+    document.body.addEventListener('keydown', onTreeEvent(onTreeKeydown));
 
     document.body.addEventListener('htmx:afterRequest', onAddFormAfterRequest);
     document.body.addEventListener('htmx:afterRequest', onAddRootAfterRequest);

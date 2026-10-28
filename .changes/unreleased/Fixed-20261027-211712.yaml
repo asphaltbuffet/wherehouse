@@ -1,0 +1,5 @@
+kind: Fixed
+body: 'web UI: browser Back no longer shows outdated names, statuses, or lock icons after a change'
+time: 2026-10-27T21:17:12.460386352-04:00
+custom:
+    Issue: '#314'
