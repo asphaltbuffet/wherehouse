@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'web UI: the inventory tree keeps responding to clicks and keys after browser Back'
-time: 2026-10-27T21:32:51.648764528-04:00
-custom:
-    Issue: '#327'

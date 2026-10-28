@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'Web UI: actions on an out-of-date item panel now show the item''s current state with an inline message instead of silently doing nothing, and Mark missing can no longer mark an item found.'
-time: 2026-10-28T00:06:27.31915775-04:00
-custom:
-    Issue: "306"
