@@ -155,6 +155,8 @@ func TestReparentEntity_IntoDiscrete_Error(t *testing.T) {
 		NewParentID: box.EntityID,
 		ActorID:     "alice",
 	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	require.ErrorContains(t, err, `cannot move "Wrench"`)
 	assert.ErrorContains(t, err, "discrete")
 }
 

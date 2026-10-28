@@ -155,7 +155,7 @@ func (a *App) checkMoveDestinationTx(
 ) error {
 	parent, err := a.getParentTx(ctx, tx, parentID)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot move %q: %w", entity.FullPathDisplay, err)
 	}
 	inside, err := a.isSelfOrDescendant(ctx, tx, entity.EntityID, parent.EntityID)
 	if err != nil {

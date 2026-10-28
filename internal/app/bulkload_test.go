@@ -281,3 +281,17 @@ func TestAddEntitiesAtPaths_AllOrNothing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, entities)
 }
+
+// A missing parent is ErrNotFound, so callers can tell it from other failures.
+func TestAddEntitiesAtPaths_MissingParent_NotFound(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	_, err := a.AddEntitiesAtPaths(
+		t.Context(),
+		[]app.BulkAddRow{{Path: "Nowhere:Bin"}},
+		app.BulkAddOptions{ActorID: "test"},
+	)
+
+	require.ErrorIs(t, err, app.ErrNotFound)
+	assert.ErrorContains(t, err, "--create-parents")
+}

@@ -140,18 +140,21 @@ func (s *Server) renderBorrowFormError(w http.ResponseWriter, form borrowFormDat
 }
 
 // withParentLabel prepares form for an error re-render: a parent that no
-// longer exists is cleared so the user picks another; otherwise its path is
-// looked up for the label.
+// longer exists or cannot hold entities is cleared so the user picks another;
+// otherwise its path is looked up for the label.
 func (s *Server) withParentLabel(ctx context.Context, form borrowFormData, err error) borrowFormData {
 	if form.ParentID == "" {
 		return form
 	}
-	if errors.Is(err, app.ErrNotFound) {
+	if errors.Is(err, app.ErrNotFound) || errors.Is(err, app.ErrInvalidDestination) {
 		form.ParentID = ""
 		return form
 	}
 	parent, lookupErr := s.cfg.App.GetEntityByID(ctx, form.ParentID)
 	if lookupErr != nil {
+		if !errors.Is(lookupErr, app.ErrNotFound) {
+			s.cfg.Logger.Error("borrow form parent label", "error", lookupErr, "parent_id", form.ParentID)
+		}
 		form.ParentID = ""
 		return form
 	}

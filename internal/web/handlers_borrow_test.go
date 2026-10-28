@@ -16,6 +16,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/web"
 )
 
 func TestHandleBorrowForm_DefaultParent(t *testing.T) {
@@ -182,7 +183,31 @@ func TestHandleBorrow_DiscreteParent(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, body, "can&#39;t hold items")
-	assert.Contains(t, body, "Garage:Box", "parent label shown on re-render")
+	assert.Contains(
+		t,
+		body,
+		`name="parent_id" value=""`,
+		"ineligible parent is cleared so a resubmit can't repeat the error",
+	)
+	assert.Contains(t, body, `data-parent-label>(root)</span>`)
+}
+
+// A failed label lookup clears the parent like a stale one, but is logged.
+func TestHandleBorrow_ParentLabelLookupFailureIsLogged(t *testing.T) {
+	fake := &fakeApp{
+		err:       errTest, // GetEntityByID fails with a non-NotFound error
+		borrowErr: fmt.Errorf("borrow: %w", app.ErrLenderRequired),
+	}
+	logger := &recordingLogger{}
+	srv, err := web.New(web.Config{App: fake, Bind: "127.0.0.1", Output: io.Discard, Logger: logger})
+	require.NoError(t, err)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	_, body := postBorrow(t, ts, url.Values{"display_name": {"Drill"}, "from": {" "}, "parent_id": {"g"}})
+
+	assert.Contains(t, body, `name="parent_id" value=""`)
+	assert.Contains(t, logger.errors, "borrow form parent label")
 }
 
 // Review Focus #4: an unrelated error keeps the chosen parent and its label.

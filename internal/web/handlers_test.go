@@ -6,17 +6,37 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/logging"
 	"github.com/asphaltbuffet/wherehouse/internal/web"
 )
 
 // errTest is a sentinel error used across handler tests.
 var errTest = errors.New("test error")
+
+// recordingLogger satisfies logging.Logger and keeps the messages of Error calls.
+type recordingLogger struct {
+	mu     sync.Mutex
+	errors []string
+}
+
+func (l *recordingLogger) Debug(string, ...any) {}
+func (l *recordingLogger) Info(string, ...any)  {}
+func (l *recordingLogger) Warn(string, ...any)  {}
+
+func (l *recordingLogger) Error(msg string, _ ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.errors = append(l.errors, msg)
+}
+
+func (l *recordingLogger) With(...any) logging.Logger { return l }
 
 // fakeApp satisfies web.App for tests.
 type fakeApp struct {

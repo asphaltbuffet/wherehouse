@@ -322,8 +322,8 @@ func (a *App) ensureAncestors(
 
 		if !opts.CreateParents {
 			return nil, nil, fmt.Errorf(
-				"parent %q not found (use --create-parents to create missing ancestors)",
-				ancestorPath.String(),
+				"parent %q %w (use --create-parents to create missing ancestors)",
+				ancestorPath.String(), ErrNotFound,
 			)
 		}
 
