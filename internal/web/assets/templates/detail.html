@@ -6,9 +6,11 @@
       <h2>{{.Entity.DisplayName}}</h2>
       <span class="tape-id mono">{{.Entity.EntityID}}</span>
     </div>
+    {{if not .Removed}}
     <button class="btn-link tape-edit"
             hx-get="/entities/{{.Entity.EntityID}}/edit/name"
             hx-target="closest .tape-row" hx-swap="outerHTML">Edit name</button>
+    {{end}}
   </div>
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
   {{template "status_line" .Entity}}
@@ -17,7 +19,9 @@
     {{if .Entity.Locked}}<div><dt>Locked</dt><dd>yes</dd></div>{{end}}
     {{if .Entity.Discrete}}<div><dt>Discrete</dt><dd>yes</dd></div>{{end}}
     <div><dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd></div>
+    {{if .Removed}}<div><dt>Last location</dt><dd>{{.Entity.FullPathDisplay}}</dd></div>{{end}}
   </dl>
+  {{if not .Removed}}
   <h3 class="visually-hidden">Actions</h3>
   <div class="detail-actions" role="group" aria-label="Actions">
       {{if .CanAddChild}}
@@ -98,6 +102,7 @@
       </button>
       {{end}}
   </div>
+  {{end}}
 
   {{if .History}}
   <h3 class="history-heading">History</h3>

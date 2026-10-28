@@ -1579,3 +1579,66 @@ func TestHandleEntityDetail_HistoryRestore(t *testing.T) {
 	assert.Contains(t, body, `class="app-search"`)
 	assert.Contains(t, body, `id="entity-detail"`)
 }
+
+func TestHandleEntityDetail_Removed(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", CanonicalName: "garage",
+				FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+			{EntityID: "h", DisplayName: "Hammer", CanonicalName: "hammer", ParentID: "g",
+				FullPathDisplay: "Garage:Hammer", Status: inventory.EntityStatusRemoved},
+		},
+		history: []app.HistoryResult{
+			{EventID: 1, TimestampUTC: "2025-01-01T00:00:00Z", ActorUserID: "alice"},
+			{EventID: 2, TimestampUTC: "2025-02-01T00:00:00Z", ActorUserID: "bob"},
+		},
+	}
+
+	tests := []struct {
+		name string
+		htmx bool
+	}{
+		{name: "full page", htmx: false},
+		{name: "fragment", htmx: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			req, err := http.NewRequest(http.MethodGet, ts.URL+"/entities/h", nil)
+			require.NoError(t, err)
+			if tt.htmx {
+				req.Header.Set("Hx-Request", "true")
+			}
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			raw, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			body := string(raw)
+
+			assert.Contains(t, body, "Hammer")
+			assert.Contains(t, body, "Removed")
+			assert.Contains(t, body, "Garage:Hammer", "last location shown")
+			assert.Contains(t, body, "bob", "history shown")
+			assert.NotContains(t, body, "/entities/h/edit/name")
+			assert.NotContains(t, body, "/entities/h/actions/")
+			assert.Equal(t, tt.htmx, !strings.Contains(body, "<html"))
+		})
+	}
+}
+
+func TestHandleEntityDetail_UnknownIDNotFound(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/nope")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}

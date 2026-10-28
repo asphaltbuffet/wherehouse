@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -39,6 +40,7 @@ type detailData struct {
 	RemoveForm          *removeFormData // non-nil re-opens the remove form (guard tripped at submit)
 	Breadcrumbs         []Breadcrumb
 	Error               string // populated by edit POST handlers; rendered inline above the detail dl
+	Removed             bool   // read-only view of a removed entity: last location + history, no actions
 }
 
 // loanFormData is the view model for the inline loan form.
@@ -251,6 +253,54 @@ func BreadcrumbsForEntity(entities []app.EntityResult, fullPath string) []Breadc
 	return crumbs
 }
 
+// detailHistory returns the entity's creation timestamp and its history,
+// newest first.
+func (s *Server) detailHistory(ctx context.Context, entityID string) (string, []app.HistoryResult, error) {
+	history, err := s.cfg.App.GetHistory(ctx, app.GetHistoryRequest{
+		EntityID:    entityID,
+		OldestFirst: true,
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("get history: %w", err)
+	}
+
+	dateAdded := ""
+	if len(history) > 0 {
+		dateAdded = history[0].TimestampUTC
+	}
+	slices.Reverse(history)
+
+	return dateAdded, history, nil
+}
+
+// buildRemovedDetailData builds the read-only view of a removed entity: its
+// last location and history, with no actions. A zero Entity.EntityID means
+// the ID never existed (or is not removed, which buildDetailData handles).
+func (s *Server) buildRemovedDetailData(ctx context.Context, entityID string) (detailData, error) {
+	entity, err := s.cfg.App.GetEntityByIDAnyStatus(ctx, entityID)
+	if err != nil {
+		if errors.Is(err, app.ErrNotFound) {
+			return detailData{}, nil
+		}
+		return detailData{}, fmt.Errorf("get entity any status: %w", err)
+	}
+	if entity.Status != inventory.EntityStatusRemoved {
+		return detailData{}, nil
+	}
+
+	dateAdded, history, err := s.detailHistory(ctx, entityID)
+	if err != nil {
+		return detailData{}, err
+	}
+
+	return detailData{
+		Entity:    entity,
+		DateAdded: dateAdded,
+		History:   history,
+		Removed:   true,
+	}, nil
+}
+
 func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailData, error) {
 	entity, err := s.cfg.App.GetEntityByID(ctx, entityID)
 	if err != nil {
@@ -273,20 +323,9 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		}
 	}
 
-	history, err := s.cfg.App.GetHistory(ctx, app.GetHistoryRequest{
-		EntityID:    entityID,
-		OldestFirst: true,
-	})
+	dateAdded, history, err := s.detailHistory(ctx, entityID)
 	if err != nil {
-		return detailData{}, fmt.Errorf("get history: %w", err)
-	}
-
-	dateAdded := ""
-	if len(history) > 0 {
-		dateAdded = history[0].TimestampUTC
-	}
-	for i, j := 0, len(history)-1; i < j; i, j = i+1, j-1 {
-		history[i], history[j] = history[j], history[i]
+		return detailData{}, err
 	}
 
 	// Missing toggles and Loan apply only to ok/missing (ADR 0024);
@@ -351,6 +390,13 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.serverError(w, "build detail data", err)
 		return
+	}
+	if data.Entity.EntityID == "" {
+		data, err = s.buildRemovedDetailData(r.Context(), entityID)
+		if err != nil {
+			s.serverError(w, "build removed detail data", err)
+			return
+		}
 	}
 	if data.Entity.EntityID == "" {
 		http.Error(w, "entity not found", http.StatusNotFound)
