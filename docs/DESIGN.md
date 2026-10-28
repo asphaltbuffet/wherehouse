@@ -11,7 +11,7 @@ It is:
 - Event-sourced (events are the source of truth)
 - Deterministic (replay order defined strictly by `event_id`)
 - Multi-user (attribution-only, no permissions)
-- SQLite-backed (network-mount compatible)
+- SQLite-backed (single host; a network mount is fine only if no other host opens the file)
 - Projection-driven for fast reads
 - Strict about integrity and concurrency
 - Explicit about lifecycle transitions
@@ -50,7 +50,7 @@ Primary daily workflows:
 - No undo. Corrections create new events.
 - SQLite is canonical storage.
 - DB path must be absolute.
-- Must support network-mounted DB.
+- Every process that opens the DB must run on the same host (WAL needs shared memory).
 - Timestamps stored as UTC (RFC3339 with `Z`).
 - Replay ordering is strictly by `event_id`.
 - Projections are disposable and rebuildable.
@@ -420,7 +420,6 @@ config_version = 1
 Configurable:
 
 - `db_path` (absolute only)
-- `sqlite_journal_mode`
 - `[users.*]`
 - `[user_identity.os_username_map]`
 - `default_grouping`
@@ -564,7 +563,7 @@ Wherehouse v1 is:
 - Explicit
 - Auditable
 - Rebuildable
-- Network-safe
+- Single-host
 - CLI-native
 
 It is not trying to be everything.
