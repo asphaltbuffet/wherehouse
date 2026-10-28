@@ -17,7 +17,7 @@ import (
 // echoed back when the form is re-rendered with an error.
 type borrowFormData struct {
 	ParentID    string // empty means root
-	ParentPath  string // FullPathDisplay of ParentID; empty for root
+	ParentPath  string // display label for ParentID on re-render; never sent to the app
 	Error       string
 	DisplayName string
 	From        string
@@ -95,20 +95,6 @@ func (s *Server) handleBorrow(w http.ResponseWriter, r *http.Request) {
 		Note:        strings.TrimSpace(r.FormValue("note")),
 	}
 
-	if form.ParentID != "" {
-		parent, err := s.cfg.App.GetEntityByID(r.Context(), form.ParentID)
-		if errors.Is(err, app.ErrNotFound) {
-			form.ParentID = ""
-			s.renderBorrowFormError(w, form, "That location no longer exists — choose another.")
-			return
-		}
-		if err != nil {
-			s.serverError(w, "get parent entity", err)
-			return
-		}
-		form.ParentPath = parent.FullPathDisplay
-	}
-
 	results, err := s.cfg.App.BorrowEntities(r.Context(), []app.BorrowEntityRequest{{
 		DisplayName:   form.DisplayName,
 		ParentID:      form.ParentID,
@@ -118,7 +104,7 @@ func (s *Server) handleBorrow(w http.ResponseWriter, r *http.Request) {
 	}})
 	if err != nil {
 		s.cfg.Logger.Error("borrow entity", "error", err)
-		s.renderBorrowFormError(w, form, borrowErrorMessage(err))
+		s.renderBorrowFormError(w, s.withParentLabel(r.Context(), form, err), borrowErrorMessage(err))
 		return
 	}
 	if len(results) == 0 {
@@ -153,9 +139,33 @@ func (s *Server) renderBorrowFormError(w http.ResponseWriter, form borrowFormDat
 	s.renderHTML(w, "borrow_form", form)
 }
 
+// withParentLabel prepares form for an error re-render: a parent that no
+// longer exists is cleared so the user picks another; otherwise its path is
+// looked up for the label.
+func (s *Server) withParentLabel(ctx context.Context, form borrowFormData, err error) borrowFormData {
+	if form.ParentID == "" {
+		return form
+	}
+	if errors.Is(err, app.ErrNotFound) {
+		form.ParentID = ""
+		return form
+	}
+	parent, lookupErr := s.cfg.App.GetEntityByID(ctx, form.ParentID)
+	if lookupErr != nil {
+		form.ParentID = ""
+		return form
+	}
+	form.ParentPath = parent.FullPathDisplay
+	return form
+}
+
 // borrowErrorMessage maps app-layer validation errors to form messages.
 func borrowErrorMessage(err error) string {
 	switch {
+	case errors.Is(err, app.ErrNotFound):
+		return "That location no longer exists — choose another."
+	case errors.Is(err, app.ErrInvalidDestination):
+		return "That location can't hold items — choose another."
 	case errors.Is(err, app.ErrLenderRequired):
 		return "Borrowed from is required."
 	case errors.Is(err, entitypath.ErrEmptySegment):

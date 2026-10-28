@@ -148,10 +148,7 @@ func TestHandleBorrow_Root(t *testing.T) {
 
 // Review Focus #3: parent removed between opening the form and submitting it.
 func TestHandleBorrow_StaleParent(t *testing.T) {
-	fake := &fakeApp{entities: []app.EntityResult{
-		{EntityID: "gone", DisplayName: "Old Shelf", FullPathDisplay: "Old Shelf",
-			Status: inventory.EntityStatusRemoved},
-	}}
+	fake := &fakeApp{borrowErr: fmt.Errorf("get entity %q: %w", "gone", app.ErrNotFound)}
 	ts := newTestServer(t, fake)
 	defer ts.Close()
 
@@ -162,7 +159,42 @@ func TestHandleBorrow_StaleParent(t *testing.T) {
 	assert.Equal(t, "innerHTML", resp.Header.Get("Hx-Reswap"))
 	assert.Contains(t, body, "no longer exists")
 	assert.Contains(t, body, `name="parent_id" value=""`)
-	assert.Zero(t, fake.borrowCalls)
+	assert.Equal(t, "gone", fake.lastBorrowReq.ParentID, "ID passed straight through, no pre-fetch")
+}
+
+func TestHandleBorrow_DiscreteParent(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "box", DisplayName: "Box", FullPathDisplay: "Garage:Box", Discrete: true, Status: inventory.EntityStatusOk},
+		},
+		borrowErr: fmt.Errorf("%q is discrete: %w", "Garage:Box", app.ErrInvalidDestination),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postBorrow(t, ts, url.Values{"display_name": {"Drill"}, "from": {"Alice"}, "parent_id": {"box"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, "can&#39;t hold items")
+	assert.Contains(t, body, "Garage:Box", "parent label shown on re-render")
+}
+
+// Review Focus #4: an unrelated error keeps the chosen parent and its label.
+func TestHandleBorrow_ErrorKeepsParentLabel(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		},
+		borrowErr: fmt.Errorf("borrow: %w", app.ErrLenderRequired),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postBorrow(t, ts, url.Values{"display_name": {"Drill"}, "from": {" "}, "parent_id": {"g"}})
+
+	assert.Contains(t, body, "Borrowed from is required")
+	assert.Contains(t, body, `name="parent_id" value="g"`)
+	assert.Contains(t, body, `data-parent-label>Garage</span>`)
 }
 
 // Review Focus #1 and #2: app validation errors become inline form errors.

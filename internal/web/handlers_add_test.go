@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -73,4 +74,51 @@ func TestAddItemForm_LockedDiscreteCheckboxes(t *testing.T) {
 	assert.Contains(t, body, "prevent direct reparenting")
 	assert.Contains(t, body, "no children allowed")
 	assert.NotContains(t, body, "checked", "checkboxes must default unchecked")
+}
+
+// #288: the request carries the picked parent's ID; no path round-trip.
+func TestAddItem_PassesParentIDThrough(t *testing.T) {
+	fa := &fakeApp{} // no entities: the handler must not pre-fetch the parent
+	h := newActorHandler(t, fa, "")
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, postForm("/entities/bin2/add", "display_name=Nail"))
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "bin2", fa.lastCreateReq.ParentID)
+}
+
+func TestAddItem_RootHasNoParentID(t *testing.T) {
+	fa := &fakeApp{}
+	h := newActorHandler(t, fa, "")
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, postForm("/entities/add", "display_name=Nail"))
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Empty(t, fa.lastCreateReq.ParentID)
+}
+
+// Review Focus #3: app parent errors are client errors, not 500s.
+func TestAddItem_ParentErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"removed or unknown parent", fmt.Errorf("get entity %q: %w", "gone", app.ErrNotFound), http.StatusNotFound},
+		{"discrete parent", fmt.Errorf("%q is discrete: %w", "Box", app.ErrInvalidDestination), http.StatusUnprocessableEntity},
+		{"other", errTest, http.StatusInternalServerError},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fa := &fakeApp{err: tc.err}
+			h := newActorHandler(t, fa, "")
+
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, postForm("/entities/gone/add", "display_name=Nail"))
+
+			assert.Equal(t, tc.want, rec.Code)
+		})
+	}
 }
