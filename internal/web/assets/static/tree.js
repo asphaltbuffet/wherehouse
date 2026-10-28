@@ -89,6 +89,12 @@
     closeTree(document.getElementById('tree-toggle'));
   }
 
+  // A header search swaps results into the detail panel, so get the drawer out
+  // of the way; focus stays in the search box so typing continues.
+  function onSearchBeforeRequest(e) {
+    if (narrow.matches && e.target.closest && e.target.closest('.app-search')) closeTree(null);
+  }
+
   // A chevron click only expands and a + click only opens the add modal;
   // neither may also load the row's detail (which would close the drawer).
   function onTreeBeforeRequest(e) {
@@ -315,6 +321,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     document.body.addEventListener('click', onTreeToggleClick);
     document.body.addEventListener('keydown', onDrawerKeydown);
+    document.body.addEventListener('htmx:beforeRequest', onSearchBeforeRequest);
     document.body.addEventListener('htmx:beforeRequest', onTreeEvent(function (root, e) { onTreeBeforeRequest(e); }));
     narrow.addEventListener('change', function (e) { if (!e.matches) closeTree(null); });
 
