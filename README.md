@@ -46,7 +46,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 - **Hierarchical Paths** — arbitrarily nested entities with colon-path addressing
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
-- **Web UI** — local HTTP server for browsing, searching, adding, editing, locking, marking discrete, borrowing, loaning, and returning inventory
+- **Web UI** — local HTTP server for browsing (including tags), searching, adding, editing, locking, marking discrete, borrowing, loaning, and returning inventory
 - **Network Storage Ready** — SQLite WAL mode works with NFS/SMB mounts
 - **Multi-User Attribution** — trust-based; tracks who made changes, no permissions enforcement
 - **Single File Database** — entire inventory in one portable SQLite file
