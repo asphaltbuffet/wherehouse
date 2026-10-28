@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -177,6 +178,33 @@ func (a *App) BulkAddEntities(ctx context.Context, rows []BulkAddRow, opts BulkA
 	}
 
 	return result, nil
+}
+
+// AddEntitiesAtPaths creates one entity per row in a single transaction and
+// returns them in row order, without the ancestors CreateParents adds. Unlike
+// BulkAddEntities it never skips a row: names are not unique, so an existing
+// entity at the same path is not a duplicate. opts.AllowDuplicates is ignored.
+func (a *App) AddEntitiesAtPaths(ctx context.Context, rows []BulkAddRow, opts BulkAddOptions) ([]EntityResult, error) {
+	if len(rows) == 0 {
+		return nil, errors.New("AddEntitiesAtPaths: at least one row required")
+	}
+	opts.AllowDuplicates = true
+
+	results := make([]EntityResult, len(rows))
+	err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		for i, row := range rows {
+			created, _, _, err := a.bulkAddRowInTx(ctx, tx, row, opts)
+			if err != nil {
+				return err
+			}
+			results[i] = created[len(created)-1]
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // bulkAddRowInTx handles one CSV row within an open transaction.
