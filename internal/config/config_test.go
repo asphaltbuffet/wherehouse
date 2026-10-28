@@ -84,7 +84,7 @@ default_identity = "alice"
 
 [output]
 default_format = "json"
-quiet = false
+quiet = 0
 `
 				require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
@@ -93,7 +93,7 @@ quiet = false
 path = "/local/db.sqlite"
 
 [output]
-quiet = true
+quiet = 1
 `
 				require.NoError(t, afero.WriteFile(fs, "./wherehouse.toml", []byte(localContent), 0o644))
 			},
@@ -245,6 +245,47 @@ func TestValidation(t *testing.T) {
 				Output:   OutputConfig{DefaultFormat: "xml"},
 			},
 			errorMsg: "must be one of [human, json]",
+		},
+		{
+			name: "negative max_size_mb",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Logging:  LoggingConfig{MaxSizeMB: -1},
+				Output:   OutputConfig{DefaultFormat: "human"},
+			},
+			errorMsg: "logging configuration: max_size_mb must be >= 0, got -1",
+		},
+		{
+			name: "negative max_backups",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Logging:  LoggingConfig{MaxBackups: -1},
+				Output:   OutputConfig{DefaultFormat: "human"},
+			},
+			errorMsg: "logging configuration: max_backups must be >= 0, got -1",
+		},
+		{
+			name: "negative quiet",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Output:   OutputConfig{DefaultFormat: "human", Quiet: -1},
+			},
+			errorMsg: "output configuration: quiet must be between 0 and 2, got -1",
+		},
+		{
+			name: "quiet above max level",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Output:   OutputConfig{DefaultFormat: "human", Quiet: 3},
+			},
+			errorMsg: "output configuration: quiet must be between 0 and 2, got 3",
+		},
+		{
+			name: "quiet at max level",
+			config: &Config{
+				Database: DatabaseConfig{Path: "/path/to/db.sqlite"},
+				Output:   OutputConfig{DefaultFormat: "human", Quiet: MaxQuietLevel},
+			},
 		},
 	}
 
@@ -680,7 +721,7 @@ default_identity = "alice"
 
 [output]
 default_format = "json"
-quiet = false
+quiet = 0
 `
 	require.NoError(t, afero.WriteFile(fs, globalPath, []byte(globalContent), 0o644))
 
@@ -950,6 +991,41 @@ func TestNew_StderrWithRotationFromEnvFails(t *testing.T) {
 
 	_, err := NewWithFS(afero.NewMemMapFs(), "")
 	require.ErrorContains(t, err, `file_path "-" (stderr)`)
+}
+
+// TestNewWithFS_LegacyBoolQuiet verifies config files written when output.quiet
+// was documented as a bool still load (true → 1, false → 0).
+func TestNewWithFS_LegacyBoolQuiet(t *testing.T) {
+	tests := []struct {
+		toml string
+		want int
+	}{
+		{toml: "true", want: 1},
+		{toml: "false", want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.toml, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Setenv("WHEREHOUSE_OUTPUT_QUIET", "")
+
+			fs := afero.NewMemMapFs()
+			content := "[output]\nquiet = " + tt.toml + "\n"
+			require.NoError(t, afero.WriteFile(fs, "/cfg.toml", []byte(content), 0o644))
+
+			cfg, err := NewWithFS(fs, "/cfg.toml")
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, cfg.QuietLevel())
+		})
+	}
+}
+
+func TestNew_NegativeQuietFromEnvFails(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("WHEREHOUSE_OUTPUT_QUIET", "-1")
+
+	_, err := NewWithFS(afero.NewMemMapFs(), "")
+	require.ErrorContains(t, err, "quiet must be between 0 and 2, got -1")
 }
 
 // TestNewWithFS_LegacyDBPathIgnored verifies that setting only the removed

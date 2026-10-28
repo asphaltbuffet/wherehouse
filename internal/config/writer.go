@@ -194,11 +194,11 @@ func parseConfigValue(key, value string) (any, error) {
 		}
 		return value, nil
 	case "output.quiet":
-		b, err := strconv.ParseBool(value)
-		if err != nil {
-			return nil, fmt.Errorf("output.quiet must be 'true' or 'false', got %q", value)
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > MaxQuietLevel {
+			return nil, fmt.Errorf("output.quiet must be an integer between 0 and %d, got %q", MaxQuietLevel, value)
 		}
-		return b, nil
+		return n, nil
 	case "web.actor_header":
 		// Name validity is checked by web.New at startup; config must not import internal/web.
 		return value, nil

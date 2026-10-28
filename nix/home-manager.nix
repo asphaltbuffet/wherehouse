@@ -34,7 +34,14 @@
   # Build the [output] section, omitting null values.
   outputSettings = lib.filterAttrs (_: v: v != null) {
     default_format = cfg.settings.output.defaultFormat;
-    quiet = cfg.settings.output.quiet;
+    quiet = let
+      q = cfg.settings.output.quiet;
+    in
+      if q == true
+      then 1
+      else if q == false
+      then 0
+      else q;
   };
 
   # Build the [web] section, omitting null values.
@@ -99,7 +106,7 @@ in {
         };
 
         maxSizeMB = lib.mkOption {
-          type = lib.types.nullOr lib.types.int;
+          type = lib.types.nullOr lib.types.ints.unsigned;
           default = null;
           description = ''
             Maximum log file size in megabytes before rotation.
@@ -109,7 +116,7 @@ in {
         };
 
         maxBackups = lib.mkOption {
-          type = lib.types.nullOr lib.types.int;
+          type = lib.types.nullOr lib.types.ints.unsigned;
           default = null;
           description = ''
             Number of old rotated log files to retain.
@@ -158,13 +165,14 @@ in {
         };
 
         quiet = lib.mkOption {
-          type = lib.types.nullOr lib.types.bool;
+          type = lib.types.nullOr (lib.types.either lib.types.bool (lib.types.ints.between 0 2));
           default = null;
           description = ''
-            Enable quiet mode by default, suppressing non-essential output.
-            When null, defaults to false.
+            Default quiet level: 0 = normal, 1 = minimal (-q), 2 = silent (-qq).
+            Booleans are accepted for compatibility (true = 1, false = 0).
+            When null, defaults to 0.
           '';
-          example = false;
+          example = 1;
         };
       };
 

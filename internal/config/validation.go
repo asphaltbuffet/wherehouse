@@ -64,11 +64,25 @@ func validateOutput(cfg *OutputConfig) error {
 		return fmt.Errorf("default_format must be one of [human, json], got %q", cfg.DefaultFormat)
 	}
 
+	if cfg.Quiet < 0 || cfg.Quiet > MaxQuietLevel {
+		return fmt.Errorf("quiet must be between 0 and %d, got %d", MaxQuietLevel, cfg.Quiet)
+	}
+
 	return nil
 }
 
-// validateLogging rejects rotation settings on the stderr sink.
+// validateLogging rejects negative rotation values and rotation settings on the stderr sink.
 func validateLogging(cfg *LoggingConfig) error {
+	// Negative values would bypass the rotator's zero-value defaults
+	// (e.g. max_backups -1 skips the "0 → 3" coercion and retains every backup).
+	if cfg.MaxSizeMB < 0 {
+		return fmt.Errorf("max_size_mb must be >= 0, got %d", cfg.MaxSizeMB)
+	}
+
+	if cfg.MaxBackups < 0 {
+		return fmt.Errorf("max_backups must be >= 0, got %d", cfg.MaxBackups)
+	}
+
 	if cfg.FilePath == logging.StderrPath && cfg.MaxSizeMB > 0 {
 		return errStderrRotation
 	}
