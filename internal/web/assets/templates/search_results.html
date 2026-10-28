@@ -11,13 +11,13 @@
             hx-swap="innerHTML"
             hx-push-url="true"
             tabindex="0">
-          {{if .Entity.Locked}}<span aria-hidden="true">🔒</span>{{end}}
+          {{if .Entity.Locked}}{{template "padlock"}}{{end}}
           <div>
             <div class="sr-name">{{.Entity.DisplayName}}</div>
             <div class="sr-path">{{.Entity.FullPathDisplay}}</div>
           </div>
           {{$cls := statusClass .Entity.Status}}
-          {{if $cls}}<span class="badge {{$cls}}">{{.Entity.Status}}</span>{{end}}
+          {{if $cls}}<span class="badge {{$cls}}">{{template "status_mark_inner" .Entity.Status}}</span>{{end}}
         </li>
         {{end}}
       </ul>

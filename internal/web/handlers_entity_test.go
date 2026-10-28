@@ -728,6 +728,19 @@ func loanableHammer() []app.EntityResult {
 	}
 }
 
+func TestTreeBadgeOOB_HasHiddenStatusText(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: loanableHammer()})
+	defer ts.Close()
+
+	_, body := postLoan(t, ts, url.Values{"recipient": {"Alice"}})
+
+	assert.Contains(
+		t,
+		body,
+		`<span id="tree-badge-abc" class="badge loaned" hx-swap-oob="true"><span class="visually-hidden">loaned</span></span>`,
+	)
+}
+
 func TestHandleLoan_Success(t *testing.T) {
 	fake := &fakeApp{entities: loanableHammer()}
 	ts := newTestServer(t, fake)

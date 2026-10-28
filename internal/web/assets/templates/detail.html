@@ -150,7 +150,7 @@
 {{end}}
 
 {{define "tree_badge_oob"}}
-{{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}" hx-swap-oob="true">{{if $cls}}{{.Status}}{{end}}</span>
+{{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}" hx-swap-oob="true">{{template "status_mark_inner" .Status}}</span>
 {{end}}
 
 {{define "tree_node_delete_oob"}}

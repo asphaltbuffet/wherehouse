@@ -201,13 +201,24 @@ h1, h2, h3 {
 }
 
 .app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: var(--font-size-lg);
-  color: var(--color-accent);
+  letter-spacing: 0.01em;
+  color: var(--color-text);
   text-decoration: none;
   white-space: nowrap;
 }
-.app-brand:hover { text-decoration: underline; }
+.app-brand:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.app-brand-mark {
+  width: 0.6rem; height: 0.6rem;
+  background: var(--tape);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--color-border-strong);
+}
 
 .app-search {
   flex: 1;
@@ -219,14 +230,14 @@ h1, h2, h3 {
   font-size: var(--font-size-sm);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
 }
 .app-search input[type="search"]:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
 }
 
 .app-actions {
@@ -299,10 +310,8 @@ h1, h2, h3 {
   align-items: center;
   padding: var(--space-1) var(--space-2) var(--space-2);
   font-weight: 600;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 /* ── Detail panel ────────────────────────────────────────────────────── */
@@ -331,7 +340,11 @@ h1, h2, h3 {
   user-select: none;
 }
 .tree-item:hover   { background: var(--color-raised); }
-.tree-item.selected { background: var(--color-selected); }
+.tree-item.selected {
+  background: var(--color-selected);
+  box-shadow: inset 3px 0 0 var(--tape);
+  font-weight: 600;
+}
 
 .tree-children {
   padding-left: 1.2em;
@@ -354,16 +367,34 @@ h1, h2, h3 {
 .chevron svg { width: 0.6em; height: 0.6em; }
 .chevron.open { transform: rotate(90deg); }
 
-/* ── Badges ──────────────────────────────────────────────────────────── */
+.padlock { width: 0.7rem; height: 0.85rem; color: var(--color-text-muted); flex-shrink: 0; }
+
+/* ── Status marks (shape first, colour second) ───────────────────────── */
 .badge {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-raised);
-  color: var(--color-text-muted);
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
 }
-.badge.removed { background: transparent; color: var(--color-text-muted); text-decoration: line-through; }
+.badge.borrowed {
+  background: var(--status-borrowed);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.badge.loaned {
+  border-radius: 50%;
+  border: 2px solid var(--status-loaned);
+  background: linear-gradient(90deg, var(--status-loaned) 50%, transparent 50%);
+}
+.badge.missing {
+  border-radius: 50%;
+  border: 2px dashed var(--status-missing);
+}
+.badge.removed {
+  border-radius: 50%;
+  border: 2px solid var(--color-text-muted);
+  background: linear-gradient(45deg, transparent 42%, var(--color-text-muted) 42%,
+                              var(--color-text-muted) 58%, transparent 58%);
+}
 
 /* ── Add button (per tree item) ──────────────────────────────────────── */
 .add-btn {
