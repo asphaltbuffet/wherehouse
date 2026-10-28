@@ -228,7 +228,7 @@ h1, h2, h3 {
 .app-search input[type="search"] {
   width: 100%;
   font-family: var(--font-body);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base); /* ≥16px: iOS zooms on focus below that */
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
@@ -738,4 +738,68 @@ dialog#add-modal input[type="checkbox"],
     background: #1d211f66;
   }
   #detail-panel { padding: var(--space-4); }
+}
+
+/* ── Coarse pointers: 44px targets regardless of width ───────────────── */
+@media (pointer: coarse) {
+  .btn-primary, .btn-ghost, .btn-link,
+  .child-row, .search-result-item, .tree-item,
+  .breadcrumbs a, .parent-options li > *,
+  .app-search input[type="search"],
+  dialog#add-modal input:not([type="checkbox"]), dialog#add-modal select,
+  .form-panel input:not([type="checkbox"]), .form-panel select {
+    min-height: 2.75rem;
+    box-sizing: border-box;
+  }
+  .breadcrumbs a, .parent-options li > * { display: inline-flex; align-items: center; }
+  .tree-item .add-btn { min-width: 2.75rem; min-height: 2.75rem; }
+  .tree-item .chevron:not(.chevron-hidden) {
+    min-width: 2.75rem;
+    align-self: stretch;
+    justify-content: center;
+  }
+  dialog#add-modal input[type="checkbox"], .form-panel input[type="checkbox"] {
+    width: 1.375rem; height: 1.375rem;
+  }
+  .parent-options { max-height: 50vh; }
+}
+
+/* ── Narrow viewports: sheet dialog, stacked inline-form buttons ──────── */
+@media (max-width: 48rem) {
+  dialog#add-modal {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    min-width: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+  /* Fill the sheet so a short form still puts its actions at the bottom. */
+  dialog#add-modal[open], #add-modal-body, #add-modal-body > form {
+    display: flex;
+    flex-direction: column;
+  }
+  #add-modal-body, #add-modal-body > form { flex: 1 0 auto; }
+  dialog#add-modal .modal-actions {
+    margin-top: auto;
+    position: sticky;
+    bottom: calc(-1 * var(--space-5)); /* cancel the dialog's bottom padding */
+    margin-left: calc(-1 * var(--space-5));
+    margin-right: calc(-1 * var(--space-5));
+    margin-bottom: calc(-1 * var(--space-5));
+    padding: var(--space-3) var(--space-5);
+    background: var(--color-raised);
+    border-top: 1px solid var(--color-border);
+  }
+  dialog#add-modal .modal-actions > * { flex: 1; }
+  .loan-form-buttons, .remove-form-buttons { flex-direction: column; }
+  .loan-form-buttons > *, .remove-form-buttons > * { width: 100%; }
+  .detail-actions .detail-action-btn { flex: 1 1 calc(50% - var(--space-2)); }
+  .tape h2, .tape-id { overflow-wrap: anywhere; }
+  .app-footer { flex-wrap: wrap; row-gap: var(--space-1); }
 }
