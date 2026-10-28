@@ -857,33 +857,24 @@ func (s *Server) renderAlreadyRemoved(w http.ResponseWriter, r *http.Request, en
 	s.renderAfterRemoval(w, r, removed)
 }
 
-// handleMoveForm handles GET /entities/{entityID}/actions/move, swapping the
-// Move button for the inline move form.
+// handleMoveForm handles GET /entities/{entityID}/actions/move, re-rendering
+// the detail section with the inline move form open.
 func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanMove {
-		http.Error(w, "entity cannot be moved", http.StatusForbidden)
-		return
-	}
-
-	s.renderHTML(w, "move_form", moveFormData{EntityID: entityID, AtRoot: isRootEntity(data.Entity)})
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		if !d.CanMove {
+			return false
+		}
+		d.MoveForm = &moveFormData{EntityID: d.Entity.EntityID, AtRoot: isRootEntity(d.Entity)}
+		return true
+	})
 }
 
 // moveRootValue is the destination form value meaning "move to the root".
 // Entity IDs are 10-char NanoIDs, so it cannot collide with one.
 const moveRootValue = "root"
 
-// handleMove handles POST /entities/{entityID}/actions/move.
+// handleMove handles POST /entities/{entityID}/actions/move. Eligibility is
+// left to the app layer (ADR 0035), so a stale panel reaches renderMoveFailure.
 func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -898,11 +889,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanMove {
-		http.Error(w, "entity cannot be moved", http.StatusForbidden)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -957,8 +944,7 @@ func (s *Server) renderMoveFailure(
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		s.cfg.Logger.Info("move target removed concurrently", "error", err, "entity_id", entityID)
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -971,10 +957,11 @@ func (s *Server) renderMoveFailure(
 
 	if fresh.CanMove {
 		s.cfg.Logger.Error("move entity", "error", err, "entity_id", entityID)
+		fresh.Error = "move failed"
 	} else {
-		s.cfg.Logger.Info("move rejected: entity changed concurrently", "error", err, "entity_id", entityID)
+		s.cfg.Logger.Info("move rejected: panel was stale", "error", err, "entity_id", entityID)
+		fresh.Error = staleMessage
 	}
-	fresh.Error = "move failed"
 	s.renderStatusChanged(w, r, fresh)
 }
 

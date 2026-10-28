@@ -1125,11 +1125,14 @@ func TestEntityDetail_MoveButton(t *testing.T) {
 }
 
 func TestHandleMoveForm(t *testing.T) {
+	formPost := `hx-post="/entities/abc/actions/move"`
 	tests := []struct {
 		name       string
 		entities   []app.EntityResult
 		wantCode   int
+		wantForm   bool
 		wantToRoot bool
+		want       []string
 	}{
 		{
 			name: "nested entity offers root",
@@ -1138,21 +1141,28 @@ func TestHandleMoveForm(t *testing.T) {
 				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
 					Status: inventory.EntityStatusOk},
 			},
-			wantCode: http.StatusOK, wantToRoot: true,
+			wantCode: http.StatusOK, wantForm: true, wantToRoot: true,
 		},
 		{
 			name: "root entity hides root choice",
 			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
 				Status: inventory.EntityStatusOk}},
-			wantCode: http.StatusOK,
+			wantCode: http.StatusOK, wantForm: true,
 		},
 		{
-			name: "missing forbidden",
+			name: "missing is stale",
 			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
 				Status: inventory.EntityStatusMissing}},
-			wantCode: http.StatusForbidden,
+			wantCode: http.StatusOK, want: []string{`id="entity-detail"`, staleText},
 		},
-		{name: "not found", wantCode: http.StatusNotFound},
+		{
+			name: "removed shows removed panel",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusRemoved}},
+			wantCode: http.StatusOK,
+			want:     []string{staleText, "Last location", `id="tree-node-abc" hx-swap-oob="delete"`},
+		},
+		{name: "unknown id", wantCode: http.StatusNotFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1167,13 +1177,18 @@ func TestHandleMoveForm(t *testing.T) {
 			body, _ := io.ReadAll(resp.Body)
 
 			assert.Equal(t, tt.wantCode, resp.StatusCode)
-			if tt.wantCode != http.StatusOK {
+			for _, s := range tt.want {
+				assert.Contains(t, string(body), s)
+			}
+			assert.Equal(t, tt.wantForm, strings.Contains(string(body), formPost))
+			if !tt.wantForm {
 				return
 			}
-			assert.Contains(t, string(body), `hx-post="/entities/abc/actions/move"`)
+			assert.Contains(t, string(body), `id="entity-detail"`)
 			assert.Contains(t, string(body), `name="destination"`)
 			assert.Contains(t, string(body), `name="note"`)
 			assert.Contains(t, string(body), `hx-vals='{"moving": "abc"}'`)
+			assert.NotContains(t, string(body), staleText)
 			assert.Equal(t, tt.wantToRoot, strings.Contains(string(body), `data-parent-value="root"`))
 		})
 	}
@@ -1282,37 +1297,47 @@ func TestHandleMove_ConcurrentLostShowsFreshState(t *testing.T) {
 	resp, body := postMove(t, ts, url.Values{"destination": {"w"}})
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Contains(t, body, "move failed")
+	assert.Contains(t, body, staleText)
 	assert.Contains(t, body, `title="Missing entities cannot be moved — mark found first"`)
 	assert.Contains(t, body, `id="tree-badge-abc"`)
 }
 
-func TestHandleMove_RemovedConcurrentlyNotFound(t *testing.T) {
+func TestHandleMove_RemovedConcurrentlyShowsRemovedPanel(t *testing.T) {
 	fake := &fakeApp{
 		entities: movableDrill(),
 		moveErr:  errTest,
-		onMove:   func(f *fakeApp) { f.entities = f.entities[:2] },
+		onMove:   func(f *fakeApp) { f.entities[2].Status = inventory.EntityStatusRemoved },
 	}
 	ts := newTestServer(t, fake)
 	defer ts.Close()
 
-	resp, _ := postMove(t, ts, url.Values{"destination": {"w"}})
+	resp, body := postMove(t, ts, url.Values{"destination": {"w"}})
 
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, staleText)
+	assert.Contains(t, body, "Last location")
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
 }
 
+// The app guard decides (ADR 0035); a stale panel's move renders the fresh
+// state, never a bare 403 (#306).
 func TestHandleMove_Rejected(t *testing.T) {
-	fake := &fakeApp{entities: []app.EntityResult{
-		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill", Status: inventory.EntityStatusLoaned,
-			StatusContext: "Bob"},
-	}}
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill", Status: inventory.EntityStatusLoaned,
+				StatusContext: "Bob"},
+		},
+		moveErr: errTest,
+	}
 	ts := newTestServer(t, fake)
 	defer ts.Close()
 
-	resp, _ := postMove(t, ts, url.Values{"destination": {"root"}})
+	resp, body := postMove(t, ts, url.Values{"destination": {"root"}})
 
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-	assert.Equal(t, 0, fake.moveCalls)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 1, fake.moveCalls, "the app layer decides")
+	assert.Contains(t, body, staleText)
+	assert.NotContains(t, body, "move failed")
 }
 
 func TestEntityDetail_RemoveButton(t *testing.T) {

@@ -82,7 +82,7 @@
       {{else if .CanMove}}
       <button class="btn-ghost detail-action-btn" data-action="move"
               hx-get="/entities/{{.Entity.EntityID}}/actions/move"
-              hx-target="this" hx-swap="outerHTML">
+              hx-target="#entity-detail" hx-swap="outerHTML">
         Move
       </button>
       {{else}}
