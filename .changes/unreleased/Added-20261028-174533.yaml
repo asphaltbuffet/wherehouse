@@ -1,0 +1,5 @@
+kind: Added
+body: 'Web UI: on narrow screens the tree becomes a drawer opened from the header, and the detail panel uses the full width; clicking a tree chevron or + no longer also opens that entity'
+time: 2026-10-28T17:45:33.269000584-04:00
+custom:
+    Issue: ''

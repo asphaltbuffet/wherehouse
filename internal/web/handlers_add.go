@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 type addFormData struct {
 	ParentID string // empty means root
-	Target   string // CSS selector for hx-target
 }
 
 // handleAddItemForm returns an inline modal form for adding a child entity under parentID.
@@ -24,25 +24,22 @@ func (s *Server) handleRootAddItemForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderAddForm(w http.ResponseWriter, _ *http.Request, parentID string) {
-	target := "#tree-children-" + parentID
-	if parentID == "" {
-		target = "#tree-root-list"
-	}
-	s.renderHTML(w, "add_item_form", addFormData{ParentID: parentID, Target: target})
+	s.renderHTML(w, "add_item_form", addFormData{ParentID: parentID})
 }
 
 // handleAddItem processes the POST form, creates the entity under the picked
-// parent, and returns a fresh tree_node fragment.
+// parent, and returns the parent's detail plus an entity-created trigger that
+// tree.js uses to insert the tree node.
 func (s *Server) handleAddItem(w http.ResponseWriter, r *http.Request) {
-	s.createAndRenderNode(w, r, r.PathValue("parentID"))
+	s.createAndRenderParent(w, r, r.PathValue("parentID"))
 }
 
 // handleRootAddItem processes the POST form for a new root-level entity.
 func (s *Server) handleRootAddItem(w http.ResponseWriter, r *http.Request) {
-	s.createAndRenderNode(w, r, "")
+	s.createAndRenderParent(w, r, "")
 }
 
-func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, parentID string) {
+func (s *Server) createAndRenderParent(w http.ResponseWriter, r *http.Request, parentID string) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
@@ -73,5 +70,37 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 		return
 	}
 
-	s.renderHTML(w, "tree_node", created)
+	trigger, err := json.Marshal(map[string]treeNodeAttachedEvent{
+		"entity-created": {EntityID: created.EntityID, ParentID: parentID},
+	})
+	if err != nil {
+		s.serverError(w, "marshal trigger", err)
+		return
+	}
+	w.Header().Set("Hx-Trigger", string(trigger))
+	s.renderParentDetail(w, r, parentID)
+}
+
+// renderParentDetail shows parentID's detail with its fresh children list, or
+// the home detail for the root (or a parent that vanished after the write).
+func (s *Server) renderParentDetail(w http.ResponseWriter, r *http.Request, parentID string) {
+	if parentID != "" {
+		data, err := s.buildDetailData(r.Context(), parentID)
+		if err != nil {
+			s.serverError(w, "build parent detail data", err)
+			return
+		}
+		if data.Entity.EntityID != "" {
+			w.Header().Set("Hx-Push-Url", "/entities/"+parentID)
+			s.renderHTML(w, "detail_section", data)
+			return
+		}
+	}
+	home, err := s.homeView(r.Context())
+	if err != nil {
+		s.serverError(w, "build home", err)
+		return
+	}
+	w.Header().Set("Hx-Push-Url", "/")
+	s.renderHTML(w, "home_section", home)
 }

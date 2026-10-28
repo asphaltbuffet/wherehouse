@@ -40,8 +40,16 @@ type detailData struct {
 	RemoveForm          *removeFormData   // non-nil re-opens the remove form (guard tripped at submit)
 	EditNameForm        *editNameFormData // non-nil swaps the name tape for the rename form
 	Breadcrumbs         []Breadcrumb
-	Error               string // populated by edit POST handlers; rendered inline above the detail dl
-	Removed             bool   // read-only view of a removed entity: last location + history, no actions
+	Error               string    // populated by edit POST handlers; rendered inline above the detail dl
+	Removed             bool      // read-only view of a removed entity: last location + history, no actions
+	ChildList           childList // live children; empty for discrete entities (never fetched)
+}
+
+// childList is the view model for the children list. ParentID is "" on the
+// home detail, where Children are the roots.
+type childList struct {
+	ParentID string
+	Children []app.EntityResult
 }
 
 // loanFormData is the view model for the inline loan form.
@@ -219,9 +227,8 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 
 // detailPageData wraps detailData with the tree roots for full-page (non-HTMX) renders.
 type detailPageData struct {
+	Shell  pageShell
 	Detail detailData
-	Actor  actorView
-	Roots  []app.EntityResult
 }
 
 // Breadcrumb is one segment of the entity path shown above the detail heading.
@@ -317,8 +324,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	}
 
 	// Breadcrumbs need the full entity list to resolve ancestor IDs by path.
-	// Only required when the entity is not at the root; for root entities the
-	// breadcrumb template is hidden by len(.)<=1 anyway, so we skip the call.
+	// A root entity's only crumb (after Inventory) is itself, so skip the call.
 	var crumbEntities []app.EntityResult
 	if isRootEntity(entity) {
 		crumbEntities = []app.EntityResult{entity}
@@ -332,6 +338,14 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	dateAdded, history, err := s.detailHistory(ctx, entityID)
 	if err != nil {
 		return detailData{}, err
+	}
+
+	var children []app.EntityResult
+	if !entity.Discrete {
+		children, err = s.cfg.App.GetChildren(ctx, entityID)
+		if err != nil {
+			return detailData{}, fmt.Errorf("get children: %w", err)
+		}
 	}
 
 	// Loan applies only to ok/missing (ADR 0024);
@@ -374,6 +388,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		CanRemove:           canRemove,
 		RemoveBlockedReason: removeBlockedReason,
 		Breadcrumbs:         BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
+		ChildList:           childList{ParentID: entity.EntityID, Children: children},
 	}, nil
 }
 
@@ -418,18 +433,12 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 		return
 	}
 
-	entities, err := s.cfg.App.ListEntities(r.Context())
+	shell, err := s.newPageShell(r.Context(), r, "Wherehouse")
 	if err != nil {
-		s.serverError(w, "list entities", err)
+		s.serverError(w, "build page shell", err)
 		return
 	}
-	var roots []app.EntityResult
-	for _, e := range entities {
-		if isRootEntity(e) {
-			roots = append(roots, e)
-		}
-	}
-	s.renderHTML(w, "detail", detailPageData{Detail: data, Roots: roots, Actor: s.actorView(r)})
+	s.renderHTML(w, "detail", detailPageData{Shell: shell, Detail: data})
 }
 
 // handleEditNameForm handles GET /entities/{entityID}/edit/name, re-rendering
@@ -1026,7 +1035,7 @@ func (s *Server) setTreeNodeDetachedTrigger(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Hx-Trigger-After-Swap", string(trigger))
 }
 
-// renderAfterRemoval shows the removed entity's parent (or the empty state for a
+// renderAfterRemoval shows the removed entity's parent (or the home detail for a
 // root entity), pushes the matching URL, and deletes the entity's tree node.
 func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, removed app.EntityResult) {
 	var parent detailData
@@ -1041,8 +1050,13 @@ func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, remo
 
 	s.setTreeNodeDetachedTrigger(w, r, removed)
 	if parent.Entity.EntityID == "" {
+		home, err := s.homeView(r.Context())
+		if err != nil {
+			s.serverError(w, "build home", err)
+			return
+		}
 		w.Header().Set("Hx-Push-Url", "/")
-		s.renderHTML(w, "detail_empty", nil)
+		s.renderHTML(w, "home_section", home)
 	} else {
 		w.Header().Set("Hx-Push-Url", "/entities/"+parent.Entity.EntityID)
 		s.renderHTML(w, "detail_section", parent)

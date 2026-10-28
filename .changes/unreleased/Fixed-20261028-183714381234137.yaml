@@ -1,0 +1,5 @@
+kind: Fixed
+body: 'Web UI: the tree highlights whichever entity the detail panel shows, and the add/borrow dialog no longer flashes the previous form'
+time: 2026-10-28T18:37:14.379055695-04:00
+custom:
+    Issue: ''

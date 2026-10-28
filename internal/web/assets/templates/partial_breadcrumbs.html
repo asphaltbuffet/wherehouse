@@ -1,18 +1,13 @@
 {{define "breadcrumbs"}}
-{{if gt (len .) 1}}
 <nav class="breadcrumbs" aria-label="Location path">
-  {{range $i, $c := .}}
-    {{if $i}}<span class="sep" aria-hidden="true">›</span>{{end}}
-    {{if $c.EntityID}}
-      <a hx-get="/entities/{{$c.EntityID}}"
-         hx-target="#detail-panel"
-         hx-swap="innerHTML"
-         hx-push-url="true"
-         href="/entities/{{$c.EntityID}}">{{$c.Name}}</a>
+  <a hx-get="/" hx-target="#detail-panel" hx-swap="innerHTML" hx-push-url="true" href="/">Inventory</a>
+  {{range .}}
+    <span class="sep" aria-hidden="true">›</span>
+    {{if .EntityID}}
+      <a hx-get="/entities/{{.EntityID}}" hx-target="#detail-panel" hx-swap="innerHTML" hx-push-url="true" href="/entities/{{.EntityID}}">{{.Name}}</a>
     {{else}}
-      <span>{{$c.Name}}</span>
+      <span aria-current="page">{{.Name}}</span>
     {{end}}
   {{end}}
 </nav>
-{{end}}
 {{end}}

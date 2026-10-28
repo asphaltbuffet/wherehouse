@@ -1,5 +1,5 @@
 {{define "detail_section"}}
-<section id="entity-detail">
+<section id="entity-detail" data-entity-id="{{.Entity.EntityID}}">
   {{template "breadcrumbs" .Breadcrumbs}}
   {{if .EditNameForm}}
   {{template "edit_name_form" .EditNameForm}}
@@ -40,6 +40,9 @@
               title="Discrete entities cannot have children">
         Add child
       </button>
+      {{end}}
+      {{if .CanAddChild}}
+      <button class="btn-ghost detail-action-btn" type="button" aria-haspopup="dialog" aria-controls="add-modal" hx-get="/entities/borrow?parent={{.Entity.EntityID}}" hx-target="#add-modal-body" hx-swap="innerHTML">Borrow into here</button>
       {{end}}
       {{if .CanMarkFound}}
       <button class="btn-primary detail-action-btn"
@@ -114,19 +117,15 @@
   </div>
   {{end}}
 
+  {{if and (not .Removed) (not .Entity.Discrete)}}{{template "children_list" .ChildList}}{{end}}
+
   {{if .History}}
   <h3 class="history-heading">History</h3>
-  <table class="history-table">
-    <thead><tr><th scope="col" class="num">#</th><th scope="col">Event</th><th scope="col">By</th><th scope="col">When</th><th scope="col">Note</th></tr></thead>
-    <tbody>
+  <table class="history-table" role="table">
+    <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col" class="num">#</th><th role="columnheader" scope="col">Event</th><th role="columnheader" scope="col">By</th><th role="columnheader" scope="col">When</th><th role="columnheader" scope="col">Note</th></tr></thead>
+    <tbody role="rowgroup">
     {{range .History}}
-      <tr>
-        <td class="num mono">{{.EventID}}</td>
-        <td>{{.EventType}}</td>
-        <td>{{.ActorUserID}}</td>
-        <td class="mono">{{.TimestampUTC}}</td>
-        <td>{{.Note}}</td>
-      </tr>
+      <tr role="row"><td role="cell" class="num mono">{{.EventID}}</td><td role="cell" class="h-event">{{.EventType}}</td><td role="cell" class="h-actor">{{.ActorUserID}}</td><td role="cell" class="h-when mono">{{.TimestampUTC}}</td><td role="cell" class="h-note">{{.Note}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -134,31 +133,9 @@
 </section>
 {{end}}
 
-{{define "detail"}}<!doctype html>
-<html lang="en">
-<head>{{template "head" "Wherehouse"}}</head>
-<body>
-  <a class="skip-link" href="#detail-panel">Skip to content</a>
-  {{template "header" .Actor}}
-  <div class="app-shell">
-    <nav id="tree-panel" aria-label="Inventory tree">
-      <div id="tree-panel-header"><span>Inventory</span></div>
-      <ul id="tree-root-list" class="tree-node" role="tree">
-        {{range .Roots}}
-          {{template "tree_node" .}}
-        {{end}}
-      </ul>
-    </nav>
-    <main id="detail-panel" tabindex="-1">
+{{define "detail"}}{{template "shell_start" .Shell}}
       {{template "detail_section" .Detail}}
-    </main>
-  </div>
-
-  <dialog id="add-modal" aria-label="Add item">
-    <div id="add-modal-body"></div>
-  </dialog>
-</body>
-</html>{{end}}
+{{template "shell_end" .Shell}}{{end}}
 
 {{define "tree_label_oob"}}
 <span id="tree-label-{{.EntityID}}" hx-swap-oob="true">{{.DisplayName}}</span>

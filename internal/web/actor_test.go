@@ -158,7 +158,7 @@ func getPage(t *testing.T, h http.Handler, target string, hdr map[string]string)
 	return rec.Body.String()
 }
 
-func TestHeader_ShowsActorOnEveryFullPage(t *testing.T) {
+func TestFooter_ShowsActorOnEveryFullPage(t *testing.T) {
 	for _, page := range []string{"/", "/search?q=ham", "/entities/abc"} {
 		t.Run(page, func(t *testing.T) {
 			h := newActorHandler(t, &fakeApp{entities: hammer()}, tsHeader)
@@ -166,6 +166,11 @@ func TestHeader_ShowsActorOnEveryFullPage(t *testing.T) {
 
 			assert.Contains(t, body, "acting as alice@example.com")
 			assert.Contains(t, body, `title="from header Tailscale-User-Login"`)
+			footer := strings.Index(body, `class="app-footer"`)
+			actor := strings.Index(body, "acting as alice@example.com")
+			require.NotEqual(t, -1, footer, "every full page has a footer")
+			assert.Less(t, footer, actor, "actor label lives in the footer")
+			assert.Contains(t, body, `class="app-footer-version"`)
 		})
 	}
 }

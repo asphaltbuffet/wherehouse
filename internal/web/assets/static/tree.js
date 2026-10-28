@@ -1,4 +1,5 @@
-// Behaviors for the inventory tree, add-modal, and detail pane.
+// Behaviors for the inventory tree (a drawer on narrow screens), add-modal,
+// and detail pane.
 //
 // Everything is wired by event delegation against stable container IDs so the
 // HTML templates can stay free of inline event handlers (Content-Security-Policy
@@ -27,8 +28,8 @@
 
   function openAddModal(parentId) {
     var url = parentId ? '/entities/' + parentId + '/add' : '/entities/add';
+    // onModalFormAfterRequest opens the dialog once the fresh form is in.
     htmx.ajax('GET', url, { target: '#add-modal-body', swap: 'innerHTML' });
-    document.getElementById('add-modal').showModal();
   }
 
   function clearTreeSelection() {
@@ -37,6 +38,70 @@
       var ti = e.closest('[role="treeitem"]');
       if (ti) ti.setAttribute('aria-selected', 'false');
     });
+  }
+
+  // Narrow viewports show the tree as a drawer (ADR 0037). Keep this query in
+  // step with the max-width breakpoint in app.css.
+  var narrow = window.matchMedia('(max-width: 48rem)');
+
+  // setDrawerInert keeps Tab out of the panels behind an open drawer.
+  function setDrawerInert(on) {
+    document.getElementById('detail-panel').inert = on;
+    var footer = document.querySelector('.app-footer');
+    if (footer) footer.inert = on;
+  }
+
+  function openTree() {
+    document.body.classList.add('tree-open');
+    document.getElementById('tree-toggle').setAttribute('aria-expanded', 'true');
+    setDrawerInert(true);
+    focusItem(document.querySelector('#tree-root-list .tree-item.selected') ||
+      document.querySelector('#tree-root-list .tree-item'));
+  }
+
+  // closeTree hides the drawer and moves focus to focusEl (null leaves focus alone).
+  function closeTree(focusEl) {
+    if (!document.body.classList.contains('tree-open')) return;
+    document.body.classList.remove('tree-open');
+    document.getElementById('tree-toggle').setAttribute('aria-expanded', 'false');
+    setDrawerInert(false);
+    if (focusEl) focusEl.focus();
+  }
+
+  function onTreeToggleClick(e) {
+    var toggle = document.getElementById('tree-toggle');
+    if (e.target.closest && e.target.closest('#tree-toggle')) {
+      if (document.body.classList.contains('tree-open')) {
+        closeTree(toggle);
+      } else {
+        openTree();
+      }
+      return;
+    }
+    if (e.target.id === 'tree-backdrop') closeTree(toggle);
+  }
+
+  function onDrawerKeydown(e) {
+    if (e.key !== 'Escape' || !document.body.classList.contains('tree-open')) return;
+    var dialog = document.getElementById('add-modal');
+    if (dialog && dialog.open) return; // Esc belongs to the modal first
+    e.preventDefault();
+    closeTree(document.getElementById('tree-toggle'));
+  }
+
+  // A header search swaps results into the detail panel, so get the drawer out
+  // of the way; focus stays in the search box so typing continues.
+  function onSearchBeforeRequest(e) {
+    if (narrow.matches && e.target.closest && e.target.closest('.app-search')) closeTree(null);
+  }
+
+  // A chevron click only expands and a + click only opens the add modal;
+  // neither may also load the row's detail (which would close the drawer).
+  function onTreeBeforeRequest(e) {
+    var ev = e.detail && e.detail.requestConfig && e.detail.requestConfig.triggeringEvent;
+    var control = ev && ev.target && ev.target.closest &&
+      ev.target.closest('.chevron:not(.chevron-hidden), .add-btn');
+    if (control && e.target.classList && e.target.classList.contains('tree-item')) e.preventDefault();
   }
 
   function toggleNode(el) {
@@ -82,12 +147,25 @@
     }
   }
 
-  // After any htmx swap originating inside the tree, highlight the
-  // .tree-item that issued the request.
+  // After a tree row loads its detail, close the drawer on narrow screens
+  // (syncTreeSelection does the highlighting).
   function onTreeAfterRequest(e) {
     var item = e.target.closest && e.target.closest('.tree-item');
     if (!item) return;
+    if (narrow.matches) closeTree(document.getElementById('detail-panel'));
+  }
+
+  // Highlight the tree row of the entity the detail panel shows (none on
+  // home). Runs after every settle, so it also catches navigation from
+  // breadcrumbs, the children list and search, and tree nodes that load
+  // after the detail did (a borrow's new node, an expanded branch).
+  function syncTreeSelection() {
+    var section = document.querySelector('#detail-panel #entity-detail');
+    var id = section ? section.dataset.entityId : '';
     clearTreeSelection();
+    if (!id) return;
+    var item = document.querySelector('#tree-root-list .tree-item[data-entity-id="' + id + '"]');
+    if (!item) return;
     item.classList.add('selected');
     var li = item.closest('[role="treeitem"]');
     if (li) li.setAttribute('aria-selected', 'true');
@@ -143,35 +221,11 @@
     }
   }
 
-  // After the add-form POST completes successfully, close the modal,
-  // reset the form, and reveal the chevron on a parent that previously
-  // had no children.
-  function onAddFormAfterRequest(e) {
-    if (!e.detail || !e.detail.successful) return;
-    var form = e.target.closest && e.target.closest('form');
-    if (!form || !form.matches('#add-modal-body form')) return;
-    if (form.dataset.form === 'borrow') return; // closed by onEntityCreated instead
-    document.getElementById('add-modal').close();
-    form.reset();
-    var targetSelector = form.getAttribute('hx-target');
-    var target = targetSelector ? document.querySelector(targetSelector) : null;
-    if (target && target.children.length === 1) {
-      var li = target.closest('li');
-      if (li) {
-        li.setAttribute('aria-expanded', 'false');
-        var item = li.querySelector('.tree-item');
-        if (item) {
-          var ch = item.querySelector('.chevron');
-          if (ch) ch.classList.remove('chevron-hidden');
-        }
-      }
-    }
-  }
-
-  // After the "+ Add root" GET fetches the form into #add-modal-body,
-  // show the dialog. htmx dispatches afterRequest on the requesting
-  // element, so match on the swap target in e.detail instead.
-  function onAddRootAfterRequest(e) {
+  // After any GET swaps a form into #add-modal-body (add, borrow), show the
+  // dialog. Opening only after the swap means the previous form never
+  // flashes. htmx dispatches afterRequest on the requesting element, so
+  // match on the swap target in e.detail instead.
+  function onModalFormAfterRequest(e) {
     if (!e.detail || !e.detail.target || e.detail.target.id !== 'add-modal-body') return;
     var dialog = document.getElementById('add-modal');
     if (dialog && !dialog.open) dialog.showModal();
@@ -235,10 +289,11 @@
     });
   }
 
-  // After a borrow: close the modal, then insert the new node.
+  // After an add or borrow: close the modal, then insert the new node.
   function onEntityCreated(e) {
     var dialog = document.getElementById('add-modal');
     if (dialog) dialog.close();
+    if (narrow.matches) closeTree(document.getElementById('detail-panel')); // show the result
     onTreeNodeAttached(e);
   }
 
@@ -274,13 +329,20 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    document.body.addEventListener('click', onTreeToggleClick);
+    document.body.addEventListener('keydown', onDrawerKeydown);
+    document.body.addEventListener('htmx:beforeRequest', onSearchBeforeRequest);
+    document.body.addEventListener('htmx:afterSettle', syncTreeSelection);
+    syncTreeSelection(); // full-page load of /entities/{id}
+    document.body.addEventListener('htmx:beforeRequest', onTreeEvent(function (root, e) { onTreeBeforeRequest(e); }));
+    narrow.addEventListener('change', function (e) { if (!e.matches) closeTree(null); });
+
     // Tree listeners first: onTreeClick stops later body listeners for .add-btn.
     document.body.addEventListener('click', onTreeEvent(function (root, e) { onTreeClick(e); }));
     document.body.addEventListener('htmx:afterRequest', onTreeEvent(function (root, e) { onTreeAfterRequest(e); }));
     document.body.addEventListener('keydown', onTreeEvent(onTreeKeydown));
 
-    document.body.addEventListener('htmx:afterRequest', onAddFormAfterRequest);
-    document.body.addEventListener('htmx:afterRequest', onAddRootAfterRequest);
+    document.body.addEventListener('htmx:afterRequest', onModalFormAfterRequest);
     document.body.addEventListener('click', onDetailAddClick);
     document.body.addEventListener('click', onAddModalCancel);
     document.body.addEventListener('click', onParentPick);

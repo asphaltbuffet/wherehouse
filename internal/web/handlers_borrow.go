@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
@@ -24,10 +23,10 @@ type borrowFormData struct {
 	Note        string
 }
 
-// handleBorrowForm serves the borrow modal, pre-selecting a parent derived from
-// the entity the user is currently viewing.
+// handleBorrowForm serves the borrow modal, pre-selecting the nearest eligible
+// parent of the ?parent= entity (the page the button was on); none means root.
 func (s *Server) handleBorrowForm(w http.ResponseWriter, r *http.Request) {
-	parent, err := s.defaultBorrowParent(r.Context(), currentEntityID(r))
+	parent, err := s.defaultBorrowParent(r.Context(), r.URL.Query().Get("parent"))
 	if err != nil {
 		s.serverError(w, "resolve default parent", err)
 		return
@@ -36,20 +35,6 @@ func (s *Server) handleBorrowForm(w http.ResponseWriter, r *http.Request) {
 		ParentID:   parent.EntityID,
 		ParentPath: parent.FullPathDisplay,
 	})
-}
-
-// currentEntityID returns the entity ID when the HX-Current-URL header points at
-// /entities/{id}; any other page (or a missing/malformed header) yields "".
-func currentEntityID(r *http.Request) string {
-	u, err := url.Parse(r.Header.Get("Hx-Current-Url"))
-	if err != nil {
-		return ""
-	}
-	rest, ok := strings.CutPrefix(u.Path, "/entities/")
-	if !ok || rest == "" || strings.Contains(rest, "/") {
-		return ""
-	}
-	return rest
 }
 
 // defaultBorrowParent walks from entityID up the hierarchy to the nearest eligible

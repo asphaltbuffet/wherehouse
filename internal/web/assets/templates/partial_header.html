@@ -1,6 +1,7 @@
 {{define "header"}}
 <header class="app-header">
-  <a class="app-brand" href="/"><span class="app-brand-mark" aria-hidden="true"></span>Wherehouse</a>
+  <button id="tree-toggle" class="btn-ghost tree-toggle" type="button" aria-controls="tree-panel" aria-expanded="false">Inventory</button>
+  <a class="app-brand" href="/"><span class="app-brand-mark" aria-hidden="true"></span><span class="app-brand-name">Wherehouse</span></a>
   <form class="app-search"
         role="search"
         hx-get="/search"
@@ -11,22 +12,5 @@
     <label for="q" class="visually-hidden">Search inventory</label>
     <input id="q" name="q" type="search" placeholder="Search items and locations…" autocomplete="off">
   </form>
-  <div class="app-actions">
-    <span class="app-actor" title="{{.Source}}">acting as {{.Name}}</span>
-    <button class="btn-ghost"
-            aria-label="Add root location"
-            aria-haspopup="dialog"
-            aria-controls="add-modal"
-            hx-get="/entities/add"
-            hx-target="#add-modal-body"
-            hx-swap="innerHTML">+ Add root</button>
-    <button class="btn-ghost"
-            aria-label="Borrow an item"
-            aria-haspopup="dialog"
-            aria-controls="add-modal"
-            hx-get="/entities/borrow"
-            hx-target="#add-modal-body"
-            hx-swap="innerHTML">Borrow</button>
-  </div>
 </header>
 {{end}}

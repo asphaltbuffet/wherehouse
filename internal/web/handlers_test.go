@@ -56,6 +56,7 @@ type fakeApp struct {
 	lastActor    string // ActorID from the most recent mutating call
 
 	lastCreateReq app.CreateEntityRequest // most recent CreateEntity request
+	createResult  app.EntityResult
 
 	returnErr     error
 	lastReturnReq app.ChangeStatusRequest
@@ -69,6 +70,9 @@ type fakeApp struct {
 	hasChildren      map[string]bool // parentID → HasLiveChildren result; missing key ⇒ false
 	hasChildrenErr   error
 	hasChildrenCalls int
+
+	children    map[string][]app.EntityResult // parentID → GetChildren result; nil map ⇒ legacy "_child" lookup
+	childrenErr error
 
 	parentResults   []app.FindResult
 	parentCalls     int
@@ -208,6 +212,12 @@ func (f *fakeApp) GetChildren(_ context.Context, parentID string) ([]app.EntityR
 	if f.err != nil {
 		return nil, f.err
 	}
+	if f.childrenErr != nil {
+		return nil, f.childrenErr
+	}
+	if f.children != nil {
+		return f.children[parentID], nil
+	}
 	var out []app.EntityResult
 	for _, e := range f.entities {
 		if e.EntityID == parentID+"_child" {
@@ -224,7 +234,7 @@ func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.
 func (f *fakeApp) CreateEntity(_ context.Context, req app.CreateEntityRequest) (app.EntityResult, error) {
 	f.lastActor = req.ActorID
 	f.lastCreateReq = req
-	return app.EntityResult{}, f.err
+	return f.createResult, f.err
 }
 
 func (f *fakeApp) RenameEntity(_ context.Context, req app.RenameEntityRequest) (app.EntityResult, error) {

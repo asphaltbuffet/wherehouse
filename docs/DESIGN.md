@@ -432,6 +432,8 @@ Env override supported.
 - Thin layer over the app layer (`wherehouse serve`).
 - No direct event writes.
 - No duplicated domain logic.
+- One markup structure for every viewport; layout adapts with CSS at a single `48rem` breakpoint, and touch sizing follows `pointer: coarse` ([ADR 0037](adr/0037-web-ui-single-markup-across-viewports.md)).
+- Navigation works without the tree: `/` lists the roots, each detail lists its contents, and breadcrumbs (starting at Inventory) lead back up. Below the breakpoint the tree is a drawer.
 
 Architecture:
 
