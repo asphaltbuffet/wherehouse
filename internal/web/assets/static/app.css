@@ -1,15 +1,32 @@
 /* ── Fonts ───────────────────────────────────────────────────────────── */
+/* Barlow / Barlow Condensed: SIL OFL 1.1, see fonts/OFL-Barlow.txt */
 @font-face {
-  font-family: "Space Grotesk";
-  src: url("/static/fonts/SpaceGrotesk-Regular.woff2") format("woff2");
+  font-family: "Barlow";
+  src: url("/static/fonts/Barlow-Regular.woff2") format("woff2");
   font-weight: 400; font-style: normal; font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
     U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
     U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "Space Grotesk";
-  src: url("/static/fonts/SpaceGrotesk-Bold.woff2") format("woff2");
+  font-family: "Barlow";
+  src: url("/static/fonts/Barlow-Medium.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow";
+  src: url("/static/fonts/Barlow-SemiBold.woff2") format("woff2");
+  font-weight: 600; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  src: url("/static/fonts/BarlowCondensed-Bold.woff2") format("woff2");
   font-weight: 700; font-style: normal; font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
     U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
@@ -26,30 +43,27 @@
 
 /* ── Tokens — light (default) ────────────────────────────────────────── */
 :root {
-  /* colour */
-  --color-surface:          #f3f5f7;
-  --color-raised:           #e3e8ee;
-  --color-selected:         #d8e6e6;
-  --color-border:           #d8dee5;
-  --color-border-strong:    #b8c1cb;
-  --color-text:             #1f2933;
-  --color-text-muted:       #5a6573;
-  --color-text-faint:       #8893a0;
-  --color-accent:           #3d6b6b;
-  --color-accent-contrast:  #ffffff;
-  --color-focus-ring:       #3d6b6b;
-  --color-error:            #a13030;
-  /* badge pairs */
-  --badge-ok-bg:            #cfe3d8;
-  --badge-ok-fg:            #1f4634;
-  --badge-borrowed-bg:      #f1e3b8;
-  --badge-borrowed-fg:      #5e4515;
-  --badge-loaned-bg:        #cddeec;
-  --badge-loaned-fg:        #1f3c5c;
-  --badge-missing-bg:       #f1d4cf;
-  --badge-missing-fg:       #6e2620;
+  /* colour: cabinet steel, drawer fronts, ink, label tape */
+  --color-surface:          #d7dbd4;
+  --color-raised:           #eceee8;
+  --color-selected:         #eceee8;
+  --color-border:           #1d211f26;
+  --color-border-strong:    #1d211f59;
+  --color-text:             #1d211f;
+  --color-text-muted:       #4d5550;
+  --color-text-faint:       #6b746e;
+  --color-accent:           #1d211f;
+  --color-accent-contrast:  #eceee8;
+  --color-focus-ring:       #1d211f;
+  --color-error:            #a63f00;
+  --tape:                   #f2dd3a;
+  --tape-ink:               #1d211f;
+  /* status marks — darkened Wong hues for ≥3:1 on steel */
+  --status-borrowed:        #9a6700;
+  --status-loaned:          #0072b2;
+  --status-missing:         #b84f00;
   /* shadow */
-  --shadow-modal:           0 8px 32px rgba(20,30,40,0.18);
+  --shadow-modal:           0 8px 28px #1d211f40;
   /* spacing scale */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -58,45 +72,42 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
   /* type scale */
-  --font-size-xs:   0.75rem;
+  --font-size-xs:   0.8125rem;
   --font-size-sm:   0.875rem;
   --font-size-base: 1rem;
-  --font-size-lg:   1.125rem;
-  --line-tight:     1.25;
-  --line-base:      1.5;
+  --font-size-lg:   1.1875rem;
+  --font-size-tape: 1.75rem;
+  --line-tight:     1.2;
+  --line-base:      1.45;
   /* misc */
-  --radius-sm:   4px;
-  --radius-md:   6px;
+  --radius-sm:   3px;
+  --radius-md:   4px;
   --radius-pill: 999px;
-  --font-body: "Space Grotesk", system-ui, sans-serif;
-  --font-mono: "Space Mono", ui-monospace, Menlo, monospace;
+  --font-body:    "Barlow", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, Menlo, monospace;
   --transition-fast: 120ms ease;
 }
 
 /* ── Tokens — dark ───────────────────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-surface:         #161a1f;
-    --color-raised:          #1f242b;
-    --color-selected:        #2a3a3a;
-    --color-border:          #2c333b;
-    --color-border-strong:   #404853;
-    --color-text:            #e6ebf1;
-    --color-text-muted:      #9aa4b1;
-    --color-text-faint:      #6d7785;
-    --color-accent:          #6ea3a3;
-    --color-accent-contrast: #0d1417;
-    --color-focus-ring:      #7fb8b8;
-    --color-error:           #e58a8a;
-    --badge-ok-bg:           #1f4634;
-    --badge-ok-fg:           #cfe3d8;
-    --badge-borrowed-bg:     #4a3611;
-    --badge-borrowed-fg:     #f1e3b8;
-    --badge-loaned-bg:       #1c3450;
-    --badge-loaned-fg:       #cddeec;
-    --badge-missing-bg:      #5a221d;
-    --badge-missing-fg:      #f3d8d3;
-    --shadow-modal:          0 8px 32px rgba(0,0,0,0.6);
+    --color-surface:         #24292a;
+    --color-raised:          #2f3536;
+    --color-selected:        #2f3536;
+    --color-border:          #e4e7e126;
+    --color-border-strong:   #e4e7e159;
+    --color-text:            #e4e7e1;
+    --color-text-muted:      #9aa39d;
+    --color-text-faint:      #79827c;
+    --color-accent:          #e4e7e1;
+    --color-accent-contrast: #24292a;
+    --color-focus-ring:      #e4e7e1;
+    --color-error:           #ef7a3a;
+    --status-borrowed:       #f0b429;
+    --status-loaned:         #56b4e9;
+    --status-missing:        #ef7a3a;
+    --shadow-modal:          0 8px 28px #00000099;
   }
 }
 
@@ -115,6 +126,7 @@
 :focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--tape);
   border-radius: var(--radius-sm);
 }
 
@@ -351,10 +363,6 @@ h1, h2, h3 {
   background: var(--color-raised);
   color: var(--color-text-muted);
 }
-.badge.ok      { background: var(--badge-ok-bg);       color: var(--badge-ok-fg); }
-.badge.borrowed { background: var(--badge-borrowed-bg); color: var(--badge-borrowed-fg); }
-.badge.loaned  { background: var(--badge-loaned-bg);   color: var(--badge-loaned-fg); }
-.badge.missing { background: var(--badge-missing-bg);  color: var(--badge-missing-fg); }
 .badge.removed { background: transparent; color: var(--color-text-muted); text-decoration: line-through; }
 
 /* ── Add button (per tree item) ──────────────────────────────────────── */
