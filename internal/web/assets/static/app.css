@@ -527,6 +527,15 @@ h1, h2, h3 {
 .child-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .child-row .chevron { color: var(--color-text-muted); }
 .children-empty { color: var(--color-text-faint); font-style: italic; }
+
+/* Names and paths may be one unbroken word; let them wrap instead of
+   scrolling their panel sideways. Flex children also need min-width: 0. */
+.detail-facts dd, .sr-name, .sr-path, [data-parent-label],
+.parent-options li > *, .tree-item > [id^="tree-label-"],
+.search-result-item > div {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
 .detail-action-btn:disabled { opacity: 0.45; cursor: default; }
 
 .history-heading {
