@@ -13,7 +13,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
-// CreateEntity creates a new entity, resolving ParentPath to a parent entity ID if provided.
+// CreateEntity creates a new entity under req.ParentID (root when empty).
 func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (EntityResult, error) {
 	results, err := a.CreateEntities(ctx, []CreateEntityRequest{req})
 	if err != nil {
@@ -130,21 +130,32 @@ func checkMoveSource(entity *inventory.Entity, newParentID string) error {
 	return nil
 }
 
-// checkMoveDestinationTx rejects a non-root destination that is removed,
-// discrete, or the entity itself or one of its descendants.
+// getParentTx loads parentID as the parent of a new or moved entity. Create,
+// borrow and reparent share this rule: the parent must be live (a removed one
+// reads as ErrNotFound) and not discrete.
+func (a *App) getParentTx(ctx context.Context, tx store.Tx, parentID string) (*inventory.Entity, error) {
+	parent, err := a.store.GetLiveEntityTx(ctx, tx, parentID)
+	if err != nil {
+		return nil, wrapEntityError(parentID, err)
+	}
+	if parent.Discrete {
+		return nil, fmt.Errorf("%q is discrete and cannot hold entities: %w",
+			parent.FullPathDisplay, ErrInvalidDestination)
+	}
+	return parent, nil
+}
+
+// checkMoveDestinationTx rejects a non-root destination that fails
+// getParentTx, or is the entity itself or one of its descendants.
 func (a *App) checkMoveDestinationTx(
 	ctx context.Context,
 	tx store.Tx,
 	entity *inventory.Entity,
 	parentID string,
 ) error {
-	parent, err := a.store.GetLiveEntityTx(ctx, tx, parentID)
+	parent, err := a.getParentTx(ctx, tx, parentID)
 	if err != nil {
-		return wrapEntityError(parentID, err)
-	}
-	if parent.Discrete {
-		return fmt.Errorf("cannot move into %q: entity is discrete: %w",
-			parent.FullPathDisplay, ErrInvalidDestination)
+		return fmt.Errorf("cannot move %q: %w", entity.FullPathDisplay, err)
 	}
 	inside, err := a.isSelfOrDescendant(ctx, tx, entity.EntityID, parent.EntityID)
 	if err != nil {
@@ -445,9 +456,13 @@ func (a *App) CreateEntities(ctx context.Context, reqs []CreateEntityRequest) ([
 }
 
 func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntityRequest) (EntityResult, error) {
-	parentID, err := a.resolveParentID(ctx, tx, req)
-	if err != nil {
-		return EntityResult{}, err
+	var parentID *string
+	if req.ParentID != "" {
+		parent, err := a.getParentTx(ctx, tx, req.ParentID)
+		if err != nil {
+			return EntityResult{}, err
+		}
+		parentID = &parent.EntityID
 	}
 
 	entityID, err := nanoid.New()
@@ -483,32 +498,4 @@ func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntit
 	}
 
 	return entityToResult(entity, nil), nil
-}
-
-func (a *App) resolveParentID(ctx context.Context, tx store.Tx, req CreateEntityRequest) (*string, error) {
-	if req.ParentPath == "" {
-		return nil, nil //nolint:nilnil // nil *string is the correct "no parent" sentinel
-	}
-
-	if req.CreateParents {
-		p, err := entitypath.Parse(req.ParentPath + ":" + req.DisplayName)
-		if err != nil {
-			return nil, fmt.Errorf("parse full path: %w", err)
-		}
-		if _, _, err = a.ensureAncestors(ctx, tx, p.Segments(), BulkAddOptions{
-			CreateParents: true,
-			ActorID:       req.ActorID,
-		}); err != nil {
-			return nil, err
-		}
-	}
-
-	parent, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
-	if err != nil {
-		return nil, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
-	}
-	if parent.Discrete {
-		return nil, fmt.Errorf("cannot add child to %q: entity is discrete", parent.FullPathDisplay)
-	}
-	return &parent.EntityID, nil
 }

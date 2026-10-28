@@ -199,7 +199,7 @@ func TestBulkAddEntities_DiscreteDirectParent_HardError(t *testing.T) {
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "test"})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Box", ParentPath: "Garage", Discrete: true, ActorID: "test",
+		DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Garage"), Discrete: true, ActorID: "test",
 	})
 	require.NoError(t, err)
 
@@ -217,4 +217,81 @@ func TestBulkAddEntities_MissingParent_HardErrorWithoutFlag(t *testing.T) {
 	_, err := a.BulkAddEntities(ctx, rows, app.BulkAddOptions{ActorID: "test"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--create-parents")
+}
+
+func TestAddEntitiesAtPaths_ReturnsLeavesOnly(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	got, err := a.AddEntitiesAtPaths(t.Context(),
+		[]app.BulkAddRow{{Path: "A:B"}, {Path: "C"}},
+		app.BulkAddOptions{ActorID: "test", CreateParents: true})
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "A:B", got[0].FullPathDisplay)
+	assert.Equal(t, "C", got[1].FullPathDisplay)
+	_, err = a.LookupEntityByPath(t.Context(), "A")
+	require.NoError(t, err, "ancestor is still created")
+}
+
+// Names are not unique: an existing entity at the same path is not a duplicate.
+func TestAddEntitiesAtPaths_CreatesAlongsideExisting(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	first, err := a.AddEntitiesAtPaths(
+		t.Context(),
+		[]app.BulkAddRow{{Path: "Bin"}},
+		app.BulkAddOptions{ActorID: "test"},
+	)
+	require.NoError(t, err)
+
+	second, err := a.AddEntitiesAtPaths(
+		t.Context(),
+		[]app.BulkAddRow{{Path: "Bin"}},
+		app.BulkAddOptions{ActorID: "test"},
+	)
+
+	require.NoError(t, err)
+	require.Len(t, second, 1)
+	assert.NotEqual(t, first[0].EntityID, second[0].EntityID)
+}
+
+// A later row may name a parent an earlier row in the same call creates.
+func TestAddEntitiesAtPaths_SameBatchParent(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	got, err := a.AddEntitiesAtPaths(t.Context(),
+		[]app.BulkAddRow{{Path: "Garage"}, {Path: "Garage:Bin", Discrete: true}},
+		app.BulkAddOptions{ActorID: "test"})
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, got[0].EntityID, got[1].ParentID)
+	assert.True(t, got[1].Discrete)
+}
+
+func TestAddEntitiesAtPaths_AllOrNothing(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	_, err := a.AddEntitiesAtPaths(t.Context(),
+		[]app.BulkAddRow{{Path: "Garage"}, {Path: "Nowhere:Bin"}},
+		app.BulkAddOptions{ActorID: "test"})
+
+	require.ErrorContains(t, err, "not found")
+	entities, err := a.ListEntities(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, entities)
+}
+
+// A missing parent is ErrNotFound, so callers can tell it from other failures.
+func TestAddEntitiesAtPaths_MissingParent_NotFound(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	_, err := a.AddEntitiesAtPaths(
+		t.Context(),
+		[]app.BulkAddRow{{Path: "Nowhere:Bin"}},
+		app.BulkAddOptions{ActorID: "test"},
+	)
+
+	require.ErrorIs(t, err, app.ErrNotFound)
+	assert.ErrorContains(t, err, "--create-parents")
 }

@@ -30,9 +30,15 @@ func (a *App) LookupEntityByPath(ctx context.Context, path string) (EntityResult
 
 CLI commands that accept a path argument call this method before constructing a mutating request.
 
-### Creation requests retain `ParentPath`
+### Creation requests take `ParentID`
 
-`CreateEntityRequest.ParentPath` and `BorrowEntityRequest.ParentPath` are unchanged. These fields carry genuine user input (the user types or selects a destination path), not a reference to an entity the caller already holds. PathResolution for creation is the CLI's responsibility as today.
+*Amended (#288).* This ADR originally exempted `CreateEntityRequest` and `BorrowEntityRequest`, keeping `ParentPath` on the grounds that a creation destination is typed user input rather than a reference the caller already holds. The web parent picker invalidated that premise: it holds the chosen parent's `entity_id`, and round-tripping it through `FullPathDisplay` re-resolved to the *first* same-named match, so an entity picked under the second of two same-named siblings was created under the first.
+
+Both structs now take `ParentID string` (empty = root). The parent is validated by ID inside the creating transaction — it must be live and not discrete (the same rule reparent uses) — which also closes the lookup-then-create race (#144).
+
+- **Web** passes the picked `parent_id` straight through.
+- **CLI `add`** routes positional arguments through the bulk-load path (the same one `add --file` uses, with duplicates allowed). That path resolves each parent path inside the transaction, so `--create-parents` and batches whose later paths depend on earlier ones (`add Garage Garage:Bin`) keep working atomically. `CreateParents` is a bulk-load option, not a field on `CreateEntityRequest`.
+- **CLI `borrow`** resolves each parent with `LookupEntityByPath` before building requests. A parent created earlier in the same `borrow` invocation is therefore not resolvable; that case is deliberately unsupported.
 
 ### TUI `App` interface shape is unchanged
 

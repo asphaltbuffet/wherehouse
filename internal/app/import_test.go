@@ -204,7 +204,7 @@ func seedReparentScenario(t *testing.T) (*app.App, []app.ExportResult) {
 		ctx,
 		app.CreateEntityRequest{
 			DisplayName: "Parent", ActorID: "alice",
-			ParentPath: gp1.FullPathDisplay,
+			ParentID: gp1.EntityID,
 		},
 	)
 	require.NoError(t, err)
@@ -213,7 +213,7 @@ func seedReparentScenario(t *testing.T) (*app.App, []app.ExportResult) {
 		ctx,
 		app.CreateEntityRequest{
 			DisplayName: "Child", ActorID: "alice",
-			ParentPath: parent.FullPathDisplay,
+			ParentID: parent.EntityID,
 		},
 	)
 	require.NoError(t, err)

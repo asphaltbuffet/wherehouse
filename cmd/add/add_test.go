@@ -3,6 +3,7 @@ package add_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -28,7 +29,7 @@ func TestRunAdd_HappyPath(t *testing.T) {
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: tc.name,
-			ParentPath:  tc.parent,
+			ParentID:    apptesting.MustLookupID(t, a, tc.parent),
 			ActorID:     "test",
 		})
 		require.NoError(t, err)
@@ -335,4 +336,56 @@ func writeTempCSV(t *testing.T, content string) string {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	return f.Name()
+}
+
+// A later arg may name a parent an earlier arg creates (single transaction).
+func TestRunAdd_SameBatchParent(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	cmd := add.NewAddCmd(a)
+	cmd.SetArgs([]string{"Garage", "Garage:Bin"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	garage, err := a.LookupEntityByPath(t.Context(), "Garage")
+	require.NoError(t, err)
+	bin, err := a.LookupEntityByPath(t.Context(), "Garage:Bin")
+	require.NoError(t, err)
+	assert.Equal(t, garage.EntityID, bin.ParentID)
+}
+
+// Review Focus #1: positional add never skips an existing same-path entity.
+func TestRunAdd_ExistingPathCreatesAnother(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	for range 2 {
+		cmd := add.NewAddCmd(a)
+		cmd.SetArgs([]string{"Bin"})
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		require.NoError(t, cmd.Execute())
+	}
+
+	entities, err := a.ListEntities(t.Context())
+	require.NoError(t, err)
+	assert.Len(t, entities, 2)
+}
+
+// Review Focus #2: --create-parents reports only the requested entity.
+func TestRunAdd_CreateParents_JSONListsLeafOnly(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	cmd := add.NewAddCmd(a)
+	cmd.SetContext(
+		context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithJSON())),
+	)
+	cmd.SetArgs([]string{"A:B", "--create-parents"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	var out []app.AddOutput
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &out))
+	require.Len(t, out, 1)
+	assert.Equal(t, "A:B", out[0].Path)
 }

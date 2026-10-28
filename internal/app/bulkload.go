@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -179,6 +180,38 @@ func (a *App) BulkAddEntities(ctx context.Context, rows []BulkAddRow, opts BulkA
 	return result, nil
 }
 
+// AddEntitiesAtPaths creates one entity per row in a single transaction and
+// returns them in row order, without the ancestors CreateParents adds. Unlike
+// BulkAddEntities it never skips a row: names are not unique, so an existing
+// entity at the same path is not a duplicate. opts.AllowDuplicates is ignored.
+func (a *App) AddEntitiesAtPaths(ctx context.Context, rows []BulkAddRow, opts BulkAddOptions) ([]EntityResult, error) {
+	if len(rows) == 0 {
+		return nil, errors.New("AddEntitiesAtPaths: at least one row required")
+	}
+
+	results := make([]EntityResult, len(rows))
+	err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		for i, row := range rows {
+			p, err := entitypath.Parse(row.Path)
+			if err != nil {
+				return fmt.Errorf("invalid path %q: %w", row.Path, err)
+			}
+			if _, _, err = a.ensureAncestors(ctx, tx, p.Segments(), opts); err != nil {
+				return err
+			}
+			results[i], err = a.createRowEntityInTx(ctx, tx, p, row, opts.ActorID)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 // bulkAddRowInTx handles one CSV row within an open transaction.
 // Returns (created entities, skip reason, warnings, error).
 // A non-nil skip means the row was skipped without error.
@@ -211,16 +244,37 @@ func (a *App) bulkAddRowInTx(
 		}
 	}
 
-	// Create the entity itself.
-	result, createErr := a.createEntityInTx(ctx, tx, CreateEntityRequest{
+	result, err := a.createRowEntityInTx(ctx, tx, p, row, opts.ActorID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	parentEntities = append(parentEntities, result)
+	return parentEntities, nil, warnings, nil
+}
+
+// createRowEntityInTx creates the entity a row names at p, with its tags, under
+// the existing parent at p.Dir(). Ancestors must already exist.
+func (a *App) createRowEntityInTx(
+	ctx context.Context,
+	tx store.Tx,
+	p entitypath.Path,
+	row BulkAddRow,
+	actorID string,
+) (EntityResult, error) {
+	parentID, err := a.parentIDForPathTx(ctx, tx, p.Dir().String())
+	if err != nil {
+		return EntityResult{}, err
+	}
+	result, err := a.createEntityInTx(ctx, tx, CreateEntityRequest{
 		DisplayName: p.Base(),
 		Locked:      row.Locked,
 		Discrete:    row.Discrete,
-		ParentPath:  p.Dir().String(),
-		ActorID:     opts.ActorID,
+		ParentID:    parentID,
+		ActorID:     actorID,
 	})
-	if createErr != nil {
-		return nil, nil, nil, fmt.Errorf("create %q: %w", row.Path, createErr)
+	if err != nil {
+		return EntityResult{}, fmt.Errorf("create %q: %w", row.Path, err)
 	}
 
 	// Apply tags within the same transaction.
@@ -229,16 +283,14 @@ func (a *App) bulkAddRowInTx(
 		payload := eventbus.EntityTagAddedPayload{EntityID: result.EntityID, Tag: canonical}
 		raw, marshalErr := json.Marshal(payload)
 		if marshalErr != nil {
-			return nil, nil, nil, fmt.Errorf("marshal tag payload: %w", marshalErr)
+			return EntityResult{}, fmt.Errorf("marshal tag payload: %w", marshalErr)
 		}
-		_, dispErr := a.bus.DispatchInTx(ctx, tx, inventory.EntityTagAddedEvent, opts.ActorID, raw, nil)
+		_, dispErr := a.bus.DispatchInTx(ctx, tx, inventory.EntityTagAddedEvent, actorID, raw, nil)
 		if dispErr != nil {
-			return nil, nil, nil, fmt.Errorf("add tag %q to %q: %w", tag, row.Path, dispErr)
+			return EntityResult{}, fmt.Errorf("add tag %q to %q: %w", tag, row.Path, dispErr)
 		}
 	}
-
-	parentEntities = append(parentEntities, result)
-	return parentEntities, nil, warnings, nil
+	return result, nil
 }
 
 // ensureAncestors walks path segments [0..len-1) and ensures each ancestor exists.
@@ -270,15 +322,19 @@ func (a *App) ensureAncestors(
 
 		if !opts.CreateParents {
 			return nil, nil, fmt.Errorf(
-				"parent %q not found (use --create-parents to create missing ancestors)",
-				ancestorPath.String(),
+				"parent %q %w (use --create-parents to create missing ancestors)",
+				ancestorPath.String(), ErrNotFound,
 			)
 		}
 
 		parentPath, _ := entitypath.New(segments[:depth-1]...)
+		parentID, idErr := a.parentIDForPathTx(ctx, tx, parentPath.String())
+		if idErr != nil {
+			return nil, nil, idErr
+		}
 		parentResult, createErr := a.createEntityInTx(ctx, tx, CreateEntityRequest{
 			DisplayName: segments[depth-1],
-			ParentPath:  parentPath.String(),
+			ParentID:    parentID,
 			ActorID:     opts.ActorID,
 		})
 		if createErr != nil {
@@ -288,4 +344,17 @@ func (a *App) ensureAncestors(
 	}
 
 	return created, warnings, nil
+}
+
+// parentIDForPathTx resolves a parent path to its entity ID inside tx. An empty
+// path is the root and resolves to "".
+func (a *App) parentIDForPathTx(ctx context.Context, tx store.Tx, path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	parent, err := a.resolveEntityPathTx(ctx, tx, path)
+	if err != nil {
+		return "", fmt.Errorf("resolve parent path %q: %w", path, err)
+	}
+	return parent.EntityID, nil
 }

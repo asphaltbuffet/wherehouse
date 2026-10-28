@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -22,14 +23,19 @@ func seedEntityInStatus(t *testing.T, a *app.App, status inventory.EntityStatus)
 
 	if status == inventory.EntityStatusBorrowed {
 		_, err = a.BorrowEntities(ctx, []app.BorrowEntityRequest{
-			{DisplayName: "Item", ParentPath: "Box", StatusContext: "Alice", ActorID: "test"},
+			{
+				DisplayName:   "Item",
+				ParentID:      apptesting.MustLookupID(t, a, "Box"),
+				StatusContext: "Alice",
+				ActorID:       "test",
+			},
 		})
 		require.NoError(t, err)
 		return
 	}
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Item", ParentPath: "Box", ActorID: "test",
+		DisplayName: "Item", ParentID: apptesting.MustLookupID(t, a, "Box"), ActorID: "test",
 	})
 	require.NoError(t, err)
 
@@ -157,7 +163,10 @@ func TestStatusBatch_IllegalTransitionRollsBackBatch(t *testing.T) {
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "test"})
 	require.NoError(t, err)
 	for _, name := range []string{"A", "B"} {
-		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: name, ParentPath: "Box", ActorID: "test"})
+		_, err = a.CreateEntity(
+			ctx,
+			app.CreateEntityRequest{DisplayName: name, ParentID: apptesting.MustLookupID(t, a, "Box"), ActorID: "test"},
+		)
 		require.NoError(t, err)
 	}
 

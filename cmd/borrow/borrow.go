@@ -57,6 +57,7 @@ func runBorrow(cmd *cobra.Command, args []string, a *app.App) error {
 	fromFlag, _ := cmd.Flags().GetString("from")
 	noteFlag, _ := cmd.Flags().GetString("note")
 
+	parentIDs := make(map[string]string) // parent path → entity ID, one lookup per distinct path
 	reqs := make([]app.BorrowEntityRequest, 0, len(args))
 	for _, arg := range args {
 		p, err := entitypath.Parse(arg)
@@ -67,9 +68,19 @@ func runBorrow(cmd *cobra.Command, args []string, a *app.App) error {
 		if name == "" {
 			return fmt.Errorf("cannot determine entity name from %q", arg)
 		}
+		dir := p.Dir().String()
+		parentID, seen := parentIDs[dir]
+		if !seen && dir != "" {
+			parent, lookupErr := a.LookupEntityByPath(ctx, dir)
+			if lookupErr != nil {
+				return fmt.Errorf("failed to borrow %q: %w", arg, lookupErr)
+			}
+			parentID = parent.EntityID
+			parentIDs[dir] = parentID
+		}
 		reqs = append(reqs, app.BorrowEntityRequest{
 			DisplayName:   name,
-			ParentPath:    p.Dir().String(),
+			ParentID:      parentID,
 			StatusContext: fromFlag,
 			ActorID:       cli.GetActorUserID(ctx),
 			Note:          noteFlag,

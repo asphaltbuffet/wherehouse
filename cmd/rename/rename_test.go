@@ -25,7 +25,7 @@ func seedForRename(t *testing.T, a *app.App) {
 		{"OldName", "Garage"},
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: tc.name, ParentPath: tc.parent,
+			DisplayName: tc.name, ParentID: apptesting.MustLookupID(t, a, tc.parent),
 			ActorID: "test",
 		})
 		require.NoError(t, err)

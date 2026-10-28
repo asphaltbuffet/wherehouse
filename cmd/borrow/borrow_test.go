@@ -105,7 +105,12 @@ func TestRunBorrow_BlocksLost(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentPath: "Shelf", StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -122,7 +127,12 @@ func TestRunBorrow_BlocksFound(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentPath: "Shelf", StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -139,7 +149,12 @@ func TestRunBorrow_BlocksLoan(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentPath: "Shelf", StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -156,7 +171,12 @@ func TestRunBorrow_BlocksRemove(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentPath: "Shelf", StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -173,7 +193,12 @@ func TestRunBorrow_ReturnSetsRemoved(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentPath: "Shelf", StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -191,4 +216,34 @@ func TestRunBorrow_ReturnSetsRemoved(t *testing.T) {
 			assert.Equal(t, inventory.EntityStatusRemoved, e.Status)
 		}
 	}
+}
+
+// A parent created earlier in the same borrow invocation is deliberately unsupported (#288).
+func TestRunBorrow_SameInvocationParent_NotFound(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	cmd := borrow.NewBorrowCmd(a)
+	cmd.SetArgs([]string{"X", "X:y", "--from", "Bob"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	require.ErrorIs(t, cmd.Execute(), app.ErrNotFound)
+	entities, err := a.ListEntities(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, entities, "nothing is created when a parent fails to resolve")
+}
+
+// Review Focus #5: a root-level borrow does no path lookup.
+func TestRunBorrow_Root(t *testing.T) {
+	a := apptesting.OpenApp(t)
+
+	cmd := borrow.NewBorrowCmd(a)
+	cmd.SetArgs([]string{"Ladder", "--from", "Bob"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	got, err := a.LookupEntityByPath(t.Context(), "Ladder")
+	require.NoError(t, err)
+	assert.Empty(t, got.ParentID)
 }

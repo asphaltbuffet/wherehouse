@@ -20,7 +20,12 @@ func seedBorrowedCaseWithBits(t *testing.T, a *app.App) (string, string) {
 	})
 	require.NoError(t, err)
 	b, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
-		{DisplayName: "Bits", ParentPath: "Drill Case", StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Bits",
+			ParentID:      apptesting.MustLookupID(t, a, "Drill Case"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 	return c[0].EntityID, b[0].EntityID
@@ -57,7 +62,14 @@ func TestMarkReturned_LoanedWithChildrenAllowed(t *testing.T) {
 	ctx := t.Context()
 	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Toolbox", ActorID: "test"})
 	require.NoError(t, err)
-	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Socket", ParentPath: "Toolbox", ActorID: "test"})
+	_, err = a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{
+			DisplayName: "Socket",
+			ParentID:    apptesting.MustLookupID(t, a, "Toolbox"),
+			ActorID:     "test",
+		},
+	)
 	require.NoError(t, err)
 	_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{
 		{EntityID: box.EntityID, StatusContext: "Bob", ActorID: "test"},

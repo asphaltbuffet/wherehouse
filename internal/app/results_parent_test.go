@@ -17,7 +17,7 @@ func TestEntityResult_ParentID(t *testing.T) {
 	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "test"})
 	require.NoError(t, err)
 	item, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Item", ParentPath: "Box", ActorID: "test",
+		DisplayName: "Item", ParentID: apptesting.MustLookupID(t, a, "Box"), ActorID: "test",
 	})
 	require.NoError(t, err)
 

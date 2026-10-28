@@ -23,7 +23,7 @@ func seedForTagCmd(t *testing.T, a *app.App) {
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(t.Context(), app.CreateEntityRequest{
-		DisplayName: "Wrench", ParentPath: "Garage", ActorID: "alice",
+		DisplayName: "Wrench", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 }

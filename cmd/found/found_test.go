@@ -26,7 +26,7 @@ func seedForFound(t *testing.T, a *app.App) {
 		{"Hammer", "Garage:Toolbox"},
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: tc.name, ParentPath: tc.parent,
+			DisplayName: tc.name, ParentID: apptesting.MustLookupID(t, a, tc.parent),
 			ActorID: "test",
 		})
 		require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestRunFound_WorksOnLockedEntity(t *testing.T) {
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Wrench", ParentPath: "Garage", Locked: false, ActorID: "test",
+		DisplayName: "Wrench", ParentID: apptesting.MustLookupID(t, a, "Garage"), Locked: false, ActorID: "test",
 	})
 	require.NoError(t, err)
 

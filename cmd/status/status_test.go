@@ -28,7 +28,7 @@ func seedForStatus(t *testing.T, a *app.App) {
 		{"Wrench", "Garage:Toolbox"},
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: tc.name, ParentPath: tc.parent,
+			DisplayName: tc.name, ParentID: apptesting.MustLookupID(t, a, tc.parent),
 			ActorID: "test",
 		})
 		require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestRunStatus_MultipleMatches_RankedByEventID(t *testing.T) {
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(t.Context(), app.CreateEntityRequest{
-		DisplayName: "Wrench", ParentPath: "Garage:Toolbox", ActorID: "test",
+		DisplayName: "Wrench", ParentID: apptesting.MustLookupID(t, a, "Garage:Toolbox"), ActorID: "test",
 	})
 	require.NoError(t, err)
 

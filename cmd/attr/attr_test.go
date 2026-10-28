@@ -21,7 +21,7 @@ func seed(t *testing.T, a *app.App) {
 		{"Garage", ""}, {"Shelf", "Garage"}, {"Nails", "Garage"},
 	} {
 		_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
-			DisplayName: tc.name, ParentPath: tc.parent, ActorID: "test",
+			DisplayName: tc.name, ParentID: apptesting.MustLookupID(t, a, tc.parent), ActorID: "test",
 		})
 		require.NoError(t, err)
 	}

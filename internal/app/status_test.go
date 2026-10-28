@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -21,7 +22,7 @@ func TestMarkLost_Missing(t *testing.T) {
 	require.NoError(t, err)
 
 	wrench, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Wrench", ParentPath: "Garage", ActorID: "alice",
+		DisplayName: "Wrench", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 

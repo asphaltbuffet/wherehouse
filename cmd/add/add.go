@@ -92,27 +92,22 @@ func runAdd(cmd *cobra.Command, args []string, a *app.App) error {
 		}
 	}
 
-	reqs := make([]app.CreateEntityRequest, 0, len(args))
+	rows := make([]app.BulkAddRow, 0, len(args))
 	for _, arg := range args {
 		p, parseErr := entitypath.Parse(arg)
 		if parseErr != nil {
 			return fmt.Errorf("failed to add %q: %w", arg, parseErr)
 		}
-		name := p.Base()
-		if name == "" {
+		if p.Base() == "" {
 			return fmt.Errorf("cannot determine entity name from %q", arg)
 		}
-		reqs = append(reqs, app.CreateEntityRequest{
-			DisplayName:   name,
-			Locked:        locked,
-			Discrete:      discrete,
-			ParentPath:    p.Dir().String(),
-			ActorID:       cli.GetActorUserID(ctx),
-			CreateParents: createParents,
-		})
+		rows = append(rows, app.BulkAddRow{Path: arg, Locked: locked, Discrete: discrete})
 	}
 
-	results, err := a.CreateEntities(ctx, reqs)
+	results, err := a.AddEntitiesAtPaths(ctx, rows, app.BulkAddOptions{
+		CreateParents: createParents,
+		ActorID:       cli.GetActorUserID(ctx),
+	})
 	if err != nil {
 		return err
 	}

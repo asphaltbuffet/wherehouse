@@ -31,21 +31,10 @@ func (s *Server) renderAddForm(w http.ResponseWriter, _ *http.Request, parentID 
 	s.renderHTML(w, "add_item_form", addFormData{ParentID: parentID, Target: target})
 }
 
-// handleAddItem processes the POST form, creates the entity, and returns a fresh tree_node fragment.
+// handleAddItem processes the POST form, creates the entity under the picked
+// parent, and returns a fresh tree_node fragment.
 func (s *Server) handleAddItem(w http.ResponseWriter, r *http.Request) {
-	parentID := r.PathValue("parentID")
-
-	parent, err := s.cfg.App.GetEntityByID(r.Context(), parentID)
-	if err != nil {
-		if errors.Is(err, app.ErrNotFound) {
-			http.Error(w, "parent entity not found", http.StatusNotFound)
-			return
-		}
-		s.serverError(w, "get parent entity", err)
-		return
-	}
-
-	s.createAndRenderNode(w, r, parent.FullPathDisplay)
+	s.createAndRenderNode(w, r, r.PathValue("parentID"))
 }
 
 // handleRootAddItem processes the POST form for a new root-level entity.
@@ -53,7 +42,7 @@ func (s *Server) handleRootAddItem(w http.ResponseWriter, r *http.Request) {
 	s.createAndRenderNode(w, r, "")
 }
 
-func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, parentPath string) {
+func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, parentID string) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
@@ -69,11 +58,18 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 		DisplayName: displayName,
 		Locked:      r.FormValue("locked") != "",
 		Discrete:    r.FormValue("discrete") != "",
-		ParentPath:  parentPath,
+		ParentID:    parentID,
 		ActorID:     s.actorFor(r),
 	})
 	if err != nil {
-		s.serverError(w, "create entity", err)
+		switch {
+		case errors.Is(err, app.ErrNotFound):
+			http.Error(w, "parent entity not found", http.StatusNotFound)
+		case errors.Is(err, app.ErrInvalidDestination):
+			http.Error(w, "that location can't hold items", http.StatusUnprocessableEntity)
+		default:
+			s.serverError(w, "create entity", err)
+		}
 		return
 	}
 

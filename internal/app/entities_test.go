@@ -81,7 +81,7 @@ func TestCreateEntity_NestedPath(t *testing.T) {
 
 	result, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Toolbox",
-		ParentPath:  "Garage",
+		ParentID:    apptesting.MustLookupID(t, a, "Garage"),
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
@@ -101,9 +101,10 @@ func TestCreateEntity_DiscreteParent_Error(t *testing.T) {
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Nail",
-		ParentPath:  "Box of Nails",
+		ParentID:    apptesting.MustLookupID(t, a, "Box of Nails"),
 		ActorID:     "alice",
 	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
 	assert.ErrorContains(t, err, "discrete")
 }
 
@@ -154,6 +155,8 @@ func TestReparentEntity_IntoDiscrete_Error(t *testing.T) {
 		NewParentID: box.EntityID,
 		ActorID:     "alice",
 	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	require.ErrorContains(t, err, `cannot move "Wrench"`)
 	assert.ErrorContains(t, err, "discrete")
 }
 
@@ -169,7 +172,7 @@ func TestReparentEntity_LockedChildMovesWithParent(t *testing.T) {
 
 	fileCabinet, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "File Cabinet",
-		ParentPath:  "Garage",
+		ParentID:    apptesting.MustLookupID(t, a, "Garage"),
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
@@ -178,7 +181,7 @@ func TestReparentEntity_LockedChildMovesWithParent(t *testing.T) {
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Top Drawer",
 		Locked:      true,
-		ParentPath:  "Garage:File Cabinet",
+		ParentID:    apptesting.MustLookupID(t, a, "Garage:File Cabinet"),
 		ActorID:     "alice",
 	})
 	require.NoError(t, err)
@@ -234,7 +237,7 @@ func TestLookupEntityByPath_Disambiguation(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Shelf", ParentPath: "Garage", ActorID: "alice",
+		DisplayName: "Shelf", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -297,14 +300,14 @@ func TestApp_GetChildren(t *testing.T) {
 
 		child1, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Child1",
-			ParentPath:  "Parent",
+			ParentID:    apptesting.MustLookupID(t, a, "Parent"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		child2, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Child2",
-			ParentPath:  "Parent",
+			ParentID:    apptesting.MustLookupID(t, a, "Parent"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
@@ -329,14 +332,14 @@ func TestApp_GetChildren(t *testing.T) {
 
 		active, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Active",
-			ParentPath:  "Parent",
+			ParentID:    apptesting.MustLookupID(t, a, "Parent"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		removedEntity, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Removed",
-			ParentPath:  "Parent",
+			ParentID:    apptesting.MustLookupID(t, a, "Parent"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
@@ -380,14 +383,14 @@ func TestApp_GetChildren(t *testing.T) {
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Mid",
-			ParentPath:  "GP",
+			ParentID:    apptesting.MustLookupID(t, a, "GP"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Leaf",
-			ParentPath:  "GP:Mid",
+			ParentID:    apptesting.MustLookupID(t, a, "GP:Mid"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
@@ -410,14 +413,14 @@ func TestApp_GetChildren(t *testing.T) {
 
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Mid",
-			ParentPath:  "GP",
+			ParentID:    apptesting.MustLookupID(t, a, "GP"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
 
 		leaf, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: "Leaf",
-			ParentPath:  "GP:Mid",
+			ParentID:    apptesting.MustLookupID(t, a, "GP:Mid"),
 			ActorID:     "alice",
 		})
 		require.NoError(t, err)
@@ -443,7 +446,7 @@ func TestApp_HasLiveChildren(t *testing.T) {
 		parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Parent", ActorID: "alice"})
 		require.NoError(t, err)
 		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: "Child", ParentPath: "Parent", ActorID: "alice",
+			DisplayName: "Child", ParentID: apptesting.MustLookupID(t, a, "Parent"), ActorID: "alice",
 		})
 		require.NoError(t, err)
 
@@ -457,7 +460,7 @@ func TestApp_HasLiveChildren(t *testing.T) {
 		parent, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Parent", ActorID: "alice"})
 		require.NoError(t, err)
 		child, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: "Child", ParentPath: "Parent", ActorID: "alice",
+			DisplayName: "Child", ParentID: apptesting.MustLookupID(t, a, "Parent"), ActorID: "alice",
 		})
 		require.NoError(t, err)
 		require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: child.EntityID, ActorID: "alice"}))
@@ -608,11 +611,11 @@ func TestReparentEntity_InvalidDestinations(t *testing.T) {
 	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
 	require.NoError(t, err)
 	toolbox, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Toolbox", ParentPath: "Garage", ActorID: "alice",
+		DisplayName: "Toolbox", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 	drawer, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Drawer", ParentPath: "Garage:Toolbox", ActorID: "alice",
+		DisplayName: "Drawer", ParentID: apptesting.MustLookupID(t, a, "Garage:Toolbox"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{
@@ -652,7 +655,7 @@ func TestReparentEntity_ToRoot(t *testing.T) {
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
 	require.NoError(t, err)
 	toolbox, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Toolbox", ParentPath: "Garage", ActorID: "alice",
+		DisplayName: "Toolbox", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -669,11 +672,17 @@ func TestReparentEntity_SameNameSiblingIsNotDescendant(t *testing.T) {
 	ctx := t.Context()
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Shelf", ActorID: "alice"})
 	require.NoError(t, err)
-	box1, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentPath: "Shelf", ActorID: "alice"})
+	box1, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Shelf"), ActorID: "alice"},
+	)
 	require.NoError(t, err)
-	box2, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentPath: "Shelf", ActorID: "alice"})
+	box2, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Shelf"), ActorID: "alice"},
+	)
 	require.NoError(t, err)
-	// "Shelf:Box" is ambiguous as a ParentPath, so place Tray under box2 by ID.
+	// "Shelf:Box" is ambiguous as a path, so place Tray under box2 by ID.
 	tray, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Tray", ActorID: "alice"})
 	require.NoError(t, err)
 	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
@@ -695,11 +704,22 @@ func TestReparentEntity_DescendantUnderRemovedAncestor(t *testing.T) {
 	ctx := t.Context()
 	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
 	require.NoError(t, err)
-	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentPath: "Garage", ActorID: "alice"})
+	box, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{
+			DisplayName: "Box",
+			ParentID:    apptesting.MustLookupID(t, a, "Garage"),
+			ActorID:     "alice",
+		},
+	)
 	require.NoError(t, err)
 	bit, err := a.CreateEntity(
 		ctx,
-		app.CreateEntityRequest{DisplayName: "Bit", ParentPath: "Garage:Box", ActorID: "alice"},
+		app.CreateEntityRequest{
+			DisplayName: "Bit",
+			ParentID:    apptesting.MustLookupID(t, a, "Garage:Box"),
+			ActorID:     "alice",
+		},
 	)
 	require.NoError(t, err)
 	apptesting.RemoveLeavingLiveChildren(t, a, box.EntityID) // pre-#287 data: live child under removed parent
@@ -738,7 +758,7 @@ func TestRemoveEntity_LiveChildrenRejected(t *testing.T) {
 	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "alice"})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Nail", ParentPath: "Box", ActorID: "alice",
+		DisplayName: "Nail", ParentID: apptesting.MustLookupID(t, a, "Box"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -758,7 +778,7 @@ func TestRemoveEntity_RemovedChildrenDoNotBlock(t *testing.T) {
 	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "alice"})
 	require.NoError(t, err)
 	nail, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Nail", ParentPath: "Box", ActorID: "alice",
+		DisplayName: "Nail", ParentID: apptesting.MustLookupID(t, a, "Box"), ActorID: "alice",
 	})
 	require.NoError(t, err)
 
@@ -776,4 +796,82 @@ func TestRemoveEntity_AlreadyRemovedNotFound(t *testing.T) {
 
 	err = a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"})
 	require.ErrorIs(t, err, app.ErrNotFound, "web relies on this to detect a concurrent remove")
+}
+
+// #288: names are not unique, so the parent is the one the caller picked by ID.
+func TestCreateEntity_UnderSecondSameNamedSibling(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Bin", ParentID: garage.EntityID, ActorID: "alice"},
+	)
+	require.NoError(t, err)
+	bin2, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Bin", ParentID: garage.EntityID, ActorID: "alice"},
+	)
+	require.NoError(t, err)
+
+	got, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Nail", ParentID: bin2.EntityID, ActorID: "alice"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, bin2.EntityID, got.ParentID)
+}
+
+// #288: a discrete first same-named sibling must not block the eligible second.
+func TestCreateEntity_DiscreteFirstSiblingDoesNotBlockSecond(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Bin", Discrete: true, ParentID: garage.EntityID, ActorID: "alice",
+	})
+	require.NoError(t, err)
+	bin2, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Bin", ParentID: garage.EntityID, ActorID: "alice"},
+	)
+	require.NoError(t, err)
+
+	got, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Nail", ParentID: bin2.EntityID, ActorID: "alice"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, bin2.EntityID, got.ParentID)
+}
+
+// Review Focus #3: a parent removed after the caller picked it.
+func TestCreateEntity_RemovedParent_NotFound(t *testing.T) {
+	a := openTestApp(t)
+	ctx := t.Context()
+	shelf, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Shelf", ActorID: "alice"})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: shelf.EntityID, ActorID: "alice"}))
+
+	_, err = a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Nail", ParentID: shelf.EntityID, ActorID: "alice"},
+	)
+
+	require.ErrorIs(t, err, app.ErrNotFound)
+}
+
+func TestCreateEntity_UnknownParent_NotFound(t *testing.T) {
+	a := openTestApp(t)
+
+	_, err := a.CreateEntity(
+		t.Context(),
+		app.CreateEntityRequest{DisplayName: "Nail", ParentID: "nosuchid00", ActorID: "alice"},
+	)
+
+	require.ErrorIs(t, err, app.ErrNotFound)
 }
