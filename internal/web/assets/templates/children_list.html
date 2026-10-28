@@ -1,0 +1,23 @@
+{{define "chevron_svg"}}<svg viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>{{end}}
+
+{{define "children_list"}}
+<section class="children" aria-labelledby="children-heading">
+  <h3 id="children-heading" class="children-heading">Contents</h3>
+  {{if .Children}}
+  <ul id="children-list" class="children-list" data-parent-id="{{.ParentID}}">
+    {{range .Children}}
+    <li>
+      <a class="child-row" href="/entities/{{.EntityID}}" hx-get="/entities/{{.EntityID}}" hx-target="#detail-panel" hx-swap="innerHTML" hx-push-url="true">
+        <span class="tree-slot">{{template "tree_lock" .}}</span>
+        <span class="child-name">{{.DisplayName}}</span>
+        {{$cls := statusClass .Status}}<span class="badge {{$cls}}">{{template "status_mark_inner" .Status}}</span>
+        {{if .HasChildren}}<span class="chevron" aria-hidden="true">{{template "chevron_svg"}}</span>{{end}}
+      </a>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p id="children-list" class="children-empty" data-parent-id="{{.ParentID}}">{{if .ParentID}}Nothing here yet.{{else}}Nothing in the inventory yet.{{end}}</p>
+  {{end}}
+</section>
+{{end}}

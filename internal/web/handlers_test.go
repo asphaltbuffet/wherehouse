@@ -70,6 +70,9 @@ type fakeApp struct {
 	hasChildrenErr   error
 	hasChildrenCalls int
 
+	children    map[string][]app.EntityResult // parentID → GetChildren result; nil map ⇒ legacy "_child" lookup
+	childrenErr error
+
 	parentResults   []app.FindResult
 	parentCalls     int
 	lastParentQuery string
@@ -207,6 +210,12 @@ func (f *fakeApp) GetEntityByIDAnyStatus(_ context.Context, entityID string) (ap
 func (f *fakeApp) GetChildren(_ context.Context, parentID string) ([]app.EntityResult, error) {
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.childrenErr != nil {
+		return nil, f.childrenErr
+	}
+	if f.children != nil {
+		return f.children[parentID], nil
 	}
 	var out []app.EntityResult
 	for _, e := range f.entities {

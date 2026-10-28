@@ -1018,6 +1018,7 @@ func TestHandleLoan_RemovedConcurrentlyShowsRemovedPanel(t *testing.T) {
 	assert.Contains(t, body, staleText)
 	assert.Contains(t, body, "Last location")
 	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.NotContains(t, body, `id="children-list"`, "removed view has no children list")
 }
 
 // The app guard decides (ADR 0035): a stale panel's loan reaches it and the
@@ -1840,4 +1841,103 @@ func TestHandleMove_BlankDestinationOnStalePanelShowsCurrentState(t *testing.T) 
 	assert.NotContains(t, body, "Choose a destination.")
 	assert.NotContains(t, body, `hx-post="/entities/abc/actions/move"`)
 	assert.Contains(t, body, `id="tree-badge-abc"`)
+}
+
+func garageWithChildren() *fakeApp {
+	return &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		},
+		children: map[string][]app.EntityResult{"g": {
+			{EntityID: "b1", DisplayName: "Bench", ParentID: "g", Status: inventory.EntityStatusOk},
+			{EntityID: "d1", DisplayName: "Drawer", ParentID: "g", Locked: true, HasChildren: true,
+				Status: inventory.EntityStatusOk},
+			{EntityID: "w1", DisplayName: "Wrench", ParentID: "g", Status: inventory.EntityStatusLoaned},
+		}},
+		history: []app.HistoryResult{
+			{EventID: 1, TimestampUTC: "2025-01-01T00:00:00Z", ActorUserID: "alice"},
+		},
+	}
+}
+
+// childRow returns the markup of the children-list row linking to id.
+func childRow(t *testing.T, body, id string) string {
+	t.Helper()
+	start := strings.Index(body, `<a class="child-row" href="/entities/`+id+`"`)
+	require.NotEqual(t, -1, start, "child row %s missing", id)
+	end := strings.Index(body[start:], "</a>")
+	require.NotEqual(t, -1, end, "child row %s unterminated", id)
+	return body[start : start+end]
+}
+
+func TestDetail_ChildrenList_RowsInAppOrder(t *testing.T) {
+	ts := newTestServer(t, garageWithChildren())
+	defer ts.Close()
+
+	body := getDetail(t, ts, "g")
+
+	require.Contains(t, body, `id="children-list" class="children-list" data-parent-id="g"`)
+	bench := strings.Index(body, `<a class="child-row" href="/entities/b1"`)
+	drawer := strings.Index(body, `<a class="child-row" href="/entities/d1"`)
+	wrench := strings.Index(body, `<a class="child-row" href="/entities/w1"`)
+	assert.True(t, bench < drawer && drawer < wrench, "rows must keep GetChildren order")
+
+	assert.Contains(t, childRow(t, body, "b1"), `hx-get="/entities/b1"`)
+	assert.Contains(t, childRow(t, body, "b1"), `hx-push-url="true"`)
+	assert.Contains(t, childRow(t, body, "d1"), `class="padlock"`)
+	assert.Contains(t, childRow(t, body, "d1"), `class="chevron"`)
+	assert.NotContains(t, childRow(t, body, "b1"), `class="chevron"`)
+	assert.Contains(t, childRow(t, body, "w1"), `<span class="visually-hidden">loaned</span>`)
+	_, list, _ := strings.Cut(body, `id="children-list"`)
+	assert.NotContains(t, list, "add-btn", "children rows have no per-row add button")
+}
+
+func TestDetail_ChildrenList_AfterActionsBeforeHistory(t *testing.T) {
+	ts := newTestServer(t, garageWithChildren())
+	defer ts.Close()
+
+	body := getDetail(t, ts, "g")
+
+	actions := strings.Index(body, `class="detail-actions"`)
+	list := strings.Index(body, `id="children-list"`)
+	history := strings.Index(body, `class="history-table"`)
+	require.True(t, actions >= 0 && list >= 0 && history >= 0)
+	assert.Less(t, actions, list)
+	assert.Less(t, list, history)
+}
+
+func TestDetail_ChildrenList_EmptyMessage(t *testing.T) {
+	fake := garageWithChildren()
+	fake.children = map[string][]app.EntityResult{}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	body := getDetail(t, ts, "g")
+
+	assert.Contains(t, body, `id="children-list" class="children-empty" data-parent-id="g">Nothing here yet.</p>`)
+}
+
+func TestDetail_ChildrenList_OmittedForDiscrete(t *testing.T) {
+	fake := garageWithChildren()
+	fake.entities[0].Discrete = true
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	body := getDetail(t, ts, "g")
+
+	assert.NotContains(t, body, `id="children-list"`)
+	assert.NotContains(t, body, ">Contents<")
+}
+
+func TestDetail_ChildrenList_GetChildrenErrorIs500(t *testing.T) {
+	fake := garageWithChildren()
+	fake.childrenErr = errTest
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/g")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }

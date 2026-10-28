@@ -40,8 +40,16 @@ type detailData struct {
 	RemoveForm          *removeFormData   // non-nil re-opens the remove form (guard tripped at submit)
 	EditNameForm        *editNameFormData // non-nil swaps the name tape for the rename form
 	Breadcrumbs         []Breadcrumb
-	Error               string // populated by edit POST handlers; rendered inline above the detail dl
-	Removed             bool   // read-only view of a removed entity: last location + history, no actions
+	Error               string    // populated by edit POST handlers; rendered inline above the detail dl
+	Removed             bool      // read-only view of a removed entity: last location + history, no actions
+	ChildList           childList // live children; empty for discrete entities (never fetched)
+}
+
+// childList is the view model for the children list. ParentID is "" on the
+// home detail, where Children are the roots.
+type childList struct {
+	ParentID string
+	Children []app.EntityResult
 }
 
 // loanFormData is the view model for the inline loan form.
@@ -334,6 +342,14 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		return detailData{}, err
 	}
 
+	var children []app.EntityResult
+	if !entity.Discrete {
+		children, err = s.cfg.App.GetChildren(ctx, entityID)
+		if err != nil {
+			return detailData{}, fmt.Errorf("get children: %w", err)
+		}
+	}
+
 	// Loan applies only to ok/missing (ADR 0024);
 	// borrowed/loaned use Return.
 	editable := entity.Status == inventory.EntityStatusOk ||
@@ -374,6 +390,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		CanRemove:           canRemove,
 		RemoveBlockedReason: removeBlockedReason,
 		Breadcrumbs:         BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
+		ChildList:           childList{ParentID: entity.EntityID, Children: children},
 	}, nil
 }
 

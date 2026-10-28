@@ -514,6 +514,24 @@ h1, h2, h3 {
   gap: var(--space-2);
 }
 .detail-actions > form { flex-basis: 100%; }
+
+/* ── Children list ───────────────────────────────────────────────────── */
+.children-heading { margin: var(--space-6) 0 var(--space-2); font-size: var(--font-size-base); }
+.children-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border-strong); }
+.children-list li { border-bottom: 1px solid var(--color-border); }
+.child-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.child-row:hover { background: var(--color-raised); }
+.child-row:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+.child-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.child-row .chevron { color: var(--color-text-muted); }
+.children-empty { color: var(--color-text-faint); font-style: italic; }
 .detail-action-btn:disabled { opacity: 0.45; cursor: default; }
 
 .history-heading {

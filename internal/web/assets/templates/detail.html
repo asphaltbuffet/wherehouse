@@ -114,6 +114,8 @@
   </div>
   {{end}}
 
+  {{if and (not .Removed) (not .Entity.Discrete)}}{{template "children_list" .ChildList}}{{end}}
+
   {{if .History}}
   <h3 class="history-heading">History</h3>
   <table class="history-table">
