@@ -742,31 +742,21 @@ func (s *Server) renderLoanFailure(
 	s.renderStatusChanged(w, r, fresh)
 }
 
-// handleRemoveForm handles GET /entities/{entityID}/actions/remove, swapping
-// the Remove button for the inline remove form.
+// handleRemoveForm handles GET /entities/{entityID}/actions/remove,
+// re-rendering the detail section with the inline remove form open.
 func (s *Server) handleRemoveForm(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanRemove || data.RemoveBlockedReason != "" {
-		http.Error(w, "entity cannot be removed", http.StatusForbidden)
-		return
-	}
-
-	s.renderHTML(w, "remove_form", removeFormData{EntityID: entityID, DisplayName: data.Entity.DisplayName})
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		if !d.CanRemove || d.RemoveBlockedReason != "" {
+			return false
+		}
+		d.RemoveForm = &removeFormData{EntityID: d.Entity.EntityID, DisplayName: d.Entity.DisplayName}
+		return true
+	})
 }
 
-// handleRemove handles POST /entities/{entityID}/actions/remove. The live
-// children guard is left to the app layer (#287) so a stale panel still gets
-// the inline error rather than a bare 403.
+// handleRemove handles POST /entities/{entityID}/actions/remove. Eligibility,
+// including the live children guard (#287), is left to the app layer (ADR
+// 0035), so a stale panel gets an inline error rather than a bare 403.
 func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -782,10 +772,6 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.Entity.EntityID == "" {
 		s.renderAlreadyRemoved(w, r, entityID)
-		return
-	}
-	if !data.CanRemove {
-		http.Error(w, "entity cannot be removed", http.StatusForbidden)
 		return
 	}
 
@@ -807,8 +793,8 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 	s.renderAfterRemoval(w, r, data.Entity)
 }
 
-// renderRemoveFailure handles a failed RemoveEntity. Live children re-open the
-// form with the user's note on a fresh read (the panel may be stale). A
+// renderRemoveFailure handles a failed RemoveEntity on a fresh read (the panel
+// may be stale). Live children re-open the form with the user's note; a
 // concurrent remove is this request's outcome, as with Return (#292).
 func (s *Server) renderRemoveFailure(
 	w http.ResponseWriter, r *http.Request, stale detailData, form removeFormData, err error,
@@ -833,9 +819,23 @@ func (s *Server) renderRemoveFailure(
 		fresh.RemoveForm = &form
 		s.renderDetailSection(w, r, fresh)
 	default:
-		s.cfg.Logger.Error("remove entity", "error", err, "entity_id", entityID)
-		stale.Error = "remove failed"
-		s.renderDetailSection(w, r, stale)
+		fresh, ferr := s.buildDetailData(r.Context(), entityID)
+		if ferr != nil {
+			s.serverError(w, "build detail data", ferr)
+			return
+		}
+		if fresh.Entity.EntityID == "" {
+			s.renderAlreadyRemoved(w, r, entityID)
+			return
+		}
+		if fresh.CanRemove {
+			s.cfg.Logger.Error("remove entity", "error", err, "entity_id", entityID)
+			fresh.Error = "remove failed"
+		} else {
+			s.cfg.Logger.Info("remove rejected: panel was stale", "error", err, "entity_id", entityID)
+			fresh.Error = staleMessage
+		}
+		s.renderDetailSection(w, r, fresh)
 	}
 }
 

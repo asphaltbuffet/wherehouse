@@ -1438,21 +1438,41 @@ func TestHandleRemoveForm(t *testing.T) {
 	hammer := func(status inventory.EntityStatus) []app.EntityResult {
 		return []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: status}}
 	}
+	formPost := `hx-post="/entities/abc/actions/remove"`
 	tests := []struct {
 		name        string
 		entities    []app.EntityResult
 		hasChildren bool
 		wantCode    int
+		want        []string
+		notWant     []string
 	}{
-		{name: "ok renders form", entities: hammer(inventory.EntityStatusOk), wantCode: http.StatusOK},
-		{name: "borrowed forbidden", entities: hammer(inventory.EntityStatusBorrowed), wantCode: http.StatusForbidden},
 		{
-			name:        "live children forbidden",
-			entities:    hammer(inventory.EntityStatusOk),
-			hasChildren: true,
-			wantCode:    http.StatusForbidden,
+			name: "ok opens form", entities: hammer(inventory.EntityStatusOk), wantCode: http.StatusOK,
+			want: []string{
+				`id="entity-detail"`, formPost,
+				// renderAfterRemoval may return detail_empty, which has no #entity-detail wrapper.
+				`hx-target="#detail-panel"`, `name="note"`,
+				"Remove Hammer from the inventory? This cannot be undone.",
+			},
+			notWant: []string{"hx-confirm", staleText},
 		},
-		{name: "not found", wantCode: http.StatusNotFound},
+		{
+			name: "borrowed is stale", entities: hammer(inventory.EntityStatusBorrowed), wantCode: http.StatusOK,
+			want: []string{`id="entity-detail"`, staleText}, notWant: []string{formPost},
+		},
+		{
+			name: "live children is stale", entities: hammer(inventory.EntityStatusOk), hasChildren: true,
+			wantCode: http.StatusOK,
+			want:     []string{`id="entity-detail"`, staleText}, notWant: []string{formPost},
+		},
+		{
+			name: "removed shows removed panel", entities: hammer(inventory.EntityStatusRemoved),
+			wantCode: http.StatusOK,
+			want:     []string{staleText, "Last location", `id="tree-node-abc" hx-swap-oob="delete"`},
+			notWant:  []string{formPost},
+		},
+		{name: "unknown id", wantCode: http.StatusNotFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1467,13 +1487,11 @@ func TestHandleRemoveForm(t *testing.T) {
 			body, _ := io.ReadAll(resp.Body)
 
 			assert.Equal(t, tt.wantCode, resp.StatusCode)
-			if tt.wantCode == http.StatusOK {
-				assert.Contains(t, string(body), `hx-post="/entities/abc/actions/remove"`)
-				// renderAfterRemoval may return detail_empty, which has no #entity-detail wrapper.
-				assert.Contains(t, string(body), `hx-target="#detail-panel"`)
-				assert.Contains(t, string(body), `name="note"`)
-				assert.Contains(t, string(body), "Remove Hammer from the inventory? This cannot be undone.")
-				assert.NotContains(t, string(body), "hx-confirm")
+			for _, s := range tt.want {
+				assert.Contains(t, string(body), s)
+			}
+			for _, s := range tt.notWant {
+				assert.NotContains(t, string(body), s)
 			}
 		})
 	}
@@ -1542,15 +1560,19 @@ func TestHandleRemove_BlankNoteStoredEmpty(t *testing.T) {
 	assert.Empty(t, fake.lastRemoveReq.Note)
 }
 
-func TestHandleRemove_BorrowedForbidden(t *testing.T) {
-	fake := &fakeApp{entities: hammerInGarage(inventory.EntityStatusBorrowed)}
+// The app guard rejects removing a borrowed entity (ADR 0022) with an untyped
+// error; the handler renders the fresh state, never a bare 403 (#306).
+func TestHandleRemove_BorrowedRejectedShowsCurrentState(t *testing.T) {
+	fake := &fakeApp{entities: hammerInGarage(inventory.EntityStatusBorrowed), removeErr: errTest}
 	ts := newTestServer(t, fake)
 	defer ts.Close()
 
-	resp, _ := postRemove(t, ts, url.Values{})
+	resp, body := postRemove(t, ts, url.Values{})
 
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-	assert.Zero(t, fake.removeCalls)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 1, fake.removeCalls, "the app layer decides")
+	assert.Contains(t, body, staleText)
+	assert.NotContains(t, body, "remove failed")
 }
 
 // #287 guard tripped at submit (a child was added after the form opened).
