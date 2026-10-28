@@ -1,8 +1,8 @@
 {{define "add_item_form"}}
 {{$action := "/entities/add"}}{{if .ParentID}}{{$action = printf "/entities/%s/add" .ParentID}}{{end}}
 <form hx-post="{{$action}}"
-      hx-target="{{.Target}}"
-      hx-swap="beforeend">
+      hx-target="#detail-panel"
+      hx-swap="innerHTML">
   <h2>Add Item</h2>
   <label for="display_name">Display Name</label>
   <input id="display_name" type="text" name="display_name" required autofocus>

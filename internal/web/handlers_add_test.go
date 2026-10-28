@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -125,4 +126,78 @@ func TestAddItem_ParentErrors(t *testing.T) {
 			assert.Equal(t, tc.want, rec.Code)
 		})
 	}
+}
+
+func createdTrigger(t *testing.T, rec *httptest.ResponseRecorder) map[string]string {
+	t.Helper()
+	var trigger map[string]map[string]string
+	require.NoError(t, json.Unmarshal([]byte(rec.Header().Get("Hx-Trigger")), &trigger))
+	ev, ok := trigger["entity-created"]
+	require.True(t, ok, "entity-created missing")
+	return ev
+}
+
+// Review Focus #1: the response must not depend on the parent's tree node being loaded.
+func TestAddItem_RespondsWithParentDetailAndTrigger(t *testing.T) {
+	fa := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		},
+		children:     map[string][]app.EntityResult{"g": {{EntityID: "b1", DisplayName: "Bench", ParentID: "g"}}},
+		createResult: app.EntityResult{EntityID: "b1", DisplayName: "Bench", ParentID: "g"},
+	}
+	h := newActorHandler(t, fa, "")
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, postForm("/entities/g/add", "display_name=Bench"))
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	body := rec.Body.String()
+	assert.Equal(t, "/entities/g", rec.Header().Get("Hx-Push-Url"))
+	assert.Equal(t, map[string]string{"entityId": "b1", "parentId": "g"}, createdTrigger(t, rec))
+	assert.Contains(t, body, `<section id="entity-detail"`)
+	assert.Contains(t, body, `<a class="child-row" href="/entities/b1"`)
+	assert.NotContains(t, body, `role="treeitem"`, "tree insertion is the trigger's job now")
+}
+
+func TestAddItem_RootRespondsWithHome(t *testing.T) {
+	fa := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "s", DisplayName: "Shed", FullPathDisplay: "Shed", Status: inventory.EntityStatusOk},
+		},
+		createResult: app.EntityResult{EntityID: "s", DisplayName: "Shed"},
+	}
+	h := newActorHandler(t, fa, "")
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, postForm("/entities/add", "display_name=Shed"))
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "/", rec.Header().Get("Hx-Push-Url"))
+	assert.Equal(t, map[string]string{"entityId": "s", "parentId": ""}, createdTrigger(t, rec))
+	assert.Contains(t, rec.Body.String(), `<section id="home-detail"`)
+}
+
+func TestAddItem_ParentGoneAfterCreateShowsHome(t *testing.T) {
+	fa := &fakeApp{createResult: app.EntityResult{EntityID: "n1", DisplayName: "Nail", ParentID: "bin2"}}
+	h := newActorHandler(t, fa, "")
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, postForm("/entities/bin2/add", "display_name=Nail"))
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "/", rec.Header().Get("Hx-Push-Url"))
+	assert.Contains(t, rec.Body.String(), `<section id="home-detail"`)
+}
+
+func TestAddItemForm_TargetsDetailPanel(t *testing.T) {
+	h := newActorHandler(t, &fakeApp{}, "")
+	req := httptest.NewRequest(http.MethodGet, "/entities/g/add", nil)
+	req.Header.Set("Hx-Request", "true")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `hx-target="#detail-panel"`)
+	assert.NotContains(t, rec.Body.String(), "#tree-children-")
 }

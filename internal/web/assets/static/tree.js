@@ -146,28 +146,6 @@
   // After the add-form POST completes successfully, close the modal,
   // reset the form, and reveal the chevron on a parent that previously
   // had no children.
-  function onAddFormAfterRequest(e) {
-    if (!e.detail || !e.detail.successful) return;
-    var form = e.target.closest && e.target.closest('form');
-    if (!form || !form.matches('#add-modal-body form')) return;
-    if (form.dataset.form === 'borrow') return; // closed by onEntityCreated instead
-    document.getElementById('add-modal').close();
-    form.reset();
-    var targetSelector = form.getAttribute('hx-target');
-    var target = targetSelector ? document.querySelector(targetSelector) : null;
-    if (target && target.children.length === 1) {
-      var li = target.closest('li');
-      if (li) {
-        li.setAttribute('aria-expanded', 'false');
-        var item = li.querySelector('.tree-item');
-        if (item) {
-          var ch = item.querySelector('.chevron');
-          if (ch) ch.classList.remove('chevron-hidden');
-        }
-      }
-    }
-  }
-
   // After the "+ Add root" GET fetches the form into #add-modal-body,
   // show the dialog. htmx dispatches afterRequest on the requesting
   // element, so match on the swap target in e.detail instead.
@@ -235,7 +213,7 @@
     });
   }
 
-  // After a borrow: close the modal, then insert the new node.
+  // After an add or borrow: close the modal, then insert the new node.
   function onEntityCreated(e) {
     var dialog = document.getElementById('add-modal');
     if (dialog) dialog.close();
@@ -279,7 +257,6 @@
     document.body.addEventListener('htmx:afterRequest', onTreeEvent(function (root, e) { onTreeAfterRequest(e); }));
     document.body.addEventListener('keydown', onTreeEvent(onTreeKeydown));
 
-    document.body.addEventListener('htmx:afterRequest', onAddFormAfterRequest);
     document.body.addEventListener('htmx:afterRequest', onAddRootAfterRequest);
     document.body.addEventListener('click', onDetailAddClick);
     document.body.addEventListener('click', onAddModalCancel);

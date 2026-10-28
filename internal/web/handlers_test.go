@@ -56,6 +56,7 @@ type fakeApp struct {
 	lastActor    string // ActorID from the most recent mutating call
 
 	lastCreateReq app.CreateEntityRequest // most recent CreateEntity request
+	createResult  app.EntityResult
 
 	returnErr     error
 	lastReturnReq app.ChangeStatusRequest
@@ -233,7 +234,7 @@ func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.
 func (f *fakeApp) CreateEntity(_ context.Context, req app.CreateEntityRequest) (app.EntityResult, error) {
 	f.lastActor = req.ActorID
 	f.lastCreateReq = req
-	return app.EntityResult{}, f.err
+	return f.createResult, f.err
 }
 
 func (f *fakeApp) RenameEntity(_ context.Context, req app.RenameEntityRequest) (app.EntityResult, error) {
