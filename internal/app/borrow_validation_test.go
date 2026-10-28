@@ -71,9 +71,41 @@ func TestBorrowEntities_DiscreteParent_InvalidDestination(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentPath: "Box", StatusContext: "Alice", ActorID: "test"},
+		{DisplayName: "Drill", ParentID: apptesting.MustLookupID(t, a, "Box"), StatusContext: "Alice", ActorID: "test"},
 	})
 
 	require.ErrorIs(t, err, app.ErrInvalidDestination)
 	assert.ErrorContains(t, err, "discrete")
+}
+
+// #288: borrow lands under the picked same-named sibling.
+func TestBorrowEntities_UnderSecondSameNamedSibling(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bin", ActorID: "test"})
+	require.NoError(t, err)
+	bin2, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bin", ActorID: "test"})
+	require.NoError(t, err)
+
+	got, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{DisplayName: "Drill", ParentID: bin2.EntityID, StatusContext: "Alice", ActorID: "test"},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, bin2.EntityID, got[0].ParentID)
+}
+
+func TestBorrowEntities_RemovedParent_NotFound(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	shelf, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Shelf", ActorID: "test"})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: shelf.EntityID, ActorID: "test"}))
+
+	_, err = a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{DisplayName: "Drill", ParentID: shelf.EntityID, StatusContext: "Alice", ActorID: "test"},
+	})
+
+	require.ErrorIs(t, err, app.ErrNotFound)
 }

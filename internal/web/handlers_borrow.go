@@ -111,7 +111,7 @@ func (s *Server) handleBorrow(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.cfg.App.BorrowEntities(r.Context(), []app.BorrowEntityRequest{{
 		DisplayName:   form.DisplayName,
-		ParentPath:    form.ParentPath,
+		ParentID:      form.ParentID,
 		StatusContext: form.From,
 		ActorID:       s.actorFor(r),
 		Note:          form.Note,

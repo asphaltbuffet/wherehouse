@@ -66,7 +66,7 @@ func TestRunExport_MultipleEvents_OrderedByEventID(t *testing.T) {
 		{"Wrench", "Garage:Toolbox"},
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
-			DisplayName: tc.name, ParentPath: tc.parent,
+			DisplayName: tc.name, ParentID: apptesting.MustLookupID(t, a, tc.parent),
 			ActorID: "test",
 		})
 		require.NoError(t, err)

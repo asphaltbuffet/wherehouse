@@ -120,7 +120,7 @@ func TestHandleBorrow_CreatesUnderParent(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "Drill", fake.lastBorrowReq.DisplayName)
-	assert.Equal(t, "Garage", fake.lastBorrowReq.ParentPath)
+	assert.Equal(t, "g", fake.lastBorrowReq.ParentID)
 	assert.Equal(t, "Alice", fake.lastBorrowReq.StatusContext)
 	assert.Equal(t, "weekend", fake.lastBorrowReq.Note)
 	assert.Equal(t, "/entities/n", resp.Header.Get("Hx-Push-Url"))
@@ -142,7 +142,7 @@ func TestHandleBorrow_Root(t *testing.T) {
 	resp, _ := postBorrow(t, ts, url.Values{"display_name": {"Ladder"}, "from": {"Bob"}, "parent_id": {""}})
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Empty(t, fake.lastBorrowReq.ParentPath)
+	assert.Empty(t, fake.lastBorrowReq.ParentID)
 	assert.Contains(t, resp.Header.Get("Hx-Trigger"), `"parentId":""`)
 }
 

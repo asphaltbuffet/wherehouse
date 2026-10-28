@@ -260,12 +260,8 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 	}
 
 	var parentID *string
-	if req.ParentPath != "" {
-		resolved, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
-		if err != nil {
-			return "", fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
-		}
-		parent, err := a.getParentTx(ctx, tx, resolved.EntityID)
+	if req.ParentID != "" {
+		parent, err := a.getParentTx(ctx, tx, req.ParentID)
 		if err != nil {
 			return "", err
 		}

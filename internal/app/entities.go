@@ -13,7 +13,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
-// CreateEntity creates a new entity, resolving ParentPath to a parent entity ID if provided.
+// CreateEntity creates a new entity under req.ParentID (root when empty).
 func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (EntityResult, error) {
 	results, err := a.CreateEntities(ctx, []CreateEntityRequest{req})
 	if err != nil {
@@ -456,9 +456,13 @@ func (a *App) CreateEntities(ctx context.Context, reqs []CreateEntityRequest) ([
 }
 
 func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntityRequest) (EntityResult, error) {
-	parentID, err := a.resolveParentID(ctx, tx, req)
-	if err != nil {
-		return EntityResult{}, err
+	var parentID *string
+	if req.ParentID != "" {
+		parent, err := a.getParentTx(ctx, tx, req.ParentID)
+		if err != nil {
+			return EntityResult{}, err
+		}
+		parentID = &parent.EntityID
 	}
 
 	entityID, err := nanoid.New()
@@ -494,33 +498,4 @@ func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntit
 	}
 
 	return entityToResult(entity, nil), nil
-}
-
-func (a *App) resolveParentID(ctx context.Context, tx store.Tx, req CreateEntityRequest) (*string, error) {
-	if req.ParentPath == "" {
-		return nil, nil //nolint:nilnil // nil *string is the correct "no parent" sentinel
-	}
-
-	if req.CreateParents {
-		p, err := entitypath.Parse(req.ParentPath + ":" + req.DisplayName)
-		if err != nil {
-			return nil, fmt.Errorf("parse full path: %w", err)
-		}
-		if _, _, err = a.ensureAncestors(ctx, tx, p.Segments(), BulkAddOptions{
-			CreateParents: true,
-			ActorID:       req.ActorID,
-		}); err != nil {
-			return nil, err
-		}
-	}
-
-	resolved, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
-	if err != nil {
-		return nil, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
-	}
-	parent, err := a.getParentTx(ctx, tx, resolved.EntityID)
-	if err != nil {
-		return nil, err
-	}
-	return &parent.EntityID, nil
 }

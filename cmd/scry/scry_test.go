@@ -35,7 +35,7 @@ func TestRunScry_WithArg_CallsFindEntities(t *testing.T) {
 	})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Toolbox", ParentPath: "Garage",
+		DisplayName: "Toolbox", ParentID: apptesting.MustLookupID(t, a, "Garage"),
 		ActorID: "test",
 	})
 	require.NoError(t, err)

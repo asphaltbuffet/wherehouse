@@ -29,7 +29,7 @@ func TestRunAdd_HappyPath(t *testing.T) {
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: tc.name,
-			ParentPath:  tc.parent,
+			ParentID:    apptesting.MustLookupID(t, a, tc.parent),
 			ActorID:     "test",
 		})
 		require.NoError(t, err)

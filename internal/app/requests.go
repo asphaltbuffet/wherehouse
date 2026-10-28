@@ -5,11 +5,9 @@ type CreateEntityRequest struct {
 	DisplayName string
 	Locked      bool
 	Discrete    bool
-	// ParentPath is a colon-separated path, e.g. "Garage:Toolbox". Empty means root-level.
-	ParentPath    string
-	ActorID       string
-	Note          string
-	CreateParents bool
+	ParentID    string // empty means root-level
+	ActorID     string
+	Note        string
 }
 
 // RenameEntityRequest is the input for renaming an entity.
@@ -58,7 +56,7 @@ type SetAttributesRequest struct {
 // BorrowEntityRequest is the input for borrowing an external entity into the inventory.
 type BorrowEntityRequest struct {
 	DisplayName   string
-	ParentPath    string
+	ParentID      string // empty means root-level
 	StatusContext string // lender name, stored in --from flag
 	ActorID       string
 	Note          string

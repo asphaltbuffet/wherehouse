@@ -240,11 +240,15 @@ func (a *App) bulkAddRowInTx(
 	}
 
 	// Create the entity itself.
+	parentID, err := a.parentIDForPathTx(ctx, tx, p.Dir().String())
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	result, createErr := a.createEntityInTx(ctx, tx, CreateEntityRequest{
 		DisplayName: p.Base(),
 		Locked:      row.Locked,
 		Discrete:    row.Discrete,
-		ParentPath:  p.Dir().String(),
+		ParentID:    parentID,
 		ActorID:     opts.ActorID,
 	})
 	if createErr != nil {
@@ -304,9 +308,13 @@ func (a *App) ensureAncestors(
 		}
 
 		parentPath, _ := entitypath.New(segments[:depth-1]...)
+		parentID, idErr := a.parentIDForPathTx(ctx, tx, parentPath.String())
+		if idErr != nil {
+			return nil, nil, idErr
+		}
 		parentResult, createErr := a.createEntityInTx(ctx, tx, CreateEntityRequest{
 			DisplayName: segments[depth-1],
-			ParentPath:  parentPath.String(),
+			ParentID:    parentID,
 			ActorID:     opts.ActorID,
 		})
 		if createErr != nil {
@@ -316,4 +324,17 @@ func (a *App) ensureAncestors(
 	}
 
 	return created, warnings, nil
+}
+
+// parentIDForPathTx resolves a parent path to its entity ID inside tx. An empty
+// path is the root and resolves to "".
+func (a *App) parentIDForPathTx(ctx context.Context, tx store.Tx, path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	parent, err := a.resolveEntityPathTx(ctx, tx, path)
+	if err != nil {
+		return "", fmt.Errorf("resolve parent path %q: %w", path, err)
+	}
+	return parent.EntityID, nil
 }

@@ -22,7 +22,7 @@ func TestRunHistory_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Wrench",
-		ParentPath:  "Garage",
+		ParentID:    apptesting.MustLookupID(t, a, "Garage"),
 		ActorID:     "test",
 	})
 	require.NoError(t, err)

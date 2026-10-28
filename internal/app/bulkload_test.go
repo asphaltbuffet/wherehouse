@@ -199,7 +199,7 @@ func TestBulkAddEntities_DiscreteDirectParent_HardError(t *testing.T) {
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "test"})
 	require.NoError(t, err)
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{
-		DisplayName: "Box", ParentPath: "Garage", Discrete: true, ActorID: "test",
+		DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Garage"), Discrete: true, ActorID: "test",
 	})
 	require.NoError(t, err)
 

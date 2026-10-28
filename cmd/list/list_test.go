@@ -29,7 +29,7 @@ func seedThree(t *testing.T, a *app.App) {
 	} {
 		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 			DisplayName: tc.name,
-			ParentPath:  tc.parent,
+			ParentID:    apptesting.MustLookupID(t, a, tc.parent),
 			ActorID:     "test",
 		})
 		require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestRunList_FilterPrunesUnrelatedBranches(t *testing.T) {
 	seedThree(t, a)
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
 		DisplayName: "Drill",
-		ParentPath:  "Garage:Toolbox",
+		ParentID:    apptesting.MustLookupID(t, a, "Garage:Toolbox"),
 		ActorID:     "test",
 	})
 	require.NoError(t, err)

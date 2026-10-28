@@ -45,7 +45,7 @@ func (s *Server) handleAddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.createAndRenderNode(w, r, parent.FullPathDisplay)
+	s.createAndRenderNode(w, r, parent.EntityID)
 }
 
 // handleRootAddItem processes the POST form for a new root-level entity.
@@ -53,7 +53,7 @@ func (s *Server) handleRootAddItem(w http.ResponseWriter, r *http.Request) {
 	s.createAndRenderNode(w, r, "")
 }
 
-func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, parentPath string) {
+func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, parentID string) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
@@ -69,7 +69,7 @@ func (s *Server) createAndRenderNode(w http.ResponseWriter, r *http.Request, par
 		DisplayName: displayName,
 		Locked:      r.FormValue("locked") != "",
 		Discrete:    r.FormValue("discrete") != "",
-		ParentPath:  parentPath,
+		ParentID:    parentID,
 		ActorID:     s.actorFor(r),
 	})
 	if err != nil {
