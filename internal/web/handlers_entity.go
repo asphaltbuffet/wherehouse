@@ -107,7 +107,6 @@ type attrAction struct {
 const (
 	lockBlockedReason     = "Missing or loaned entities cannot be locked"
 	discreteBlockedReason = "Entities with children cannot be marked discrete"
-	attrStaleMessage      = "Already changed elsewhere; showing current state."
 	attrFailedMessage     = "attribute change failed"
 )
 
@@ -191,7 +190,7 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
 
@@ -199,7 +198,7 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 	case setErr == nil:
 	case errors.Is(setErr, app.ErrNoChange):
 		s.cfg.Logger.Info("attribute unchanged: panel was stale", "error", setErr, "entity_id", entityID)
-		fresh.Error = attrStaleMessage
+		fresh.Error = staleMessage
 	default:
 		s.cfg.Logger.Error("set attributes", "error", setErr, "entity_id", entityID)
 		fresh.Error = attrFailedMessage
@@ -1058,4 +1057,27 @@ func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, remo
 		s.renderHTML(w, "detail_section", parent)
 	}
 	s.renderHTMLAppend(w, "tree_node_delete_oob", removed)
+}
+
+// renderGone answers an action on an entity that is no longer live. A removed
+// entity gets its read-only panel with staleMessage, and its stale tree node is
+// dropped. An ID that never existed is a plain 404: no real panel links to it.
+func (s *Server) renderGone(w http.ResponseWriter, r *http.Request, entityID string) {
+	removed, err := s.buildRemovedDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build removed detail data", err)
+		return
+	}
+	if removed.Entity.EntityID == "" {
+		http.Error(w, "entity not found", http.StatusNotFound)
+		return
+	}
+
+	s.cfg.Logger.Info("action on removed entity: panel was stale", "entity_id", entityID)
+	removed.Error = staleMessage
+	s.setTreeNodeDetachedTrigger(w, r, removed.Entity)
+	s.renderDetailSection(w, r, removed)
+	if wantsFragment(r) {
+		s.renderHTMLAppend(w, "tree_node_delete_oob", removed.Entity)
+	}
 }
