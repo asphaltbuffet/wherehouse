@@ -261,12 +261,13 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 
 	var parentID *string
 	if req.ParentPath != "" {
-		parent, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
+		resolved, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
 		if err != nil {
 			return "", fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
 		}
-		if parent.Discrete {
-			return "", fmt.Errorf("cannot add child to %q: entity is discrete", parent.FullPathDisplay)
+		parent, err := a.getParentTx(ctx, tx, resolved.EntityID)
+		if err != nil {
+			return "", err
 		}
 		parentID = &parent.EntityID
 	}

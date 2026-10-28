@@ -30,10 +30,10 @@ var ErrNoChange = errors.New("no change")
 // ErrNoAttributes is returned when an attribute request names no attribute.
 var ErrNoAttributes = errors.New("no attribute to change")
 
-// ErrInvalidDestination is returned when a move names a destination the entity
-// may not be moved to: itself, one of its descendants, its current parent, or
-// a discrete entity (ADR 0034).
-var ErrInvalidDestination = errors.New("invalid move destination")
+// ErrInvalidDestination is returned when a request names a parent the entity
+// may not be placed under: a discrete entity (create, borrow, move), or for a
+// move also itself, one of its descendants, or its current parent (ADR 0034).
+var ErrInvalidDestination = errors.New("invalid destination")
 
 // wrapEntityError translates a store.GetEntity error into an app-layer error.
 // store.ErrNotFound becomes app.ErrNotFound; all other errors (DB failures,

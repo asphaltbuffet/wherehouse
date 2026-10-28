@@ -104,6 +104,7 @@ func TestCreateEntity_DiscreteParent_Error(t *testing.T) {
 		ParentPath:  "Box of Nails",
 		ActorID:     "alice",
 	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
 	assert.ErrorContains(t, err, "discrete")
 }
 

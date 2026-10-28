@@ -130,21 +130,32 @@ func checkMoveSource(entity *inventory.Entity, newParentID string) error {
 	return nil
 }
 
-// checkMoveDestinationTx rejects a non-root destination that is removed,
-// discrete, or the entity itself or one of its descendants.
+// getParentTx loads parentID as the parent of a new or moved entity. Create,
+// borrow and reparent share this rule: the parent must be live (a removed one
+// reads as ErrNotFound) and not discrete.
+func (a *App) getParentTx(ctx context.Context, tx store.Tx, parentID string) (*inventory.Entity, error) {
+	parent, err := a.store.GetLiveEntityTx(ctx, tx, parentID)
+	if err != nil {
+		return nil, wrapEntityError(parentID, err)
+	}
+	if parent.Discrete {
+		return nil, fmt.Errorf("%q is discrete and cannot hold entities: %w",
+			parent.FullPathDisplay, ErrInvalidDestination)
+	}
+	return parent, nil
+}
+
+// checkMoveDestinationTx rejects a non-root destination that fails
+// getParentTx, or is the entity itself or one of its descendants.
 func (a *App) checkMoveDestinationTx(
 	ctx context.Context,
 	tx store.Tx,
 	entity *inventory.Entity,
 	parentID string,
 ) error {
-	parent, err := a.store.GetLiveEntityTx(ctx, tx, parentID)
+	parent, err := a.getParentTx(ctx, tx, parentID)
 	if err != nil {
-		return wrapEntityError(parentID, err)
-	}
-	if parent.Discrete {
-		return fmt.Errorf("cannot move into %q: entity is discrete: %w",
-			parent.FullPathDisplay, ErrInvalidDestination)
+		return err
 	}
 	inside, err := a.isSelfOrDescendant(ctx, tx, entity.EntityID, parent.EntityID)
 	if err != nil {
@@ -503,12 +514,13 @@ func (a *App) resolveParentID(ctx context.Context, tx store.Tx, req CreateEntity
 		}
 	}
 
-	parent, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
+	resolved, err := a.resolveEntityPathTx(ctx, tx, req.ParentPath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve parent path %q: %w", req.ParentPath, err)
 	}
-	if parent.Discrete {
-		return nil, fmt.Errorf("cannot add child to %q: entity is discrete", parent.FullPathDisplay)
+	parent, err := a.getParentTx(ctx, tx, resolved.EntityID)
+	if err != nil {
+		return nil, err
 	}
 	return &parent.EntityID, nil
 }

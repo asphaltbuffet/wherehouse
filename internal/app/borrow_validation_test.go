@@ -62,3 +62,18 @@ func TestBorrowEntities_TrimsLender(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, "Alice", results[0].StatusContext)
 }
+
+func TestBorrowEntities_DiscreteParent_InvalidDestination(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
+		DisplayName: "Box", Discrete: true, ActorID: "test",
+	})
+	require.NoError(t, err)
+
+	_, err = a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
+		{DisplayName: "Drill", ParentPath: "Box", StatusContext: "Alice", ActorID: "test"},
+	})
+
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.ErrorContains(t, err, "discrete")
+}
