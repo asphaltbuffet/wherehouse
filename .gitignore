@@ -12,3 +12,6 @@ release_notes/
 
 # Playwright MCP output (snapshots, console logs, screenshots)
 .playwright-mcp/
+
+# superpowers brainstorming companion
+.superpowers/

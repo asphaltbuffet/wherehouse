@@ -16,7 +16,7 @@
     </span>
     <span id="tree-lock-{{.EntityID}}" class="tree-slot">{{template "tree_lock" .}}</span>
     <span id="tree-label-{{.EntityID}}">{{.DisplayName}}</span>
-    {{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}">{{if $cls}}{{.Status}}{{end}}</span>
+    {{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}">{{template "status_mark_inner" .Status}}</span>
     <span id="tree-add-{{.EntityID}}" class="tree-slot">{{template "tree_add_btn" .}}</span>
   </div>
   <ul id="tree-children-{{.EntityID}}"
@@ -25,7 +25,7 @@
 </li>
 {{end}}
 
-{{define "tree_lock"}}{{if .Locked}}<span aria-hidden="true">🔒</span>{{end}}{{end}}
+{{define "tree_lock"}}{{if .Locked}}{{template "padlock"}}{{end}}{{end}}
 
 {{define "tree_add_btn"}}{{if not .Discrete}}<button class="add-btn"
             type="button"

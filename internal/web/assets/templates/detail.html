@@ -1,25 +1,25 @@
 {{define "detail_section"}}
 <section id="entity-detail">
   {{template "breadcrumbs" .Breadcrumbs}}
-  <h2>{{.Entity.DisplayName}}</h2>
+  <div class="tape-row">
+    <div class="tape">
+      <h2>{{.Entity.DisplayName}}</h2>
+      <span class="tape-id mono">{{.Entity.EntityID}}</span>
+    </div>
+    <button class="btn-link tape-edit"
+            hx-get="/entities/{{.Entity.EntityID}}/edit/name"
+            hx-target="closest .tape-row" hx-swap="outerHTML">Edit name</button>
+  </div>
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
-  <div class="detail-top">
-    <dl class="detail-kv">
-      <dt>Name</dt>
-      <dd>
-        {{.Entity.DisplayName}}
-        <button class="btn-link"
-                hx-get="/entities/{{.Entity.EntityID}}/edit/name"
-                hx-target="closest dd" hx-swap="outerHTML">Edit</button>
-      </dd>
-      {{if .Entity.Locked}}<dt>Locked</dt><dd>yes</dd>{{end}}
-      {{if .Entity.Discrete}}<dt>Discrete</dt><dd>yes</dd>{{end}}
-      <dt>Path</dt>      <dd>{{.Entity.FullPathDisplay}}</dd>
-      <dt>Status</dt>    <dd>{{.Entity.Status}}{{if .Entity.StatusContext}} — {{.Entity.StatusContext}}{{end}}</dd>
-      <dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd>
-    </dl>
-    <aside class="detail-actions" aria-label="Actions">
-      <h3 class="detail-actions-heading">Actions</h3>
+  {{template "status_line" .Entity}}
+  {{with .Entity.Tags}}<ul class="tag-list" aria-label="Tags">{{range .}}<li class="tag">{{.}}</li>{{end}}</ul>{{end}}
+  <dl class="detail-facts">
+    {{if .Entity.Locked}}<div><dt>Locked</dt><dd>yes</dd></div>{{end}}
+    {{if .Entity.Discrete}}<div><dt>Discrete</dt><dd>yes</dd></div>{{end}}
+    <div><dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd></div>
+  </dl>
+  <h3 class="visually-hidden">Actions</h3>
+  <div class="detail-actions" role="group" aria-label="Actions">
       {{if .CanAddChild}}
       <button class="btn-ghost detail-action-btn"
               type="button"
@@ -34,7 +34,7 @@
       </button>
       {{end}}
       {{if .CanMarkMissing}}
-      <button class="btn-ghost detail-action-btn"
+      <button class="{{if .IsMissing}}btn-primary{{else}}btn-ghost{{end}} detail-action-btn"
               hx-post="/entities/{{.Entity.EntityID}}/actions/toggle-missing"
               hx-target="#entity-detail" hx-swap="outerHTML">
         {{if .IsMissing}}Mark found{{else}}Mark missing{{end}}
@@ -46,7 +46,7 @@
       </button>
       {{end}}
       {{if .CanReturn}}
-      <button class="btn-ghost detail-action-btn"
+      <button class="btn-primary detail-action-btn"
               hx-post="/entities/{{.Entity.EntityID}}/actions/return"
               hx-target="#detail-panel" hx-swap="innerHTML"
               {{if .ReturnConfirm}}hx-confirm="{{.ReturnConfirm}}"{{end}}>
@@ -97,19 +97,19 @@
         Remove
       </button>
       {{end}}
-    </aside>
   </div>
 
   {{if .History}}
-  <h3>History</h3>
+  <h3 class="history-heading">History</h3>
   <table class="history-table">
-    <thead><tr><th>When</th><th>Event</th><th>By</th><th>Note</th></tr></thead>
+    <thead><tr><th scope="col" class="num">#</th><th scope="col">Event</th><th scope="col">By</th><th scope="col">When</th><th scope="col">Note</th></tr></thead>
     <tbody>
     {{range .History}}
       <tr>
-        <td class="mono">{{.TimestampUTC}}</td>
+        <td class="num mono">{{.EventID}}</td>
         <td>{{.EventType}}</td>
         <td>{{.ActorUserID}}</td>
+        <td class="mono">{{.TimestampUTC}}</td>
         <td>{{.Note}}</td>
       </tr>
     {{end}}
@@ -150,7 +150,7 @@
 {{end}}
 
 {{define "tree_badge_oob"}}
-{{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}" hx-swap-oob="true">{{if $cls}}{{.Status}}{{end}}</span>
+{{$cls := statusClass .Status}}<span id="tree-badge-{{.EntityID}}" class="badge {{$cls}}" hx-swap-oob="true">{{template "status_mark_inner" .Status}}</span>
 {{end}}
 
 {{define "tree_node_delete_oob"}}

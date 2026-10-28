@@ -302,6 +302,14 @@ func newTestServer(t *testing.T, a web.App) *httptest.Server {
 	return httptest.NewServer(srv.Handler())
 }
 
+// readBody reads the full response body as a string.
+func readBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return string(b)
+}
+
 // newActorHandler builds a server that trusts header (may be "") for the actor.
 func newActorHandler(t *testing.T, a web.App, header string) http.Handler {
 	t.Helper()

@@ -32,6 +32,61 @@ func TestHandleIndex(t *testing.T) {
 	assert.Contains(t, string(body), "Garage")
 }
 
+func TestIndex_TreeMarksAndPadlock(t *testing.T) {
+	entities := []app.EntityResult{
+		{EntityID: "g1", DisplayName: "Garage", CanonicalName: "garage", FullPathDisplay: "Garage",
+			Status: inventory.EntityStatusOk, Locked: true},
+		{EntityID: "w1", DisplayName: "Wrench", CanonicalName: "wrench", FullPathDisplay: "Wrench",
+			Status: inventory.EntityStatusLoaned},
+	}
+	ts := newTestServer(t, &fakeApp{entities: entities})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+
+	// ok → empty mark, loaned → hidden text
+	assert.Contains(t, body, `<span id="tree-badge-g1" class="badge "></span>`)
+	assert.Contains(t, body,
+		`<span id="tree-badge-w1" class="badge loaned"><span class="visually-hidden">loaned</span></span>`)
+	// padlock is an svg, not an emoji
+	assert.Contains(t, body, `class="padlock"`)
+	assert.NotContains(t, body, "🔒")
+}
+
+func TestIndex_EmptyStateCopy(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+
+	assert.Contains(t, body, `class="empty-state"`)
+	assert.Contains(t, body, `<span class="empty-tape" aria-hidden="true"></span>`)
+	assert.Contains(t, body, "Pick something from the tree, or search for it.")
+	assert.NotContains(t, body, "📦")
+}
+
+func TestSearch_EmptyStatesHaveNoEmoji(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+	defer ts.Close()
+
+	for _, q := range []string{"", "zzz"} {
+		resp, err := ts.Client().Get(ts.URL + "/search?q=" + url.QueryEscape(q))
+		require.NoError(t, err)
+		body := readBody(t, resp)
+		resp.Body.Close()
+
+		assert.Contains(t, body, `class="empty-state"`)
+		assert.Contains(t, body, `class="empty-tape"`)
+		assert.NotContains(t, body, "🔍")
+	}
+}
+
 func TestHandleTreeChildren_UnknownParentReturns404(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{})
 	defer ts.Close()

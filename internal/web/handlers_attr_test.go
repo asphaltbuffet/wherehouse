@@ -107,7 +107,7 @@ func TestHandleAttr_Lock(t *testing.T) {
 	assert.Equal(t, "abc", fake.lastAttrReq.EntityID)
 	assert.Contains(t, body, ">Unlock<", "detail re-rendered with new state")
 	assert.Contains(t, body,
-		`id="tree-lock-abc" class="tree-slot" hx-swap-oob="true"><span aria-hidden="true">🔒</span>`)
+		`id="tree-lock-abc" class="tree-slot" hx-swap-oob="true"><svg class="padlock"`)
 }
 
 func TestHandleAttr_DiscreteRemovesTreeAddButton(t *testing.T) {

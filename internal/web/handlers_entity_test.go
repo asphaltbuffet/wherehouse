@@ -417,7 +417,7 @@ func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 
 	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
-	assert.Contains(t, string(body), "Select an item to see details.")
+	assert.Contains(t, string(body), "Pick something from the tree, or search for it.")
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: ""}, detachedTrigger(t, resp))
 	assert.Equal(t, 1, fake.hasChildrenCalls,
@@ -728,6 +728,171 @@ func loanableHammer() []app.EntityResult {
 	}
 }
 
+func renderDetail(t *testing.T, e app.EntityResult) string {
+	t.Helper()
+	history := []app.HistoryResult{
+		{
+			EventID:      412,
+			EventType:    inventory.EntityCreatedEvent,
+			TimestampUTC: "2026-03-03T10:00:00Z",
+			ActorUserID:  "grue",
+		},
+	}
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{e}, history: history})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/" + e.EntityID)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	return readBody(t, resp)
+}
+
+func TestDetail_TapeRowAndNoPathRow(t *testing.T) {
+	body := renderDetail(t, app.EntityResult{EntityID: "k3x9q2m7wa", DisplayName: "Torque wrench",
+		CanonicalName: "torque wrench", FullPathDisplay: "Garage:Toolbox:Torque wrench",
+		Status: inventory.EntityStatusOk})
+
+	assert.Contains(t, body, `<div class="tape-row">`)
+	assert.Contains(t, body, `<h2>Torque wrench</h2>`)
+	assert.Contains(t, body, `<span class="tape-id mono">k3x9q2m7wa</span>`)
+	assert.Contains(t, body, `hx-target="closest .tape-row"`)
+	assert.Contains(t, body, `>Edit name</button>`)
+	assert.NotContains(t, body, `<dt>Path</dt>`)
+	assert.NotContains(t, body, `<dt>Name</dt>`)
+}
+
+func TestDetail_Tags(t *testing.T) {
+	tests := []struct {
+		name    string
+		tags    []string
+		want    string
+		wantNot string
+	}{
+		{"sorted chips", []string{"auto", "calibrated"},
+			`<ul class="tag-list" aria-label="Tags"><li class="tag">auto</li><li class="tag">calibrated</li></ul>`, ""},
+		{"nil tags omit row", nil, "", `class="tag-list"`},
+		{"empty tags omit row", []string{}, "", `class="tag-list"`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := renderDetail(t, app.EntityResult{EntityID: "t1", DisplayName: "Wrench",
+				CanonicalName: "wrench", FullPathDisplay: "Wrench",
+				Status: inventory.EntityStatusOk, Tags: tc.tags})
+			if tc.want != "" {
+				assert.Contains(t, body, tc.want)
+			}
+			if tc.wantNot != "" {
+				assert.NotContains(t, body, tc.wantNot)
+			}
+		})
+	}
+}
+
+func TestDetail_StatusLine(t *testing.T) {
+	tests := []struct {
+		name   string
+		status inventory.EntityStatus
+		ctx    string
+		want   string // "" means no status line at all
+	}{
+		{"ok has no line", inventory.EntityStatusOk, "", ""},
+		{"loaned with recipient", inventory.EntityStatusLoaned, "Dana", "Loaned to Dana"},
+		{"loaned without recipient", inventory.EntityStatusLoaned, "", "Loaned</p>"},
+		{"borrowed with lender", inventory.EntityStatusBorrowed, "Sam", "Borrowed from Sam"},
+		{"borrowed without lender", inventory.EntityStatusBorrowed, "", "Borrowed</p>"},
+		{"missing", inventory.EntityStatusMissing, "", "Missing</p>"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := renderDetail(t, app.EntityResult{EntityID: "s1", DisplayName: "Wrench",
+				CanonicalName: "wrench", FullPathDisplay: "Wrench",
+				Status: tc.status, StatusContext: tc.ctx})
+			if tc.want == "" {
+				assert.NotContains(t, body, `class="status-line"`)
+				return
+			}
+			assert.Contains(t, body, `class="status-line"`)
+			assert.Contains(t, body, tc.want)
+			assert.NotContains(t, body, " to </p>")
+			assert.NotContains(t, body, " from </p>")
+		})
+	}
+}
+
+func TestDetail_PrimaryActionAndLedger(t *testing.T) {
+	body := renderDetail(t, app.EntityResult{EntityID: "p1", DisplayName: "Wrench",
+		CanonicalName: "wrench", FullPathDisplay: "Wrench",
+		Status: inventory.EntityStatusLoaned, StatusContext: "Dana"})
+
+	assert.Contains(t, body, `class="btn-primary detail-action-btn"`) // Return is primary
+	assert.Contains(t, body, `<td class="num mono">412</td>`)
+	assert.Contains(t, body, `class="detail-actions"`)
+}
+
+func TestDetail_ActionsHeadingForScreenReaders(t *testing.T) {
+	body := renderDetail(t, app.EntityResult{EntityID: "h1", DisplayName: "Wrench",
+		CanonicalName: "wrench", FullPathDisplay: "Wrench", Status: inventory.EntityStatusOk})
+
+	assert.Contains(t, body, `<h3 class="visually-hidden">Actions</h3>`)
+}
+
+func TestEditNameForm_RootIsTapeRow(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
+		{EntityID: "e1", DisplayName: "Wrench", CanonicalName: "wrench", FullPathDisplay: "Wrench"},
+	}})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/e1/edit/name")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := strings.TrimSpace(readBody(t, resp))
+
+	assert.True(t, strings.HasPrefix(body, `<div class="tape-row">`), body)
+	assert.Contains(t, body, `hx-target="#entity-detail"`)
+}
+
+func TestInlineForms_TextButtons(t *testing.T) {
+	tests := []struct {
+		action string
+		submit string
+	}{
+		{"loan", "Loan"},
+		{"move", "Move"},
+		{"remove", "Remove"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: loanableHammer()})
+			defer ts.Close()
+
+			resp, err := ts.Client().Get(ts.URL + "/entities/abc/actions/" + tc.action)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body := readBody(t, resp)
+
+			assert.Contains(t, body, `form-panel" data-action="`+tc.action+`"`)
+			assert.Contains(t, body, `<button type="submit" class="btn-primary">`+tc.submit+`</button>`)
+			assert.Contains(t, body, `>Cancel</button>`)
+			assert.NotContains(t, body, "✓")
+			assert.NotContains(t, body, "✕")
+		})
+	}
+}
+
+func TestTreeBadgeOOB_HasHiddenStatusText(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: loanableHammer()})
+	defer ts.Close()
+
+	_, body := postLoan(t, ts, url.Values{"recipient": {"Alice"}})
+
+	assert.Contains(
+		t,
+		body,
+		`<span id="tree-badge-abc" class="badge loaned" hx-swap-oob="true"><span class="visually-hidden">loaned</span></span>`,
+	)
+}
+
 func TestHandleLoan_Success(t *testing.T) {
 	fake := &fakeApp{entities: loanableHammer()}
 	ts := newTestServer(t, fake)
@@ -740,7 +905,7 @@ func TestHandleLoan_Success(t *testing.T) {
 	assert.Equal(t, "Alice", fake.lastLoanReq.StatusContext)
 	assert.Equal(t, "for the weekend", fake.lastLoanReq.Note)
 	assert.Contains(t, body, `id="entity-detail"`)
-	assert.Contains(t, body, "loaned — Alice")
+	assert.Contains(t, body, "Loaned to Alice")
 	assert.Contains(t, body, `id="tree-badge-abc"`)
 	assert.NotContains(t, body, `data-action="loan"`)
 	assert.NotContains(t, body, "loan failed")
@@ -780,7 +945,7 @@ func TestHandleLoan_ConcurrentLoanShowsFreshState(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, body, "loan failed")
-	assert.Contains(t, body, "loaned — Bob")
+	assert.Contains(t, body, "Loaned to Bob")
 	assert.Contains(t, body, `id="tree-badge-abc"`)
 	assert.NotContains(t, body, `data-action="loan"`)
 }
@@ -993,7 +1158,7 @@ func TestHandleMove_Success(t *testing.T) {
 	assert.Equal(t, "w", fake.lastMoveReq.NewParentID)
 	assert.Equal(t, "new bench", fake.lastMoveReq.Note)
 	assert.Contains(t, body, `id="entity-detail"`)
-	assert.Contains(t, body, "Workshop:Drill")
+	assert.Contains(t, body, `href="/entities/w">Workshop</a>`, "new parent appears in breadcrumbs")
 	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.JSONEq(t,
 		`{"tree-node-detached":{"entityId":"abc","parentId":"g","parentHasChildren":false},`+
@@ -1281,7 +1446,7 @@ func TestHandleRemove_RootShowsEmptyState(t *testing.T) {
 	resp, body := postRemove(t, ts, url.Values{})
 
 	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
-	assert.Contains(t, body, "Select an item to see details.")
+	assert.Contains(t, body, "Pick something from the tree, or search for it.")
 	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
 }
 
