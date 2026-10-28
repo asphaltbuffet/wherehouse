@@ -1,5 +1,5 @@
 {{define "detail_section"}}
-<section id="entity-detail">
+<section id="entity-detail" data-entity-id="{{.Entity.EntityID}}">
   {{template "breadcrumbs" .Breadcrumbs}}
   {{if .EditNameForm}}
   {{template "edit_name_form" .EditNameForm}}

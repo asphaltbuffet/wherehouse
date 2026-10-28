@@ -887,7 +887,7 @@ func TestEditNameForm_RendersInTapeRow(t *testing.T) {
 	defer resp.Body.Close()
 	body := strings.TrimSpace(readBody(t, resp))
 
-	assert.Contains(t, body, `<section id="entity-detail">`)
+	assert.Contains(t, body, `<section id="entity-detail" data-entity-id="e1">`)
 	assert.Contains(t, body, `<div class="tape-row">`)
 	assert.Contains(t, body, `<form class="tape-edit-form" hx-post="/entities/e1/edit/name"`)
 	assert.Contains(t, body, `hx-target="#entity-detail"`)
@@ -1454,7 +1454,7 @@ func TestHandleRemoveForm(t *testing.T) {
 			name: "ok opens form", entities: hammer(inventory.EntityStatusOk), wantCode: http.StatusOK,
 			want: []string{
 				`id="entity-detail"`, formPost,
-				// renderAfterRemoval may return detail_empty, which has no #entity-detail wrapper.
+				// renderAfterRemoval may return home_section, which has no #entity-detail wrapper.
 				`hx-target="#detail-panel"`, `name="note"`,
 				"Remove Hammer from the inventory? This cannot be undone.",
 			},
@@ -1975,4 +1975,12 @@ func TestDetail_HistoryHasExplicitTableRoles(t *testing.T) {
 		assert.Contains(t, body, `<td role="cell" class="`+cls+`">`)
 	}
 	assert.Contains(t, body, `<th role="columnheader" scope="col" class="num">#</th>`)
+}
+
+// tree.js syncs the tree selection to the entity the detail panel shows.
+func TestDetail_SectionCarriesEntityID(t *testing.T) {
+	ts := newTestServer(t, garageWithChildren())
+	defer ts.Close()
+
+	assert.Contains(t, getDetail(t, ts, "g"), `<section id="entity-detail" data-entity-id="g">`)
 }
