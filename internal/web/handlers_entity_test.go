@@ -795,8 +795,7 @@ func TestDetail_TapeRowAndNoPathRow(t *testing.T) {
 	assert.Contains(t, body, `<div class="tape-row">`)
 	assert.Contains(t, body, `<h2>Torque wrench</h2>`)
 	assert.Contains(t, body, `<span class="tape-id mono">k3x9q2m7wa</span>`)
-	assert.Contains(t, body, `hx-target="closest .tape-row"`)
-	assert.Contains(t, body, `>Edit name</button>`)
+	assert.Contains(t, body, `hx-target="#entity-detail" hx-swap="outerHTML">Edit name</button>`)
 	assert.NotContains(t, body, `<dt>Path</dt>`)
 	assert.NotContains(t, body, `<dt>Name</dt>`)
 }
@@ -876,7 +875,8 @@ func TestDetail_ActionsHeadingForScreenReaders(t *testing.T) {
 	assert.Contains(t, body, `<h3 class="visually-hidden">Actions</h3>`)
 }
 
-func TestEditNameForm_RootIsTapeRow(t *testing.T) {
+// The rename form sits in the tape row of the full section (#306).
+func TestEditNameForm_RendersInTapeRow(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
 		{EntityID: "e1", DisplayName: "Wrench", CanonicalName: "wrench", FullPathDisplay: "Wrench"},
 	}})
@@ -887,7 +887,9 @@ func TestEditNameForm_RootIsTapeRow(t *testing.T) {
 	defer resp.Body.Close()
 	body := strings.TrimSpace(readBody(t, resp))
 
-	assert.True(t, strings.HasPrefix(body, `<div class="tape-row">`), body)
+	assert.Contains(t, body, `<section id="entity-detail">`)
+	assert.Contains(t, body, `<div class="tape-row">`)
+	assert.Contains(t, body, `<form class="tape-edit-form" hx-post="/entities/e1/edit/name"`)
 	assert.Contains(t, body, `hx-target="#entity-detail"`)
 }
 
@@ -1743,4 +1745,79 @@ func TestHandleEntityDetail_UnknownIDNotFound(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+// #306: every form-opening button swaps the whole section, so a stale open
+// can show the fresh state with an error.
+func TestDetail_FormButtonsTargetSection(t *testing.T) {
+	body := renderDetail(t, app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+		Status: inventory.EntityStatusOk})
+
+	assert.Contains(t, body, `hx-get="/entities/abc/edit/name"`)
+	assert.NotContains(t, body, `hx-target="this"`)
+	assert.NotContains(t, body, `hx-target="closest .tape-row"`)
+}
+
+func TestHandleEditNameForm_ReturnsSectionWithForm(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Old Name", FullPathDisplay: "Old Name", Status: inventory.EntityStatusOk},
+	}})
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc/edit/name", nil)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), `id="entity-detail"`)
+	assert.Contains(t, string(body), `hx-post="/entities/abc/edit/name"`)
+	assert.Contains(t, string(body), `value="Old Name"`)
+	assert.NotContains(t, string(body), `hx-get="/entities/abc/edit/name"`, "the form replaces the Edit name button")
+}
+
+func TestHandleEditNameForm_RemovedShowsRemovedPanel(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Old Name", FullPathDisplay: "Old Name", Status: inventory.EntityStatusRemoved},
+	}})
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc/edit/name", nil)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), staleText)
+	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.NotContains(t, string(body), `hx-post="/entities/abc/edit/name"`)
+}
+
+func TestHandleEditName_RemovedShowsRemovedPanel(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Old Name", FullPathDisplay: "Old Name",
+				Status: inventory.EntityStatusRemoved},
+		},
+		renameErr: errTest,
+	})
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/edit/name",
+		strings.NewReader(url.Values{"display_name": {"New"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), staleText)
+	assert.Contains(t, string(body), "Last location")
+	assert.NotContains(t, string(body), "rename failed")
 }

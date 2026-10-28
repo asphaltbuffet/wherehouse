@@ -36,8 +36,9 @@ type detailData struct {
 	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
 	// CanRemove is false for borrowed: a borrowed entity exits via Return (ADR 0022).
 	CanRemove           bool
-	RemoveBlockedReason string          // non-empty when Remove is shown disabled
-	RemoveForm          *removeFormData // non-nil re-opens the remove form (guard tripped at submit)
+	RemoveBlockedReason string            // non-empty when Remove is shown disabled
+	RemoveForm          *removeFormData   // non-nil re-opens the remove form (guard tripped at submit)
+	EditNameForm        *editNameFormData // non-nil swaps the name tape for the rename form
 	Breadcrumbs         []Breadcrumb
 	Error               string // populated by edit POST handlers; rendered inline above the detail dl
 	Removed             bool   // read-only view of a removed entity: last location + history, no actions
@@ -92,6 +93,12 @@ type removeFormData struct {
 
 // removeHasChildrenReason is the tooltip on a disabled Remove button (#287).
 const removeHasChildrenReason = "Contains other entities — remove or move them first"
+
+// editNameFormData is the view model for the inline rename form.
+type editNameFormData struct {
+	EntityID    string
+	CurrentName string
+}
 
 // attrAction is the view model for one attribute button on the detail panel.
 // The button posts Field=Value: the explicit target, never a toggle, so a
@@ -425,28 +432,17 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 	s.renderHTML(w, "detail", detailPageData{Detail: data, Roots: roots, Actor: s.actorView(r)})
 }
 
+// handleEditNameForm handles GET /entities/{entityID}/edit/name, re-rendering
+// the detail section with the rename form in place of the name tape.
 func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
-	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-
-	s.renderHTML(w, "edit_name_form", struct {
-		EntityID    string
-		CurrentName string
-	}{
-		EntityID:    entityID,
-		CurrentName: data.Entity.DisplayName,
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		d.EditNameForm = &editNameFormData{EntityID: d.Entity.EntityID, CurrentName: d.Entity.DisplayName}
+		return true
 	})
 }
 
+// handleEditName handles POST /entities/{entityID}/edit/name. Liveness is left
+// to the app layer (ADR 0035); the result is always rendered from a fresh read.
 func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -454,45 +450,34 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-
 	newName := strings.TrimSpace(r.FormValue("display_name"))
 	if newName == "" {
 		http.Error(w, "display_name is required", http.StatusBadRequest)
 		return
 	}
 
-	_, err = s.cfg.App.RenameEntity(r.Context(), app.RenameEntityRequest{
+	_, renameErr := s.cfg.App.RenameEntity(r.Context(), app.RenameEntityRequest{
 		EntityID: entityID,
 		NewName:  newName,
 		ActorID:  s.actorFor(r),
 	})
-	if err != nil {
-		s.cfg.Logger.Error("rename entity", "error", err, "entity_id", entityID)
-		data.Error = "rename failed"
-		s.renderDetailSection(w, r, data)
-		return
-	}
 
-	// Re-fetch so the rendered section reflects the new name.
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
 		s.serverError(w, "build detail data", err)
 		return
 	}
 	if fresh.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
+		s.renderGone(w, r, entityID)
 		return
 	}
+	if renameErr != nil {
+		s.cfg.Logger.Error("rename entity", "error", renameErr, "entity_id", entityID)
+		fresh.Error = "rename failed"
+		s.renderDetailSection(w, r, fresh)
+		return
+	}
+
 	s.renderDetailSection(w, r, fresh)
 	if wantsFragment(r) {
 		s.renderHTMLAppend(w, "tree_label_oob", fresh.Entity)

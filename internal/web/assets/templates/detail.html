@@ -1,6 +1,9 @@
 {{define "detail_section"}}
 <section id="entity-detail">
   {{template "breadcrumbs" .Breadcrumbs}}
+  {{if .EditNameForm}}
+  {{template "edit_name_form" .EditNameForm}}
+  {{else}}
   <div class="tape-row">
     <div class="tape">
       <h2>{{.Entity.DisplayName}}</h2>
@@ -9,9 +12,10 @@
     {{if not .Removed}}
     <button class="btn-link tape-edit"
             hx-get="/entities/{{.Entity.EntityID}}/edit/name"
-            hx-target="closest .tape-row" hx-swap="outerHTML">Edit name</button>
+            hx-target="#entity-detail" hx-swap="outerHTML">Edit name</button>
     {{end}}
   </div>
+  {{end}}
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
   {{template "status_line" .Entity}}
   {{with .Entity.Tags}}<ul class="tag-list" aria-label="Tags">{{range .}}<li class="tag">{{.}}</li>{{end}}</ul>{{end}}
