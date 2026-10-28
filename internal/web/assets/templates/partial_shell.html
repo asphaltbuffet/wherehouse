@@ -1,0 +1,28 @@
+{{define "shell_start"}}<!doctype html>
+<html lang="en">
+<head>{{template "head" .Title}}</head>
+<body>
+  <a class="skip-link" href="#detail-panel">Skip to content</a>
+  {{template "header"}}
+  <div class="app-shell">
+    <nav id="tree-panel" aria-label="Inventory tree">
+      <div id="tree-panel-header"><span>Inventory</span></div>
+      <ul id="tree-root-list" class="tree-node" role="tree">
+        {{range .Roots}}
+          {{template "tree_node" .}}
+        {{end}}
+      </ul>
+    </nav>
+    <main id="detail-panel" tabindex="-1">
+{{end}}
+
+{{define "shell_end"}}
+    </main>
+  </div>
+
+  <dialog id="add-modal" aria-label="Add item">
+    <div id="add-modal-body"></div>
+  </dialog>
+  {{template "footer" .}}
+</body>
+</html>{{end}}

@@ -7,38 +7,20 @@ import (
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
-	versioncmd "github.com/asphaltbuffet/wherehouse/internal/version"
 )
 
 type indexData struct {
-	Roots     []app.EntityResult
-	Version   string
-	GitCommit string
-	Actor     actorView
+	Shell pageShell
 }
 
 // handleIndex renders the full page shell with root-level tree nodes.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	entities, err := s.cfg.App.ListEntities(r.Context())
+	shell, err := s.newPageShell(r.Context(), r, "Wherehouse")
 	if err != nil {
-		s.serverError(w, "list entities", err)
+		s.serverError(w, "build page shell", err)
 		return
 	}
-
-	var roots []app.EntityResult
-	for _, e := range entities {
-		if isRootEntity(e) {
-			roots = append(roots, e)
-		}
-	}
-
-	data := indexData{
-		Roots:     roots,
-		Version:   versioncmd.Version,
-		GitCommit: versioncmd.GitCommit,
-		Actor:     s.actorView(r),
-	}
-	s.renderHTML(w, "index", data)
+	s.renderHTML(w, "index", indexData{Shell: shell})
 }
 
 // handleTreeChildren returns the direct children of an entity as tree_node fragments.
@@ -106,22 +88,15 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entities, err := s.cfg.App.ListEntities(r.Context())
+	shell, err := s.newPageShell(r.Context(), r, "Wherehouse — Search")
 	if err != nil {
-		s.serverError(w, "list entities", err)
+		s.serverError(w, "build page shell", err)
 		return
 	}
-	var roots []app.EntityResult
-	for _, e := range entities {
-		if isRootEntity(e) {
-			roots = append(roots, e)
-		}
-	}
 	s.renderHTML(w, "search_page", struct {
-		Roots  []app.EntityResult
+		Shell  pageShell
 		Search any
-		Actor  actorView
-	}{Roots: roots, Search: searchData, Actor: s.actorView(r)})
+	}{Shell: shell, Search: searchData})
 }
 
 // handleParentOptions returns eligible-parent matches for a parent picker.

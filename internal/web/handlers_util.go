@@ -2,11 +2,52 @@ package web
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
+	versioncmd "github.com/asphaltbuffet/wherehouse/internal/version"
 )
+
+// pageShell is what every full page renders around its main panel.
+type pageShell struct {
+	Title     string
+	Roots     []app.EntityResult
+	Actor     actorView
+	Version   string
+	GitCommit string
+}
+
+func (s *Server) newPageShell(ctx context.Context, r *http.Request, title string) (pageShell, error) {
+	roots, err := s.listRoots(ctx)
+	if err != nil {
+		return pageShell{}, err
+	}
+	return pageShell{
+		Title:     title,
+		Roots:     roots,
+		Actor:     s.actorView(r),
+		Version:   versioncmd.Version,
+		GitCommit: versioncmd.GitCommit,
+	}, nil
+}
+
+// listRoots returns the root entities in ListEntities order (the tree's order).
+func (s *Server) listRoots(ctx context.Context) ([]app.EntityResult, error) {
+	entities, err := s.cfg.App.ListEntities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list entities: %w", err)
+	}
+	var roots []app.EntityResult
+	for _, e := range entities {
+		if isRootEntity(e) {
+			roots = append(roots, e)
+		}
+	}
+	return roots, nil
+}
 
 const (
 	searchLimit          = 50

@@ -227,9 +227,8 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 
 // detailPageData wraps detailData with the tree roots for full-page (non-HTMX) renders.
 type detailPageData struct {
+	Shell  pageShell
 	Detail detailData
-	Actor  actorView
-	Roots  []app.EntityResult
 }
 
 // Breadcrumb is one segment of the entity path shown above the detail heading.
@@ -435,18 +434,12 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 		return
 	}
 
-	entities, err := s.cfg.App.ListEntities(r.Context())
+	shell, err := s.newPageShell(r.Context(), r, "Wherehouse")
 	if err != nil {
-		s.serverError(w, "list entities", err)
+		s.serverError(w, "build page shell", err)
 		return
 	}
-	var roots []app.EntityResult
-	for _, e := range entities {
-		if isRootEntity(e) {
-			roots = append(roots, e)
-		}
-	}
-	s.renderHTML(w, "detail", detailPageData{Detail: data, Roots: roots, Actor: s.actorView(r)})
+	s.renderHTML(w, "detail", detailPageData{Shell: shell, Detail: data})
 }
 
 // handleEditNameForm handles GET /entities/{entityID}/edit/name, re-rendering

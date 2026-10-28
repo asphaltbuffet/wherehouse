@@ -136,31 +136,9 @@
 </section>
 {{end}}
 
-{{define "detail"}}<!doctype html>
-<html lang="en">
-<head>{{template "head" "Wherehouse"}}</head>
-<body>
-  <a class="skip-link" href="#detail-panel">Skip to content</a>
-  {{template "header" .Actor}}
-  <div class="app-shell">
-    <nav id="tree-panel" aria-label="Inventory tree">
-      <div id="tree-panel-header"><span>Inventory</span></div>
-      <ul id="tree-root-list" class="tree-node" role="tree">
-        {{range .Roots}}
-          {{template "tree_node" .}}
-        {{end}}
-      </ul>
-    </nav>
-    <main id="detail-panel" tabindex="-1">
+{{define "detail"}}{{template "shell_start" .Shell}}
       {{template "detail_section" .Detail}}
-    </main>
-  </div>
-
-  <dialog id="add-modal" aria-label="Add item">
-    <div id="add-modal-body"></div>
-  </dialog>
-</body>
-</html>{{end}}
+{{template "shell_end" .Shell}}{{end}}
 
 {{define "tree_label_oob"}}
 <span id="tree-label-{{.EntityID}}" hx-swap-oob="true">{{.DisplayName}}</span>

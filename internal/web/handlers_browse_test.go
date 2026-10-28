@@ -353,3 +353,24 @@ func TestHandleSearch_HistoryRestore(t *testing.T) {
 		})
 	}
 }
+
+func TestFullPages_ShareShell(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: inventory.EntityStatusOk},
+	}}
+	for _, page := range []string{"/", "/search?q=ham", "/entities/abc"} {
+		t.Run(page, func(t *testing.T) {
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+			resp, err := ts.Client().Get(ts.URL + page)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body := readBody(t, resp)
+
+			assert.Equal(t, 1, strings.Count(body, `id="tree-root-list"`))
+			assert.Equal(t, 1, strings.Count(body, `<dialog id="add-modal"`))
+			assert.Equal(t, 1, strings.Count(body, `class="app-footer"`))
+			assert.Contains(t, body, `id="tree-node-abc"`)
+		})
+	}
+}
