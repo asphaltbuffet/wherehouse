@@ -56,6 +56,37 @@ func TestIndex_TreeMarksAndPadlock(t *testing.T) {
 	assert.NotContains(t, body, "🔒")
 }
 
+func TestIndex_EmptyStateCopy(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+
+	assert.Contains(t, body, `class="empty-state"`)
+	assert.Contains(t, body, `<span class="empty-tape" aria-hidden="true"></span>`)
+	assert.Contains(t, body, "Pick something from the tree, or search for it.")
+	assert.NotContains(t, body, "📦")
+}
+
+func TestSearch_EmptyStatesHaveNoEmoji(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+	defer ts.Close()
+
+	for _, q := range []string{"", "zzz"} {
+		resp, err := ts.Client().Get(ts.URL + "/search?q=" + url.QueryEscape(q))
+		require.NoError(t, err)
+		body := readBody(t, resp)
+		resp.Body.Close()
+
+		assert.Contains(t, body, `class="empty-state"`)
+		assert.Contains(t, body, `class="empty-tape"`)
+		assert.NotContains(t, body, "🔍")
+	}
+}
+
 func TestHandleTreeChildren_UnknownParentReturns404(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{})
 	defer ts.Close()

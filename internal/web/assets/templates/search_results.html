@@ -23,13 +23,13 @@
       </ul>
     {{else}}
       <div class="empty-state">
-        <span class="empty-icon">🔍</span>
+        <span class="empty-tape" aria-hidden="true"></span>
         <span>No results for "{{.Query}}".</span>
       </div>
     {{end}}
   {{else}}
     <div class="empty-state">
-      <span class="empty-icon">🔍</span>
+      <span class="empty-tape" aria-hidden="true"></span>
       <span>Type to search items and locations.</span>
     </div>
   {{end}}

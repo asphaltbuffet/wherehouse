@@ -417,7 +417,7 @@ func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 
 	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
-	assert.Contains(t, string(body), "Select an item to see details.")
+	assert.Contains(t, string(body), "Pick something from the tree, or search for it.")
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: ""}, detachedTrigger(t, resp))
 	assert.Equal(t, 1, fake.hasChildrenCalls,
@@ -850,6 +850,34 @@ func TestEditNameForm_RootIsTapeRow(t *testing.T) {
 
 	assert.True(t, strings.HasPrefix(body, `<div class="tape-row">`), body)
 	assert.Contains(t, body, `hx-target="#entity-detail"`)
+}
+
+func TestInlineForms_TextButtons(t *testing.T) {
+	tests := []struct {
+		action string
+		submit string
+	}{
+		{"loan", "Loan"},
+		{"move", "Move"},
+		{"remove", "Remove"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: loanableHammer()})
+			defer ts.Close()
+
+			resp, err := ts.Client().Get(ts.URL + "/entities/abc/actions/" + tc.action)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body := readBody(t, resp)
+
+			assert.Contains(t, body, `form-panel" data-action="`+tc.action+`"`)
+			assert.Contains(t, body, `<button type="submit" class="btn-primary">`+tc.submit+`</button>`)
+			assert.Contains(t, body, `>Cancel</button>`)
+			assert.NotContains(t, body, "✓")
+			assert.NotContains(t, body, "✕")
+		})
+	}
 }
 
 func TestTreeBadgeOOB_HasHiddenStatusText(t *testing.T) {
@@ -1418,7 +1446,7 @@ func TestHandleRemove_RootShowsEmptyState(t *testing.T) {
 	resp, body := postRemove(t, ts, url.Values{})
 
 	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
-	assert.Contains(t, body, "Select an item to see details.")
+	assert.Contains(t, body, "Pick something from the tree, or search for it.")
 	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
 }
 

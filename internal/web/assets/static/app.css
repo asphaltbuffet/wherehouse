@@ -253,47 +253,42 @@ h1, h2, h3 {
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
-.btn-primary {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-accent);
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-}
-.btn-primary:hover { opacity: 0.9; }
-
+.btn-primary,
 .btn-ghost {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-strong);
-  background: none;
-  color: var(--color-text);
-  cursor: pointer;
   font-family: var(--font-body);
   font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
 }
-.btn-ghost:hover { background: var(--color-raised); }
+.btn-primary {
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: 600;
+}
+.btn-primary:hover { box-shadow: inset 0 -2px 0 var(--tape); }
+.btn-ghost {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+.btn-ghost:hover { border-color: var(--color-text); }
 
 .btn-link {
   background: none;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 1px var(--space-2);
-  color: var(--color-accent);
+  border: none;
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
   cursor: pointer;
   font-family: var(--font-body);
-  font-size: var(--font-size-xs);
-  text-decoration: none;
+  font-size: var(--font-size-sm);
+  text-decoration: underline;
+  text-underline-offset: 2px;
   white-space: nowrap;
 }
-.btn-link:hover {
-  background: var(--color-raised);
-  border-color: var(--color-border-strong);
-}
+.btn-link:hover { color: var(--color-text); }
 
 /* ── Tree panel ──────────────────────────────────────────────────────── */
 #tree-panel {
@@ -520,10 +515,6 @@ h1, h2, h3 {
 }
 .detail-actions > form { flex-basis: 100%; }
 .detail-action-btn:disabled { opacity: 0.45; cursor: default; }
-/* kept from the old block; Task 4 folds these into .form-panel */
-.loan-form, .remove-form { display: flex; flex-direction: column; gap: var(--space-1); }
-.loan-form label, .remove-form label { font-size: var(--font-size-sm); color: var(--color-text-muted); }
-.loan-form-buttons, .remove-form-buttons { display: flex; gap: var(--space-2); }
 
 .history-heading {
   margin: var(--space-6) 0 0;
@@ -552,30 +543,33 @@ h1, h2, h3 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--space-3);
   padding: var(--space-6);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
   text-align: center;
-  gap: var(--space-2);
 }
-.empty-state .empty-icon { font-size: 2rem; }
+.empty-tape {
+  width: 9rem;
+  height: 2rem;
+  background: var(--tape);
+  border-radius: var(--radius-sm);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 4px) 50%, 100% 100%, 0 100%, 4px 50%);
+  opacity: 0.85;
+}
 
 /* ── Error state ─────────────────────────────────────────────────────── */
 .error {
-  color: var(--color-error);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-raised);
+  border-left: 4px solid var(--color-error);
+  border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-sm);
   margin-bottom: var(--space-3);
 }
 
 /* ── Search results ──────────────────────────────────────────────────── */
-.search-results {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
+.search-results { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--color-border-strong); }
 .search-result-item {
   display: flex;
   align-items: center;
@@ -584,66 +578,81 @@ h1, h2, h3 {
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
 }
-.search-result-item:hover { background: var(--color-raised); }
-.search-result-item .sr-name { font-weight: 600; font-size: var(--font-size-base); }
+.search-result-item:hover,
+.search-result-item:focus-visible {
+  background: var(--color-raised);
+  box-shadow: inset 3px 0 0 var(--tape);
+}
+.search-result-item .sr-name { font-weight: 600; }
 .search-result-item .sr-path { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.search-result-item .badge { margin-left: auto; }
 
 /* ── Dialog ──────────────────────────────────────────────────────────── */
 dialog#add-modal {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
+  border-top: 4px solid var(--tape);
   border-radius: var(--radius-md);
   padding: var(--space-5);
-  min-width: 320px;
+  min-width: min(22rem, calc(100vw - 2rem));
   box-shadow: var(--shadow-modal);
-  background: var(--color-surface);
+  background: var(--color-raised);
   color: var(--color-text);
 }
-dialog#add-modal::backdrop { background: rgba(0,0,0,0.4); }
-
+dialog#add-modal::backdrop { background: #1d211f66; }
 dialog#add-modal h2 { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); }
 
-dialog#add-modal label {
+/* ── Forms (dialog + inline action forms) ────────────────────────────── */
+dialog#add-modal label,
+.form-panel label {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   margin-bottom: var(--space-3);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
-
 dialog#add-modal input,
-dialog#add-modal select {
+dialog#add-modal select,
+.form-panel input,
+.form-panel select {
   font-family: var(--font-body);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
-  font-weight: normal;
-  min-height: 32px;
+  min-height: 2.25rem;
 }
-
-dialog#add-modal label:has(> input[type="checkbox"]) {
+dialog#add-modal label:has(> input[type="checkbox"]),
+.form-panel label:has(> input[type="checkbox"]) {
   flex-direction: row;
   align-items: center;
   gap: var(--space-2);
-  font-weight: normal;
+  color: var(--color-text);
 }
+dialog#add-modal input[type="checkbox"],
+.form-panel input[type="checkbox"] { min-height: auto; padding: 0; margin: 0; accent-color: var(--color-text); }
 
-dialog#add-modal input[type="checkbox"] {
-  min-height: auto;
-  padding: 0;
-  margin: 0;
+.form-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
 }
-
-.modal-actions {
+/* Inline forms use sibling <label for>, so labels hug their input instead. */
+.form-panel > label { margin-bottom: 0; }
+.form-panel > input + label { margin-top: var(--space-2); }
+.loan-form-buttons, .remove-form-buttons, .modal-actions {
   display: flex;
   gap: var(--space-2);
-  margin-top: var(--space-4);
-  justify-content: flex-end;
 }
+.loan-form-buttons, .remove-form-buttons { margin-top: var(--space-2); }
+.modal-actions { margin-top: var(--space-4); justify-content: flex-end; }
 
 /* ── Footer ──────────────────────────────────────────────────────────── */
 .app-footer {
@@ -670,25 +679,8 @@ dialog#add-modal input[type="checkbox"] {
 }
 
 /* Borrow modal parent picker */
-.parent-chosen {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
-  color: var(--color-text);
-}
-.parent-options {
-  list-style: none;
-  margin: 0 0 0.75rem;
-  padding: 0;
-  max-height: 12rem;
-  overflow-y: auto;
-  border-radius: var(--radius-sm);
-}
-.parent-options:not(:empty) { border: 1px solid var(--color-border); }
-.parent-options li { padding: 0.125rem 0.5rem; }
-.parent-options-empty {
-  color: var(--color-text-faint);
-  font-size: var(--font-size-sm);
-  font-style: italic;
-}
+.parent-chosen { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); color: var(--color-text); }
+.parent-options { list-style: none; margin: 0 0 var(--space-3); padding: 0; max-height: 12rem; overflow-y: auto; border-radius: var(--radius-md); }
+.parent-options:not(:empty) { border: 1px solid var(--color-border-strong); background: var(--color-surface); }
+.parent-options li { padding: 0.125rem var(--space-2); }
+.parent-options-empty { color: var(--color-text-faint); font-size: var(--font-size-sm); font-style: italic; }

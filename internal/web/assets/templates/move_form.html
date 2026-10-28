@@ -1,5 +1,5 @@
 {{define "move_form"}}
-<form class="loan-form" data-action="move"
+<form class="loan-form form-panel" data-action="move"
       hx-post="/entities/{{.EntityID}}/actions/move"
       hx-target="#entity-detail" hx-swap="outerHTML">
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
@@ -24,10 +24,10 @@
   <label for="move_note">Note (optional)</label>
   <input id="move_note" type="text" name="note" value="{{.Note}}">
   <div class="loan-form-buttons">
-    <button type="submit" class="btn-link" aria-label="Move">✓</button>
-    <button type="button" class="btn-link" aria-label="Cancel"
+    <button type="submit" class="btn-primary">Move</button>
+    <button type="button" class="btn-ghost"
             hx-get="/entities/{{.EntityID}}"
-            hx-target="#entity-detail" hx-swap="outerHTML">✕</button>
+            hx-target="#entity-detail" hx-swap="outerHTML">Cancel</button>
   </div>
 </form>
 {{end}}
