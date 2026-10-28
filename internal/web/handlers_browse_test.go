@@ -427,6 +427,10 @@ func TestFullPages_ShareShell(t *testing.T) {
 			assert.Equal(t, 1, strings.Count(body, `<dialog id="add-modal"`))
 			assert.Equal(t, 1, strings.Count(body, `class="app-footer"`))
 			assert.Contains(t, body, `id="tree-node-abc"`)
+			assert.Contains(t, body, `<button id="tree-toggle" class="btn-ghost tree-toggle" type="button" `+
+				`aria-controls="tree-panel" aria-expanded="false">Inventory</button>`)
+			assert.Contains(t, body, `<div id="tree-backdrop" class="tree-backdrop"></div>`)
+			assert.Contains(t, body, `<span class="app-brand-name">Wherehouse</span>`)
 		})
 	}
 }

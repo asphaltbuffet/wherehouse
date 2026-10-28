@@ -1,6 +1,7 @@
 {{define "header"}}
 <header class="app-header">
-  <a class="app-brand" href="/"><span class="app-brand-mark" aria-hidden="true"></span>Wherehouse</a>
+  <button id="tree-toggle" class="btn-ghost tree-toggle" type="button" aria-controls="tree-panel" aria-expanded="false">Inventory</button>
+  <a class="app-brand" href="/"><span class="app-brand-mark" aria-hidden="true"></span><span class="app-brand-name">Wherehouse</span></a>
   <form class="app-search"
         role="search"
         hx-get="/search"

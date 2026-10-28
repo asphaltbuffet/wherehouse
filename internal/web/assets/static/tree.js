@@ -1,4 +1,5 @@
-// Behaviors for the inventory tree, add-modal, and detail pane.
+// Behaviors for the inventory tree (a drawer on narrow screens), add-modal,
+// and detail pane.
 //
 // Everything is wired by event delegation against stable container IDs so the
 // HTML templates can stay free of inline event handlers (Content-Security-Policy
@@ -37,6 +38,64 @@
       var ti = e.closest('[role="treeitem"]');
       if (ti) ti.setAttribute('aria-selected', 'false');
     });
+  }
+
+  // Narrow viewports show the tree as a drawer (ADR 0037). Keep this query in
+  // step with the max-width breakpoint in app.css.
+  var narrow = window.matchMedia('(max-width: 48rem)');
+
+  // setDrawerInert keeps Tab out of the panels behind an open drawer.
+  function setDrawerInert(on) {
+    document.getElementById('detail-panel').inert = on;
+    var footer = document.querySelector('.app-footer');
+    if (footer) footer.inert = on;
+  }
+
+  function openTree() {
+    document.body.classList.add('tree-open');
+    document.getElementById('tree-toggle').setAttribute('aria-expanded', 'true');
+    setDrawerInert(true);
+    focusItem(document.querySelector('#tree-root-list .tree-item.selected') ||
+      document.querySelector('#tree-root-list .tree-item'));
+  }
+
+  // closeTree hides the drawer and moves focus to focusEl (null leaves focus alone).
+  function closeTree(focusEl) {
+    if (!document.body.classList.contains('tree-open')) return;
+    document.body.classList.remove('tree-open');
+    document.getElementById('tree-toggle').setAttribute('aria-expanded', 'false');
+    setDrawerInert(false);
+    if (focusEl) focusEl.focus();
+  }
+
+  function onTreeToggleClick(e) {
+    var toggle = document.getElementById('tree-toggle');
+    if (e.target.closest && e.target.closest('#tree-toggle')) {
+      if (document.body.classList.contains('tree-open')) {
+        closeTree(toggle);
+      } else {
+        openTree();
+      }
+      return;
+    }
+    if (e.target.id === 'tree-backdrop') closeTree(toggle);
+  }
+
+  function onDrawerKeydown(e) {
+    if (e.key !== 'Escape' || !document.body.classList.contains('tree-open')) return;
+    var dialog = document.getElementById('add-modal');
+    if (dialog && dialog.open) return; // Esc belongs to the modal first
+    e.preventDefault();
+    closeTree(document.getElementById('tree-toggle'));
+  }
+
+  // A chevron click only expands and a + click only opens the add modal;
+  // neither may also load the row's detail (which would close the drawer).
+  function onTreeBeforeRequest(e) {
+    var ev = e.detail && e.detail.requestConfig && e.detail.requestConfig.triggeringEvent;
+    var control = ev && ev.target && ev.target.closest &&
+      ev.target.closest('.chevron:not(.chevron-hidden), .add-btn');
+    if (control && e.target.classList && e.target.classList.contains('tree-item')) e.preventDefault();
   }
 
   function toggleNode(el) {
@@ -91,6 +150,7 @@
     item.classList.add('selected');
     var li = item.closest('[role="treeitem"]');
     if (li) li.setAttribute('aria-selected', 'true');
+    if (narrow.matches) closeTree(document.getElementById('detail-panel'));
   }
 
   function onTreeKeydown(root, e) {
@@ -217,6 +277,7 @@
   function onEntityCreated(e) {
     var dialog = document.getElementById('add-modal');
     if (dialog) dialog.close();
+    if (narrow.matches) closeTree(document.getElementById('detail-panel')); // show the result
     onTreeNodeAttached(e);
   }
 
@@ -252,6 +313,11 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    document.body.addEventListener('click', onTreeToggleClick);
+    document.body.addEventListener('keydown', onDrawerKeydown);
+    document.body.addEventListener('htmx:beforeRequest', onTreeEvent(function (root, e) { onTreeBeforeRequest(e); }));
+    narrow.addEventListener('change', function (e) { if (!e.matches) closeTree(null); });
+
     // Tree listeners first: onTreeClick stops later body listeners for .add-btn.
     document.body.addEventListener('click', onTreeEvent(function (root, e) { onTreeClick(e); }));
     document.body.addEventListener('htmx:afterRequest', onTreeEvent(function (root, e) { onTreeAfterRequest(e); }));
