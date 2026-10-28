@@ -143,6 +143,16 @@ alias = "up"
 run = "go get -u -t ./..."
 depends_post = ["mod-tidy"]
 
+[tasks.test-browser]
+description = "run browser tests across the device matrix (ADR 0038)"
+depends = ["generate"]
+env = { BROWSER_ARTIFACTS_DIR = "{{config_root}}/bin/browser-artifacts" }
+run = [
+  "rm -rf bin/browser-artifacts",
+  "go run github.com/mxschmitt/playwright-go/cmd/playwright install chromium webkit firefox",
+  "gotestsum -- -tags browser -race -timeout 10m -run '^TestBrowser' ./internal/web/...",
+]
+
 [tasks.test]
 description = "run test suite"
 depends = ["generate"]

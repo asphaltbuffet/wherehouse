@@ -95,6 +95,57 @@ jobs:
           files: ./bin/coverage.out
           flags: Linux
 
+  browser:
+    name: Browser Tests
+    needs: generate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.2
+
+      - name: Download generated files
+        uses: actions/download-artifact@v8
+        with:
+          name: generated
+
+      # Browser builds are pinned by the playwright-go version (ADR 0038).
+      - name: Resolve playwright-go version
+        id: playwright
+        run: echo "version=$(go list -m -f '{{.Version}}' github.com/mxschmitt/playwright-go)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright driver and browsers
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/ms-playwright-go
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install browsers and system dependencies
+        run: go run github.com/mxschmitt/playwright-go/cmd/playwright install --with-deps chromium webkit firefox
+
+      - name: Browser tests
+        run: mise run test-browser
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-artifacts
+          path: bin/browser-artifacts
+          if-no-files-found: ignore
+
   lint:
     name: Lint
     needs: generate

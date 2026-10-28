@@ -28,12 +28,18 @@ schema = 3
   [mod."github.com/clipperhouse/uax29/v2"]
     version = "v2.7.0"
     hash = "sha256-GO3az7WiGcwU0OvmocwdfR5ohGRL8NbjscIaMyhAdxE="
+  [mod."github.com/deckarep/golang-set/v2"]
+    version = "v2.8.0"
+    hash = "sha256-9f8aAodhyBeB3xPQKZTlcy3jGpLsY8fDwT2a+Xel0xg="
   [mod."github.com/dustin/go-humanize"]
     version = "v1.1.0"
     hash = "sha256-Qa7BSAXtgH7CB5STBiXTTOCgivWUiA65u3KxDOSZCkQ="
   [mod."github.com/fsnotify/fsnotify"]
     version = "v1.10.1"
     hash = "sha256-6LBLgsh4nKkMpgRKVsYFEaGDSU1fncBcWVSjKBdfgjU="
+  [mod."github.com/go-stack/stack"]
+    version = "v1.8.1"
+    hash = "sha256-ixcJ2RrK1ZH3YWGQZF9QFBo02NOuLeSp9wJ7gniipgY="
   [mod."github.com/go-viper/mapstructure/v2"]
     version = "v2.5.0"
     hash = "sha256-LbrCBANBprVI84M0CWrXc7rriJL5ac5VKbh58LBTw7U="
@@ -76,6 +82,9 @@ schema = 3
   [mod."github.com/muesli/roff"]
     version = "v0.1.0"
     hash = "sha256-0A/M8h0+dSF1NruiGjs4WbfWENFbV3VpyIwJzHEeRlA="
+  [mod."github.com/mxschmitt/playwright-go"]
+    version = "v0.6201.1"
+    hash = "sha256-iJShAFR53t2O71hWp/aL2xNfx4hiTwSgR9WeQNYlPeI="
   [mod."github.com/ncruces/go-strftime"]
     version = "v1.1.0"
     hash = "sha256-Q8VG+Tvb9/dr6p/wLbHwe4Myk8e+dtbVSlgoCfE6t3M="
