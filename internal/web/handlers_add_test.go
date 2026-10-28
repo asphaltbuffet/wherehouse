@@ -107,7 +107,11 @@ func TestAddItem_ParentErrors(t *testing.T) {
 		want int
 	}{
 		{"removed or unknown parent", fmt.Errorf("get entity %q: %w", "gone", app.ErrNotFound), http.StatusNotFound},
-		{"discrete parent", fmt.Errorf("%q is discrete: %w", "Box", app.ErrInvalidDestination), http.StatusUnprocessableEntity},
+		{
+			"discrete parent",
+			fmt.Errorf("%q is discrete: %w", "Box", app.ErrInvalidDestination),
+			http.StatusUnprocessableEntity,
+		},
 		{"other", errTest, http.StatusInternalServerError},
 	}
 	for _, tc := range cases {

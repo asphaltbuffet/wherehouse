@@ -105,7 +105,12 @@ func TestRunBorrow_BlocksLost(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentID: apptesting.MustLookupID(t, a, "Shelf"), StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -122,7 +127,12 @@ func TestRunBorrow_BlocksFound(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentID: apptesting.MustLookupID(t, a, "Shelf"), StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -139,7 +149,12 @@ func TestRunBorrow_BlocksLoan(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentID: apptesting.MustLookupID(t, a, "Shelf"), StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -156,7 +171,12 @@ func TestRunBorrow_BlocksRemove(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentID: apptesting.MustLookupID(t, a, "Shelf"), StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 
@@ -173,7 +193,12 @@ func TestRunBorrow_ReturnSetsRemoved(t *testing.T) {
 	seedShelf(t, a)
 
 	_, err := a.BorrowEntities(t.Context(), []app.BorrowEntityRequest{
-		{DisplayName: "Drill", ParentID: apptesting.MustLookupID(t, a, "Shelf"), StatusContext: "Alice", ActorID: "test"},
+		{
+			DisplayName:   "Drill",
+			ParentID:      apptesting.MustLookupID(t, a, "Shelf"),
+			StatusContext: "Alice",
+			ActorID:       "test",
+		},
 	})
 	require.NoError(t, err)
 

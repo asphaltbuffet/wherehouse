@@ -237,10 +237,18 @@ func TestAddEntitiesAtPaths_ReturnsLeavesOnly(t *testing.T) {
 // Names are not unique: an existing entity at the same path is not a duplicate.
 func TestAddEntitiesAtPaths_CreatesAlongsideExisting(t *testing.T) {
 	a := apptesting.OpenApp(t)
-	first, err := a.AddEntitiesAtPaths(t.Context(), []app.BulkAddRow{{Path: "Bin"}}, app.BulkAddOptions{ActorID: "test"})
+	first, err := a.AddEntitiesAtPaths(
+		t.Context(),
+		[]app.BulkAddRow{{Path: "Bin"}},
+		app.BulkAddOptions{ActorID: "test"},
+	)
 	require.NoError(t, err)
 
-	second, err := a.AddEntitiesAtPaths(t.Context(), []app.BulkAddRow{{Path: "Bin"}}, app.BulkAddOptions{ActorID: "test"})
+	second, err := a.AddEntitiesAtPaths(
+		t.Context(),
+		[]app.BulkAddRow{{Path: "Bin"}},
+		app.BulkAddOptions{ActorID: "test"},
+	)
 
 	require.NoError(t, err)
 	require.Len(t, second, 1)

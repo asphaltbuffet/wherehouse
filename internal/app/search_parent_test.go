@@ -93,7 +93,11 @@ func TestFindMoveDestinations_ExcludesSelfDescendantsAndCurrentParent(t *testing
 	} {
 		_, err := a.CreateEntity(
 			ctx,
-			app.CreateEntityRequest{DisplayName: c.name, ParentID: apptesting.MustLookupID(t, a, c.parent), ActorID: "test"},
+			app.CreateEntityRequest{
+				DisplayName: c.name,
+				ParentID:    apptesting.MustLookupID(t, a, c.parent),
+				ActorID:     "test",
+			},
 		)
 		require.NoError(t, err)
 	}
@@ -117,7 +121,10 @@ func TestFindMoveDestinations_FiltersBeforeLimit(t *testing.T) {
 	_, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bin", ActorID: "test"})
 	require.NoError(t, err)
 	for _, name := range []string{"Bin A", "Bin B"} {
-		_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: name, ParentID: apptesting.MustLookupID(t, a, "Bin"), ActorID: "test"})
+		_, err = a.CreateEntity(
+			ctx,
+			app.CreateEntityRequest{DisplayName: name, ParentID: apptesting.MustLookupID(t, a, "Bin"), ActorID: "test"},
+		)
 		require.NoError(t, err)
 	}
 	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Cabinet", ActorID: "test"})
@@ -147,9 +154,19 @@ func TestFindMoveDestinations_ExcludesDescendantUnderRemovedAncestor(t *testing.
 	ctx := t.Context()
 	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "test"})
 	require.NoError(t, err)
-	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "test"})
+	box, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "test"},
+	)
 	require.NoError(t, err)
-	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bit", ParentID: apptesting.MustLookupID(t, a, "Garage:Box"), ActorID: "test"})
+	_, err = a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{
+			DisplayName: "Bit",
+			ParentID:    apptesting.MustLookupID(t, a, "Garage:Box"),
+			ActorID:     "test",
+		},
+	)
 	require.NoError(t, err)
 	apptesting.RemoveLeavingLiveChildren(t, a, box.EntityID) // pre-#287 data: live child under removed parent
 

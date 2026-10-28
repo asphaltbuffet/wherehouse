@@ -18,7 +18,14 @@ func seedAttr(t *testing.T, a *app.App) (app.EntityResult, app.EntityResult) {
 	ctx := context.Background()
 	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
 	require.NoError(t, err)
-	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "alice"})
+	box, err := a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{
+			DisplayName: "Box",
+			ParentID:    apptesting.MustLookupID(t, a, "Garage"),
+			ActorID:     "alice",
+		},
+	)
 	require.NoError(t, err)
 	return garage, box
 }
@@ -153,9 +160,14 @@ func TestSetAttributes_LockRequiresOkOrBorrowed(t *testing.T) {
 	require.ErrorContains(t, err, "only ok or borrowed entities can be locked")
 
 	// borrowed is allowed
-	borrowed, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{{
-		DisplayName: "Bench", ParentID: apptesting.MustLookupID(t, a, "Garage"), StatusContext: "Alice", ActorID: "alice",
-	}})
+	borrowed, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{
+			DisplayName:   "Bench",
+			ParentID:      apptesting.MustLookupID(t, a, "Garage"),
+			StatusContext: "Alice",
+			ActorID:       "alice",
+		},
+	})
 	require.NoError(t, err)
 	results, err := a.SetAttributes(ctx, []app.SetAttributesRequest{
 		{EntityID: borrowed[0].EntityID, Locked: new(true)},
@@ -213,7 +225,14 @@ func TestSetAttributes_AtomicWithinRequest(t *testing.T) {
 	ctx := context.Background()
 	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", Locked: true, ActorID: "alice"})
 	require.NoError(t, err)
-	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ParentID: apptesting.MustLookupID(t, a, "Garage"), ActorID: "alice"})
+	_, err = a.CreateEntity(
+		ctx,
+		app.CreateEntityRequest{
+			DisplayName: "Box",
+			ParentID:    apptesting.MustLookupID(t, a, "Garage"),
+			ActorID:     "alice",
+		},
+	)
 	require.NoError(t, err)
 
 	_, err = a.SetAttributes(ctx, []app.SetAttributesRequest{{

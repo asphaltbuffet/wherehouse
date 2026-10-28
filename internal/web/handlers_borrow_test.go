@@ -165,7 +165,13 @@ func TestHandleBorrow_StaleParent(t *testing.T) {
 func TestHandleBorrow_DiscreteParent(t *testing.T) {
 	fake := &fakeApp{
 		entities: []app.EntityResult{
-			{EntityID: "box", DisplayName: "Box", FullPathDisplay: "Garage:Box", Discrete: true, Status: inventory.EntityStatusOk},
+			{
+				EntityID:        "box",
+				DisplayName:     "Box",
+				FullPathDisplay: "Garage:Box",
+				Discrete:        true,
+				Status:          inventory.EntityStatusOk,
+			},
 		},
 		borrowErr: fmt.Errorf("%q is discrete: %w", "Garage:Box", app.ErrInvalidDestination),
 	}
