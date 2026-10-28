@@ -403,19 +403,52 @@ func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
 		"only the detail panel's discrete check queries; a root removal must not query a parent")
 }
 
-func TestHandleReturn_OkForbidden(t *testing.T) {
-	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
-		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: inventory.EntityStatusOk},
-	}})
+// A stale Return on an entity already returned elsewhere reaches the app
+// guard (ADR 0035); the intent holds, so the fresh state renders without an
+// error (#292, #306).
+func TestHandleReturn_StaleOnOkShowsCurrentState(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: inventory.EntityStatusOk},
+		},
+		returnErr: errTest,
+	}
+	ts := newTestServer(t, fake)
 	defer ts.Close()
 
 	resp := postHTMX(t, ts, "/entities/abc/actions/return")
 	defer resp.Body.Close()
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "abc", fake.lastReturnReq.EntityID, "the app layer decides (ADR 0035)")
+	assert.Contains(t, string(body), `id="tree-badge-abc"`)
+	assert.NotContains(t, string(body), "return failed")
+	assert.NotContains(t, string(body), `hx-post="/entities/abc/actions/return"`)
 }
 
-// Review Focus #4: a second click after the borrowed entity was removed.
-func TestHandleReturn_AlreadyReturnedNotFound(t *testing.T) {
+// Review Focus #3: the entity left the inventory elsewhere (returned or
+// removed); show the parent as a completed removal, without writing.
+func TestHandleReturn_AlreadyRemovedShowsParent(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+			Status: inventory.EntityStatusRemoved},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Empty(t, fake.lastReturnReq.EntityID, "nothing to write: the entity already left the inventory")
+	assert.Equal(t, "/entities/g", resp.Header.Get("Hx-Push-Url"))
+	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
+}
+
+func TestHandleReturn_UnknownEntityNotFound(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
 	defer ts.Close()
 

@@ -547,7 +547,9 @@ func (s *Server) changeMissing(
 
 // handleReturn handles POST /entities/{entityID}/actions/return.
 // A borrowed entity is removed, so the response navigates to its parent;
-// a loaned entity goes back to ok and is re-rendered in place.
+// a loaned entity goes back to ok and is re-rendered in place. Eligibility is
+// left to the app layer (ADR 0035), so a stale panel reaches
+// renderReturnFailure instead of a bare 403 (#306).
 func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
 
@@ -557,11 +559,7 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanReturn {
-		http.Error(w, "entity cannot be returned", http.StatusForbidden)
+		s.renderAlreadyRemoved(w, r, entityID)
 		return
 	}
 
@@ -773,7 +771,7 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Entity.EntityID == "" {
-		s.renderRemoveAlreadyApplied(w, r, entityID)
+		s.renderAlreadyRemoved(w, r, entityID)
 		return
 	}
 	if !data.CanRemove {
@@ -809,7 +807,7 @@ func (s *Server) renderRemoveFailure(
 
 	switch {
 	case errors.Is(err, app.ErrNotFound):
-		s.renderRemoveAlreadyApplied(w, r, entityID)
+		s.renderAlreadyRemoved(w, r, entityID)
 	case errors.Is(err, app.ErrHasChildren):
 		s.cfg.Logger.Info("remove rejected: entity has live children", "error", err, "entity_id", entityID)
 		fresh, ferr := s.buildDetailData(r.Context(), entityID)
@@ -818,7 +816,7 @@ func (s *Server) renderRemoveFailure(
 			return
 		}
 		if fresh.Entity.EntityID == "" {
-			s.renderRemoveAlreadyApplied(w, r, entityID)
+			s.renderAlreadyRemoved(w, r, entityID)
 			return
 		}
 		form.Error = "remove failed: it still contains other entities — remove or move them first"
@@ -831,11 +829,11 @@ func (s *Server) renderRemoveFailure(
 	}
 }
 
-// renderRemoveAlreadyApplied handles a Remove for an entity that is no longer
-// live. If it was removed elsewhere (another tab, the CLI), the user's intent
-// already holds, so show the removal outcome. This request's note is dropped;
-// history records the removal that won.
-func (s *Server) renderRemoveAlreadyApplied(w http.ResponseWriter, r *http.Request, entityID string) {
+// renderAlreadyRemoved handles a Remove or Return for an entity that is no
+// longer live. If it left the inventory elsewhere (another tab, the CLI), the
+// user's intent already holds, so show the removal outcome. This request's
+// note is dropped; history records the event that won.
+func (s *Server) renderAlreadyRemoved(w http.ResponseWriter, r *http.Request, entityID string) {
 	removed, err := s.cfg.App.GetEntityByIDAnyStatus(r.Context(), entityID)
 	if errors.Is(err, app.ErrNotFound) {
 		http.Error(w, "entity not found", http.StatusNotFound)
@@ -845,7 +843,7 @@ func (s *Server) renderRemoveAlreadyApplied(w http.ResponseWriter, r *http.Reque
 		s.serverError(w, "get entity", err)
 		return
 	}
-	s.cfg.Logger.Info("remove already applied concurrently", "entity_id", entityID)
+	s.cfg.Logger.Info("entity already removed concurrently", "entity_id", entityID)
 	s.renderAfterRemoval(w, r, removed)
 }
 
