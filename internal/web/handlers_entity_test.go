@@ -383,7 +383,7 @@ func TestHandleReturn_BorrowedCountErrorOmitsTrigger(t *testing.T) {
 	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
 }
 
-func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
+func TestHandleReturn_BorrowedRootShowsHome(t *testing.T) {
 	fake := &fakeApp{entities: []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
 			Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
@@ -396,7 +396,7 @@ func TestHandleReturn_BorrowedRootShowsEmptyState(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 
 	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
-	assert.Contains(t, string(body), "Pick something from the tree, or search for it.")
+	assert.Contains(t, string(body), `<section id="home-detail"`)
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: ""}, detachedTrigger(t, resp))
 	assert.Equal(t, 1, fake.hasChildrenCalls,
@@ -1538,7 +1538,7 @@ func TestHandleRemove_ShowsParentAndDeletesNode(t *testing.T) {
 	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: "g", ParentHasChildren: false}, detachedTrigger(t, resp))
 }
 
-func TestHandleRemove_RootShowsEmptyState(t *testing.T) {
+func TestHandleRemove_RootShowsHome(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
 		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer", Status: inventory.EntityStatusOk},
 	}})
@@ -1547,7 +1547,7 @@ func TestHandleRemove_RootShowsEmptyState(t *testing.T) {
 	resp, body := postRemove(t, ts, url.Values{})
 
 	assert.Equal(t, "/", resp.Header.Get("Hx-Push-Url"))
-	assert.Contains(t, body, "Pick something from the tree, or search for it.")
+	assert.Contains(t, body, `<section id="home-detail"`)
 	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
 }
 
@@ -1940,4 +1940,25 @@ func TestDetail_ChildrenList_GetChildrenErrorIs500(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func TestDetail_BreadcrumbsStartAtInventory(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g",
+			Status: inventory.EntityStatusOk},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	root := getDetail(t, ts, "g")
+	assert.Contains(t, root, `href="/">Inventory</a>`)
+	assert.Contains(t, root, `<span aria-current="page">Garage</span>`)
+
+	nested := getDetail(t, ts, "t")
+	inv := strings.Index(nested, `href="/">Inventory</a>`)
+	garage := strings.Index(nested, `href="/entities/g">Garage</a>`)
+	require.True(t, inv >= 0 && garage >= 0)
+	assert.Less(t, inv, garage)
+	assert.Contains(t, nested, `<span aria-current="page">Toolbox</span>`)
 }

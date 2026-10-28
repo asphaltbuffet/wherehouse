@@ -324,8 +324,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	}
 
 	// Breadcrumbs need the full entity list to resolve ancestor IDs by path.
-	// Only required when the entity is not at the root; for root entities the
-	// breadcrumb template is hidden by len(.)<=1 anyway, so we skip the call.
+	// A root entity's only crumb (after Inventory) is itself, so skip the call.
 	var crumbEntities []app.EntityResult
 	if isRootEntity(entity) {
 		crumbEntities = []app.EntityResult{entity}
@@ -1036,7 +1035,7 @@ func (s *Server) setTreeNodeDetachedTrigger(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Hx-Trigger-After-Swap", string(trigger))
 }
 
-// renderAfterRemoval shows the removed entity's parent (or the empty state for a
+// renderAfterRemoval shows the removed entity's parent (or the home detail for a
 // root entity), pushes the matching URL, and deletes the entity's tree node.
 func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, removed app.EntityResult) {
 	var parent detailData
@@ -1051,8 +1050,13 @@ func (s *Server) renderAfterRemoval(w http.ResponseWriter, r *http.Request, remo
 
 	s.setTreeNodeDetachedTrigger(w, r, removed)
 	if parent.Entity.EntityID == "" {
+		home, err := s.homeView(r.Context())
+		if err != nil {
+			s.serverError(w, "build home", err)
+			return
+		}
 		w.Header().Set("Hx-Push-Url", "/")
-		s.renderHTML(w, "detail_empty", nil)
+		s.renderHTML(w, "home_section", home)
 	} else {
 		w.Header().Set("Hx-Push-Url", "/entities/"+parent.Entity.EntityID)
 		s.renderHTML(w, "detail_section", parent)

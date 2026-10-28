@@ -56,8 +56,15 @@ func TestIndex_TreeMarksAndPadlock(t *testing.T) {
 	assert.NotContains(t, body, "🔒")
 }
 
-func TestIndex_EmptyStateCopy(t *testing.T) {
-	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+func TestIndex_HomeListsRoots(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk,
+			HasChildren: true},
+		{EntityID: "s", DisplayName: "Shed", FullPathDisplay: "Shed", Status: inventory.EntityStatusOk},
+		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g",
+			Status: inventory.EntityStatusOk},
+	}}
+	ts := newTestServer(t, fake)
 	defer ts.Close()
 
 	resp, err := ts.Client().Get(ts.URL + "/")
@@ -65,10 +72,59 @@ func TestIndex_EmptyStateCopy(t *testing.T) {
 	defer resp.Body.Close()
 	body := readBody(t, resp)
 
-	assert.Contains(t, body, `class="empty-state"`)
-	assert.Contains(t, body, `<span class="empty-tape" aria-hidden="true"></span>`)
-	assert.Contains(t, body, "Pick something from the tree, or search for it.")
-	assert.NotContains(t, body, "📦")
+	assert.Contains(t, body, `<section id="home-detail"`)
+	assert.Contains(t, body, `<h2>Inventory</h2>`)
+	assert.Contains(t, body, `id="children-list" class="children-list" data-parent-id=""`)
+	assert.Contains(t, body, `<a class="child-row" href="/entities/g"`)
+	assert.Contains(t, body, `<a class="child-row" href="/entities/s"`)
+	assert.NotContains(t, body, `<a class="child-row" href="/entities/t"`, "non-roots stay off the home list")
+	assert.Contains(t, body, `data-action="add-child" data-parent-id="">Add root</button>`)
+	assert.NotContains(t, body, "Pick something from the tree")
+}
+
+func TestIndex_HomeEmptyInventory(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Contains(t, readBody(t, resp), `data-parent-id="">Nothing in the inventory yet.</p>`)
+}
+
+func TestIndex_FragmentIsHomeOnly(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+	}})
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/", nil)
+	require.NoError(t, err)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+
+	assert.Contains(t, body, `<section id="home-detail"`)
+	assert.NotContains(t, body, "<!doctype")
+	assert.NotContains(t, body, `id="tree-root-list"`)
+}
+
+func TestIndex_HistoryRestoreGetsFullPage(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/", nil)
+	require.NoError(t, err)
+	req.Header.Set("Hx-Request", "true")
+	req.Header.Set("Hx-History-Restore-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Contains(t, readBody(t, resp), "<!doctype")
 }
 
 func TestSearch_EmptyStatesHaveNoEmoji(t *testing.T) {

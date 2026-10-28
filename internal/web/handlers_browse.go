@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -11,16 +12,39 @@ import (
 
 type indexData struct {
 	Shell pageShell
+	Home  homeData
 }
 
-// handleIndex renders the full page shell with root-level tree nodes.
+// homeData is the view model for the home detail at "/": the roots as a children list.
+type homeData struct {
+	ChildList childList
+}
+
+func (s *Server) homeView(ctx context.Context) (homeData, error) {
+	roots, err := s.listRoots(ctx)
+	if err != nil {
+		return homeData{}, err
+	}
+	return homeData{ChildList: childList{Children: roots}}, nil
+}
+
+// handleIndex renders the home detail: as a fragment for htmx, else inside the full page shell.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	home, err := s.homeView(r.Context())
+	if err != nil {
+		s.serverError(w, "build home", err)
+		return
+	}
+	if wantsFragment(r) {
+		s.renderHTML(w, "home_section", home)
+		return
+	}
 	shell, err := s.newPageShell(r.Context(), r, "Wherehouse")
 	if err != nil {
 		s.serverError(w, "build page shell", err)
 		return
 	}
-	s.renderHTML(w, "index", indexData{Shell: shell})
+	s.renderHTML(w, "index", indexData{Shell: shell, Home: home})
 }
 
 // handleTreeChildren returns the direct children of an entity as tree_node fragments.
