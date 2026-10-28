@@ -1546,3 +1546,36 @@ func TestHandleRemove_GenericFailureShowsError(t *testing.T) {
 	assert.Contains(t, body, "<h2>Hammer</h2>")
 	assert.NotContains(t, body, `hx-swap-oob="delete"`)
 }
+
+func TestHandleEntityDetail_HistoryRestore(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Garage", CanonicalName: "garage",
+				FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		},
+		history: []app.HistoryResult{
+			{EventID: 1, TimestampUTC: "2025-01-01T00:00:00Z", ActorUserID: "alice"},
+		},
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
+	require.NoError(t, err)
+	req.Header.Set("Hx-Request", "true")
+	req.Header.Set("Hx-History-Restore-Request", "true")
+
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	raw, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	body := string(raw)
+
+	assert.Contains(t, body, "<html")
+	assert.Contains(t, body, `id="tree-root-list"`)
+	assert.Contains(t, body, `class="app-search"`)
+	assert.Contains(t, body, `id="entity-detail"`)
+}

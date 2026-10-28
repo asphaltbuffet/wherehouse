@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	searchLimit        = 50
-	parentOptionsLimit = 10
-	maxQueryLen        = 100
-	maxFormBytes       = 16 * 1024 // upper bound for POST form bodies
-	htmxHeaderVal      = "true"
+	searchLimit          = 50
+	parentOptionsLimit   = 10
+	maxQueryLen          = 100
+	maxFormBytes         = 16 * 1024 // upper bound for POST form bodies
+	htmxHeaderVal        = "true"
+	historyRestoreHeader = "Hx-History-Restore-Request"
 )
 
 // serverError logs the internal detail and returns a generic 500 to the client.
@@ -22,6 +23,15 @@ const (
 func (s *Server) serverError(w http.ResponseWriter, op string, err error) {
 	s.cfg.Logger.Error(op, "error", err)
 	http.Error(w, "internal error", http.StatusInternalServerError)
+}
+
+// wantsFragment reports whether r should be answered with an HTMX fragment
+// rather than a full page. htmx sends its history-cache-miss reload with
+// Hx-Request set, but swaps the response into <body>, so that request needs
+// the full page. Security checks (csrfGuard) must read Hx-Request directly.
+func wantsFragment(r *http.Request) bool {
+	return r.Header.Get("Hx-Request") == htmxHeaderVal &&
+		r.Header.Get(historyRestoreHeader) != htmxHeaderVal
 }
 
 // renderHTML renders one template into a buffer and writes it to w with the

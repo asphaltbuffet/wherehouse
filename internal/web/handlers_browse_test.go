@@ -303,3 +303,53 @@ func TestHandleTreeNode_ShowsChevronWhenEntityHasChildren(t *testing.T) {
 	assert.Contains(t, string(body), `aria-expanded="false"`)
 	assert.NotContains(t, string(body), "chevron-hidden")
 }
+
+func TestHandleSearch_HistoryRestore(t *testing.T) {
+	results := []app.FindResult{
+		{Entity: app.EntityResult{
+			EntityID:        "id1",
+			DisplayName:     "Hammer",
+			FullPathDisplay: "Garage:Toolbox:Hammer",
+			Status:          inventory.EntityStatusOk,
+		}},
+	}
+
+	tests := []struct {
+		name         string
+		query        string
+		restoreValue string
+		wantFullPage bool
+	}{
+		{name: "restore with results", query: "hammer", restoreValue: "true", wantFullPage: true},
+		{name: "restore with empty query", query: "", restoreValue: "true", wantFullPage: true},
+		{name: "restore header not true", query: "hammer", restoreValue: "false", wantFullPage: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{findResults: results})
+			defer ts.Close()
+
+			req, err := http.NewRequest(http.MethodGet, ts.URL+"/search?q="+tt.query, nil)
+			require.NoError(t, err)
+			req.Header.Set("Hx-Request", "true")
+			req.Header.Set("Hx-History-Restore-Request", tt.restoreValue)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			raw, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			body := string(raw)
+
+			if tt.wantFullPage {
+				assert.Contains(t, body, "<html")
+				assert.Contains(t, body, `id="tree-root-list"`)
+				assert.Contains(t, body, `class="app-search"`)
+			} else {
+				assert.NotContains(t, body, "<html")
+			}
+		})
+	}
+}

@@ -74,7 +74,7 @@ func (s *Server) handleTreeChildren(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearch handles GET /search?q=... returning either a full page or
-// an HTMX fragment depending on the Hx-Request header.
+// an HTMX fragment depending on wantsFragment.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if len(q) > maxQueryLen {
@@ -83,7 +83,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	q = strings.TrimSpace(q)
 
-	htmx := r.Header.Get("Hx-Request") == htmxHeaderVal
+	htmx := wantsFragment(r)
 
 	var searchData any
 	if q != "" {
