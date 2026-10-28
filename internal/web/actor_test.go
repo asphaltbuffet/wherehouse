@@ -40,7 +40,7 @@ func TestActor_RecordedOnEveryMutation(t *testing.T) {
 		{"create root", "/entities/add", "display_name=Wrench"},
 		{"create child", "/entities/abc/add", "display_name=Wrench"},
 		{"rename", "/entities/abc/edit/name", "display_name=Mallet"},
-		{"toggle missing", "/entities/abc/actions/toggle-missing", ""},
+		{"mark lost", "/entities/abc/actions/lost", ""},
 		{"set attribute", "/entities/abc/actions/attr", "locked=true"},
 	}
 	for _, tc := range cases {

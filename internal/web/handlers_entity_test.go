@@ -186,113 +186,92 @@ func TestBuildDetailData_Breadcrumbs(t *testing.T) {
 	_ = srv
 }
 
-func TestHandleToggleMissing_OkToMissing(t *testing.T) {
-	entities := []app.EntityResult{
-		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			Status: inventory.EntityStatusOk},
+func TestHandleMissingActions(t *testing.T) {
+	const (
+		lost  = "/entities/abc/actions/lost"
+		found = "/entities/abc/actions/found"
+	)
+	ent := func(status inventory.EntityStatus, locked bool) []app.EntityResult {
+		return []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+			Status: status, Locked: locked}}
 	}
-	fa := &fakeApp{entities: entities}
-	ts := newTestServer(t, fa)
-	defer ts.Close()
-
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/toggle-missing", nil)
-	req.Header.Set("Hx-Request", "true")
-	resp, err := ts.Client().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(t, string(body), `id="entity-detail"`)
-	assert.Equal(t, 1, fa.lostCalls, "ok → missing must go through MarkLost")
-	assert.Zero(t, fa.foundCalls)
-}
-
-func TestHandleToggleMissing_MissingToOk(t *testing.T) {
-	entities := []app.EntityResult{
-		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			Status: inventory.EntityStatusMissing},
+	tests := []struct {
+		name      string
+		path      string
+		entities  []app.EntityResult
+		statusErr error
+		wantCode  int
+		wantLost  int
+		wantFound int
+		want      []string
+		notWant   []string
+	}{
+		{
+			name: "lost on ok", path: lost, entities: ent(inventory.EntityStatusOk, false),
+			wantCode: http.StatusOK, wantLost: 1,
+			want:    []string{`id="entity-detail"`, `id="tree-badge-abc"`},
+			notWant: []string{staleText},
+		},
+		{
+			name: "found on missing", path: found, entities: ent(inventory.EntityStatusMissing, false),
+			wantCode: http.StatusOK, wantFound: 1,
+			want:    []string{`id="entity-detail"`},
+			notWant: []string{staleText},
+		},
+		{
+			// #306 regression: a stale "Mark missing" on an entity already marked
+			// missing elsewhere must not mark it found.
+			name: "stale lost on missing", path: lost, entities: ent(inventory.EntityStatusMissing, false),
+			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
+			want:    []string{staleText, `hx-post="/entities/abc/actions/found"`},
+			notWant: []string{"status change failed"},
+		},
+		{
+			name: "stale found on ok", path: found, entities: ent(inventory.EntityStatusOk, false),
+			statusErr: errTest, wantCode: http.StatusOK, wantFound: 1,
+			want: []string{staleText, `hx-post="/entities/abc/actions/lost"`},
+		},
+		{
+			// Review Focus #2: locked after the panel rendered.
+			name: "stale lost on locked", path: lost, entities: ent(inventory.EntityStatusOk, true),
+			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
+			want:    []string{staleText},
+			notWant: []string{`hx-post="/entities/abc/actions/lost"`, "status change failed"},
+		},
+		{
+			name: "genuine failure", path: lost, entities: ent(inventory.EntityStatusOk, false),
+			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
+			want:    []string{"status change failed", `hx-post="/entities/abc/actions/lost"`},
+			notWant: []string{staleText},
+		},
+		{
+			name: "removed elsewhere", path: lost, entities: ent(inventory.EntityStatusRemoved, false),
+			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
+			want: []string{staleText, "Last location", `id="tree-node-abc" hx-swap-oob="delete"`},
+		},
+		{name: "unknown id", path: lost, wantCode: http.StatusNotFound, wantLost: 1},
 	}
-	fa := &fakeApp{entities: entities}
-	ts := newTestServer(t, fa)
-	defer ts.Close()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &fakeApp{entities: tt.entities, statusErr: tt.statusErr}
+			ts := newTestServer(t, fa)
+			defer ts.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/toggle-missing", nil)
-	req.Header.Set("Hx-Request", "true")
-	resp, err := ts.Client().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
+			resp := postHTMX(t, ts, tt.path)
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, 1, fa.foundCalls, "missing → ok must go through MarkFound")
-	assert.Zero(t, fa.lostCalls)
-}
-
-func TestHandleToggleMissing_LockedEntity_Forbidden(t *testing.T) {
-	// locked entities cannot be marked missing — their location is fixed by assertion.
-	entities := []app.EntityResult{
-		{EntityID: "abc", DisplayName: "Garage", FullPathDisplay: "Garage",
-			Locked: true, Status: inventory.EntityStatusOk},
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			assert.Equal(t, tt.wantLost, fa.lostCalls, "MarkLost calls")
+			assert.Equal(t, tt.wantFound, fa.foundCalls, "MarkFound calls")
+			for _, s := range tt.want {
+				assert.Contains(t, string(body), s)
+			}
+			for _, s := range tt.notWant {
+				assert.NotContains(t, string(body), s)
+			}
+		})
 	}
-	ts := newTestServer(t, &fakeApp{entities: entities})
-	defer ts.Close()
-
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/toggle-missing", nil)
-	req.Header.Set("Hx-Request", "true")
-	resp, err := ts.Client().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-}
-
-func TestHandleToggleMissing_NotFound(t *testing.T) {
-	ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{}})
-	defer ts.Close()
-
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/missing/actions/toggle-missing", nil)
-	req.Header.Set("Hx-Request", "true")
-	resp, err := ts.Client().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-}
-
-func TestHandleToggleMissing_BorrowedForbidden(t *testing.T) {
-	entities := []app.EntityResult{
-		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			Status: inventory.EntityStatusBorrowed},
-	}
-	ts := newTestServer(t, &fakeApp{entities: entities})
-	defer ts.Close()
-
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/toggle-missing", nil)
-	req.Header.Set("Hx-Request", "true")
-	resp, err := ts.Client().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-}
-
-func TestHandleToggleMissing_AppError(t *testing.T) {
-	entities := []app.EntityResult{
-		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer",
-			Status: inventory.EntityStatusOk},
-	}
-	ts := newTestServer(t, &fakeApp{entities: entities, statusErr: errTest})
-	defer ts.Close()
-
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/toggle-missing", nil)
-	req.Header.Set("Hx-Request", "true")
-	resp, err := ts.Client().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(t, string(body), "status change failed")
 }
 
 func postHTMX(t *testing.T, ts *httptest.Server, path string) *http.Response {

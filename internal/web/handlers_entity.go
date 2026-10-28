@@ -22,8 +22,8 @@ type detailData struct {
 	DateAdded         string
 	History           []app.HistoryResult
 	CanAddChild       bool
-	CanMarkMissing    bool
-	IsMissing         bool          // true when Status == EntityStatusMissing
+	CanMarkLost       bool          // ok and not locked (ADR 0024)
+	CanMarkFound      bool          // missing; found has no locked guard (ADR 0024)
 	CanReturn         bool          // borrowed or loaned
 	ReturnConfirm     string        // non-empty only for borrowed: returning removes the entity
 	CanLoan           bool          // ok/missing and not locked (ADR 0024)
@@ -327,7 +327,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		return detailData{}, err
 	}
 
-	// Missing toggles and Loan apply only to ok/missing (ADR 0024);
+	// Loan applies only to ok/missing (ADR 0024);
 	// borrowed/loaned use Return.
 	editable := entity.Status == inventory.EntityStatusOk ||
 		entity.Status == inventory.EntityStatusMissing
@@ -349,12 +349,12 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	}
 
 	return detailData{
-		Entity:         entity,
-		DateAdded:      dateAdded,
-		History:        history,
-		CanAddChild:    !entity.Discrete,
-		CanMarkMissing: !entity.Locked && editable,
-		IsMissing:      entity.Status == inventory.EntityStatusMissing,
+		Entity:       entity,
+		DateAdded:    dateAdded,
+		History:      history,
+		CanAddChild:  !entity.Discrete,
+		CanMarkLost:  entity.Status == inventory.EntityStatusOk && !entity.Locked,
+		CanMarkFound: entity.Status == inventory.EntityStatusMissing,
 		CanReturn: entity.Status == inventory.EntityStatusBorrowed ||
 			entity.Status == inventory.EntityStatusLoaned,
 		ReturnConfirm:       returnConfirm(entity),
@@ -499,47 +499,50 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleToggleMissing handles POST /entities/{entityID}/actions/toggle-missing.
-// It toggles the entity's status between Ok and Missing.
-func (s *Server) handleToggleMissing(w http.ResponseWriter, r *http.Request) {
+// missingChange is app.MarkLost or app.MarkFound.
+type missingChange func(context.Context, []app.ChangeStatusRequest) ([]app.EntityResult, error)
+
+// handleLost handles POST /entities/{entityID}/actions/lost.
+func (s *Server) handleLost(w http.ResponseWriter, r *http.Request) {
+	s.changeMissing(w, r, s.cfg.App.MarkLost, func(d detailData) bool { return d.CanMarkLost })
+}
+
+// handleFound handles POST /entities/{entityID}/actions/found.
+func (s *Server) handleFound(w http.ResponseWriter, r *http.Request) {
+	s.changeMissing(w, r, s.cfg.App.MarkFound, func(d detailData) bool { return d.CanMarkFound })
+}
+
+// changeMissing applies an explicit lost/found change. The button names its
+// target, so a stale click fails the app layer's source-status guard (ADR
+// 0024, 0035) instead of flipping the status the other way (#306). offered
+// reports whether the fresh panel still offers this change: if not, the
+// failure was a stale panel, not an error.
+func (s *Server) changeMissing(
+	w http.ResponseWriter, r *http.Request, change missingChange, offered func(detailData) bool,
+) {
 	entityID := r.PathValue("entityID")
-
-	data, err := s.buildDetailData(r.Context(), entityID)
-	if err != nil {
-		s.serverError(w, "build detail data", err)
-		return
-	}
-	if data.Entity.EntityID == "" {
-		http.Error(w, "entity not found", http.StatusNotFound)
-		return
-	}
-	if !data.CanMarkMissing {
-		http.Error(w, "status cannot be changed here", http.StatusForbidden)
-		return
-	}
-
-	reqs := []app.ChangeStatusRequest{{EntityID: entityID, ActorID: s.actorFor(r)}}
-	if data.IsMissing {
-		_, err = s.cfg.App.MarkFound(r.Context(), reqs)
-	} else {
-		_, err = s.cfg.App.MarkLost(r.Context(), reqs)
-	}
-	if err != nil {
-		s.cfg.Logger.Error("change status", "error", err, "entity_id", entityID)
-		data.Error = "status change failed"
-		s.renderDetailSection(w, r, data)
-		return
-	}
+	_, changeErr := change(r.Context(), []app.ChangeStatusRequest{{EntityID: entityID, ActorID: s.actorFor(r)}})
 
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
 		s.serverError(w, "build detail data", err)
 		return
 	}
-	s.renderDetailSection(w, r, fresh)
-	if wantsFragment(r) {
-		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
+	if fresh.Entity.EntityID == "" {
+		s.renderGone(w, r, entityID)
+		return
 	}
+
+	switch {
+	case changeErr == nil:
+	case offered(fresh):
+		s.cfg.Logger.Error("change status", "error", changeErr, "entity_id", entityID)
+		fresh.Error = "status change failed"
+	default:
+		s.cfg.Logger.Info("status change rejected: panel was stale", "error", changeErr, "entity_id", entityID)
+		fresh.Error = staleMessage
+	}
+	s.renderStatusChanged(w, r, fresh)
 }
 
 // handleReturn handles POST /entities/{entityID}/actions/return.
