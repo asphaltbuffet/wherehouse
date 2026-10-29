@@ -35,16 +35,20 @@ func NewReturnCmd(a *app.App) *cobra.Command {
 func buildReturnCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "return <path>...",
-		Short: "Mark one or more loaned entities as returned",
-		Long: `Mark one or more entities as ok (status: ok), recording that they have been returned.
+		Short: "Return entities: back from a loan, back to the lender, or back home",
+		Long: `Return one or more entities. What happens depends on the entity's state.
 
-A borrowed entity is removed from the inventory instead. A borrowed entity that still
-contains other entities cannot be returned; return or move them first.
+A loaned entity is marked ok again, and if it is also displaced it goes back to
+its home. A borrowed entity is removed from the inventory instead; a borrowed
+entity that still contains other entities cannot be returned, so return or move
+them first. A displaced entity (one that was 'use'd) is moved back to its home.
+An entity that is ok and already at home, or that is missing, cannot be returned.
 
 All entities are updated atomically — if any path fails, none are changed.
 
 Examples:
   wherehouse return "Garage:Toolbox:Wrench"
+  wherehouse return "Deck:Drill"   # displaced → back to its home
   wherehouse return "Garage:Toolbox:Wrench" "Shelf:Hammer" --note "returned after the weekend"`,
 		Args: cobra.MinimumNArgs(1),
 	}
