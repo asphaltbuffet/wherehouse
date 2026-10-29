@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 // pathsByID maps entity ID to FullPathDisplay. List-style callers already hold
@@ -43,4 +46,97 @@ func (a *App) withHomePath(ctx context.Context, r EntityResult) (EntityResult, e
 	}
 	r.HomePathDisplay = home.FullPathDisplay
 	return r, nil
+}
+
+// checkHomeCycleTx rejects placing moving under destID ("" = root) when some
+// displaced ancestor-or-self of the destination has its home inside moving's
+// subtree: the move would put that entity's home inside the entity itself
+// (CONTEXT.md "Home"). It covers indirect cases, e.g. moving Garage (which
+// holds Shelf, the drill's home) into the drill.
+func (a *App) checkHomeCycleTx(ctx context.Context, tx store.Tx, moving *inventory.Entity, destID string) error {
+	seen := make(map[string]bool)
+	for id := destID; id != ""; {
+		if seen[id] {
+			return fmt.Errorf("ancestor chain of %q loops at %q", destID, id)
+		}
+		seen[id] = true
+		e, err := a.store.GetEntityTx(ctx, tx, id)
+		if err != nil {
+			return wrapEntityError(id, err)
+		}
+		if e.IsDisplaced() && e.HomeID != nil {
+			inside, ierr := a.isSelfOrDescendant(ctx, tx, moving.EntityID, *e.HomeID)
+			if ierr != nil {
+				return ierr
+			}
+			if inside {
+				return fmt.Errorf("cannot move %q there: %q's home would end up inside it — return %q first: %w",
+					moving.FullPathDisplay, e.FullPathDisplay, e.FullPathDisplay, ErrInvalidDestination)
+			}
+		}
+		id = idOf(e.ParentID)
+	}
+	return nil
+}
+
+// rehomeTx makes a displaced entity's current parent its home (CONTEXT.md
+// "Move": moving a displaced entity to where it already is).
+func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string) error {
+	raw, err := json.Marshal(eventbus.EntityRehomedPayload{EntityID: entity.EntityID, HomeID: entity.ParentID})
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityRehomedEvent, actorID, raw, note); err != nil {
+		return fmt.Errorf("rehome entity: %w", err)
+	}
+	return nil
+}
+
+// UseEntity temporarily moves an entity: the parent changes and the home stays,
+// leaving it displaced (CONTEXT.md "Use"). Preconditions are move's plus
+// "destination is not home". All guards read through the write transaction (ADR 0035).
+func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (EntityResult, error) {
+	var note *string
+	if req.Note != "" {
+		note = &req.Note
+	}
+
+	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		if err != nil {
+			return wrapEntityError(req.EntityID, err)
+		}
+		if err = checkMovable(entity); err != nil {
+			return err
+		}
+		if req.NewParentID == idOf(entity.HomeID) {
+			return fmt.Errorf("cannot use %q at its home — use 'return' instead: %w: %w",
+				entity.FullPathDisplay, ErrDestinationIsHome, ErrInvalidDestination)
+		}
+		if err = checkNotAlreadyThere(entity, req.NewParentID); err != nil {
+			return err
+		}
+
+		var newParentID *string
+		if req.NewParentID != "" {
+			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID); err != nil {
+				return err
+			}
+			newParentID = &req.NewParentID
+		}
+
+		raw, err := json.Marshal(eventbus.EntityUsedPayload{EntityID: entity.EntityID, NewParentID: newParentID})
+		if err != nil {
+			return fmt.Errorf("marshal payload: %w", err)
+		}
+		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityUsedEvent, req.ActorID, raw, note); err != nil {
+			return fmt.Errorf("use entity: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return EntityResult{}, err
+	}
+
+	// AnyStatus: a concurrent remove may commit between our commit and this read.
+	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
 }

@@ -270,6 +270,13 @@ func TestHomeEvents_ReplayEquivalence(t *testing.T) {
 	useDrill(t, b, &deck)
 	returnDrill(t, b, &garage)
 	useDrill(t, b, &deck)
+	dispatch(t, b, inventory.EntityRehomedEvent,
+		eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
+	dispatch(t, b, inventory.EntityReparentedEvent,
+		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &garage})
+	useDrill(t, b, &deck)
+	dispatch(t, b, inventory.EntityReparentedEvent,
+		eventbus.EntityReparentedPayload{EntityID: "bit0000001", NewParentID: &garage})
 
 	before, err := s.ListAllEntities(ctx)
 	require.NoError(t, err)
