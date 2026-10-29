@@ -1,5 +1,0 @@
-kind: Fixed
-body: Reject negative logging.max_size_mb / logging.max_backups and out-of-range output.quiet (must be 0-2) when loading config
-time: 2026-10-28T10:02:13.983725518-04:00
-custom:
-    Issue: '#279'
