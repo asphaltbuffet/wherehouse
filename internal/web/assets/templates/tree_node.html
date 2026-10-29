@@ -3,7 +3,7 @@
     role="treeitem"
     aria-selected="false"
     {{if .HasChildren}}aria-expanded="false"{{end}}
-    aria-label="{{.DisplayName}}">
+    aria-labelledby="tree-label-{{.EntityID}}">
   <div class="tree-item"
        tabindex="0"
        data-entity-id="{{.EntityID}}"

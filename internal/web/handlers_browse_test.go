@@ -301,6 +301,9 @@ func TestHandleTreeNode(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), `id="tree-node-abc"`)
+	// Named by its label span, so a rename's out-of-band label swap renames it.
+	assert.Contains(t, string(body), `aria-labelledby="tree-label-abc"`)
+	assert.NotContains(t, string(body), `aria-label="Drill"`)
 
 	resp2, err := ts.Client().Get(ts.URL + "/entities/nope/tree-node")
 	require.NoError(t, err)
