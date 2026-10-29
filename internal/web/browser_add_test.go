@@ -38,11 +38,16 @@ func TestBrowserAddAtRoot(t *testing.T) {
 	})
 }
 
+// addDialog is the modal that hosts the add and borrow forms.
+func (s *session) addDialog() playwright.Locator {
+	return s.page.GetByRole(*playwright.AriaRoleDialog, playwright.PageGetByRoleOptions{Name: "Add item"})
+}
+
 // submitAddForm fills the open add-item dialog with name, submits it, and
 // waits for the dialog to close.
 func (s *session) submitAddForm(name string) {
 	s.t.Helper()
-	dialog := s.page.GetByRole(*playwright.AriaRoleDialog, playwright.PageGetByRoleOptions{Name: "Add item"})
+	dialog := s.addDialog()
 	require.NoError(s.t, expect.Locator(dialog).ToBeVisible())
 	require.NoError(s.t, dialog.GetByLabel("Display Name").Fill(name))
 	require.NoError(s.t, dialog.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
