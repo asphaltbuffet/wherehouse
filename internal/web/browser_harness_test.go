@@ -254,6 +254,17 @@ func (s *session) openTree() {
 	require.NoError(s.t, expect.Locator(toggle).ToHaveAttribute("aria-expanded", "true"))
 }
 
+// closeTree undoes openTree. The open drawer's backdrop covers the toggle,
+// so it closes with Escape.
+func (s *session) closeTree() {
+	s.t.Helper()
+	if s.layout != narrow {
+		return
+	}
+	require.NoError(s.t, s.page.Keyboard().Press("Escape"))
+	require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
+}
+
 func (s *session) treeToggle() playwright.Locator {
 	return s.page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{
 		Name:  "Inventory",
