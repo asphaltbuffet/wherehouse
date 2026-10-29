@@ -1,0 +1,5 @@
+kind: Added
+body: 'use command and web Use action: temporarily move an entity while keeping its home; return sends displaced entities home; list --displaced and --home-under show what is out of place'
+time: 2026-10-29T18:07:53.489071173-04:00
+custom:
+    Issue: "356"

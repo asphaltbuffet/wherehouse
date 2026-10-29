@@ -45,6 +45,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 - **Unified Entity Model** — locations and items are both entities; hierarchy via colon-separated paths (`Garage:Toolbox:Wrench`)
 - **Hierarchical Paths** — arbitrarily nested entities with colon-path addressing
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
+- **Home and Displaced** — an entity remembers its home; `use` moves it temporarily and `return` sends it back
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
 - **Web UI** — local HTTP server for browsing (including tags), searching, adding, editing, locking, marking discrete, borrowing, loaning, and returning inventory; works on phones (tree drawer, full-width detail with a contents list)
 - **Single-Host Storage** — one SQLite file in WAL mode; share an inventory across machines through the web UI, not by opening the file from more than one host
@@ -279,9 +280,18 @@ wherehouse loan "Garage:Ladder" --to "Bob" --note "lent for the weekend"
 # and must not still contain other entities
 wherehouse return "Garage:Ladder"
 
+# Temporarily move something, keeping its home; return sends it back
+wherehouse use "Garage:Shelf:Drill" --to "Deck"
+wherehouse use "Garage:Shelf:Drill" --to "Deck" --note "deck project"
+wherehouse return "Deck:Drill"
+
 # Track an externally-owned item brought into the inventory
 wherehouse borrow "Garage:Alice's Drill" --from "Alice"
 ```
+
+#### Home and displaced entities
+
+Every entity has a home. `use` moves an entity elsewhere without changing its home, so it shows as displaced (an "away" tag in the web UI) until `return` sends it home; `move` makes the new place its home. See the Home, Displaced, Use, and Return entries in [CONTEXT.md](CONTEXT.md) and [ADR 0039](docs/adr/0039-home-is-a-persistent-reference-and-displaced-is-derived.md).
 
 #### Status Lifecycle
 
@@ -321,6 +331,7 @@ Non-status actions, by interface:
 | lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities (a locked entity can never be `missing`; unlock it first) |
 | loan | ✅ | ✅ | web form asks for "Loaned to" and an optional note; disabled for locked entities |
 | borrow | ✅ | ✅ | web creates one entity per submit, with a searchable location picker defaulting to the entity being viewed |
+| use | ✅ | ✅ | temporary move that keeps the entity's home; web form labelled "Use at" |
 | return | ✅ | ✅ | web asks for confirmation before returning a borrowed entity |
 | scry / list | ✅ | ✅ | web has search and tree browsing; no status filter |
 | history | ✅ | ❌ | |
@@ -337,6 +348,10 @@ wherehouse list --under "Garage:Toolbox"
 
 # Filter by status
 wherehouse list --status missing
+
+# Show entities away from their home, or those whose home is under a path
+wherehouse list --displaced
+wherehouse list --home-under "Garage:Shelf"
 ```
 
 ### 8. Rename Entities
@@ -411,7 +426,7 @@ Entity Management:
   move <path>          Move an entity to a new parent (--to <dest>)
   rename <path>        Rename an entity (--to <new-name>)
   remove <path>        Remove an entity from the inventory
-  list                 List entities (--under, --status filters)
+  list                 List entities (--under, --status, --displaced, --home-under)
   scry [<name>]        Search entities by name, or list all
   history <path>       Show full event timeline for an entity
 
@@ -420,7 +435,8 @@ Status:
   lost <path>...       Mark entities as missing (from ok)
   found <path>...      Recover missing entities (to ok)
   loan <path>...       Lend entities out (--to <recipient>)
-  return <path>...     Bring loaned/borrowed entities back
+  use <path>           Temporarily move an entity, keeping its home (--to <dest>)
+  return <path>...     Restore status and location: back from loan/lender, or home
   borrow <path>...     Track externally-owned items (--from <lender>)
   export               Export all events as NDJSON to stdout
   doctor               Check inventory health (--rebuild, --rebuild --force)
