@@ -321,6 +321,21 @@ func (s *session) requireChild(parentID, name string) app.EntityResult {
 	return app.EntityResult{}
 }
 
+// stored returns the database's current state of entityID, removed or not.
+func (s *session) stored(entityID string) app.EntityResult {
+	s.t.Helper()
+	e, err := s.app.GetEntityByIDAnyStatus(s.t.Context(), entityID)
+	require.NoError(s.t, err)
+	return e
+}
+
+// mainText is the exact text text in the main content area.
+func (s *session) mainText(text string) playwright.Locator {
+	return s.page.GetByRole(*playwright.AriaRoleMain).GetByText(text, playwright.LocatorGetByTextOptions{
+		Exact: new(true),
+	})
+}
+
 // detailHeading is the entity name heading in the main content area.
 func (s *session) detailHeading(name string) playwright.Locator {
 	main := s.page.GetByRole(*playwright.AriaRoleMain)
