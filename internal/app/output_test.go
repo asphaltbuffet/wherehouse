@@ -253,3 +253,19 @@ func TestToAttrOutputs_JSONContract(t *testing.T) {
 		"discrete": false
 	}]`, string(b))
 }
+
+func TestToListItems_HomeOnlyWhenDisplaced(t *testing.T) {
+	items := app.ToListItems([]app.EntityResult{
+		{EntityID: "a", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g", Status: inventory.EntityStatusOk},
+		{EntityID: "b", FullPathDisplay: "Deck:Saw", ParentID: "d", HomeID: "g", HomePathDisplay: "Garage",
+			Status: inventory.EntityStatusOk},
+		{EntityID: "c", FullPathDisplay: "Deck:Level", ParentID: "d", HomeID: "", Status: inventory.EntityStatusOk},
+	})
+	assert.Empty(t, items[0].Home)
+	assert.Equal(t, "Garage", items[1].Home)
+	assert.Equal(t, "(root)", items[2].Home)
+
+	raw, err := json.Marshal(items[0])
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), `"home"`)
+}

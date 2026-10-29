@@ -318,6 +318,7 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 		results[i] = entityToResult(e, tagsByID[e.EntityID])
 		results[i].HasChildren = parentIDs[e.EntityID]
 	}
+	fillHomePaths(results, pathsByID(entities))
 	return results, nil
 }
 

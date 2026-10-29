@@ -90,6 +90,7 @@ func (a *App) findMatching(
 		return nil, fmt.Errorf("find entities tags: %w", err)
 	}
 
+	paths := pathsByID(all)
 	query := strings.ToLower(req.Query)
 	var results []FindResult
 
@@ -99,6 +100,7 @@ func (a *App) findMatching(
 			continue
 		}
 		r := entityToResult(e, tagsByID[e.EntityID])
+		fillHomePath(&r, paths)
 		if !keep(r) {
 			continue
 		}
