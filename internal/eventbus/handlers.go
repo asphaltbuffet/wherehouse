@@ -47,6 +47,7 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 		Locked:            locked,
 		Discrete:          discrete,
 		ParentID:          p.ParentID,
+		HomeID:            p.ParentID,
 		FullPathDisplay:   fullPathDisplay,
 		FullPathCanonical: fullPathCanonical,
 		Depth:             depth,
@@ -122,6 +123,7 @@ func (b *Bus) handleEntityReparented(ctx context.Context, tx store.Tx, ev *inven
 	}
 
 	entity.ParentID = p.NewParentID
+	entity.HomeID = p.NewParentID
 	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
 		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
 	)
@@ -158,6 +160,7 @@ func (b *Bus) handleEntityReparentedProjectionOnlyTx(ctx context.Context, tx sto
 	}
 
 	entity.ParentID = p.NewParentID
+	entity.HomeID = p.NewParentID
 	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
 		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
 	)
@@ -201,6 +204,7 @@ func (b *Bus) handleEntityReparentedComputePayloadsTx(
 	}
 
 	entity.ParentID = p.NewParentID
+	entity.HomeID = p.NewParentID
 	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
 		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
 	)
@@ -316,6 +320,7 @@ func (b *Bus) handleEntityBorrowed(ctx context.Context, tx store.Tx, ev *invento
 		DisplayName:       p.DisplayName,
 		CanonicalName:     canonicalName,
 		ParentID:          p.ParentID,
+		HomeID:            p.ParentID,
 		FullPathDisplay:   fullPathDisplay,
 		FullPathCanonical: fullPathCanonical,
 		Depth:             depth,

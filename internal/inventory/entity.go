@@ -12,6 +12,7 @@ type Entity struct {
 	Locked            bool
 	Discrete          bool
 	ParentID          *string
+	HomeID            *string // designated parent; nil = root (see CONTEXT.md "Home")
 	FullPathDisplay   string
 	FullPathCanonical string
 	Depth             int
@@ -19,4 +20,20 @@ type Entity struct {
 	StatusContext     *string
 	LastEventID       int64
 	UpdatedAt         time.Time
+}
+
+// IsDisplaced reports whether a non-removed entity sits somewhere other than
+// its home (see CONTEXT.md "Displaced"). It is derived, never stored.
+func (e *Entity) IsDisplaced() bool {
+	if e.Status == EntityStatusRemoved {
+		return false
+	}
+	return derefOrEmpty(e.ParentID) != derefOrEmpty(e.HomeID)
+}
+
+func derefOrEmpty(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

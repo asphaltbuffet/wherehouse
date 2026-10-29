@@ -155,3 +155,44 @@ func TestPayloadFactories_CoversAllEventTypes(t *testing.T) {
 		assert.NotNil(t, instance, "factory() for %s returned nil", et)
 	}
 }
+
+func dispatch(t *testing.T, b *eventbus.Bus, et inventory.EventType, payload any) {
+	t.Helper()
+	_, err := b.Dispatch(t.Context(), et, "test", mustMarshal(t, payload), nil)
+	require.NoError(t, err)
+}
+
+func TestHome_FollowsCreateAndReparent(t *testing.T) {
+	ctx := t.Context()
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	created := func(id, name string, parent *string) {
+		dispatch(t, b, inventory.EntityCreatedEvent,
+			eventbus.EntityCreatedPayload{EntityID: id, DisplayName: name, ParentID: parent})
+	}
+	garage := "garage0001"
+	created(garage, "Garage", nil)
+	created("shed000001", "Shed", nil)
+	created("drill00001", "Drill", &garage)
+
+	e, err := s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	require.NotNil(t, e.HomeID)
+	assert.Equal(t, garage, *e.HomeID)
+
+	shed := "shed000001"
+	dispatch(t, b, inventory.EntityReparentedEvent,
+		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &shed})
+	e, err = s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	require.NotNil(t, e.HomeID)
+	assert.Equal(t, shed, *e.HomeID)
+	assert.False(t, e.IsDisplaced())
+
+	_, err = b.TruncateAndReplay(ctx)
+	require.NoError(t, err)
+	e, err = s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	require.NotNil(t, e.HomeID)
+	assert.Equal(t, shed, *e.HomeID, "replay must reproduce home")
+}
