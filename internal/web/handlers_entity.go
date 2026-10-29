@@ -490,6 +490,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	s.renderDetailSection(w, r, fresh)
 	if wantsFragment(r) {
 		s.renderHTMLAppend(w, "tree_label_oob", fresh.Entity)
+		s.renderHTMLAppend(w, "tree_attrs_oob", fresh.Entity) // the add button's label names it
 	}
 }
 

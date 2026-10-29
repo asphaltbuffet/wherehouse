@@ -115,25 +115,79 @@ type session struct {
 	layout layout
 }
 
+// sessionConfig adjusts a session's browser context; the zero value is the
+// device's defaults.
+type sessionConfig struct {
+	colorScheme *playwright.ColorScheme // nil leaves prefers-color-scheme at light
+	// actorHeader configures the server's identity header (ADR 0031) and
+	// has the browser send it with value actor, as a trusted proxy would.
+	actorHeader string
+	actor       string
+}
+
 // forEachDevice runs fn as a parallel subtest per device, each against its own
 // server and database seeded through s.app.
 func forEachDevice(t *testing.T, fn func(s *session)) {
 	t.Helper()
-	for _, d := range devices {
+	forDevices(t, devices, sessionConfig{}, fn)
+}
+
+// forDevices is forEachDevice over ds only, with each session adjusted by
+// cfg. Select ds by capability (devicesIn, touchDevices), never by name, so
+// the matrix can change without editing tests (ADR 0038).
+func forDevices(t *testing.T, ds []device, cfg sessionConfig, fn func(s *session)) {
+	t.Helper()
+	// An empty selection would pass without testing anything.
+	require.NotEmpty(t, ds, "no device in the matrix matches")
+	for _, d := range ds {
 		t.Run(d.name, func(t *testing.T) {
 			t.Parallel()
-			fn(newSession(t, d))
+			fn(newSession(t, d, cfg))
 		})
 	}
 }
 
-func newSession(t *testing.T, d device) *session {
+// devicesIn returns the devices with layout l.
+func devicesIn(l layout) []device {
+	var ds []device
+	for _, d := range devices {
+		if d.layout == l {
+			ds = append(ds, d)
+		}
+	}
+	return ds
+}
+
+// touchDevices returns the devices with a touch screen, where
+// `pointer: coarse` applies.
+func touchDevices() []device {
+	var ds []device
+	for _, d := range devices {
+		if d.desc.HasTouch {
+			ds = append(ds, d)
+		}
+	}
+	return ds
+}
+
+func newSession(t *testing.T, d device, cfg sessionConfig) *session {
 	t.Helper()
 	a := apptesting.OpenApp(t)
-	srv, err := web.New(web.Config{App: a, Bind: "127.0.0.1", Port: 0, Output: io.Discard})
+	srv, err := web.New(web.Config{
+		App:         a,
+		Bind:        "127.0.0.1",
+		Port:        0,
+		Output:      io.Discard,
+		ActorHeader: cfg.actorHeader,
+	})
 	require.NoError(t, err)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
+
+	var headers map[string]string
+	if cfg.actorHeader != "" {
+		headers = map[string]string{cfg.actorHeader: cfg.actor}
+	}
 
 	ctx, err := browsers[d.desc.DefaultBrowserType].NewContext(playwright.BrowserNewContextOptions{
 		BaseURL:           new(ts.URL),
@@ -143,6 +197,8 @@ func newSession(t *testing.T, d device) *session {
 		DeviceScaleFactor: new(d.desc.DeviceScaleFactor),
 		IsMobile:          new(d.desc.IsMobile),
 		HasTouch:          new(d.desc.HasTouch),
+		ColorScheme:       cfg.colorScheme,
+		ExtraHttpHeaders:  headers,
 	})
 	require.NoError(t, err)
 	page, err := ctx.NewPage()
@@ -192,6 +248,40 @@ func (s *session) visit(path string) {
 	require.NoError(s.t, err)
 }
 
+// htmxBusy matches what htmx is still working on: in-flight requests, swaps,
+// and swapped-in content it has not yet processed. New content gets its hx-*
+// listeners only when the settle step clears htmx-added, so a control acted
+// on before that is inert.
+const htmxBusy = ".htmx-request, .htmx-swapping, .htmx-settling, .htmx-added"
+
+// settle waits for htmx to go idle.
+func (s *session) settle() {
+	s.t.Helper()
+	require.NoError(s.t, expect.Locator(s.page.Locator(htmxBusy)).ToHaveCount(0))
+}
+
+// click clicks l once htmx has settled. Act through click, fill, and
+// typeText so a control swapped in by the previous action is live.
+func (s *session) click(l playwright.Locator) {
+	s.t.Helper()
+	s.settle()
+	require.NoError(s.t, l.Click())
+}
+
+// fill sets l's value once htmx has settled.
+func (s *session) fill(l playwright.Locator, value string) {
+	s.t.Helper()
+	s.settle()
+	require.NoError(s.t, l.Fill(value))
+}
+
+// typeText types text into l key by key once htmx has settled.
+func (s *session) typeText(l playwright.Locator, text string) {
+	s.t.Helper()
+	s.settle()
+	require.NoError(s.t, l.PressSequentially(text))
+}
+
 // createEntity seeds an entity through the app layer; parentID "" is a root.
 func (s *session) createEntity(name, parentID string) app.EntityResult {
 	s.t.Helper()
@@ -212,14 +302,32 @@ func (s *session) openTree() {
 		return
 	}
 	toggle := s.treeToggle()
-	require.NoError(s.t, toggle.Click())
+	s.click(toggle)
 	require.NoError(s.t, expect.Locator(toggle).ToHaveAttribute("aria-expanded", "true"))
+}
+
+// closeTree undoes openTree. The open drawer's backdrop covers the toggle,
+// so it closes with Escape.
+func (s *session) closeTree() {
+	s.t.Helper()
+	if s.layout != narrow {
+		return
+	}
+	require.NoError(s.t, s.page.Keyboard().Press("Escape"))
+	require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
 }
 
 func (s *session) treeToggle() playwright.Locator {
 	return s.page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{
 		Name:  "Inventory",
 		Exact: new(true),
+	})
+}
+
+// treePanel is the inventory tree's navigation landmark.
+func (s *session) treePanel() playwright.Locator {
+	return s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{
+		Name: "Inventory tree",
 	})
 }
 
@@ -239,8 +347,59 @@ func (s *session) treeRow(name string) playwright.Locator {
 // expands without loading the item's detail, and waits for its children.
 func (s *session) expandTreeItem(name string) {
 	s.t.Helper()
-	require.NoError(s.t, s.treeRow(name).Locator(".chevron").Click())
+	s.click(s.treeRow(name).Locator(".chevron"))
+	// tree.js sets aria-expanded before the children arrive; settle waits
+	// for them to load and become clickable.
 	require.NoError(s.t, expect.Locator(s.treeItem(name)).ToHaveAttribute("aria-expanded", "true"))
+	s.settle()
+}
+
+// button is the button named name in the main content area.
+func (s *session) button(name string) playwright.Locator {
+	main := s.page.GetByRole(*playwright.AriaRoleMain)
+	return main.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
+		Name:  name,
+		Exact: new(true),
+	})
+}
+
+// childLink is the row for name in the shown entity's (or home's) contents.
+func (s *session) childLink(name string) playwright.Locator {
+	contents := s.page.GetByRole(*playwright.AriaRoleRegion, playwright.PageGetByRoleOptions{Name: "Contents"})
+	return contents.GetByRole(*playwright.AriaRoleLink, playwright.LocatorGetByRoleOptions{
+		Name:  name,
+		Exact: new(true),
+	})
+}
+
+// requireChild returns parentID's live child named name ("" for a root),
+// failing if the database has none.
+func (s *session) requireChild(parentID, name string) app.EntityResult {
+	s.t.Helper()
+	live, err := s.app.ListEntities(s.t.Context())
+	require.NoError(s.t, err)
+	for _, e := range live {
+		if e.ParentID == parentID && e.DisplayName == name {
+			return e
+		}
+	}
+	require.Failf(s.t, "child not in database", "no %q under parent %q", name, parentID)
+	return app.EntityResult{}
+}
+
+// stored returns the database's current state of entityID, removed or not.
+func (s *session) stored(entityID string) app.EntityResult {
+	s.t.Helper()
+	e, err := s.app.GetEntityByIDAnyStatus(s.t.Context(), entityID)
+	require.NoError(s.t, err)
+	return e
+}
+
+// mainText is the exact text text in the main content area.
+func (s *session) mainText(text string) playwright.Locator {
+	return s.page.GetByRole(*playwright.AriaRoleMain).GetByText(text, playwright.LocatorGetByTextOptions{
+		Exact: new(true),
+	})
 }
 
 // detailHeading is the entity name heading in the main content area.
