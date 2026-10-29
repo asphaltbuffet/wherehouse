@@ -85,6 +85,10 @@ func runMove(cmd *cobra.Command, args []string, a *app.App) error {
 	if out.IsJSON() {
 		return out.JSON(app.ToMoveOutput(updated))
 	}
+	if src.IsDisplaced() && src.ParentID == dest.EntityID {
+		out.Success(fmt.Sprintf("Rehomed %q at %s", srcPath, dest.FullPathDisplay))
+		return nil
+	}
 	out.Success(fmt.Sprintf("Moved %q → %s", srcPath, updated.FullPathDisplay))
 	return nil
 }

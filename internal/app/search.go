@@ -21,12 +21,25 @@ func (a *App) FindParentCandidates(ctx context.Context, req FindEntitiesRequest)
 	return a.findMatching(ctx, req, EntityResult.IsEligibleParent)
 }
 
+// Relocation names the action a destination search serves. For a displaced
+// entity the two differ: a move may name the current parent (it re-homes there),
+// a use may not (ADR 0039).
+type Relocation string
+
+// Relocations accepted by FindMoveDestinations.
+const (
+	RelocationMove Relocation = "move"
+	RelocationUse  Relocation = "use"
+)
+
 // FindMoveDestinations returns eligible parents matching req.Query that
-// entityID may be moved into: everything except the entity itself, its
-// descendants, and its current parent (ADR 0034). Exclusions apply before
-// req.Limit so they never crowd out valid matches.
+// entityID may be moved or used into: everything except the entity itself, its
+// descendants, and its current parent (ADR 0034). A displaced entity also
+// excludes its home (going home is a return), and for RelocationMove keeps its
+// current parent, which re-homes it in place (ADR 0039). Exclusions apply
+// before req.Limit so they never crowd out valid matches.
 func (a *App) FindMoveDestinations(
-	ctx context.Context, entityID string, req FindEntitiesRequest,
+	ctx context.Context, entityID string, relocation Relocation, req FindEntitiesRequest,
 ) ([]FindResult, error) {
 	moving, err := a.store.GetEntity(ctx, entityID)
 	if err != nil {
@@ -40,8 +53,12 @@ func (a *App) FindMoveDestinations(
 	}
 
 	excluded := subtreeIDs(all, moving.EntityID)
-	if moving.ParentID != nil {
+	rehomable := moving.IsDisplaced() && relocation == RelocationMove
+	if moving.ParentID != nil && !rehomable {
 		excluded[*moving.ParentID] = true
+	}
+	if moving.IsDisplaced() && moving.HomeID != nil {
+		excluded[*moving.HomeID] = true
 	}
 
 	return a.findMatching(ctx, req, func(r EntityResult) bool {

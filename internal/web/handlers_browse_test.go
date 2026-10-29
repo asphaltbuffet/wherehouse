@@ -437,3 +437,29 @@ func TestFullPages_ShareShell(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleParentOptions_PassesRelocation(t *testing.T) {
+	for _, tt := range []struct {
+		query string
+		want  app.Relocation
+	}{
+		{"moving=abc", app.RelocationMove},
+		{"moving=abc&verb=move", app.RelocationMove},
+		{"moving=abc&verb=use", app.RelocationUse},
+		{"moving=abc&verb=bogus", app.RelocationMove},
+	} {
+		t.Run(tt.query, func(t *testing.T) {
+			fake := &fakeApp{}
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=x&" + tt.query)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "abc", fake.lastMovingID)
+			assert.Equal(t, tt.want, fake.lastRelocation)
+		})
+	}
+}

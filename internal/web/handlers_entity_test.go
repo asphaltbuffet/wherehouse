@@ -1211,7 +1211,7 @@ func TestHandleMoveForm(t *testing.T) {
 			assert.Contains(t, string(body), `id="entity-detail"`)
 			assert.Contains(t, string(body), `name="destination"`)
 			assert.Contains(t, string(body), `name="note"`)
-			assert.Contains(t, string(body), `hx-vals='{"moving": "abc"}'`)
+			assert.Contains(t, string(body), `hx-vals='{"moving": "abc", "verb": "move"}'`)
 			assert.NotContains(t, string(body), staleText)
 			assert.Equal(t, tt.wantToRoot, strings.Contains(string(body), `data-parent-value="root"`))
 		})
@@ -2130,4 +2130,113 @@ func TestHandleRemove_IsHomeShowsHint(t *testing.T) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "remove failed: it is home to entities that are away — return them first")
+}
+
+func TestHandleUse_UnexpectedErrorSaysUseFailed(t *testing.T) {
+	logger := &recordingLogger{}
+	fake := &fakeApp{entities: displacedDrill(), useErr: errTest}
+	srv, err := web.New(web.Config{App: fake, Bind: "127.0.0.1", Output: io.Discard, Logger: logger})
+	require.NoError(t, err)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp := postFormHTMX(t, ts, "/entities/drill00001/actions/use", url.Values{"destination": {"elsewhere"}})
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Contains(t, string(body), "use failed")
+	assert.NotContains(t, string(body), "move failed")
+	assert.Equal(t, []string{"use entity"}, logger.errors)
+}
+
+func TestHandleMove_UnexpectedErrorSaysMoveFailed(t *testing.T) {
+	logger := &recordingLogger{}
+	fake := &fakeApp{entities: movableDrill(), moveErr: errTest}
+	srv, err := web.New(web.Config{App: fake, Bind: "127.0.0.1", Output: io.Discard, Logger: logger})
+	require.NoError(t, err)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	_, body := postMove(t, ts, url.Values{"destination": {"w"}})
+
+	assert.Contains(t, body, "move failed")
+	assert.Equal(t, []string{"move entity"}, logger.errors)
+}
+
+func TestHandleRelocate_HomeCycleShowsHint(t *testing.T) {
+	cycle := fmt.Errorf("x: %w: %w", app.ErrHomeCycle, app.ErrInvalidDestination)
+	const hint = "something that belongs inside it is away. Return it first."
+
+	t.Run("move", func(t *testing.T) {
+		ts := newTestServer(t, &fakeApp{entities: movableDrill(), moveErr: cycle})
+		defer ts.Close()
+		_, body := postMove(t, ts, url.Values{"destination": {"w"}})
+		assert.Contains(t, body, "Can&#39;t move there — "+hint)
+		assert.NotContains(t, body, "choose another destination")
+		assert.Contains(t, body, `hx-post="/entities/abc/actions/move"`)
+	})
+	t.Run("use", func(t *testing.T) {
+		ts := newTestServer(t, &fakeApp{entities: displacedDrill(), useErr: cycle})
+		defer ts.Close()
+		resp := postFormHTMX(t, ts, "/entities/drill00001/actions/use", url.Values{"destination": {"x"}})
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		assert.Contains(t, string(body), "Can&#39;t use there — "+hint)
+	})
+}
+
+func TestHandleMoveForm_DisplacedRootChoice(t *testing.T) {
+	get := func(t *testing.T, entities []app.EntityResult, verb string) string {
+		t.Helper()
+		ts := newTestServer(t, &fakeApp{entities: entities})
+		defer ts.Close()
+		return getBody(t, ts, "/entities/drill00001/actions/"+verb)
+	}
+
+	t.Run("displaced with non-root home offers root in move mode", func(t *testing.T) {
+		body := get(t, displacedDrill(), "move")
+		assert.Contains(t, body, `data-parent-value="root"`)
+		assert.Contains(t, body, `"verb": "move"`)
+	})
+	t.Run("displaced with root home hides root in move mode", func(t *testing.T) {
+		entities := displacedDrill()
+		entities[2].HomeID = ""
+		entities[2].HomePathDisplay = ""
+		body := get(t, entities, "move")
+		assert.NotContains(t, body, `data-parent-value="root"`)
+	})
+	t.Run("use mode never offers root and asks for use destinations", func(t *testing.T) {
+		body := get(t, displacedDrill(), "use")
+		assert.NotContains(t, body, `data-parent-value="root"`)
+		assert.Contains(t, body, `"verb": "use"`)
+	})
+}
+
+func TestDetail_UseButtonDisabledTooltipsSayUsed(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		mutate func(*app.EntityResult)
+		move   string
+		use    string
+	}{
+		{"locked", func(e *app.EntityResult) { e.Locked = true },
+			"Locked entities cannot be moved", "Locked entities cannot be used"},
+		{"missing", func(e *app.EntityResult) { e.Status = inventory.EntityStatusMissing },
+			"Missing entities cannot be moved — mark found first", "Missing entities cannot be used — mark found first"},
+		{"loaned", func(e *app.EntityResult) { e.Status = inventory.EntityStatusLoaned },
+			"Loaned entities cannot be moved — return it first", "Loaned entities cannot be used — return it first"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			entities := movableDrill()
+			tt.mutate(&entities[2])
+			ts := newTestServer(t, &fakeApp{entities: entities})
+			defer ts.Close()
+
+			body := getBody(t, ts, "/entities/abc")
+
+			assert.Contains(t, body, `title="`+tt.move+`"`)
+			assert.Contains(t, body, `data-action="use" disabled aria-disabled="true"`)
+			assert.Contains(t, body, `title="`+tt.use+`"`)
+		})
+	}
 }

@@ -111,6 +111,11 @@
               hx-target="#entity-detail" hx-swap="outerHTML">
         Use
       </button>
+      {{else if .UseBlockedReason}}
+      <button class="btn-ghost detail-action-btn" data-action="use" disabled aria-disabled="true"
+              title="{{.UseBlockedReason}}">
+        Use
+      </button>
       {{end}}
       {{end}}
       {{template "attr_button" .LockAction}}

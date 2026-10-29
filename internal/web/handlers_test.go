@@ -96,7 +96,8 @@ type fakeApp struct {
 	useCalls   int
 	lastUseReq app.UseEntityRequest
 
-	lastMovingID string // entityID from the most recent FindMoveDestinations call
+	lastMovingID   string         // entityID from the most recent FindMoveDestinations call
+	lastRelocation app.Relocation // relocation from the most recent FindMoveDestinations call
 
 	removeErr     error
 	removeCalls   int
@@ -152,11 +153,12 @@ func (f *fakeApp) ReparentEntity(_ context.Context, req app.ReparentEntityReques
 }
 
 func (f *fakeApp) FindMoveDestinations(
-	_ context.Context, entityID string, req app.FindEntitiesRequest,
+	_ context.Context, entityID string, relocation app.Relocation, req app.FindEntitiesRequest,
 ) ([]app.FindResult, error) {
 	f.parentCalls++
 	f.lastParentQuery = req.Query
 	f.lastMovingID = entityID
+	f.lastRelocation = relocation
 	return f.parentResults, f.findErr
 }
 

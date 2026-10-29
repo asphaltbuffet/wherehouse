@@ -88,7 +88,8 @@ func lockedChange(e *inventory.Entity, locked bool) (attrChange, error) {
 			e.FullPathDisplay, e.Status,
 		)
 	case e.IsDisplaced():
-		return attrChange{}, fmt.Errorf("cannot lock %q: entity is displaced — return it first", e.FullPathDisplay)
+		return attrChange{}, rejection([]error{ErrDisplaced},
+			"cannot lock %q: entity is displaced — return it first", e.FullPathDisplay)
 	default:
 		return newAttrChange(inventory.EntityLockedEvent, eventbus.EntityLockedPayload{EntityID: e.EntityID})
 	}

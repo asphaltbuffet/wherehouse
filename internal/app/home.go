@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -53,7 +54,9 @@ func (a *App) withHomePath(ctx context.Context, r EntityResult) (EntityResult, e
 // subtree: the move would put that entity's home inside the entity itself
 // (CONTEXT.md "Home"). It covers indirect cases, e.g. moving Garage (which
 // holds Shelf, the drill's home) into the drill.
-func (a *App) checkHomeCycleTx(ctx context.Context, tx store.Tx, moving *inventory.Entity, destID string) error {
+func (a *App) checkHomeCycleTx(
+	ctx context.Context, tx store.Tx, moving *inventory.Entity, destID, verb string,
+) error {
 	seen := make(map[string]bool)
 	for id := destID; id != ""; {
 		if seen[id] {
@@ -70,8 +73,9 @@ func (a *App) checkHomeCycleTx(ctx context.Context, tx store.Tx, moving *invento
 				return ierr
 			}
 			if inside {
-				return fmt.Errorf("cannot move %q there: %q's home would end up inside it — return %q first: %w",
-					moving.FullPathDisplay, e.FullPathDisplay, e.FullPathDisplay, ErrInvalidDestination)
+				return rejection([]error{ErrHomeCycle, ErrInvalidDestination},
+					"cannot %s %q there: %q's home would end up inside it — return %q first: %s",
+					verb, moving.FullPathDisplay, e.FullPathDisplay, e.FullPathDisplay, ErrInvalidDestination)
 			}
 		}
 		id = idOf(e.ParentID)
@@ -82,6 +86,16 @@ func (a *App) checkHomeCycleTx(ctx context.Context, tx store.Tx, moving *invento
 // rehomeTx makes a displaced entity's current parent its home (CONTEXT.md
 // "Move": moving a displaced entity to where it already is).
 func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string) error {
+	if entity.ParentID != nil {
+		// The new home must satisfy the same rules as any destination.
+		if _, err := a.getParentTx(ctx, tx, *entity.ParentID); err != nil {
+			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalidDestination) {
+				return rejection([]error{ErrInvalidDestination},
+					"cannot %s %q here: its current location cannot be a home", verbMove, entity.FullPathDisplay)
+			}
+			return err
+		}
+	}
 	raw, err := json.Marshal(eventbus.EntityRehomedPayload{EntityID: entity.EntityID, HomeID: entity.ParentID})
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
@@ -106,20 +120,20 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (EntityResult
 		if err != nil {
 			return wrapEntityError(req.EntityID, err)
 		}
-		if err = checkMovable(entity); err != nil {
+		if err = checkMovable(entity, verbUse); err != nil {
 			return err
 		}
 		if req.NewParentID == idOf(entity.HomeID) {
 			return fmt.Errorf("cannot use %q at its home — use 'return' instead: %w: %w",
 				entity.FullPathDisplay, ErrDestinationIsHome, ErrInvalidDestination)
 		}
-		if err = checkNotAlreadyThere(entity, req.NewParentID); err != nil {
+		if err = checkNotAlreadyThere(entity, req.NewParentID, verbUse); err != nil {
 			return err
 		}
 
 		var newParentID *string
 		if req.NewParentID != "" {
-			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID); err != nil {
+			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID, verbUse); err != nil {
 				return err
 			}
 			newParentID = &req.NewParentID
@@ -148,7 +162,7 @@ func (a *App) returnHomeTx(
 	ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string,
 ) error {
 	if entity.HomeID != nil {
-		if err := a.checkMoveDestinationTx(ctx, tx, entity, *entity.HomeID); err != nil {
+		if err := a.checkMoveDestinationTx(ctx, tx, entity, *entity.HomeID, verbReturn); err != nil {
 			return err
 		}
 	}
@@ -170,7 +184,11 @@ func (a *App) checkNotHomeTx(ctx context.Context, tx store.Tx, e *inventory.Enti
 	if err != nil {
 		return fmt.Errorf("%s %q: %w", action, e.FullPathDisplay, err)
 	}
-	if n > 0 {
+	switch {
+	case n == 1:
+		return fmt.Errorf("cannot %s %q: it is home to 1 displaced entity — return it first: %w",
+			action, e.FullPathDisplay, ErrIsHome)
+	case n > 1:
 		return fmt.Errorf("cannot %s %q: it is home to %d displaced entities — return them first: %w",
 			action, e.FullPathDisplay, n, ErrIsHome)
 	}

@@ -15,7 +15,7 @@
   <input id="move_parent_q" type="search" name="q" autocomplete="off" autofocus
          placeholder="Search locations…" data-parent-search
          hx-get="/entities/parent-options"
-         hx-vals='{"moving": "{{.EntityID}}"}'
+         hx-vals='{"moving": "{{.EntityID}}", "verb": "{{.Verb}}"}'
          hx-trigger="input changed delay:200ms"
          hx-target="#move_parent_options"
          hx-swap="innerHTML"

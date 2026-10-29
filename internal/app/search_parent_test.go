@@ -104,7 +104,7 @@ func TestFindMoveDestinations_ExcludesSelfDescendantsAndCurrentParent(t *testing
 	box, err := a.LookupEntityByPath(ctx, "Box Shelf:Box")
 	require.NoError(t, err)
 
-	results, err := a.FindMoveDestinations(ctx, box.EntityID, app.FindEntitiesRequest{Query: "box"})
+	results, err := a.FindMoveDestinations(ctx, box.EntityID, app.RelocationMove, app.FindEntitiesRequest{Query: "box"})
 
 	require.NoError(t, err)
 	var names []string
@@ -132,7 +132,9 @@ func TestFindMoveDestinations_FiltersBeforeLimit(t *testing.T) {
 	bin, err := a.LookupEntityByPath(ctx, "Bin")
 	require.NoError(t, err)
 
-	results, err := a.FindMoveDestinations(ctx, bin.EntityID, app.FindEntitiesRequest{Query: "b", Limit: 1})
+	results, err := a.FindMoveDestinations(
+		ctx, bin.EntityID, app.RelocationMove, app.FindEntitiesRequest{Query: "b", Limit: 1},
+	)
 
 	require.NoError(t, err)
 	require.Len(t, results, 1)
@@ -142,7 +144,7 @@ func TestFindMoveDestinations_FiltersBeforeLimit(t *testing.T) {
 func TestFindMoveDestinations_UnknownEntity(t *testing.T) {
 	a := apptesting.OpenApp(t)
 
-	_, err := a.FindMoveDestinations(t.Context(), "nope", app.FindEntitiesRequest{Query: "x"})
+	_, err := a.FindMoveDestinations(t.Context(), "nope", app.RelocationMove, app.FindEntitiesRequest{Query: "x"})
 
 	require.ErrorIs(t, err, app.ErrNotFound)
 }
@@ -170,8 +172,31 @@ func TestFindMoveDestinations_ExcludesDescendantUnderRemovedAncestor(t *testing.
 	require.NoError(t, err)
 	apptesting.RemoveLeavingLiveChildren(t, a, box.EntityID) // pre-#287 data: live child under removed parent
 
-	results, err := a.FindMoveDestinations(ctx, garage.EntityID, app.FindEntitiesRequest{Query: "bit"})
+	results, err := a.FindMoveDestinations(
+		ctx, garage.EntityID, app.RelocationMove, app.FindEntitiesRequest{Query: "bit"},
+	)
 
 	require.NoError(t, err)
 	assert.Empty(t, results)
+}
+
+func TestFindMoveDestinations_DisplacedEntity(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	names := func(rel app.Relocation, q string) []string {
+		res, ferr := f.a.FindMoveDestinations(ctx, f.drill.EntityID, rel, app.FindEntitiesRequest{Query: q})
+		require.NoError(t, ferr)
+		out := make([]string, len(res))
+		for i, r := range res {
+			out[i] = r.Entity.DisplayName
+		}
+		return out
+	}
+
+	assert.Equal(t, []string{"Deck"}, names(app.RelocationMove, "deck"), "move offers the current parent (re-home)")
+	assert.Empty(t, names(app.RelocationMove, "garage"), "move never offers the home")
+	assert.Empty(t, names(app.RelocationUse, "deck"), "use never offers the current parent")
+	assert.Empty(t, names(app.RelocationUse, "garage"), "use never offers the home")
 }

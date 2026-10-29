@@ -71,7 +71,7 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 		if err != nil {
 			return wrapEntityError(req.EntityID, err)
 		}
-		if err = checkMovable(entity); err != nil {
+		if err = checkMovable(entity, verbMove); err != nil {
 			return err
 		}
 		if entity.IsDisplaced() {
@@ -83,13 +83,13 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 					entity.FullPathDisplay, ErrDestinationIsHome, ErrInvalidDestination)
 			}
 		}
-		if err = checkNotAlreadyThere(entity, req.NewParentID); err != nil {
+		if err = checkNotAlreadyThere(entity, req.NewParentID, verbMove); err != nil {
 			return err
 		}
 
 		var newParentID *string
 		if req.NewParentID != "" {
-			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID); err != nil {
+			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID, verbMove); err != nil {
 				return err
 			}
 			newParentID = &req.NewParentID
@@ -122,25 +122,33 @@ func (a *App) reparentTx(
 	return nil
 }
 
+// Verbs that name the user's action in rejection copy: move, use and return
+// share the destination checks but each says its own word.
+const (
+	verbMove   = "move"
+	verbUse    = "use"
+	verbReturn = "return"
+)
+
 // checkMovable rejects an entity that may not change location at all
-// (ADR 0034): locked, missing, or loaned.
-func checkMovable(entity *inventory.Entity) error {
+// (ADR 0034): locked, missing, or loaned. verb is the user's action.
+func checkMovable(entity *inventory.Entity, verb string) error {
 	if entity.Locked {
-		return fmt.Errorf("cannot move %q: entity is locked", entity.FullPathDisplay)
+		return fmt.Errorf("cannot %s %q: entity is locked", verb, entity.FullPathDisplay)
 	}
 	if entity.Status == inventory.EntityStatusMissing {
-		return fmt.Errorf("cannot move %q: entity is missing — mark it found first", entity.FullPathDisplay)
+		return fmt.Errorf("cannot %s %q: entity is missing — mark it found first", verb, entity.FullPathDisplay)
 	}
 	if entity.Status == inventory.EntityStatusLoaned {
-		return fmt.Errorf("cannot move %q: entity is loaned — return it first", entity.FullPathDisplay)
+		return fmt.Errorf("cannot %s %q: entity is loaned — return it first", verb, entity.FullPathDisplay)
 	}
 	return nil
 }
 
 // checkNotAlreadyThere rejects newParentID when it is the current parent.
-func checkNotAlreadyThere(entity *inventory.Entity, newParentID string) error {
+func checkNotAlreadyThere(entity *inventory.Entity, newParentID, verb string) error {
 	if newParentID == idOf(entity.ParentID) {
-		return fmt.Errorf("cannot move %q: already there: %w", entity.FullPathDisplay, ErrInvalidDestination)
+		return fmt.Errorf("cannot %s %q: already there: %w", verb, entity.FullPathDisplay, ErrInvalidDestination)
 	}
 	return nil
 }
@@ -174,21 +182,21 @@ func (a *App) checkMoveDestinationTx(
 	ctx context.Context,
 	tx store.Tx,
 	entity *inventory.Entity,
-	parentID string,
+	parentID, verb string,
 ) error {
 	parent, err := a.getParentTx(ctx, tx, parentID)
 	if err != nil {
-		return fmt.Errorf("cannot move %q: %w", entity.FullPathDisplay, err)
+		return fmt.Errorf("cannot %s %q: %w", verb, entity.FullPathDisplay, err)
 	}
 	inside, err := a.isSelfOrDescendant(ctx, tx, entity.EntityID, parent.EntityID)
 	if err != nil {
 		return err
 	}
 	if inside {
-		return fmt.Errorf("cannot move %q into itself or its own contents: %w",
-			entity.FullPathDisplay, ErrInvalidDestination)
+		return fmt.Errorf("cannot %s %q into itself or its own contents: %w",
+			verb, entity.FullPathDisplay, ErrInvalidDestination)
 	}
-	return a.checkHomeCycleTx(ctx, tx, entity, parent.EntityID)
+	return a.checkHomeCycleTx(ctx, tx, entity, parent.EntityID, verb)
 }
 
 // isSelfOrDescendant reports whether candidateID is entityID or lies beneath it.
@@ -370,6 +378,9 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 	for i, row := range rows {
 		results[i] = entityToResult(row.Entity, tagsByID[row.Entity.EntityID])
 		results[i].HasChildren = row.HasChildren
+		if results[i], err = a.withHomePath(ctx, results[i]); err != nil {
+			return nil, err
+		}
 	}
 	return results, nil
 }

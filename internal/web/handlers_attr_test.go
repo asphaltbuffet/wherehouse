@@ -13,6 +13,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/web"
 )
 
 func postAttr(t *testing.T, ts *httptest.Server, entityID, body string) (*http.Response, string) {
@@ -211,4 +212,23 @@ func TestHandleAttr_IsHomeShowsHint(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
 	assert.Contains(t, body, "Can&#39;t mark discrete: it is home to entities that are away — return them first")
+}
+
+func TestHandleAttr_DisplacedLockShowsHint(t *testing.T) {
+	logger := &recordingLogger{}
+	fake := &fakeApp{
+		entities: []app.EntityResult{attrEntity(inventory.EntityStatusOk, false, false)},
+		attrErr:  fmt.Errorf("cannot lock: %w", app.ErrDisplaced),
+	}
+	srv, err := web.New(web.Config{App: fake, Bind: "127.0.0.1", Output: io.Discard, Logger: logger})
+	require.NoError(t, err)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, body := postAttr(t, ts, "abc", "locked=true")
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	assert.Contains(t, body, "Displaced entities cannot be locked — return it first")
+	assert.NotContains(t, body, "attribute change failed")
+	assert.Empty(t, logger.errors, "an expected rejection is not an Error")
 }

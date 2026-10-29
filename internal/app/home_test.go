@@ -157,7 +157,7 @@ func TestHomeGuard_ReturnBorrowedRejectedWhileHomeOfDisplaced(t *testing.T) {
 	_, err = a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: caseID, ActorID: "t"}})
 	require.ErrorIs(t, err, app.ErrIsHome)
 	assert.Contains(t, err.Error(),
-		`cannot return "Case": it is home to 1 displaced entities — return them first`)
+		`cannot return "Case": it is home to 1 displaced entity — return it first`)
 }
 
 func TestReparent_ElsewhereClearsDisplacement(t *testing.T) {
@@ -367,7 +367,7 @@ func TestHomeGuard_RemoveRejectedWhileHomeOfDisplaced(t *testing.T) {
 
 	err = f.a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: shelf.EntityID, ActorID: "t"})
 	require.ErrorIs(t, err, app.ErrIsHome)
-	assert.Contains(t, err.Error(), "return them first")
+	assert.Contains(t, err.Error(), "it is home to 1 displaced entity — return it first")
 }
 
 func TestHomeGuard_DiscreteRejectedWhileHomeOfDisplaced(t *testing.T) {
@@ -391,8 +391,9 @@ func TestHomeGuard_LockRejectedWhileDisplaced(t *testing.T) {
 	_, err = f.a.SetAttributes(t.Context(), []app.SetAttributesRequest{{
 		EntityID: f.drill.EntityID, Locked: &locked, ActorID: "t",
 	}})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "entity is displaced — return it first")
+	require.ErrorIs(t, err, app.ErrDisplaced)
+	require.EqualError(t, err, `cannot lock "Deck:Drill": entity is displaced — return it first`)
+	require.ErrorIs(t, err, app.ErrDisplaced)
 }
 
 func TestHomeGuard_DirectCycleRejected(t *testing.T) {
@@ -412,8 +413,11 @@ func TestHomeGuard_DirectCycleRejected(t *testing.T) {
 	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
 		EntityID: shelf.EntityID, NewParentID: f.drill.EntityID, ActorID: "t",
 	})
+	require.ErrorIs(t, err, app.ErrHomeCycle)
 	require.ErrorIs(t, err, app.ErrInvalidDestination)
-	assert.Contains(t, err.Error(), "home would end up inside it")
+	assert.EqualError(t, err,
+		`cannot move "Garage:Shelf" there: "Deck:Drill"'s home would end up inside it`+
+			` — return "Deck:Drill" first: invalid destination`)
 }
 
 func TestHomeGuard_IndirectCycleRejected(t *testing.T) {
@@ -463,4 +467,178 @@ func TestHomeGuard_ReturnedHomeAllowsRemove(t *testing.T) {
 	// Drill now has no live children and is home to nobody displaced.
 	err = f.a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: f.drill.EntityID, ActorID: "t"})
 	require.NoError(t, err)
+}
+
+func TestGetChildren_FillsHomePathForDisplaced(t *testing.T) {
+	f := newHomeFixture(t)
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+
+	kids, err := f.a.GetChildren(t.Context(), f.deck.EntityID)
+	require.NoError(t, err)
+	require.Len(t, kids, 1)
+	assert.Equal(t, "Garage", kids[0].HomePathDisplay)
+	assert.Equal(t, "Garage", kids[0].HomeLabel())
+}
+
+func TestUseEntity_RejectionCopyNamesUse(t *testing.T) {
+	f := newHomeFixture(t)
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+
+	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.Contains(t, err.Error(), `cannot use "Deck:Drill": already there`)
+
+	_, err = f.use(t, f.deck.EntityID, f.drill.EntityID)
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.Contains(t, err.Error(), `cannot use "Deck" into itself or its own contents`)
+
+	locked := true
+	_, err = f.a.SetAttributes(t.Context(), []app.SetAttributesRequest{
+		{EntityID: f.deck.EntityID, Locked: &locked, ActorID: "t"},
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, f.deck.EntityID, f.garage.EntityID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `cannot use "Deck": entity is locked`)
+	assert.NotContains(t, err.Error(), "cannot move")
+}
+
+func TestReturn_HomeGoneMissingCopyNamesReturn(t *testing.T) {
+	ctx := t.Context()
+	s, err := store.Open(store.Config{Path: filepath.Join(t.TempDir(), "test.db"), AutoMigrate: true})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	a := app.New(s)
+
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "t"})
+	require.NoError(t, err)
+	deck, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Deck", ActorID: "t"})
+	require.NoError(t, err)
+	drill, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Drill", ParentID: garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = a.UseEntity(ctx, app.UseEntityRequest{EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+
+	// Remove the home by bypassing app guards.
+	raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: garage.EntityID})
+	require.NoError(t, err)
+	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityRemovedEvent, "t", raw, nil)
+	require.NoError(t, err)
+
+	_, err = a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: drill.EntityID, ActorID: "t"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `cannot return "Deck:Drill"`)
+	assert.NotContains(t, err.Error(), "cannot move")
+}
+
+func TestHomeGuard_CycleCarriesErrHomeCycleAndVerb(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	shelf, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Shelf", ParentID: f.garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: f.drill.EntityID, NewParentID: shelf.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+
+	_, err = f.use(t, f.garage.EntityID, f.bit.EntityID)
+	require.ErrorIs(t, err, app.ErrHomeCycle)
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.EqualError(t, err,
+		`cannot use "Garage" there: "Deck:Drill"'s home would end up inside it`+
+			` — return "Deck:Drill" first: invalid destination`)
+}
+
+func TestHomeGuard_PluralCopyForSeveralDisplaced(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	saw, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Saw", ParentID: f.garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	// Drill holds Bit; remove it from the picture so Garage's only children are away.
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: f.bit.EntityID, NewParentID: f.deck.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	_, err = f.use(t, saw.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+
+	err = f.a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: f.garage.EntityID, ActorID: "t"})
+	require.ErrorIs(t, err, app.ErrIsHome)
+	assert.Contains(t, err.Error(), "it is home to 2 displaced entities — return them first")
+}
+
+func TestReparent_RehomeRejectedWhenCurrentParentCannotBeHome(t *testing.T) {
+	ctx := t.Context()
+	s, err := store.Open(store.Config{Path: filepath.Join(t.TempDir(), "test.db"), AutoMigrate: true})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	a := app.New(s)
+
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "t"})
+	require.NoError(t, err)
+	deck, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Deck", ActorID: "t"})
+	require.NoError(t, err)
+	drill, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Drill", ParentID: garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = a.UseEntity(ctx, app.UseEntityRequest{EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+
+	// Make the current parent discrete by bypassing app guards.
+	raw, err := json.Marshal(eventbus.EntityDiscreteSetPayload{EntityID: deck.EntityID})
+	require.NoError(t, err)
+	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityDiscreteSetEvent, "t", raw, nil)
+	require.NoError(t, err)
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t",
+	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	got, err := a.GetEntityByID(ctx, drill.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, garage.EntityID, got.HomeID, "home unchanged")
+}
+
+func TestReparent_RehomeRejectedWhenCurrentParentRemoved(t *testing.T) {
+	ctx := t.Context()
+	s, err := store.Open(store.Config{Path: filepath.Join(t.TempDir(), "test.db"), AutoMigrate: true})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	a := app.New(s)
+
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "t"})
+	require.NoError(t, err)
+	deck, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Deck", ActorID: "t"})
+	require.NoError(t, err)
+	drill, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Drill", ParentID: garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = a.UseEntity(ctx, app.UseEntityRequest{EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+
+	// Remove the current parent by bypassing app guards.
+	raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: deck.EntityID})
+	require.NoError(t, err)
+	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityRemovedEvent, "t", raw, nil)
+	require.NoError(t, err)
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t",
+	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.EqualError(t, err, `cannot move "Deck:Drill" here: its current location cannot be a home`)
 }

@@ -31,6 +31,7 @@ type detailData struct {
 	LoanForm          *loanFormData // non-nil re-opens the loan form (validation error)
 	CanMove           bool          // not locked; ok or borrowed (ADR 0034)
 	MoveBlockedReason string        // non-empty when Move is shown disabled
+	UseBlockedReason  string        // non-empty when Use is shown disabled
 	MoveForm          *moveFormData // non-nil re-opens the move form (validation error)
 	CanUse            bool          // same as CanMove (use = move preconditions)
 	UseForm           *moveFormData // non-nil re-opens the use form (validation error)
@@ -70,30 +71,28 @@ const loanLockedReason = "Locked entities cannot be loaned"
 type moveFormData struct {
 	EntityID string
 	Verb     string // "move" or "use": form action and labels
-	AtRoot   bool   // hides the "move to root" choice: it would be a no-op
+	AtRoot   bool   // hides the "move to root" choice: see hidesRootChoice
 	Note     string
 	Error    string
 }
 
-// Tooltips on a disabled Move button; each names the one action that unblocks it.
-const (
-	moveLockedReason  = "Locked entities cannot be moved"
-	moveMissingReason = "Missing entities cannot be moved — mark found first"
-	moveLoanedReason  = "Loaned entities cannot be moved — return it first"
-)
-
-func moveBlockedReason(e app.EntityResult) string {
-	if e.Locked {
-		return moveLockedReason
-	}
-	if e.Status == inventory.EntityStatusMissing {
-		return moveMissingReason
-	}
-	if e.Status == inventory.EntityStatusLoaned {
-		return moveLoanedReason
+// Tooltips on a disabled Move or Use button; each names the one action that
+// unblocks it. participle is "moved" or "used".
+func relocateBlockedReason(e app.EntityResult, participle string) string {
+	switch {
+	case e.Locked:
+		return "Locked entities cannot be " + participle
+	case e.Status == inventory.EntityStatusMissing:
+		return "Missing entities cannot be " + participle + " — mark found first"
+	case e.Status == inventory.EntityStatusLoaned:
+		return "Loaned entities cannot be " + participle + " — return it first"
 	}
 	return ""
 }
+
+func moveBlockedReason(e app.EntityResult) string { return relocateBlockedReason(e, "moved") }
+
+func useBlockedReason(e app.EntityResult) string { return relocateBlockedReason(e, "used") }
 
 // removeFormData is the view model for the inline remove form.
 type removeFormData struct {
@@ -224,6 +223,9 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(setErr, app.ErrNoChange):
 		s.cfg.Logger.Info("attribute unchanged: panel was stale", "error", setErr, "entity_id", entityID)
 		fresh.Error = staleMessage
+	case errors.Is(setErr, app.ErrDisplaced):
+		s.cfg.Logger.Info("attribute rejected: entity is displaced", "error", setErr, "entity_id", entityID)
+		fresh.Error = lockDisplacedReason
 	case errors.Is(setErr, app.ErrIsHome):
 		s.cfg.Logger.Info("attribute rejected: entity is home to displaced entities",
 			"error", setErr, "entity_id", entityID)
@@ -400,6 +402,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		CanUse:              entity.CanMove(),
 		Displaced:           entity.IsDisplaced(),
 		MoveBlockedReason:   moveBlockedReason(entity),
+		UseBlockedReason:    useBlockedReason(entity),
 		LockAction:          lockAction(entity),
 		DiscreteAction:      discrete,
 		CanRemove:           canRemove,
@@ -909,7 +912,9 @@ func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
 		if !d.CanMove {
 			return false
 		}
-		d.MoveForm = &moveFormData{EntityID: d.Entity.EntityID, AtRoot: isRootEntity(d.Entity), Verb: verbMove}
+		d.MoveForm = &moveFormData{
+			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbMove), Verb: verbMove,
+		}
 		return true
 	})
 }
@@ -925,7 +930,9 @@ func (s *Server) handleUseForm(w http.ResponseWriter, r *http.Request) {
 		if !d.CanUse {
 			return false
 		}
-		d.UseForm = &moveFormData{EntityID: d.Entity.EntityID, AtRoot: isRootEntity(d.Entity), Verb: verbUse}
+		d.UseForm = &moveFormData{
+			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbUse), Verb: verbUse,
+		}
 		return true
 	})
 }
@@ -993,7 +1000,7 @@ func (s *Server) handleRelocate(w http.ResponseWriter, r *http.Request, verb str
 
 	form := moveFormData{
 		EntityID: entityID,
-		AtRoot:   isRootEntity(data.Entity),
+		AtRoot:   hidesRootChoice(data.Entity, verb),
 		Verb:     verb,
 		Note:     strings.TrimSpace(r.FormValue("note")),
 	}
@@ -1057,6 +1064,13 @@ func (s *Server) renderMoveFailure(
 		return
 	}
 
+	if fresh.CanMove && errors.Is(err, app.ErrHomeCycle) {
+		form.Error = "Can't " + form.Verb + " there — something that belongs inside it is away. Return it first."
+		fresh.openRelocateForm(&form)
+		s.renderDetailSection(w, r, fresh)
+		return
+	}
+
 	if fresh.CanMove && (errors.Is(err, app.ErrInvalidDestination) || errors.Is(err, app.ErrNotFound)) {
 		form.Error = "Can't " + form.Verb + " there — choose another destination."
 		fresh.openRelocateForm(&form)
@@ -1065,10 +1079,10 @@ func (s *Server) renderMoveFailure(
 	}
 
 	if fresh.CanMove {
-		s.cfg.Logger.Error("move entity", "error", err, "entity_id", entityID)
-		fresh.Error = "move failed"
+		s.cfg.Logger.Error(form.Verb+" entity", "error", err, "entity_id", entityID)
+		fresh.Error = form.Verb + " failed"
 	} else {
-		s.cfg.Logger.Info("move rejected: panel was stale", "error", err, "entity_id", entityID)
+		s.cfg.Logger.Info(form.Verb+" rejected: panel was stale", "error", err, "entity_id", entityID)
 		fresh.Error = staleMessage
 	}
 	s.renderStatusChanged(w, r, fresh)
