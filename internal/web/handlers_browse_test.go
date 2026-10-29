@@ -61,7 +61,7 @@ func TestIndex_HomeListsRoots(t *testing.T) {
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk,
 			HasChildren: true},
 		{EntityID: "s", DisplayName: "Shed", FullPathDisplay: "Shed", Status: inventory.EntityStatusOk},
-		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g",
+		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g", HomeID: "g",
 			Status: inventory.EntityStatusOk},
 	}}
 	ts := newTestServer(t, fake)

@@ -327,7 +327,7 @@ func detachedTrigger(t *testing.T, resp *http.Response) detachedEvent {
 func TestHandleReturn_BorrowedShowsParentAndDeletesNode(t *testing.T) {
 	fake := &fakeApp{entities: []app.EntityResult{
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 			Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 	}}
 	ts := newTestServer(t, fake)
@@ -348,7 +348,7 @@ func TestHandleReturn_BorrowedSiblingRemainsKeepsParentExpandable(t *testing.T) 
 	fake := &fakeApp{
 		entities: []app.EntityResult{
 			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 		},
 		hasChildren: map[string]bool{"g": true},
@@ -368,7 +368,7 @@ func TestHandleReturn_BorrowedCountErrorOmitsTrigger(t *testing.T) {
 	fake := &fakeApp{
 		entities: []app.EntityResult{
 			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 		},
 		hasChildrenErr: errTest,
@@ -435,7 +435,7 @@ func TestHandleReturn_StaleOnOkShowsCurrentState(t *testing.T) {
 func TestHandleReturn_AlreadyRemovedShowsParent(t *testing.T) {
 	fake := &fakeApp{entities: []app.EntityResult{
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 			Status: inventory.EntityStatusRemoved},
 	}}
 	ts := newTestServer(t, fake)
@@ -485,7 +485,7 @@ func TestHandleReturn_ConcurrentBorrowedShowsRemoval(t *testing.T) {
 	fake := &fakeApp{
 		entities: []app.EntityResult{
 			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+			{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 		},
 		returnErr: fmt.Errorf("get entity %q: %w", "abc", app.ErrNotFound),
@@ -1144,7 +1144,7 @@ func TestHandleMoveForm(t *testing.T) {
 			name: "nested entity offers root",
 			entities: []app.EntityResult{
 				{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 					Status: inventory.EntityStatusOk},
 			},
 			wantCode: http.StatusOK, wantForm: true, wantToRoot: true,
@@ -1217,7 +1217,7 @@ func movableDrill() []app.EntityResult {
 	return []app.EntityResult{
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
 		{EntityID: "w", DisplayName: "Workshop", FullPathDisplay: "Workshop", Status: inventory.EntityStatusOk},
-		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+		{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 			Status: inventory.EntityStatusOk},
 	}
 }
@@ -1521,7 +1521,8 @@ func postRemove(t *testing.T, ts *httptest.Server, form url.Values) (*http.Respo
 func hammerInGarage(status inventory.EntityStatus) []app.EntityResult {
 	return []app.EntityResult{
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer", ParentID: "g", Status: status},
+		{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Garage:Hammer", ParentID: "g", HomeID: "g",
+			Status: status},
 	}
 }
 
@@ -1693,7 +1694,7 @@ func TestHandleEntityDetail_Removed(t *testing.T) {
 		entities: []app.EntityResult{
 			{EntityID: "g", DisplayName: "Garage", CanonicalName: "garage",
 				FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-			{EntityID: "h", DisplayName: "Hammer", CanonicalName: "hammer", ParentID: "g",
+			{EntityID: "h", DisplayName: "Hammer", CanonicalName: "hammer", ParentID: "g", HomeID: "g",
 				FullPathDisplay: "Garage:Hammer", Status: inventory.EntityStatusRemoved},
 		},
 		history: []app.HistoryResult{
@@ -1852,10 +1853,10 @@ func garageWithChildren() *fakeApp {
 			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
 		},
 		children: map[string][]app.EntityResult{"g": {
-			{EntityID: "b1", DisplayName: "Bench", ParentID: "g", Status: inventory.EntityStatusOk},
-			{EntityID: "d1", DisplayName: "Drawer", ParentID: "g", Locked: true, HasChildren: true,
+			{EntityID: "b1", DisplayName: "Bench", ParentID: "g", HomeID: "g", Status: inventory.EntityStatusOk},
+			{EntityID: "d1", DisplayName: "Drawer", ParentID: "g", HomeID: "g", Locked: true, HasChildren: true,
 				Status: inventory.EntityStatusOk},
-			{EntityID: "w1", DisplayName: "Wrench", ParentID: "g", Status: inventory.EntityStatusLoaned},
+			{EntityID: "w1", DisplayName: "Wrench", ParentID: "g", HomeID: "g", Status: inventory.EntityStatusLoaned},
 		}},
 		history: []app.HistoryResult{
 			{EventID: 1, TimestampUTC: "2025-01-01T00:00:00Z", ActorUserID: "alice"},
@@ -1948,7 +1949,7 @@ func TestDetail_ChildrenList_GetChildrenErrorIs500(t *testing.T) {
 func TestDetail_BreadcrumbsStartAtInventory(t *testing.T) {
 	fake := &fakeApp{entities: []app.EntityResult{
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
-		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g",
+		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g", HomeID: "g",
 			Status: inventory.EntityStatusOk},
 	}}
 	ts := newTestServer(t, fake)
@@ -1986,4 +1987,129 @@ func TestDetail_SectionCarriesEntityID(t *testing.T) {
 	defer ts.Close()
 
 	assert.Contains(t, getDetail(t, ts, "g"), `<section id="entity-detail" data-entity-id="g">`)
+}
+
+func getBody(t *testing.T, ts *httptest.Server, path string) string {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)
+	require.NoError(t, err)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return string(b)
+}
+
+func postFormHTMX(t *testing.T, ts *httptest.Server, path string, form url.Values) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+path, strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	return resp
+}
+
+func displacedDrill() []app.EntityResult {
+	return []app.EntityResult{
+		{EntityID: "garage0001", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "deck000001", DisplayName: "Deck", FullPathDisplay: "Deck", Status: inventory.EntityStatusOk},
+		{EntityID: "drill00001", DisplayName: "Drill", FullPathDisplay: "Deck:Drill", ParentID: "deck000001",
+			HomeID: "garage0001", HomePathDisplay: "Garage", Status: inventory.EntityStatusOk},
+	}
+}
+
+func TestDetail_ShowsHomeAndAwayWhenDisplaced(t *testing.T) {
+	fake := &fakeApp{entities: displacedDrill()}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+	body := getBody(t, ts, "/entities/drill00001")
+	assert.Contains(t, body, "<dt>Home</dt><dd>Garage</dd>")
+	assert.Contains(t, body, ">away<")
+	assert.Contains(t, body, `hx-post="/entities/drill00001/actions/return"`)
+	assert.Contains(t, body, `title="Displaced entities cannot be locked — return it first"`)
+}
+
+func TestDetail_NoHomeFactWhenAtHome(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "garage0001", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "drill00001", DisplayName: "Drill", FullPathDisplay: "Garage:Drill",
+			ParentID: "garage0001", HomeID: "garage0001", Status: inventory.EntityStatusOk},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+	body := getBody(t, ts, "/entities/drill00001")
+	assert.NotContains(t, body, "<dt>Home</dt>")
+	assert.NotContains(t, body, `/actions/return"`, "ok at home: nothing to return")
+	assert.Contains(t, body, `hx-get="/entities/drill00001/actions/use"`)
+}
+
+func TestHandleUseForm_OpensMoveFormInUseMode(t *testing.T) {
+	fake := &fakeApp{entities: displacedDrill()}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+	body := getBody(t, ts, "/entities/drill00001/actions/use")
+	assert.Contains(t, body, `hx-post="/entities/drill00001/actions/use"`)
+	assert.Contains(t, body, "Use at")
+}
+
+func TestHandleUse_Success(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "garage0001", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "deck000001", DisplayName: "Deck", FullPathDisplay: "Deck", Status: inventory.EntityStatusOk},
+		{EntityID: "drill00001", DisplayName: "Drill", FullPathDisplay: "Garage:Drill",
+			ParentID: "garage0001", HomeID: "garage0001", Status: inventory.EntityStatusOk},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+	resp := postFormHTMX(t, ts, "/entities/drill00001/actions/use",
+		url.Values{"destination": {"deck000001"}, "note": {"  deck  "}})
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "deck000001", fake.lastUseReq.NewParentID)
+	assert.Equal(t, "deck", fake.lastUseReq.Note)
+	assert.NotEmpty(t, resp.Header.Get("Hx-Trigger-After-Swap"), "tree node moves like a Move")
+}
+
+func TestHandleUse_HomeDestinationReopensFormWithHint(t *testing.T) {
+	fake := &fakeApp{entities: displacedDrill(),
+		useErr: fmt.Errorf("x: %w: %w", app.ErrDestinationIsHome, app.ErrInvalidDestination)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+	resp := postFormHTMX(t, ts, "/entities/drill00001/actions/use", url.Values{"destination": {"garage0001"}})
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	assert.Contains(t, string(body), "That&#39;s where it belongs — use Return instead.")
+}
+
+func TestHandleReturn_DisplacedMovesTreeNode(t *testing.T) {
+	fake := &fakeApp{entities: displacedDrill()}
+	fake.onReturn = func(f *fakeApp) {
+		for i := range f.entities {
+			if f.entities[i].EntityID == "drill00001" {
+				f.entities[i].ParentID = "garage0001"
+				f.entities[i].FullPathDisplay = "Garage:Drill"
+				f.entities[i].HomePathDisplay = ""
+			}
+		}
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+	resp := postHTMX(t, ts, "/entities/drill00001/actions/return")
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.NotEmpty(t, resp.Header.Get("Hx-Trigger-After-Swap"), "node detaches from Deck, attaches under Garage")
+}
+
+func TestHandleRemove_IsHomeShowsHint(t *testing.T) {
+	fake := &fakeApp{entities: displacedDrill(), removeErr: fmt.Errorf("x: %w", app.ErrIsHome)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+	resp := postFormHTMX(t, ts, "/entities/garage0001/actions/remove", url.Values{})
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	assert.Contains(t, string(body), "remove failed: it is home to entities that are away — return them first")
 }

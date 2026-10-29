@@ -198,3 +198,17 @@ func TestHandleAttr_RemovedEntityShowsRemovedPanel(t *testing.T) {
 	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.Equal(t, detachedEvent{EntityID: "abc"}, detachedTrigger(t, resp))
 }
+
+func TestHandleAttr_IsHomeShowsHint(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{attrEntity(inventory.EntityStatusOk, false, false)},
+		attrErr:  fmt.Errorf("cannot mark discrete: %w", app.ErrIsHome),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postAttr(t, ts, "abc", "discrete=true")
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	assert.Contains(t, body, "Can&#39;t mark discrete: it is home to entities that are away — return them first")
+}

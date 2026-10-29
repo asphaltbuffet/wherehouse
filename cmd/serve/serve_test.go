@@ -76,6 +76,10 @@ func (f *fakeApp) ReparentEntity(_ context.Context, _ app.ReparentEntityRequest)
 	return app.EntityResult{}, nil
 }
 
+func (f *fakeApp) UseEntity(_ context.Context, _ app.UseEntityRequest) (app.EntityResult, error) {
+	return app.EntityResult{}, nil
+}
+
 func (f *fakeApp) FindMoveDestinations(
 	_ context.Context, _ string, _ app.FindEntitiesRequest,
 ) ([]app.FindResult, error) {

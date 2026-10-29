@@ -490,6 +490,10 @@ h1, h2, h3 {
   background: var(--color-raised);
   font-size: var(--font-size-sm);
 }
+.tag-away {
+  border-color: var(--status-borrowed);
+  color: var(--status-borrowed);
+}
 
 .detail-facts {
   display: flex;

@@ -18,10 +18,12 @@
   {{end}}
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
   {{template "status_line" .Entity}}
+  {{if .Displaced}}<span class="tag tag-away">away</span>{{end}}
   {{with .Entity.Tags}}<ul class="tag-list" aria-label="Tags">{{range .}}<li class="tag">{{.}}</li>{{end}}</ul>{{end}}
   <dl class="detail-facts">
     {{if .Entity.Locked}}<div><dt>Locked</dt><dd>yes</dd></div>{{end}}
     {{if .Entity.Discrete}}<div><dt>Discrete</dt><dd>yes</dd></div>{{end}}
+    {{if .Displaced}}<div><dt>Home</dt><dd>{{.Entity.HomeLabel}}</dd></div>{{end}}
     <div><dt>Date added</dt><dd class="mono">{{.DateAdded}}</dd></div>
     {{if .Removed}}<div><dt>Last location</dt><dd>{{.Entity.FullPathDisplay}}</dd></div>{{end}}
   </dl>
@@ -84,6 +86,7 @@
         Loan
       </button>
       {{end}}
+      {{if not .UseForm}}
       {{if .MoveForm}}
       {{template "move_form" .MoveForm}}
       {{else if .CanMove}}
@@ -97,6 +100,18 @@
               title="{{.MoveBlockedReason}}">
         Move
       </button>
+      {{end}}
+      {{end}}
+      {{if not .MoveForm}}
+      {{if .UseForm}}
+      {{template "move_form" .UseForm}}
+      {{else if .CanUse}}
+      <button class="btn-ghost detail-action-btn" data-action="use"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/use"
+              hx-target="#entity-detail" hx-swap="outerHTML">
+        Use
+      </button>
+      {{end}}
       {{end}}
       {{template "attr_button" .LockAction}}
       {{template "attr_button" .DiscreteAction}}

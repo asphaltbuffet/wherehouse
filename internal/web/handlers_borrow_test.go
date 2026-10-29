@@ -23,9 +23,9 @@ func TestHandleBorrowForm_DefaultParent(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
 		{EntityID: "nails", DisplayName: "Box of Nails", FullPathDisplay: "Garage:Box of Nails",
-			ParentID: "g", Discrete: true, Status: inventory.EntityStatusOk},
+			ParentID: "g", HomeID: "g", Discrete: true, Status: inventory.EntityStatusOk},
 		{EntityID: "old", DisplayName: "Old Shelf", FullPathDisplay: "Garage:Old Shelf",
-			ParentID: "g", Status: inventory.EntityStatusRemoved},
+			ParentID: "g", HomeID: "g", Status: inventory.EntityStatusRemoved},
 		{EntityID: "rootbox", DisplayName: "Crate", FullPathDisplay: "Crate",
 			Discrete: true, Status: inventory.EntityStatusOk},
 		{EntityID: "case", DisplayName: "Drill Case", FullPathDisplay: "Drill Case",
@@ -115,7 +115,7 @@ func TestHandleBorrow_CreatesUnderParent(t *testing.T) {
 			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
 		},
 		borrowResults: []app.EntityResult{
-			{EntityID: "n", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g",
+			{EntityID: "n", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
 				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 		},
 	}
@@ -274,7 +274,7 @@ func TestHandleBorrow_TriggerUsesCreatedParent(t *testing.T) {
 			{EntityID: "binB", DisplayName: "Bin", FullPathDisplay: "Bin", Status: inventory.EntityStatusOk},
 		},
 		borrowResults: []app.EntityResult{
-			{EntityID: "n", DisplayName: "Drill", FullPathDisplay: "Bin:Drill", ParentID: "binA",
+			{EntityID: "n", DisplayName: "Drill", FullPathDisplay: "Bin:Drill", ParentID: "binA", HomeID: "binA",
 				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 		},
 	}
