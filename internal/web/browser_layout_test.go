@@ -53,10 +53,8 @@ func TestBrowserNoHorizontalOverflow(t *testing.T) {
 
 func TestBrowserTouchTargetSize(t *testing.T) {
 	t.Parallel()
-	forEachDevice(t, func(s *session) {
-		if !s.touch {
-			s.t.Skip("touch devices only: `pointer: coarse` sizing")
-		}
+	// `pointer: coarse` sizing applies only on touch screens.
+	forDevices(t, touchDevices(), sessionConfig{}, func(s *session) {
 		deep := s.createDeepPath()
 		s.createEntity("Spare Fuse", deep.EntityID) // a child row to tap
 

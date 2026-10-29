@@ -20,9 +20,7 @@ var darkScheme = sessionConfig{colorScheme: playwright.ColorSchemeDark}
 
 func TestBrowserDarkModeWide(t *testing.T) {
 	t.Parallel()
-	forEachDeviceWith(t, darkScheme, func(s *session) {
-		s.requireLayout(wide)
-
+	forDevices(t, devicesIn(wide), darkScheme, func(s *session) {
 		s.visit("/")
 		s.requireDarkPage()
 	})
@@ -30,9 +28,7 @@ func TestBrowserDarkModeWide(t *testing.T) {
 
 func TestBrowserDarkModeNarrow(t *testing.T) {
 	t.Parallel()
-	forEachDeviceWith(t, darkScheme, func(s *session) {
-		s.requireLayout(narrow)
-
+	forDevices(t, devicesIn(narrow), darkScheme, func(s *session) {
 		s.visit("/")
 		s.requireDarkPage()
 		// The drawer paints its own background over the page.

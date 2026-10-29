@@ -113,7 +113,6 @@ type session struct {
 	app    *app.App
 	page   playwright.Page
 	layout layout
-	touch  bool // the device has a touch screen, so `pointer: coarse` applies
 }
 
 // sessionConfig adjusts a session's browser context; the zero value is the
@@ -130,18 +129,45 @@ type sessionConfig struct {
 // server and database seeded through s.app.
 func forEachDevice(t *testing.T, fn func(s *session)) {
 	t.Helper()
-	forEachDeviceWith(t, sessionConfig{}, fn)
+	forDevices(t, devices, sessionConfig{}, fn)
 }
 
-// forEachDeviceWith is forEachDevice with each session adjusted by cfg.
-func forEachDeviceWith(t *testing.T, cfg sessionConfig, fn func(s *session)) {
+// forDevices is forEachDevice over ds only, with each session adjusted by
+// cfg. Select ds by capability (devicesIn, touchDevices), never by name, so
+// the matrix can change without editing tests (ADR 0038).
+func forDevices(t *testing.T, ds []device, cfg sessionConfig, fn func(s *session)) {
 	t.Helper()
-	for _, d := range devices {
+	// An empty selection would pass without testing anything.
+	require.NotEmpty(t, ds, "no device in the matrix matches")
+	for _, d := range ds {
 		t.Run(d.name, func(t *testing.T) {
 			t.Parallel()
 			fn(newSession(t, d, cfg))
 		})
 	}
+}
+
+// devicesIn returns the devices with layout l.
+func devicesIn(l layout) []device {
+	var ds []device
+	for _, d := range devices {
+		if d.layout == l {
+			ds = append(ds, d)
+		}
+	}
+	return ds
+}
+
+// touchDevices returns the devices with a touch screen, where
+// `pointer: coarse` applies.
+func touchDevices() []device {
+	var ds []device
+	for _, d := range devices {
+		if d.desc.HasTouch {
+			ds = append(ds, d)
+		}
+	}
+	return ds
 }
 
 func newSession(t *testing.T, d device, cfg sessionConfig) *session {
@@ -194,15 +220,7 @@ func newSession(t *testing.T, d device, cfg sessionConfig) *session {
 		_ = ctx.Close()
 	})
 
-	return &session{t: t, app: a, page: page, layout: d.layout, touch: d.desc.HasTouch}
-}
-
-// requireLayout skips the device subtest unless it has layout l.
-func (s *session) requireLayout(l layout) {
-	s.t.Helper()
-	if s.layout != l {
-		s.t.Skipf("%s layout only", l)
-	}
+	return &session{t: t, app: a, page: page, layout: d.layout}
 }
 
 func saveArtifacts(t *testing.T, ctx playwright.BrowserContext, page playwright.Page, dir string) {

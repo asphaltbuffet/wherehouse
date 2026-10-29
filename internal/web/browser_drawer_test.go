@@ -13,8 +13,7 @@ import (
 
 func TestBrowserDrawerNarrow(t *testing.T) {
 	t.Parallel()
-	forEachDevice(t, func(s *session) {
-		s.requireLayout(narrow)
+	forDevices(t, devicesIn(narrow), sessionConfig{}, func(s *session) {
 		s.createEntity("Garage", "")
 
 		s.visit("/")
@@ -34,8 +33,7 @@ func TestBrowserDrawerNarrow(t *testing.T) {
 
 func TestBrowserDrawerWide(t *testing.T) {
 	t.Parallel()
-	forEachDevice(t, func(s *session) {
-		s.requireLayout(wide)
+	forDevices(t, devicesIn(wide), sessionConfig{}, func(s *session) {
 		s.createEntity("Garage", "")
 
 		s.visit("/")
