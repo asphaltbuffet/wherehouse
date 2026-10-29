@@ -37,6 +37,12 @@ const (
 	// EntityBorrowedEvent records that a new entity was created directly in borrowed status.
 	// This is atomic — there is no preceding EntityCreatedEvent.
 	EntityBorrowedEvent // entity.borrowed
+	// EntityUsedEvent records a temporary move: the parent changed, the home did not.
+	EntityUsedEvent // entity.used
+	// EntityReturnedHomeEvent records a displaced entity moving back to its home.
+	EntityReturnedHomeEvent // entity.returned_home
+	// EntityRehomedEvent records an entity's home changing to its current parent, with no reparent.
+	EntityRehomedEvent // entity.rehomed
 )
 
 var eventTypeByName = map[string]EventType{
@@ -53,6 +59,20 @@ var eventTypeByName = map[string]EventType{
 	EntityDiscreteSetEvent.String():     EntityDiscreteSetEvent,
 	EntityDiscreteClearedEvent.String(): EntityDiscreteClearedEvent,
 	EntityBorrowedEvent.String():        EntityBorrowedEvent,
+	EntityUsedEvent.String():            EntityUsedEvent,
+	EntityReturnedHomeEvent.String():    EntityReturnedHomeEvent,
+	EntityRehomedEvent.String():         EntityRehomedEvent,
+}
+
+// Relocates reports whether the event changes an entity's parent, and so
+// emits (live) or is followed by (log) EntityPathChangedEvents for descendants.
+func (t EventType) Relocates() bool {
+	switch t { //nolint:exhaustive // only parent-changing events relocate
+	case EntityReparentedEvent, EntityUsedEvent, EntityReturnedHomeEvent:
+		return true
+	default:
+		return false
+	}
 }
 
 // ParseEventType converts a string to an EventType, returning an error for unknown values.

@@ -35,3 +35,23 @@ func TestEventType_SQLRoundtrip(t *testing.T) {
 	require.NoError(t, scanned.Scan("entity.renamed"))
 	assert.Equal(t, inventory.EntityRenamedEvent, scanned)
 }
+
+func TestEventType_Relocates(t *testing.T) {
+	assert.True(t, inventory.EntityReparentedEvent.Relocates())
+	assert.True(t, inventory.EntityUsedEvent.Relocates())
+	assert.True(t, inventory.EntityReturnedHomeEvent.Relocates())
+	assert.False(t, inventory.EntityRehomedEvent.Relocates(), "rehome changes home only, no paths move")
+	assert.False(t, inventory.EntityStatusChangedEvent.Relocates())
+}
+
+func TestParseEventType_HomeEvents(t *testing.T) {
+	for name, want := range map[string]inventory.EventType{
+		"entity.used":          inventory.EntityUsedEvent,
+		"entity.returned_home": inventory.EntityReturnedHomeEvent,
+		"entity.rehomed":       inventory.EntityRehomedEvent,
+	} {
+		got, err := inventory.ParseEventType(name)
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	}
+}
