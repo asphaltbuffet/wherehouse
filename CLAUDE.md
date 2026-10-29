@@ -11,6 +11,7 @@ Use **jujutsu** (`jj`), not `git`. Never run `git` commands directly.
 ```bash
 mise run build       # go build → dist/wherehouse
 mise run test        # gotestsum, race detector, coverage → bin/coverage.out
+mise run test-browser # browser tests across the device matrix (build tag `browser`, ADR 0038)
 mise run lint        # golangci-lint --fix → bin/golangci-lint.html
 mise run generate    # go generate ./... (stringer for iota enums)
 mise run mock        # regenerate mocks via mockery
@@ -30,7 +31,7 @@ Always run `mise run lint` and `mise run test` before committing.
 
 ## Task Completion Checklist
 
-1. Fix all warnings (`mise run lint`, `mise run test`, compiler)
+1. Fix all warnings (`mise run lint`, `mise run test`, compiler); also run `mise run test-browser` when changing `internal/web` templates or assets
 2. Describe changes with conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`); add `Closes #N` when resolving an issue
 3. Add a `changie new` fragment for user-visible changes to the binary or image (not for docs-only changes)
 4. After features or fixes, update README.md, `docs/`, and CONTEXT.md where behavior or terminology changed
@@ -80,14 +81,14 @@ internal/
   nanoid/                # 10-char alphanumeric NanoID generation
   styles/                # lipgloss appStyles singleton
   version/               # build version info
-  apptesting/            # exported test helper: OpenApp(t) wires *app.App over in-memory SQLite
+  apptesting/            # exported test helper: OpenApp(t) wires *app.App over a file-backed SQLite DB under t.TempDir()
 ```
 
 ## Key Patterns
 
 ### Command Constructor Pattern
 Every command package exposes two constructors:
-- `NewXxxCmd(a *app.App)` — for tests (inject real App over in-memory SQLite)
+- `NewXxxCmd(a *app.App)` — for tests (inject real App over a temp SQLite DB)
 - `NewDefaultXxxCmd()` — for production wiring
 
 Registered in `cmd/root.go` via `NewDefaultXxxCmd()`.

@@ -111,6 +111,75 @@
           '';
 
           CGO_ENABLED = "1";
+
+          # Browser tests (ADR 0038) run browsers downloaded by playwright-go,
+          # which nix-ld loads; it resolves their shared libraries from here.
+          NIX_LD_LIBRARY_PATH = lib.makeLibraryPath (with pkgs; [
+            alsa-lib
+            at-spi2-atk
+            cairo
+            cups
+            dbus
+            enchant
+            expat
+            flite
+            fontconfig
+            freetype
+            gcc.cc.lib
+            gdk-pixbuf
+            glib
+            graphene
+            gst_all_1.gst-plugins-bad
+            gst_all_1.gst-plugins-base
+            gst_all_1.gstreamer
+            gtk3
+            gtk4
+            harfbuzz
+            harfbuzzFull # libharfbuzz-icu only
+            hyphen
+            icu74
+            lcms2
+            libavif
+            libdrm
+            libepoxy
+            libevent
+            libgbm
+            libgcrypt
+            libgpg-error
+            libjpeg8
+            libmanette
+            libopus
+            libpng
+            libpsl
+            libsecret
+            libtasn1
+            libwebp
+            libx11
+            libxcb
+            libxcomposite
+            libxcursor
+            libxdamage
+            libxext
+            libxfixes
+            libxi
+            libxkbcommon
+            libxml2_13 # WebKit links libxml2.so.2; libxml2 >= 2.14 is .so.16
+            libxrandr
+            libxrender
+            libxslt
+            nghttp2
+            nspr
+            nss
+            pango
+            sqlite
+            systemdLibs
+            vulkan-loader
+            wayland
+            zlib
+          ]);
+          # Playwright's host check runs Nix's ldd, which bypasses nix-ld and
+          # reports every library above as missing.
+          PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "1";
         };
       }
     )
