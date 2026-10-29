@@ -18,16 +18,16 @@ func TestBrowserMove(t *testing.T) {
 		shed := s.createEntity("Shed", "")
 
 		s.visit("/entities/" + drill.EntityID)
-		require.NoError(s.t, s.button("Move").Click())
-		require.NoError(s.t, s.page.GetByLabel("Move to").Fill("Shed"))
+		s.click(s.button("Move"))
+		s.fill(s.page.GetByLabel("Move to"), "Shed")
 		options := s.page.GetByRole(*playwright.AriaRoleList, playwright.PageGetByRoleOptions{
 			Name: "Matching locations",
 		})
-		require.NoError(s.t, options.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
+		s.click(options.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
 			Name:  "Shed",
 			Exact: new(true),
-		}).Click())
-		require.NoError(s.t, s.button("Move").Click())
+		}))
+		s.click(s.button("Move"))
 
 		path := s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{Name: "Location path"})
 		require.NoError(s.t, expect.Locator(path).ToHaveText("Inventory › Shed › Drill"))

@@ -17,16 +17,16 @@ func TestBrowserBorrow(t *testing.T) {
 	t.Parallel()
 	forEachDevice(t, func(s *session) {
 		s.visit("/")
-		require.NoError(s.t, s.button("Borrow").Click())
+		s.click(s.button("Borrow"))
 		dialog := s.addDialog()
 		require.NoError(s.t, expect.Locator(dialog).ToBeVisible())
 		name := dialog.GetByLabel("Name", playwright.LocatorGetByLabelOptions{Exact: new(true)})
-		require.NoError(s.t, name.Fill("Ladder"))
-		require.NoError(s.t, dialog.GetByLabel("Borrowed from").Fill("Bob"))
-		require.NoError(s.t, dialog.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
+		s.fill(name, "Ladder")
+		s.fill(dialog.GetByLabel("Borrowed from"), "Bob")
+		s.click(dialog.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
 			Name:  "Borrow",
 			Exact: new(true),
-		}).Click())
+		}))
 
 		require.NoError(s.t, expect.Locator(dialog).ToBeHidden())
 		require.NoError(s.t, expect.Locator(s.detailHeading("Ladder")).ToBeVisible())
@@ -44,9 +44,9 @@ func TestBrowserLoan(t *testing.T) {
 		ladder := s.createEntity("Ladder", "")
 
 		s.visit("/entities/" + ladder.EntityID)
-		require.NoError(s.t, s.button("Loan").Click())
-		require.NoError(s.t, s.page.GetByLabel("Loaned to").Fill("Carol"))
-		require.NoError(s.t, s.button("Loan").Click())
+		s.click(s.button("Loan"))
+		s.fill(s.page.GetByLabel("Loaned to"), "Carol")
+		s.click(s.button("Loan"))
 
 		require.NoError(s.t, expect.Locator(s.mainText("Loaned to Carol")).ToBeVisible())
 		got := s.stored(ladder.EntityID)
@@ -63,7 +63,7 @@ func TestBrowserReturnBorrowed(t *testing.T) {
 		s.acceptDialogs()
 
 		s.visit("/entities/" + ladder.EntityID)
-		require.NoError(s.t, s.button("Return").Click())
+		s.click(s.button("Return"))
 
 		// Returning a borrowed entity removes it and shows its parent.
 		require.NoError(s.t, expect.Locator(s.detailHeading("Garage")).ToBeVisible())
@@ -80,7 +80,7 @@ func TestBrowserReturnRefusedWithChildren(t *testing.T) {
 		s.acceptDialogs()
 
 		s.visit("/entities/" + crate.EntityID)
-		require.NoError(s.t, s.button("Return").Click())
+		s.click(s.button("Return"))
 
 		alert := s.page.GetByRole(*playwright.AriaRoleMain).GetByRole(*playwright.AriaRoleAlert)
 		require.NoError(s.t, expect.Locator(alert).ToContainText("still contains other entities"))

@@ -21,11 +21,11 @@ func TestBrowserDrawerNarrow(t *testing.T) {
 		require.NoError(s.t, expect.Locator(s.treePanel()).ToBeHidden())
 		require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
 
-		require.NoError(s.t, s.treeToggle().Click())
+		s.click(s.treeToggle())
 		require.NoError(s.t, expect.Locator(s.treePanel()).ToBeVisible())
 		require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "true"))
 
-		require.NoError(s.t, s.treeRow("Garage").Click())
+		s.click(s.treeRow("Garage"))
 		require.NoError(s.t, expect.Locator(s.detailHeading("Garage")).ToBeVisible())
 		require.NoError(s.t, expect.Locator(s.treePanel()).ToBeHidden())
 		require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))

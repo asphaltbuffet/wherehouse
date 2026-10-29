@@ -230,6 +230,40 @@ func (s *session) visit(path string) {
 	require.NoError(s.t, err)
 }
 
+// htmxBusy matches what htmx is still working on: in-flight requests, swaps,
+// and swapped-in content it has not yet processed. New content gets its hx-*
+// listeners only when the settle step clears htmx-added, so a control acted
+// on before that is inert.
+const htmxBusy = ".htmx-request, .htmx-swapping, .htmx-settling, .htmx-added"
+
+// settle waits for htmx to go idle.
+func (s *session) settle() {
+	s.t.Helper()
+	require.NoError(s.t, expect.Locator(s.page.Locator(htmxBusy)).ToHaveCount(0))
+}
+
+// click clicks l once htmx has settled. Act through click, fill, and
+// typeText so a control swapped in by the previous action is live.
+func (s *session) click(l playwright.Locator) {
+	s.t.Helper()
+	s.settle()
+	require.NoError(s.t, l.Click())
+}
+
+// fill sets l's value once htmx has settled.
+func (s *session) fill(l playwright.Locator, value string) {
+	s.t.Helper()
+	s.settle()
+	require.NoError(s.t, l.Fill(value))
+}
+
+// typeText types text into l key by key once htmx has settled.
+func (s *session) typeText(l playwright.Locator, text string) {
+	s.t.Helper()
+	s.settle()
+	require.NoError(s.t, l.PressSequentially(text))
+}
+
 // createEntity seeds an entity through the app layer; parentID "" is a root.
 func (s *session) createEntity(name, parentID string) app.EntityResult {
 	s.t.Helper()
@@ -250,7 +284,7 @@ func (s *session) openTree() {
 		return
 	}
 	toggle := s.treeToggle()
-	require.NoError(s.t, toggle.Click())
+	s.click(toggle)
 	require.NoError(s.t, expect.Locator(toggle).ToHaveAttribute("aria-expanded", "true"))
 }
 
@@ -295,8 +329,11 @@ func (s *session) treeRow(name string) playwright.Locator {
 // expands without loading the item's detail, and waits for its children.
 func (s *session) expandTreeItem(name string) {
 	s.t.Helper()
-	require.NoError(s.t, s.treeRow(name).Locator(".chevron").Click())
+	s.click(s.treeRow(name).Locator(".chevron"))
+	// tree.js sets aria-expanded before the children arrive; settle waits
+	// for them to load and become clickable.
 	require.NoError(s.t, expect.Locator(s.treeItem(name)).ToHaveAttribute("aria-expanded", "true"))
+	s.settle()
 }
 
 // button is the button named name in the main content area.

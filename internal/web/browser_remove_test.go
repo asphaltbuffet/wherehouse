@@ -25,10 +25,10 @@ func TestBrowserRemove(t *testing.T) {
 		require.NoError(s.t, expect.Locator(s.treeItem("Drill")).ToBeVisible())
 		s.closeTree()
 
-		require.NoError(s.t, s.childLink("Drill").Click())
+		s.click(s.childLink("Drill"))
 		require.NoError(s.t, expect.Locator(s.detailHeading("Drill")).ToBeVisible())
-		require.NoError(s.t, s.button("Remove").Click())
-		require.NoError(s.t, s.button("Remove").Click()) // the form's confirm button
+		s.click(s.button("Remove"))
+		s.click(s.button("Remove")) // the form's confirm button
 
 		require.NoError(s.t, expect.Locator(s.detailHeading("Garage")).ToBeVisible())
 		require.NoError(s.t, expect.Locator(s.childLink("Hammer")).ToBeVisible())

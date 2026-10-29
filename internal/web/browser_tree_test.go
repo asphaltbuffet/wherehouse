@@ -19,7 +19,7 @@ func TestBrowserTreeNavigation(t *testing.T) {
 		s.openTree()
 		s.expandTreeItem("Garage")
 		s.expandTreeItem("Toolbox")
-		require.NoError(s.t, s.treeRow("Drawer").Click())
+		s.click(s.treeRow("Drawer"))
 
 		require.NoError(s.t, expect.Locator(s.detailHeading("Drawer")).ToBeVisible())
 		require.NoError(s.t, expect.Locator(s.treeItem("Drawer")).ToHaveAttribute("aria-selected", "true"))

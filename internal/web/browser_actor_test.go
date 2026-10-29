@@ -23,7 +23,7 @@ func TestBrowserActorHeader(t *testing.T) {
 		Exact: new(true),
 	})).ToBeVisible())
 
-	require.NoError(s.t, s.button("Add root").Click())
+	s.click(s.button("Add root"))
 	s.submitAddForm("Garage")
 	require.NoError(s.t, expect.Locator(s.childLink("Garage")).ToBeVisible())
 

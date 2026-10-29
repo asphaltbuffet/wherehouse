@@ -15,7 +15,7 @@ func TestBrowserAddUnderParent(t *testing.T) {
 		garage := s.createEntity("Garage", "")
 
 		s.visit("/entities/" + garage.EntityID)
-		require.NoError(s.t, s.button("Add child").Click())
+		s.click(s.button("Add child"))
 		s.submitAddForm("Toolbox")
 
 		require.NoError(s.t, expect.Locator(s.detailHeading("Garage")).ToBeVisible())
@@ -28,7 +28,7 @@ func TestBrowserAddAtRoot(t *testing.T) {
 	t.Parallel()
 	forEachDevice(t, func(s *session) {
 		s.visit("/")
-		require.NoError(s.t, s.button("Add root").Click())
+		s.click(s.button("Add root"))
 		s.submitAddForm("Garage")
 
 		require.NoError(s.t, expect.Locator(s.childLink("Garage")).ToBeVisible())
@@ -49,10 +49,10 @@ func (s *session) submitAddForm(name string) {
 	s.t.Helper()
 	dialog := s.addDialog()
 	require.NoError(s.t, expect.Locator(dialog).ToBeVisible())
-	require.NoError(s.t, dialog.GetByLabel("Display Name").Fill(name))
-	require.NoError(s.t, dialog.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
+	s.fill(dialog.GetByLabel("Display Name"), name)
+	s.click(dialog.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
 		Name:  "Add",
 		Exact: new(true),
-	}).Click())
+	}))
 	require.NoError(s.t, expect.Locator(dialog).ToBeHidden())
 }

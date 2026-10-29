@@ -16,10 +16,10 @@ func TestBrowserRename(t *testing.T) {
 		bench := s.createEntity("Bench", "")
 
 		s.visit("/entities/" + bench.EntityID)
-		require.NoError(s.t, s.button("Edit name").Click())
+		s.click(s.button("Edit name"))
 		name := s.page.GetByLabel("New name")
-		require.NoError(s.t, name.Fill("Workbench"))
-		require.NoError(s.t, s.button("Save").Click())
+		s.fill(name, "Workbench")
+		s.click(s.button("Save"))
 
 		require.NoError(s.t, expect.Locator(s.detailHeading("Workbench")).ToBeVisible())
 		s.openTree()
