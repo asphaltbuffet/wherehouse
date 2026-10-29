@@ -123,3 +123,23 @@ func isRootEntity(e app.EntityResult) bool {
 
 	return p.Depth() == 1
 }
+
+// hidesRootChoice reports whether the move form omits "Move to root". Moving a
+// displaced entity to where it already is re-homes it, so for it the choice is
+// hidden only when the home is the root (going home is a return); otherwise it
+// is hidden when the entity already sits at the root (ADR 0039).
+func hidesRootChoice(e app.EntityResult, verb string) bool {
+	if verb == verbMove && e.IsDisplaced() {
+		return e.HomeID == ""
+	}
+	return isRootEntity(e)
+}
+
+// relocationParam reads the ?verb= query parameter of a destination search;
+// anything but "use" is a move.
+func relocationParam(r *http.Request) app.Relocation {
+	if r.URL.Query().Get("verb") == verbUse {
+		return app.RelocationUse
+	}
+	return app.RelocationMove
+}

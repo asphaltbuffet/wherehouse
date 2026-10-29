@@ -1,13 +1,13 @@
 {{define "move_form"}}
-<form class="loan-form form-panel" data-action="move"
-      hx-post="/entities/{{.EntityID}}/actions/move"
+<form class="loan-form form-panel" data-action="{{.Verb}}"
+      hx-post="/entities/{{.EntityID}}/actions/{{.Verb}}"
       hx-target="#entity-detail" hx-swap="outerHTML">
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
-  <label for="move_parent_q">Move to</label>
+  <label for="move_parent_q">{{if eq .Verb "use"}}Use at{{else}}Move to{{end}}</label>
   <input type="hidden" name="destination" value="" data-parent-input>
   <div class="parent-chosen">
     <span data-parent-label>(choose a destination)</span>
-    {{if not .AtRoot}}
+    {{if and (not .AtRoot) (eq .Verb "move")}}
     <button type="button" class="btn-link" data-action="clear-parent"
             data-parent-value="root">Move to root</button>
     {{end}}
@@ -15,7 +15,7 @@
   <input id="move_parent_q" type="search" name="q" autocomplete="off" autofocus
          placeholder="Search locations…" data-parent-search
          hx-get="/entities/parent-options"
-         hx-vals='{"moving": "{{.EntityID}}"}'
+         hx-vals='{"moving": "{{.EntityID}}", "verb": "{{.Verb}}"}'
          hx-trigger="input changed delay:200ms"
          hx-target="#move_parent_options"
          hx-swap="innerHTML"
@@ -24,7 +24,7 @@
   <label for="move_note">Note (optional)</label>
   <input id="move_note" type="text" name="note" value="{{.Note}}">
   <div class="loan-form-buttons">
-    <button type="submit" class="btn-primary">Move</button>
+    <button type="submit" class="btn-primary">{{if eq .Verb "use"}}Use{{else}}Move{{end}}</button>
     <button type="button" class="btn-ghost"
             hx-get="/entities/{{.EntityID}}"
             hx-target="#entity-detail" hx-swap="outerHTML">Cancel</button>

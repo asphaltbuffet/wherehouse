@@ -61,7 +61,7 @@ func TestIndex_HomeListsRoots(t *testing.T) {
 		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk,
 			HasChildren: true},
 		{EntityID: "s", DisplayName: "Shed", FullPathDisplay: "Shed", Status: inventory.EntityStatusOk},
-		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g",
+		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g", HomeID: "g",
 			Status: inventory.EntityStatusOk},
 	}}
 	ts := newTestServer(t, fake)
@@ -434,6 +434,32 @@ func TestFullPages_ShareShell(t *testing.T) {
 				`aria-controls="tree-panel" aria-expanded="false">Inventory</button>`)
 			assert.Contains(t, body, `<div id="tree-backdrop" class="tree-backdrop"></div>`)
 			assert.Contains(t, body, `<span class="app-brand-name">Wherehouse</span>`)
+		})
+	}
+}
+
+func TestHandleParentOptions_PassesRelocation(t *testing.T) {
+	for _, tt := range []struct {
+		query string
+		want  app.Relocation
+	}{
+		{"moving=abc", app.RelocationMove},
+		{"moving=abc&verb=move", app.RelocationMove},
+		{"moving=abc&verb=use", app.RelocationUse},
+		{"moving=abc&verb=bogus", app.RelocationMove},
+	} {
+		t.Run(tt.query, func(t *testing.T) {
+			fake := &fakeApp{}
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=x&" + tt.query)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "abc", fake.lastMovingID)
+			assert.Equal(t, tt.want, fake.lastRelocation)
 		})
 	}
 }

@@ -24,6 +24,26 @@ type EntityReparentedPayload struct {
 	NewParentID *string `json:"new_parent_id,omitempty"`
 }
 
+// EntityUsedPayload is the JSON payload for an EntityUsedEvent.
+type EntityUsedPayload struct {
+	EntityID    string  `json:"entity_id"`
+	NewParentID *string `json:"new_parent_id,omitempty"`
+}
+
+// EntityReturnedHomePayload is the JSON payload for an EntityReturnedHomeEvent.
+// ParentID is the home the entity returned to, stated explicitly so the event
+// is self-describing (nil = root).
+type EntityReturnedHomePayload struct {
+	EntityID string  `json:"entity_id"`
+	ParentID *string `json:"parent_id,omitempty"`
+}
+
+// EntityRehomedPayload is the JSON payload for an EntityRehomedEvent.
+type EntityRehomedPayload struct {
+	EntityID string  `json:"entity_id"`
+	HomeID   *string `json:"home_id,omitempty"`
+}
+
 // EntityPathChangedPayload is the JSON payload for an EntityPathChangedEvent.
 type EntityPathChangedPayload struct {
 	EntityID          string `json:"entity_id"`

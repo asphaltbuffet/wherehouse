@@ -129,6 +129,11 @@ func formatLabel(e app.EntityResult, isMatch, verbose bool, s *styles.Styles) st
 		b.WriteString(" 🔒")
 	}
 
+	if e.IsDisplaced() {
+		b.WriteString("  ")
+		b.WriteString(s.WarningText().Render("→ home: " + e.HomeLabel()))
+	}
+
 	if verbose {
 		for _, tag := range e.Tags {
 			b.WriteString("  ")

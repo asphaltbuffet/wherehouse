@@ -219,3 +219,76 @@ func TestRunList_JSONIncludesTags(t *testing.T) {
 	require.Len(t, tags, 1)
 	assert.Equal(t, "dewalt", tags[0])
 }
+
+// seedDisplaced builds Garage{Toolbox{Socket}, Hammer}, Shed{Saw}, Deck, then
+// uses Toolbox and Saw onto Deck.
+func seedDisplaced(t *testing.T, a *app.App) {
+	t.Helper()
+	ctx := t.Context()
+	mk := func(name, parent string) app.EntityResult {
+		e, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: name, ParentID: apptesting.MustLookupID(t, a, parent), ActorID: "t",
+		})
+		require.NoError(t, err)
+		return e
+	}
+	mk("Garage", "")
+	mk("Shed", "")
+	deck := mk("Deck", "")
+	toolbox := mk("Toolbox", "Garage")
+	mk("Socket", "Garage:Toolbox")
+	saw := mk("Saw", "Shed")
+	mk("Hammer", "Garage")
+	for _, id := range []string{toolbox.EntityID, saw.EntityID} {
+		_, err := a.UseEntity(ctx, app.UseEntityRequest{EntityID: id, NewParentID: deck.EntityID, ActorID: "t"})
+		require.NoError(t, err)
+	}
+}
+
+func runListJSON(t *testing.T, a *app.App, args ...string) []app.ListItem {
+	t.Helper()
+	cmd := listcmd.NewListCmd(a)
+	cmd.SetContext(context.WithValue(t.Context(), config.ConfigKey, apptesting.NewTestConfig(t, apptesting.WithJSON())))
+	cmd.SetArgs(args)
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+	var items []app.ListItem
+	if stdout.Len() > 0 {
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &items))
+	}
+	return items
+}
+
+func TestList_DisplacedFilterAndHomeUnder(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedDisplaced(t, a)
+
+	paths := func(args ...string) []string {
+		var ps []string
+		for _, it := range runListJSON(t, a, args...) {
+			ps = append(ps, it.Path)
+		}
+		return ps
+	}
+	assert.ElementsMatch(t, []string{"Deck:Toolbox", "Deck:Saw"}, paths("--displaced"),
+		"socket travels with toolbox: not displaced")
+	assert.ElementsMatch(t, []string{"Deck:Toolbox"}, paths("--displaced", "--home-under", "Garage"))
+	assert.ElementsMatch(t, []string{"Deck:Saw"}, paths("--home-under", "Shed", "--displaced"))
+	assert.ElementsMatch(t, []string{"Deck:Toolbox", "Deck:Saw"}, paths("--displaced", "--under", "Deck"))
+	assert.Empty(t, paths("--displaced", "--status", "missing"))
+
+	for _, it := range runListJSON(t, a, "--displaced") {
+		assert.NotEmpty(t, it.Home)
+	}
+}
+
+func TestList_TextShowsHomeOnDisplacedRows(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedDisplaced(t, a)
+	out := runCmd(t, a)
+	assert.Contains(t, out, "home: Garage")
+	assert.Contains(t, out, "home: Shed")
+	assert.NotContains(t, out, "home: Garage:Toolbox")
+}

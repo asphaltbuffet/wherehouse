@@ -41,6 +41,8 @@ Locked entities cannot be moved. Missing entities must be found first, and
 loaned entities must be returned first. The destination cannot be the entity
 itself, anything inside it, or its current parent.
 
+Move sets the entity's home as well as its location. To move something temporarily, use 'use'. Moving a displaced entity to where it already is makes that place its home; moving it to its home is rejected — use 'return'.
+
 Examples:
   wherehouse move "Garage:Toolbox:Wrench" --to "Workshop"
   wherehouse move "Garage:Toolbox" --to "Basement"`,
@@ -82,6 +84,10 @@ func runMove(cmd *cobra.Command, args []string, a *app.App) error {
 	out := cli.NewOutputWriterFromConfig(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg)
 	if out.IsJSON() {
 		return out.JSON(app.ToMoveOutput(updated))
+	}
+	if src.IsDisplaced() && src.ParentID == dest.EntityID {
+		out.Success(fmt.Sprintf("Rehomed %q at %s", srcPath, dest.FullPathDisplay))
+		return nil
 	}
 	out.Success(fmt.Sprintf("Moved %q → %s", srcPath, updated.FullPathDisplay))
 	return nil

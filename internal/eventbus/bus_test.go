@@ -145,6 +145,9 @@ func TestPayloadFactories_CoversAllEventTypes(t *testing.T) {
 		inventory.EntityPathChangedEvent,
 		inventory.EntityStatusChangedEvent,
 		inventory.EntityRemovedEvent,
+		inventory.EntityUsedEvent,
+		inventory.EntityReturnedHomeEvent,
+		inventory.EntityRehomedEvent,
 	}
 
 	for _, et := range allTypes {
@@ -154,4 +157,190 @@ func TestPayloadFactories_CoversAllEventTypes(t *testing.T) {
 		instance := factory()
 		assert.NotNil(t, instance, "factory() for %s returned nil", et)
 	}
+}
+
+func dispatch(t *testing.T, b *eventbus.Bus, et inventory.EventType, payload any) {
+	t.Helper()
+	_, err := b.Dispatch(t.Context(), et, "test", mustMarshal(t, payload), nil)
+	require.NoError(t, err)
+}
+
+func TestHome_FollowsCreateAndReparent(t *testing.T) {
+	ctx := t.Context()
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	created := func(id, name string, parent *string) {
+		dispatch(t, b, inventory.EntityCreatedEvent,
+			eventbus.EntityCreatedPayload{EntityID: id, DisplayName: name, ParentID: parent})
+	}
+	garage := "garage0001"
+	created(garage, "Garage", nil)
+	created("shed000001", "Shed", nil)
+	created("drill00001", "Drill", &garage)
+
+	e, err := s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	require.NotNil(t, e.HomeID)
+	assert.Equal(t, garage, *e.HomeID)
+
+	shed := "shed000001"
+	dispatch(t, b, inventory.EntityReparentedEvent,
+		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &shed})
+	e, err = s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	require.NotNil(t, e.HomeID)
+	assert.Equal(t, shed, *e.HomeID)
+	assert.False(t, e.IsDisplaced())
+
+	_, err = b.TruncateAndReplay(ctx)
+	require.NoError(t, err)
+	e, err = s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	require.NotNil(t, e.HomeID)
+	assert.Equal(t, shed, *e.HomeID, "replay must reproduce home")
+}
+
+func newTestBus(t *testing.T) (*store.Store, *eventbus.Bus) {
+	t.Helper()
+	s := openTestStore(t)
+	return s, eventbus.New(s)
+}
+
+func seedDrillInGarage(t *testing.T, b *eventbus.Bus) {
+	t.Helper()
+	create := func(id, name string, parent *string) {
+		t.Helper()
+		dispatch(t, b, inventory.EntityCreatedEvent,
+			eventbus.EntityCreatedPayload{EntityID: id, DisplayName: name, ParentID: parent})
+	}
+	garage, drill := "garage0001", "drill00001"
+	create(garage, "Garage", nil)
+	create("deck000001", "Deck", nil)
+	create(drill, "Drill", &garage)
+	create("bit0000001", "Bit", &drill)
+}
+
+func TestUsed_KeepsHomeAndPropagatesPaths(t *testing.T) {
+	ctx := t.Context()
+	s, b := newTestBus(t)
+	seedDrillInGarage(t, b)
+	deck := "deck000001"
+	useDrill(t, b, &deck)
+
+	drill, err := s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	assert.Equal(t, "Deck:Drill", drill.FullPathDisplay)
+	require.NotNil(t, drill.HomeID)
+	assert.Equal(t, "garage0001", *drill.HomeID)
+	assert.True(t, drill.IsDisplaced())
+
+	bit, err := s.GetEntity(ctx, "bit0000001")
+	require.NoError(t, err)
+	assert.Equal(t, "Deck:Drill:Bit", bit.FullPathDisplay)
+	assert.False(t, bit.IsDisplaced(), "descendants travel with the container")
+}
+
+func TestReturnedHome_And_Rehomed(t *testing.T) {
+	ctx := t.Context()
+	s, b := newTestBus(t)
+	seedDrillInGarage(t, b)
+	deck, garage := "deck000001", "garage0001"
+	useDrill(t, b, &deck)
+	returnDrill(t, b, &garage)
+
+	drill, err := s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	assert.Equal(t, "Garage:Drill", drill.FullPathDisplay)
+	assert.False(t, drill.IsDisplaced())
+
+	useDrill(t, b, &deck)
+	dispatch(t, b, inventory.EntityRehomedEvent, eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
+	drill, err = s.GetEntity(ctx, "drill00001")
+	require.NoError(t, err)
+	require.NotNil(t, drill.HomeID)
+	assert.Equal(t, deck, *drill.HomeID)
+	assert.False(t, drill.IsDisplaced())
+}
+
+func TestHomeEvents_ReplayEquivalence(t *testing.T) {
+	ctx := t.Context()
+	s, b := newTestBus(t)
+	seedDrillInGarage(t, b)
+	deck, garage := "deck000001", "garage0001"
+	useDrill(t, b, &deck)
+	returnDrill(t, b, &garage)
+	useDrill(t, b, &deck)
+	dispatch(t, b, inventory.EntityRehomedEvent,
+		eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
+	dispatch(t, b, inventory.EntityReparentedEvent,
+		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &garage})
+	useDrill(t, b, &deck)
+	dispatch(t, b, inventory.EntityReparentedEvent,
+		eventbus.EntityReparentedPayload{EntityID: "bit0000001", NewParentID: &garage})
+
+	before, err := s.ListAllEntities(ctx)
+	require.NoError(t, err)
+	eventsBefore, err := s.GetAllEvents(ctx)
+	require.NoError(t, err)
+
+	_, err = b.TruncateAndReplay(ctx)
+	require.NoError(t, err)
+
+	after, err := s.ListAllEntities(ctx)
+	require.NoError(t, err)
+	eventsAfter, err := s.GetAllEvents(ctx)
+	require.NoError(t, err)
+	assert.Len(t, eventsAfter, len(eventsBefore), "replay must not write events")
+	require.Len(t, after, len(before))
+	for i := range before {
+		assert.Equal(t, before[i].FullPathDisplay, after[i].FullPathDisplay)
+		assert.Equal(t, before[i].HomeID, after[i].HomeID)
+		assert.Equal(t, before[i].ParentID, after[i].ParentID)
+	}
+}
+
+func TestCountDisplacedWithHomeTx(t *testing.T) {
+	ctx := t.Context()
+	s, b := newTestBus(t)
+	seedDrillInGarage(t, b)
+	deck, garage := "deck000001", "garage0001"
+
+	count := func(homeID string) int {
+		t.Helper()
+		var n int
+		require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+			var err error
+			n, err = s.CountDisplacedWithHomeTx(ctx, tx, homeID)
+			return err
+		}))
+		return n
+	}
+
+	assert.Equal(t, 0, count(garage), "nothing is displaced yet")
+
+	useDrill(t, b, &deck)
+	assert.Equal(t, 1, count(garage), "the used drill is displaced from its garage home")
+	assert.Equal(t, 0, count(deck), "deck is not the drill's home")
+	assert.Equal(t, 0, count("drill00001"), "the bit travels with the drill and is not displaced")
+
+	returnDrill(t, b, &garage)
+	assert.Equal(t, 0, count(garage), "a drill returned home is no longer displaced")
+
+	useDrill(t, b, &deck)
+	assert.Equal(t, 1, count(garage), "using it again displaces it again")
+
+	dispatch(t, b, inventory.EntityRemovedEvent, eventbus.EntityRemovedPayload{EntityID: "drill00001"})
+	assert.Equal(t, 0, count(garage), "a removed displaced entity is not counted")
+}
+
+func useDrill(t *testing.T, b *eventbus.Bus, parent *string) {
+	t.Helper()
+	dispatch(t, b, inventory.EntityUsedEvent,
+		eventbus.EntityUsedPayload{EntityID: "drill00001", NewParentID: parent})
+}
+
+func returnDrill(t *testing.T, b *eventbus.Bus, parent *string) {
+	t.Helper()
+	dispatch(t, b, inventory.EntityReturnedHomeEvent,
+		eventbus.EntityReturnedHomePayload{EntityID: "drill00001", ParentID: parent})
 }

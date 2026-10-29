@@ -21,11 +21,14 @@ func _() {
 	_ = x[EntityDiscreteSetEvent-11]
 	_ = x[EntityDiscreteClearedEvent-12]
 	_ = x[EntityBorrowedEvent-13]
+	_ = x[EntityUsedEvent-14]
+	_ = x[EntityReturnedHomeEvent-15]
+	_ = x[EntityRehomedEvent-16]
 }
 
-const _EventType_name = "entity.createdentity.renamedentity.reparentedentity.path_changedentity.status_changedentity.removedentity.tag_addedentity.tag_removedentity.lockedentity.unlockedentity.discrete_setentity.discrete_clearedentity.borrowed"
+const _EventType_name = "entity.createdentity.renamedentity.reparentedentity.path_changedentity.status_changedentity.removedentity.tag_addedentity.tag_removedentity.lockedentity.unlockedentity.discrete_setentity.discrete_clearedentity.borrowedentity.usedentity.returned_homeentity.rehomed"
 
-var _EventType_index = [...]uint8{0, 14, 28, 45, 64, 85, 99, 115, 133, 146, 161, 180, 203, 218}
+var _EventType_index = [...]uint16{0, 14, 28, 45, 64, 85, 99, 115, 133, 146, 161, 180, 203, 218, 229, 249, 263}
 
 func (i EventType) String() string {
 	idx := int(i) - 1

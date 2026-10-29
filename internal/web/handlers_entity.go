@@ -24,14 +24,18 @@ type detailData struct {
 	CanAddChild       bool
 	CanMarkLost       bool          // ok and not locked (ADR 0024)
 	CanMarkFound      bool          // missing; found has no locked guard (ADR 0024)
-	CanReturn         bool          // borrowed or loaned
+	CanReturn         bool          // borrowed, loaned, or displaced ok
 	ReturnConfirm     string        // non-empty only for borrowed: returning removes the entity
 	CanLoan           bool          // ok/missing and not locked (ADR 0024)
 	LoanBlockedReason string        // non-empty when Loan is shown disabled
 	LoanForm          *loanFormData // non-nil re-opens the loan form (validation error)
 	CanMove           bool          // not locked; ok or borrowed (ADR 0034)
 	MoveBlockedReason string        // non-empty when Move is shown disabled
+	UseBlockedReason  string        // non-empty when Use is shown disabled
 	MoveForm          *moveFormData // non-nil re-opens the move form (validation error)
+	CanUse            bool          // same as CanMove (use = move preconditions)
+	UseForm           *moveFormData // non-nil re-opens the use form (validation error)
+	Displaced         bool          // parent differs from home (CONTEXT.md "Displaced")
 	LockAction        attrAction    // Lock / Unlock button
 	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
 	// CanRemove is false for borrowed: a borrowed entity exits via Return (ADR 0022).
@@ -66,30 +70,29 @@ const loanLockedReason = "Locked entities cannot be loaned"
 // moveFormData is the view model for the inline move form.
 type moveFormData struct {
 	EntityID string
-	AtRoot   bool // hides the "move to root" choice: it would be a no-op
+	Verb     string // "move" or "use": form action and labels
+	AtRoot   bool   // hides the "move to root" choice: see hidesRootChoice
 	Note     string
 	Error    string
 }
 
-// Tooltips on a disabled Move button; each names the one action that unblocks it.
-const (
-	moveLockedReason  = "Locked entities cannot be moved"
-	moveMissingReason = "Missing entities cannot be moved — mark found first"
-	moveLoanedReason  = "Loaned entities cannot be moved — return it first"
-)
-
-func moveBlockedReason(e app.EntityResult) string {
-	if e.Locked {
-		return moveLockedReason
-	}
-	if e.Status == inventory.EntityStatusMissing {
-		return moveMissingReason
-	}
-	if e.Status == inventory.EntityStatusLoaned {
-		return moveLoanedReason
+// Tooltips on a disabled Move or Use button; each names the one action that
+// unblocks it. participle is "moved" or "used".
+func relocateBlockedReason(e app.EntityResult, participle string) string {
+	switch {
+	case e.Locked:
+		return "Locked entities cannot be " + participle
+	case e.Status == inventory.EntityStatusMissing:
+		return "Missing entities cannot be " + participle + " — mark found first"
+	case e.Status == inventory.EntityStatusLoaned:
+		return "Loaned entities cannot be " + participle + " — return it first"
 	}
 	return ""
 }
+
+func moveBlockedReason(e app.EntityResult) string { return relocateBlockedReason(e, "moved") }
+
+func useBlockedReason(e app.EntityResult) string { return relocateBlockedReason(e, "used") }
 
 // removeFormData is the view model for the inline remove form.
 type removeFormData struct {
@@ -122,7 +125,10 @@ type attrAction struct {
 const (
 	lockBlockedReason     = "Missing or loaned entities cannot be locked"
 	discreteBlockedReason = "Entities with children cannot be marked discrete"
+	lockDisplacedReason   = "Displaced entities cannot be locked — return it first"
+	useAtHomeError        = "That's where it belongs — use Return instead."
 	attrFailedMessage     = "attribute change failed"
+	discreteIsHomeMessage = "Can't mark discrete: it is home to entities that are away — return them first"
 )
 
 func lockAction(e app.EntityResult) attrAction {
@@ -132,6 +138,9 @@ func lockAction(e app.EntityResult) attrAction {
 	a := attrAction{EntityID: e.EntityID, Label: "Lock", Field: "locked", Value: "true"}
 	if e.Status != inventory.EntityStatusOk && e.Status != inventory.EntityStatusBorrowed {
 		a.BlockedReason = lockBlockedReason
+	}
+	if e.IsDisplaced() {
+		a.BlockedReason = lockDisplacedReason
 	}
 	return a
 }
@@ -214,6 +223,13 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(setErr, app.ErrNoChange):
 		s.cfg.Logger.Info("attribute unchanged: panel was stale", "error", setErr, "entity_id", entityID)
 		fresh.Error = staleMessage
+	case errors.Is(setErr, app.ErrDisplaced):
+		s.cfg.Logger.Info("attribute rejected: entity is displaced", "error", setErr, "entity_id", entityID)
+		fresh.Error = lockDisplacedReason
+	case errors.Is(setErr, app.ErrIsHome):
+		s.cfg.Logger.Info("attribute rejected: entity is home to displaced entities",
+			"error", setErr, "entity_id", entityID)
+		fresh.Error = discreteIsHomeMessage
 	default:
 		s.cfg.Logger.Error("set attributes", "error", setErr, "entity_id", entityID)
 		fresh.Error = attrFailedMessage
@@ -377,12 +393,16 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		CanMarkLost:  entity.Status == inventory.EntityStatusOk && !entity.Locked,
 		CanMarkFound: entity.Status == inventory.EntityStatusMissing,
 		CanReturn: entity.Status == inventory.EntityStatusBorrowed ||
-			entity.Status == inventory.EntityStatusLoaned,
+			entity.Status == inventory.EntityStatusLoaned ||
+			(entity.Status == inventory.EntityStatusOk && entity.IsDisplaced()),
 		ReturnConfirm:       returnConfirm(entity),
 		CanLoan:             !entity.Locked && editable,
 		LoanBlockedReason:   loanBlockedReason,
 		CanMove:             entity.CanMove(),
+		CanUse:              entity.CanMove(),
+		Displaced:           entity.IsDisplaced(),
 		MoveBlockedReason:   moveBlockedReason(entity),
+		UseBlockedReason:    useBlockedReason(entity),
 		LockAction:          lockAction(entity),
 		DiscreteAction:      discrete,
 		CanRemove:           canRemove,
@@ -542,7 +562,8 @@ func (s *Server) changeMissing(
 
 // handleReturn handles POST /entities/{entityID}/actions/return.
 // A borrowed entity is removed, so the response navigates to its parent;
-// a loaned entity goes back to ok and is re-rendered in place. Eligibility is
+// a loaned entity goes back to ok and is re-rendered in place. A displaced
+// entity goes back to its home, so its tree node moves like a Move's. Eligibility is
 // left to the app layer (ADR 0035), so a stale panel reaches
 // renderReturnFailure instead of a bare 403 (#306).
 func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
@@ -557,6 +578,8 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 		s.renderAlreadyRemoved(w, r, entityID)
 		return
 	}
+
+	wasDisplaced := data.Entity.IsDisplaced()
 
 	_, err = s.cfg.App.MarkReturned(r.Context(), []app.ChangeStatusRequest{{
 		EntityID: entityID,
@@ -575,6 +598,12 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
 		s.serverError(w, "build detail data", err)
+		return
+	}
+	if wasDisplaced {
+		s.setTreeNodeMovedTrigger(w, r, data.Entity.ParentID, fresh.Entity)
+		s.renderDetailSection(w, r, fresh)
+		s.renderHTMLAppend(w, "tree_node_delete_oob", fresh.Entity)
 		return
 	}
 	s.renderStatusChanged(w, r, fresh)
@@ -599,6 +628,13 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 	if errors.Is(err, app.ErrHasChildren) {
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
 		stale.Error = "return failed: it still contains other entities — return or move them first"
+		s.renderDetailSection(w, r, stale)
+		return
+	}
+
+	if errors.Is(err, app.ErrIsHome) {
+		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
+		stale.Error = "return failed: it is home to entities that are away — return them first"
 		s.renderDetailSection(w, r, stale)
 		return
 	}
@@ -800,19 +836,9 @@ func (s *Server) renderRemoveFailure(
 	case errors.Is(err, app.ErrNotFound):
 		s.renderAlreadyRemoved(w, r, entityID)
 	case errors.Is(err, app.ErrHasChildren):
-		s.cfg.Logger.Info("remove rejected: entity has live children", "error", err, "entity_id", entityID)
-		fresh, ferr := s.buildDetailData(r.Context(), entityID)
-		if ferr != nil {
-			s.serverError(w, "build detail data", ferr)
-			return
-		}
-		if fresh.Entity.EntityID == "" {
-			s.renderAlreadyRemoved(w, r, entityID)
-			return
-		}
-		form.Error = "remove failed: it still contains other entities — remove or move them first"
-		fresh.RemoveForm = &form
-		s.renderDetailSection(w, r, fresh)
+		s.renderRemoveFormError(w, r, form, err, removeHasChildrenMessage)
+	case errors.Is(err, app.ErrIsHome):
+		s.renderRemoveFormError(w, r, form, err, removeIsHomeMessage)
 	default:
 		fresh, ferr := s.buildDetailData(r.Context(), entityID)
 		if ferr != nil {
@@ -832,6 +858,33 @@ func (s *Server) renderRemoveFailure(
 		}
 		s.renderDetailSection(w, r, fresh)
 	}
+}
+
+// Remove-form errors for guards the app layer trips at submit time.
+const (
+	removeHasChildrenMessage = "remove failed: it still contains other entities — remove or move them first"
+	removeIsHomeMessage      = "remove failed: it is home to entities that are away — return them first"
+)
+
+// renderRemoveFormError re-reads the entity and re-opens the remove form with
+// message and the user's note, for a guard rejection.
+func (s *Server) renderRemoveFormError(
+	w http.ResponseWriter, r *http.Request, form removeFormData, err error, message string,
+) {
+	entityID := form.EntityID
+	s.cfg.Logger.Info("remove rejected by guard", "error", err, "entity_id", entityID)
+	fresh, ferr := s.buildDetailData(r.Context(), entityID)
+	if ferr != nil {
+		s.serverError(w, "build detail data", ferr)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		s.renderAlreadyRemoved(w, r, entityID)
+		return
+	}
+	form.Error = message
+	fresh.RemoveForm = &form
+	s.renderDetailSection(w, r, fresh)
 }
 
 // renderAlreadyRemoved handles a Remove or Return for an entity that is no
@@ -859,7 +912,9 @@ func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
 		if !d.CanMove {
 			return false
 		}
-		d.MoveForm = &moveFormData{EntityID: d.Entity.EntityID, AtRoot: isRootEntity(d.Entity)}
+		d.MoveForm = &moveFormData{
+			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbMove), Verb: verbMove,
+		}
 		return true
 	})
 }
@@ -868,9 +923,64 @@ func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
 // Entity IDs are 10-char NanoIDs, so it cannot collide with one.
 const moveRootValue = "root"
 
+// handleUseForm handles GET /entities/{entityID}/actions/use: the move form in
+// use mode (CONTEXT.md "Use": same preconditions as move).
+func (s *Server) handleUseForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) bool {
+		if !d.CanUse {
+			return false
+		}
+		d.UseForm = &moveFormData{
+			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbUse), Verb: verbUse,
+		}
+		return true
+	})
+}
+
+// Verbs of the relocate form: a move changes home, a use keeps it.
+const (
+	verbMove = "move"
+	verbUse  = "use"
+)
+
+// relocateFn performs the write behind a relocate form (move or use).
+type relocateFn func(ctx context.Context, entityID, newParentID, actorID, note string) (app.EntityResult, error)
+
+// openRelocateForm re-opens the form that matches f.Verb.
+func (d *detailData) openRelocateForm(f *moveFormData) {
+	if f.Verb == verbUse {
+		d.UseForm = f
+		return
+	}
+	d.MoveForm = f
+}
+
 // handleMove handles POST /entities/{entityID}/actions/move. Eligibility is
 // left to the app layer (ADR 0035), so a stale panel reaches renderMoveFailure.
 func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
+	s.handleRelocate(w, r, verbMove, func(
+		ctx context.Context, entityID, newParentID, actor, note string,
+	) (app.EntityResult, error) {
+		return s.cfg.App.ReparentEntity(ctx, app.ReparentEntityRequest{
+			EntityID: entityID, NewParentID: newParentID, ActorID: actor, Note: note,
+		})
+	})
+}
+
+// handleUse handles POST /entities/{entityID}/actions/use. Like handleMove,
+// eligibility is left to the app layer (ADR 0035).
+func (s *Server) handleUse(w http.ResponseWriter, r *http.Request) {
+	s.handleRelocate(w, r, verbUse, func(
+		ctx context.Context, entityID, newParentID, actor, note string,
+	) (app.EntityResult, error) {
+		return s.cfg.App.UseEntity(ctx, app.UseEntityRequest{
+			EntityID: entityID, NewParentID: newParentID, ActorID: actor, Note: note,
+		})
+	})
+}
+
+// handleRelocate is the shared body of the move and use POST handlers.
+func (s *Server) handleRelocate(w http.ResponseWriter, r *http.Request, verb string, do relocateFn) {
 	entityID := r.PathValue("entityID")
 
 	if err := r.ParseForm(); err != nil {
@@ -890,7 +1000,8 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 
 	form := moveFormData{
 		EntityID: entityID,
-		AtRoot:   isRootEntity(data.Entity),
+		AtRoot:   hidesRootChoice(data.Entity, verb),
+		Verb:     verb,
 		Note:     strings.TrimSpace(r.FormValue("note")),
 	}
 	destination := strings.TrimSpace(r.FormValue("destination"))
@@ -898,13 +1009,13 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		// No write to fail, so re-check here: never re-open the form on a
 		// stale panel whose entity can no longer move.
 		if !data.CanMove {
-			s.cfg.Logger.Info("move rejected: panel was stale", "entity_id", entityID)
+			s.cfg.Logger.Info("relocate rejected: panel was stale", "verb", verb, "entity_id", entityID)
 			data.Error = staleMessage
 			s.renderStatusChanged(w, r, data)
 			return
 		}
 		form.Error = "Choose a destination."
-		data.MoveForm = &form
+		data.openRelocateForm(&form)
 		s.renderDetailSection(w, r, data)
 		return
 	}
@@ -913,12 +1024,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		newParentID = ""
 	}
 
-	moved, err := s.cfg.App.ReparentEntity(r.Context(), app.ReparentEntityRequest{
-		EntityID:    entityID,
-		NewParentID: newParentID,
-		ActorID:     s.actorFor(r),
-		Note:        form.Note,
-	})
+	moved, err := do(r.Context(), entityID, newParentID, s.actorFor(r), form.Note)
 	if err != nil {
 		s.renderMoveFailure(w, r, data, form, err)
 		return
@@ -934,7 +1040,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	s.renderHTMLAppend(w, "tree_node_delete_oob", moved)
 }
 
-// renderMoveFailure handles a failed ReparentEntity. It re-reads the entity
+// renderMoveFailure handles a failed ReparentEntity or UseEntity. It re-reads the entity
 // first: if it is still movable, a bad or vanished destination re-opens the
 // form; anything else shows the fresh state with an error, never as success.
 func (s *Server) renderMoveFailure(
@@ -951,18 +1057,32 @@ func (s *Server) renderMoveFailure(
 		return
 	}
 
+	if fresh.CanMove && errors.Is(err, app.ErrDestinationIsHome) {
+		form.Error = useAtHomeError
+		fresh.openRelocateForm(&form)
+		s.renderDetailSection(w, r, fresh)
+		return
+	}
+
+	if fresh.CanMove && errors.Is(err, app.ErrHomeCycle) {
+		form.Error = "Can't " + form.Verb + " there — something that belongs inside it is away. Return it first."
+		fresh.openRelocateForm(&form)
+		s.renderDetailSection(w, r, fresh)
+		return
+	}
+
 	if fresh.CanMove && (errors.Is(err, app.ErrInvalidDestination) || errors.Is(err, app.ErrNotFound)) {
-		form.Error = "Can't move there — choose another destination."
-		fresh.MoveForm = &form
+		form.Error = "Can't " + form.Verb + " there — choose another destination."
+		fresh.openRelocateForm(&form)
 		s.renderDetailSection(w, r, fresh)
 		return
 	}
 
 	if fresh.CanMove {
-		s.cfg.Logger.Error("move entity", "error", err, "entity_id", entityID)
-		fresh.Error = "move failed"
+		s.cfg.Logger.Error(form.Verb+" entity", "error", err, "entity_id", entityID)
+		fresh.Error = form.Verb + " failed"
 	} else {
-		s.cfg.Logger.Info("move rejected: panel was stale", "error", err, "entity_id", entityID)
+		s.cfg.Logger.Info(form.Verb+" rejected: panel was stale", "error", err, "entity_id", entityID)
 		fresh.Error = staleMessage
 	}
 	s.renderStatusChanged(w, r, fresh)

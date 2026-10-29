@@ -121,7 +121,7 @@ type importRunner struct {
 	opts   ImportOptions
 	result ImportResult
 
-	// pendingReparent is set when an EntityReparentedEvent has been replayed
+	// pendingReparent is set when a relocating event (reparent, use, return-home) has been replayed
 	// but its buffered EntityPathChangedEvent records have not yet been
 	// validated. Nil means no reparent is in flight.
 	pendingReparent *pendingReparentState
@@ -168,7 +168,7 @@ func (r *importRunner) processRecord(ctx context.Context, rec ExportResult) erro
 	}
 	r.result.Replayed++
 
-	if et == inventory.EntityReparentedEvent {
+	if et.Relocates() {
 		r.pendingReparent = &pendingReparentState{
 			eventID:  newID,
 			entityID: rec.EntityID,

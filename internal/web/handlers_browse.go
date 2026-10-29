@@ -124,7 +124,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleParentOptions returns eligible-parent matches for a parent picker.
-// With ?moving=<id> (the move form) it returns only valid move destinations.
+// With ?moving=<id> (the move or use form; ?verb=use selects use) it returns
+// only valid destinations for that entity.
 func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if len(q) > maxQueryLen {
@@ -138,7 +139,7 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 		req := app.FindEntitiesRequest{Query: q, Limit: parentOptionsLimit}
 		var err error
 		if moving := r.URL.Query().Get("moving"); moving != "" {
-			results, err = s.cfg.App.FindMoveDestinations(r.Context(), moving, req)
+			results, err = s.cfg.App.FindMoveDestinations(r.Context(), moving, relocationParam(r), req)
 		} else {
 			results, err = s.cfg.App.FindParentCandidates(r.Context(), req)
 		}

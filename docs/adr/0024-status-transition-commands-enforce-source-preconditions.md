@@ -1,5 +1,7 @@
 # Status-transition commands enforce source-status preconditions
 
+> **Superseded in part by [ADR 0039](0039-home-is-a-persistent-reference-and-displaced-is-derived.md):** `return` also accepts a displaced `ok` entity, and it moves a displaced entity home.
+
 Each intent-driven status command (`lost`, `found`, `loan`, `return`) asserts that the entity is in a legal *source* status before transitioning it, rather than dispatching an idempotent or no-op status change. A command that cannot make a meaningful transition returns an error; in a batch, one illegal argument rolls back the whole batch (atomic).
 
 ## Decision — legal transition table

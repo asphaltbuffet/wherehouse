@@ -31,6 +31,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/cmd/serve"
 	"github.com/asphaltbuffet/wherehouse/cmd/status"
 	"github.com/asphaltbuffet/wherehouse/cmd/tag"
+	"github.com/asphaltbuffet/wherehouse/cmd/use"
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
@@ -86,6 +87,7 @@ Examples:
 	rootCmd.AddCommand(loan.NewDefaultLoanCmd())
 	rootCmd.AddCommand(lost.NewDefaultLostCmd())
 	rootCmd.AddCommand(move.NewDefaultMoveCmd())
+	rootCmd.AddCommand(use.NewDefaultUseCmd())
 	rootCmd.AddCommand(remove.NewDefaultRemoveCmd())
 	rootCmd.AddCommand(rename.NewDefaultRenameCmd())
 	rootCmd.AddCommand(returncmd.NewDefaultReturnCmd())

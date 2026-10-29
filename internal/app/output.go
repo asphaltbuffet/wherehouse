@@ -7,6 +7,14 @@ import "github.com/asphaltbuffet/wherehouse/internal/inventory"
 // --json wire shape lives here (with JSON tags), not in the cmd/ layer. The
 // enums serialize as their string names via their MarshalJSON methods.
 
+// homeField is the JSON home value: set only for displaced entities.
+func homeField(r EntityResult) string {
+	if !r.IsDisplaced() {
+		return ""
+	}
+	return r.HomeLabel()
+}
+
 // ListItem is the `list` command's JSON output shape: one row per entity.
 type ListItem struct {
 	EntityID string                 `json:"entity_id"`
@@ -14,6 +22,7 @@ type ListItem struct {
 	Locked   bool                   `json:"locked"`
 	Discrete bool                   `json:"discrete"`
 	Status   inventory.EntityStatus `json:"status"`
+	Home     string                 `json:"home,omitempty"`
 	Tags     []string               `json:"tags"`
 }
 
@@ -31,6 +40,7 @@ func ToListItems(results []EntityResult) []ListItem {
 			Locked:   e.Locked,
 			Discrete: e.Discrete,
 			Status:   e.Status,
+			Home:     homeField(e),
 			Tags:     tags,
 		}
 	}
@@ -46,6 +56,7 @@ type ScryItem struct {
 	Locked   bool                   `json:"locked"`
 	Discrete bool                   `json:"discrete"`
 	Status   inventory.EntityStatus `json:"status"`
+	Home     string                 `json:"home,omitempty"`
 	Distance *int                   `json:"distance,omitempty"`
 }
 
@@ -66,6 +77,7 @@ func ToScryItems(results []FindResult, searched bool) []ScryItem {
 			Locked:   r.Entity.Locked,
 			Discrete: r.Entity.Discrete,
 			Status:   r.Entity.Status,
+			Home:     homeField(r.Entity),
 			Distance: dist,
 		}
 	}
@@ -120,6 +132,7 @@ type MoveOutput struct {
 	EntityID    string `json:"entity_id"`
 	DisplayName string `json:"display_name"`
 	Path        string `json:"path"`
+	Home        string `json:"home,omitempty"`
 }
 
 // ToMoveOutput projects a moved entity result into the `move` output shape.
@@ -128,6 +141,7 @@ func ToMoveOutput(result EntityResult) MoveOutput {
 		EntityID:    result.EntityID,
 		DisplayName: result.DisplayName,
 		Path:        result.FullPathDisplay,
+		Home:        homeField(result),
 	}
 }
 

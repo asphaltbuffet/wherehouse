@@ -55,7 +55,9 @@ func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (Entity
 	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
 }
 
-// ReparentEntity moves an entity to a new parent. Every guard reads through
+// ReparentEntity moves an entity to a new parent. A displaced entity moved to
+// where it already is is re-homed in place; moved to its home it is rejected
+// (use 'return'). Every guard reads through
 // the same transaction that writes the event, so a concurrent remove or a
 // crossing move cannot slip between check and write (ADR 0035).
 func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (EntityResult, error) {
@@ -69,29 +71,30 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 		if err != nil {
 			return wrapEntityError(req.EntityID, err)
 		}
-		if err = checkMoveSource(entity, req.NewParentID); err != nil {
+		if err = checkMovable(entity, verbMove); err != nil {
+			return err
+		}
+		if entity.IsDisplaced() {
+			switch req.NewParentID {
+			case idOf(entity.ParentID):
+				return a.rehomeTx(ctx, tx, entity, req.ActorID, note)
+			case idOf(entity.HomeID):
+				return fmt.Errorf("cannot move %q to its home — use 'return' instead: %w: %w",
+					entity.FullPathDisplay, ErrDestinationIsHome, ErrInvalidDestination)
+			}
+		}
+		if err = checkNotAlreadyThere(entity, req.NewParentID, verbMove); err != nil {
 			return err
 		}
 
 		var newParentID *string
 		if req.NewParentID != "" {
-			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID); err != nil {
+			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID, verbMove); err != nil {
 				return err
 			}
 			newParentID = &req.NewParentID
 		}
-
-		raw, err := json.Marshal(eventbus.EntityReparentedPayload{
-			EntityID:    entity.EntityID,
-			NewParentID: newParentID,
-		})
-		if err != nil {
-			return fmt.Errorf("marshal payload: %w", err)
-		}
-		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityReparentedEvent, req.ActorID, raw, note); err != nil {
-			return fmt.Errorf("reparent entity: %w", err)
-		}
-		return nil
+		return a.reparentTx(ctx, tx, entity.EntityID, newParentID, req.ActorID, note)
 	}); err != nil {
 		return EntityResult{}, err
 	}
@@ -100,34 +103,62 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
 }
 
-// checkMoveSource rejects a source entity that may not move to newParentID
-// (ADR 0034): locked, missing, loaned, or already there.
-func checkMoveSource(entity *inventory.Entity, newParentID string) error {
-	if entity.Locked {
-		return fmt.Errorf("cannot move %q: entity is locked", entity.FullPathDisplay)
+// reparentTx dispatches the reparent event for an already-validated move.
+func (a *App) reparentTx(
+	ctx context.Context,
+	tx store.Tx,
+	entityID string,
+	newParentID *string,
+	actorID string,
+	note *string,
+) error {
+	raw, err := json.Marshal(eventbus.EntityReparentedPayload{EntityID: entityID, NewParentID: newParentID})
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
 	}
-	if entity.Status == inventory.EntityStatusMissing {
-		return fmt.Errorf(
-			"cannot move %q: entity is missing — mark it found first",
-			entity.FullPathDisplay,
-		)
-	}
-	if entity.Status == inventory.EntityStatusLoaned {
-		return fmt.Errorf("cannot move %q: entity is loaned — return it first", entity.FullPathDisplay)
-	}
-
-	currentParentID := ""
-	if entity.ParentID != nil {
-		currentParentID = *entity.ParentID
-	}
-	if newParentID == currentParentID {
-		return fmt.Errorf(
-			"cannot move %q: already there: %w",
-			entity.FullPathDisplay,
-			ErrInvalidDestination,
-		)
+	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityReparentedEvent, actorID, raw, note); err != nil {
+		return fmt.Errorf("reparent entity: %w", err)
 	}
 	return nil
+}
+
+// Verbs that name the user's action in rejection copy: move, use and return
+// share the destination checks but each says its own word.
+const (
+	verbMove   = "move"
+	verbUse    = "use"
+	verbReturn = "return"
+)
+
+// checkMovable rejects an entity that may not change location at all
+// (ADR 0034): locked, missing, or loaned. verb is the user's action.
+func checkMovable(entity *inventory.Entity, verb string) error {
+	if entity.Locked {
+		return fmt.Errorf("cannot %s %q: entity is locked", verb, entity.FullPathDisplay)
+	}
+	if entity.Status == inventory.EntityStatusMissing {
+		return fmt.Errorf("cannot %s %q: entity is missing — mark it found first", verb, entity.FullPathDisplay)
+	}
+	if entity.Status == inventory.EntityStatusLoaned {
+		return fmt.Errorf("cannot %s %q: entity is loaned — return it first", verb, entity.FullPathDisplay)
+	}
+	return nil
+}
+
+// checkNotAlreadyThere rejects newParentID when it is the current parent.
+func checkNotAlreadyThere(entity *inventory.Entity, newParentID, verb string) error {
+	if newParentID == idOf(entity.ParentID) {
+		return fmt.Errorf("cannot %s %q: already there: %w", verb, entity.FullPathDisplay, ErrInvalidDestination)
+	}
+	return nil
+}
+
+// idOf dereferences an optional entity ID; nil (the root) is "".
+func idOf(id *string) string {
+	if id == nil {
+		return ""
+	}
+	return *id
 }
 
 // getParentTx loads parentID as the parent of a new or moved entity. Create,
@@ -151,21 +182,21 @@ func (a *App) checkMoveDestinationTx(
 	ctx context.Context,
 	tx store.Tx,
 	entity *inventory.Entity,
-	parentID string,
+	parentID, verb string,
 ) error {
 	parent, err := a.getParentTx(ctx, tx, parentID)
 	if err != nil {
-		return fmt.Errorf("cannot move %q: %w", entity.FullPathDisplay, err)
+		return fmt.Errorf("cannot %s %q: %w", verb, entity.FullPathDisplay, err)
 	}
 	inside, err := a.isSelfOrDescendant(ctx, tx, entity.EntityID, parent.EntityID)
 	if err != nil {
 		return err
 	}
 	if inside {
-		return fmt.Errorf("cannot move %q into itself or its own contents: %w",
-			entity.FullPathDisplay, ErrInvalidDestination)
+		return fmt.Errorf("cannot %s %q into itself or its own contents: %w",
+			verb, entity.FullPathDisplay, ErrInvalidDestination)
 	}
-	return nil
+	return a.checkHomeCycleTx(ctx, tx, entity, parent.EntityID, verb)
 }
 
 // isSelfOrDescendant reports whether candidateID is entityID or lies beneath it.
@@ -198,7 +229,8 @@ func (a *App) isSelfOrDescendant(ctx context.Context, tx store.Tx, entityID, can
 
 // RemoveEntity permanently marks an entity as removed. It refuses an entity
 // that still contains non-removed entities (#287): they would be left live
-// under a removed parent, unreachable from the tree.
+// under a removed parent, unreachable from the tree. It also refuses an entity
+// that is home to displaced entities (ErrIsHome): they must be returned first.
 func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 	var note *string
 	if req.Note != "" {
@@ -222,6 +254,9 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 		if n > 0 {
 			return fmt.Errorf("cannot remove %q (%d inside; remove or move them first): %w",
 				entity.FullPathDisplay, n, ErrHasChildren)
+		}
+		if err = a.checkNotHomeTx(ctx, tx, entity, "remove"); err != nil {
+			return err
 		}
 
 		raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: entity.EntityID})
@@ -318,6 +353,7 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 		results[i] = entityToResult(e, tagsByID[e.EntityID])
 		results[i].HasChildren = parentIDs[e.EntityID]
 	}
+	fillHomePaths(results, pathsByID(entities))
 	return results, nil
 }
 
@@ -342,6 +378,9 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 	for i, row := range rows {
 		results[i] = entityToResult(row.Entity, tagsByID[row.Entity.EntityID])
 		results[i].HasChildren = row.HasChildren
+		if results[i], err = a.withHomePath(ctx, results[i]); err != nil {
+			return nil, err
+		}
 	}
 	return results, nil
 }

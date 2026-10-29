@@ -38,16 +38,20 @@ func buildListCmd() *cobra.Command {
 		Short: "List entities in the inventory",
 		Long: `List entities in the inventory.
 
-Use --under to restrict to children of a specific entity path, and --status to filter by lifecycle status.
+Use --under to restrict to children of a specific entity path, and --status to filter by lifecycle status. Use --displaced to show only entities away from their home, and --home-under to restrict those to entities whose home is under a path.
 
 Examples:
   wherehouse list                                    # All entities
   wherehouse list --under "Garage:Toolbox"           # Under a specific path
-  wherehouse list --status missing`,
+  wherehouse list --status missing
+  wherehouse list --displaced                        # Entities away from their home
+  wherehouse list --displaced --home-under "Garage"  # ...whose home is in the Garage`,
 		Args: cobra.NoArgs,
 	}
 	cmd.Flags().String("under", "", "Restrict to entities under this path (e.g. Garage:Toolbox)")
 	cmd.Flags().String("status", "", "Filter by status: ok, borrowed, missing, loaned, removed")
+	cmd.Flags().Bool("displaced", false, "Only entities away from their home")
+	cmd.Flags().String("home-under", "", "Only entities whose home is at or under this path")
 	cmd.Flags().BoolP("verbose", "v", false, "Show entity ID and tags for each entity")
 	return cmd
 }
@@ -58,7 +62,10 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	statusFilter, _ := cmd.Flags().GetString("status")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
-	var underParsed entitypath.Path
+	displaced, _ := cmd.Flags().GetBool("displaced")
+	homeUnderPath, _ := cmd.Flags().GetString("home-under")
+
+	var underParsed, homeUnderParsed entitypath.Path
 	if underPath != "" {
 		var parseErr error
 
@@ -68,12 +75,26 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 		}
 	}
 
+	if homeUnderPath != "" {
+		var parseErr error
+
+		homeUnderParsed, parseErr = entitypath.Parse(homeUnderPath)
+		if parseErr != nil {
+			return fmt.Errorf("invalid --home-under path: %w", parseErr)
+		}
+	}
+
 	all, err := a.ListEntities(ctx)
 	if err != nil {
 		return fmt.Errorf("list failed: %w", err)
 	}
 
-	matched := filterEntities(all, underParsed, statusFilter)
+	matched := filterEntities(all, listFilter{
+		under:     underParsed,
+		homeUnder: homeUnderParsed,
+		status:    statusFilter,
+		displaced: displaced,
+	})
 
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {
@@ -86,27 +107,60 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	})
 }
 
-func filterEntities(all []app.EntityResult, under entitypath.Path, statusFilter string) []app.EntityResult {
+// listFilter is the AND of list's filter flags; zero values match everything.
+type listFilter struct {
+	under     entitypath.Path
+	homeUnder entitypath.Path
+	status    string
+	displaced bool
+}
+
+func filterEntities(all []app.EntityResult, f listFilter) []app.EntityResult {
 	var out []app.EntityResult
 
 	for _, e := range all {
-		if statusFilter != "" && e.Status.String() != statusFilter {
+		if f.status != "" && e.Status.String() != f.status {
 			continue
 		}
 
-		if !under.IsEmpty() {
-			ep, parseErr := entitypath.Parse(e.FullPathDisplay)
-			if parseErr != nil {
-				continue
-			}
+		if f.displaced && !e.IsDisplaced() {
+			continue
+		}
 
-			if !ep.HasPrefix(under) {
-				continue
-			}
+		if !f.under.IsEmpty() && !pathHasPrefix(e.FullPathDisplay, f.under) {
+			continue
+		}
+
+		if !f.homeUnder.IsEmpty() && !pathHasPrefix(homePath(e), f.homeUnder) {
+			continue
 		}
 
 		out = append(out, e)
 	}
 
 	return out
+}
+
+// homePath is the display path of e's home: its parent's path when at home.
+// Root-homed entities yield "" and never match a prefix.
+func homePath(e app.EntityResult) string {
+	if e.IsDisplaced() {
+		return e.HomePathDisplay
+	}
+
+	p, err := entitypath.Parse(e.FullPathDisplay)
+	if err != nil {
+		return ""
+	}
+
+	return p.Dir().String()
+}
+
+func pathHasPrefix(p string, prefix entitypath.Path) bool {
+	ep, err := entitypath.Parse(p)
+	if err != nil {
+		return false
+	}
+
+	return ep.HasPrefix(prefix)
 }

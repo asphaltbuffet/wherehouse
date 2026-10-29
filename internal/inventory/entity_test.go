@@ -58,3 +58,33 @@ func TestEvent_Fields(t *testing.T) {
 	require.NotNil(t, ev.EntityID)
 	assert.Equal(t, "abc123", *ev.EntityID)
 }
+
+func TestEntity_IsDisplaced(t *testing.T) {
+	garage, shelf := "garage", "shelf"
+	tests := []struct {
+		name string
+		e    inventory.Entity
+		want bool
+	}{
+		{"at home", inventory.Entity{ParentID: &shelf, HomeID: &shelf, Status: inventory.EntityStatusOk}, false},
+		{"both root", inventory.Entity{Status: inventory.EntityStatusOk}, false},
+		{"away", inventory.Entity{ParentID: &garage, HomeID: &shelf, Status: inventory.EntityStatusOk}, true},
+		{"home root, parent set", inventory.Entity{ParentID: &garage, Status: inventory.EntityStatusOk}, true},
+		{"home set, parent root", inventory.Entity{HomeID: &shelf, Status: inventory.EntityStatusOk}, true},
+		{
+			"removed never displaced",
+			inventory.Entity{ParentID: &garage, HomeID: &shelf, Status: inventory.EntityStatusRemoved},
+			false,
+		},
+		{
+			"borrowed can be displaced",
+			inventory.Entity{ParentID: &garage, HomeID: &shelf, Status: inventory.EntityStatusBorrowed},
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.e.IsDisplaced())
+		})
+	}
+}

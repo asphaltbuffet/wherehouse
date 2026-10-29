@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -344,4 +345,53 @@ func TestImportEvents_UnknownEventType_RejectedBeforeReplay(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "validation failed")
 	require.Contains(t, err.Error(), "event_id 1")
+}
+
+func TestImport_RoundTripPreservesHomes(t *testing.T) {
+	for _, returnHome := range []bool{false, true} {
+		name := "displaced"
+		if returnHome {
+			name = "returned"
+		}
+		t.Run(name, func(t *testing.T) {
+			src := apptesting.OpenApp(t)
+			ctx := t.Context()
+			garage, err := src.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "t"})
+			require.NoError(t, err)
+			deck, err := src.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Deck", ActorID: "t"})
+			require.NoError(t, err)
+			drill, err := src.CreateEntity(ctx, app.CreateEntityRequest{
+				DisplayName: "Drill", ParentID: garage.EntityID, ActorID: "t",
+			})
+			require.NoError(t, err)
+			_, err = src.CreateEntity(ctx, app.CreateEntityRequest{
+				DisplayName: "Bit", ParentID: drill.EntityID, ActorID: "t",
+			})
+			require.NoError(t, err)
+			_, err = src.UseEntity(ctx, app.UseEntityRequest{
+				EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t",
+			})
+			require.NoError(t, err)
+			wantPath := "Deck:Drill"
+			if returnHome {
+				_, err = src.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: drill.EntityID, ActorID: "t"}})
+				require.NoError(t, err)
+				wantPath = "Garage:Drill"
+			}
+
+			events, err := src.GetAllEvents(ctx)
+			require.NoError(t, err)
+			dst := apptesting.OpenApp(t)
+			res, err := dst.ImportEvents(ctx, events, app.ImportOptions{})
+			require.NoError(t, err)
+			assert.Zero(t, res.WarningCount, "path_changed events for descendants must validate: %v", res.Warnings)
+			assert.Zero(t, res.Failed)
+
+			got, err := dst.GetEntityByID(ctx, drill.EntityID)
+			require.NoError(t, err)
+			assert.Equal(t, wantPath, got.FullPathDisplay)
+			assert.Equal(t, garage.EntityID, got.HomeID)
+			assert.Equal(t, returnHome, !got.IsDisplaced())
+		})
+	}
 }

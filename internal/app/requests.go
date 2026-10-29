@@ -26,6 +26,15 @@ type ReparentEntityRequest struct {
 	Note        string
 }
 
+// UseEntityRequest is the input for temporarily moving an entity: its parent
+// changes, its home does not (CONTEXT.md "Use").
+type UseEntityRequest struct {
+	EntityID    string
+	NewParentID string // empty means root-level
+	ActorID     string
+	Note        string
+}
+
 // RemoveEntityRequest is the input for removing an entity.
 type RemoveEntityRequest struct {
 	EntityID string

@@ -78,12 +78,16 @@ func runScry(cmd *cobra.Command, args []string, a *app.App) error {
 	return out.Render(app.ToScryItems(results, len(args) == 1), func() string {
 		var b strings.Builder
 		for _, r := range results {
+			home := ""
+			if r.Entity.IsDisplaced() {
+				home = "  home: " + r.Entity.HomeLabel()
+			}
 			if len(args) == 1 && verbose {
-				fmt.Fprintf(&b, "%s  %s  [%s] dist:%d\n",
-					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.Status, r.Distance)
+				fmt.Fprintf(&b, "%s  %s  [%s] dist:%d%s\n",
+					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.Status, r.Distance, home)
 			} else {
-				fmt.Fprintf(&b, "%s  %s  [%s]\n",
-					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.Status)
+				fmt.Fprintf(&b, "%s  %s  [%s]%s\n",
+					r.Entity.EntityID, r.Entity.FullPathDisplay, r.Entity.Status, home)
 			}
 		}
 		return b.String()

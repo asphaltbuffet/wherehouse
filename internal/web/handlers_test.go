@@ -92,7 +92,12 @@ type fakeApp struct {
 	lastMoveReq app.ReparentEntityRequest
 	onMove      func(*fakeApp) // runs inside ReparentEntity; simulates a concurrent writer
 
-	lastMovingID string // entityID from the most recent FindMoveDestinations call
+	useErr     error
+	useCalls   int
+	lastUseReq app.UseEntityRequest
+
+	lastMovingID   string         // entityID from the most recent FindMoveDestinations call
+	lastRelocation app.Relocation // relocation from the most recent FindMoveDestinations call
 
 	removeErr     error
 	removeCalls   int
@@ -148,11 +153,12 @@ func (f *fakeApp) ReparentEntity(_ context.Context, req app.ReparentEntityReques
 }
 
 func (f *fakeApp) FindMoveDestinations(
-	_ context.Context, entityID string, req app.FindEntitiesRequest,
+	_ context.Context, entityID string, relocation app.Relocation, req app.FindEntitiesRequest,
 ) ([]app.FindResult, error) {
 	f.parentCalls++
 	f.lastParentQuery = req.Query
 	f.lastMovingID = entityID
+	f.lastRelocation = relocation
 	return f.parentResults, f.findErr
 }
 
@@ -349,4 +355,34 @@ func newActorHandler(t *testing.T, a web.App, header string) http.Handler {
 	srv, err := web.New(web.Config{App: a, Output: io.Discard, ActorHeader: header})
 	require.NoError(t, err)
 	return srv.Handler()
+}
+
+// UseEntity records the request and, on success, relocates the entity like
+// ReparentEntity while keeping its home. A zero HomeID defaults to the current
+// parent so older fixtures that never set HomeID read as "at home" before a
+// use; a root-homed entity used in a test must set HomeID explicitly.
+func (f *fakeApp) UseEntity(_ context.Context, req app.UseEntityRequest) (app.EntityResult, error) {
+	f.useCalls++
+	f.lastUseReq = req
+	f.lastActor = req.ActorID
+	if f.useErr != nil {
+		return app.EntityResult{}, f.useErr
+	}
+	for i := range f.entities {
+		if f.entities[i].EntityID != req.EntityID {
+			continue
+		}
+		if f.entities[i].HomeID == "" {
+			f.entities[i].HomeID = f.entities[i].ParentID
+		}
+		f.entities[i].ParentID = req.NewParentID
+		f.entities[i].FullPathDisplay = f.entities[i].DisplayName
+		for _, p := range f.entities {
+			if p.EntityID == req.NewParentID {
+				f.entities[i].FullPathDisplay = p.FullPathDisplay + ":" + f.entities[i].DisplayName
+			}
+		}
+		return f.entities[i], nil
+	}
+	return app.EntityResult{}, app.ErrNotFound
 }

@@ -47,6 +47,7 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 		Locked:            locked,
 		Discrete:          discrete,
 		ParentID:          p.ParentID,
+		HomeID:            p.ParentID,
 		FullPathDisplay:   fullPathDisplay,
 		FullPathCanonical: fullPathCanonical,
 		Depth:             depth,
@@ -101,138 +102,6 @@ func (b *Bus) handleEntityRenamed(ctx context.Context, tx store.Tx, ev *inventor
 	}
 
 	return nil
-}
-
-func (b *Bus) handleEntityReparented(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityReparentedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityReparented: unmarshal: %w", err)
-	}
-
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
-	if err != nil {
-		return fmt.Errorf("handleEntityReparented: get entity: %w", err)
-	}
-
-	// Fetch descendants before updating the parent so the path-prefix query still
-	// matches the old canonical path stored in the DB.
-	descendants, err := b.store.GetDescendantsTx(ctx, tx, p.EntityID)
-	if err != nil {
-		return fmt.Errorf("handleEntityReparented: get descendants: %w", err)
-	}
-
-	entity.ParentID = p.NewParentID
-	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
-		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
-	)
-	if err != nil {
-		return fmt.Errorf("handleEntityReparented: recompute path: %w", err)
-	}
-
-	entity.LastEventID = ev.EventID
-	entity.UpdatedAt = time.Now().UTC()
-
-	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
-		return fmt.Errorf("handleEntityReparented: %w", err)
-	}
-
-	if err = b.propagatePathChangesTx(ctx, tx, ev, entity, descendants); err != nil {
-		return fmt.Errorf("handleEntityReparented: propagate: %w", err)
-	}
-	return nil
-}
-
-// handleEntityReparentedProjectionOnlyTx updates the reparented entity's path in
-// the projection without calling propagatePathChangesTx. Used during projection
-// rebuilds where EntityPathChangedEvents already in the event log will be applied
-// directly, so regenerating them would corrupt the projection and grow the event log.
-func (b *Bus) handleEntityReparentedProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityReparentedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: unmarshal: %w", err)
-	}
-
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
-	if err != nil {
-		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: get entity: %w", err)
-	}
-
-	entity.ParentID = p.NewParentID
-	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
-		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
-	)
-	if err != nil {
-		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: recompute path: %w", err)
-	}
-
-	entity.LastEventID = ev.EventID
-	entity.UpdatedAt = time.Now().UTC()
-
-	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
-		return fmt.Errorf("handleEntityReparentedProjectionOnlyTx: %w", err)
-	}
-	return nil
-}
-
-// handleEntityReparentedComputePayloadsTx updates the projection for the
-// reparented entity and all its descendants (no event writes) and returns the
-// expected EntityPathChangedPayload for each descendant. Used by ReplayEvent
-// so import can validate export integrity without side-effect event insertion.
-func (b *Bus) handleEntityReparentedComputePayloadsTx(
-	ctx context.Context,
-	tx store.Tx,
-	ev *inventory.Event,
-) ([]EntityPathChangedPayload, error) {
-	var p EntityReparentedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: unmarshal: %w", err)
-	}
-
-	// Fetch descendants before updating the parent so the path-prefix query
-	// still matches the old canonical path stored in the DB.
-	descendants, err := b.store.GetDescendantsTx(ctx, tx, p.EntityID)
-	if err != nil {
-		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: get descendants: %w", err)
-	}
-
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
-	if err != nil {
-		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: get entity: %w", err)
-	}
-
-	entity.ParentID = p.NewParentID
-	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
-		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: recompute path: %w", err)
-	}
-
-	entity.LastEventID = ev.EventID
-	entity.UpdatedAt = time.Now().UTC()
-
-	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
-		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: update entity: %w", err)
-	}
-
-	payloads, err := ComputeDescendantPathPayloads(entity, descendants)
-	if err != nil {
-		return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: compute descendant paths: %w", err)
-	}
-
-	for i, d := range descendants {
-		dp := payloads[i]
-		d.FullPathDisplay = dp.FullPathDisplay
-		d.FullPathCanonical = dp.FullPathCanonical
-		d.Depth = dp.Depth
-		d.LastEventID = ev.EventID
-		d.UpdatedAt = time.Now().UTC()
-		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
-			return nil, fmt.Errorf("handleEntityReparentedComputePayloadsTx: update descendant %s: %w", d.EntityID, err)
-		}
-	}
-
-	return payloads, nil
 }
 
 func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
@@ -316,6 +185,7 @@ func (b *Bus) handleEntityBorrowed(ctx context.Context, tx store.Tx, ev *invento
 		DisplayName:       p.DisplayName,
 		CanonicalName:     canonicalName,
 		ParentID:          p.ParentID,
+		HomeID:            p.ParentID,
 		FullPathDisplay:   fullPathDisplay,
 		FullPathCanonical: fullPathCanonical,
 		Depth:             depth,
@@ -421,7 +291,7 @@ func (b *Bus) propagatePathChangesTx(
 ) error {
 	payloads, err := ComputeDescendantPathPayloads(parent, descendants)
 	if err != nil {
-		return fmt.Errorf("handleEntityReparented: compute descendant paths: %w", err)
+		return fmt.Errorf("compute descendant paths: %w", err)
 	}
 
 	for i, d := range descendants {

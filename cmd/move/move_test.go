@@ -99,3 +99,29 @@ func TestRunMove_MissingRejected(t *testing.T) {
 
 	assert.ErrorContains(t, cmd.Execute(), "mark it found first")
 }
+
+func TestRunMove_RehomeOutput(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForMove(t, a)
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Toolbox:Wrench")
+	require.NoError(t, err)
+	workshop, err := a.LookupEntityByPath(t.Context(), "Workshop")
+	require.NoError(t, err)
+	_, err = a.UseEntity(t.Context(), app.UseEntityRequest{
+		EntityID: wrench.EntityID, NewParentID: workshop.EntityID, ActorID: "test",
+	})
+	require.NoError(t, err)
+
+	cmd := move.NewMoveCmd(a)
+	cmd.SetArgs([]string{"Workshop:Wrench", "--to", "Workshop"})
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+
+	assert.Contains(t, stdout.String(), `Rehomed "Workshop:Wrench" at Workshop`)
+	assert.NotContains(t, stdout.String(), "Moved")
+	got, err := a.GetEntityByID(t.Context(), wrench.EntityID)
+	require.NoError(t, err)
+	assert.False(t, got.IsDisplaced())
+}

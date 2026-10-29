@@ -45,8 +45,8 @@ func (b *Bus) registerAll() {
 	}
 	b.registry[inventory.EntityReparentedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityReparentedPayload{} },
-		applyFn:        b.handleEntityReparented,
-		replayFn:       b.handleEntityReparentedProjectionOnlyTx,
+		applyFn:        b.handleRelocation,
+		replayFn:       b.handleRelocationProjectionOnlyTx,
 	}
 	b.registry[inventory.EntityPathChangedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityPathChangedPayload{} },
@@ -87,6 +87,20 @@ func (b *Bus) registerAll() {
 	b.registry[inventory.EntityBorrowedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityBorrowedPayload{} },
 		applyFn:        b.handleEntityBorrowed,
+	}
+	b.registry[inventory.EntityUsedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityUsedPayload{} },
+		applyFn:        b.handleRelocation,
+		replayFn:       b.handleRelocationProjectionOnlyTx,
+	}
+	b.registry[inventory.EntityReturnedHomeEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityReturnedHomePayload{} },
+		applyFn:        b.handleRelocation,
+		replayFn:       b.handleRelocationProjectionOnlyTx,
+	}
+	b.registry[inventory.EntityRehomedEvent] = eventRegistration{
+		payloadFactory: func() any { return &EntityRehomedPayload{} },
+		applyFn:        b.handleEntityRehomed,
 	}
 }
 
@@ -150,28 +164,20 @@ func (b *Bus) DispatchInTx(
 }
 
 // ReplayEvent inserts a fully-populated event using its original TimestampUTC
-// and EntityID (no payload reparse). EntityPathChangedEvent is a no-op: it is
-// skipped without error and returns 0, because EntityReparentedEvent's handler
-// regenerates path-changed events itself.
-// ReplayEvent inserts a fully-populated event using its original TimestampUTC
-// and EntityID (no payload reparse). Uses applyEventProjectionOnlyTx so that
-// EntityReparentedEvent does not regenerate EntityPathChangedEvents — those
-// already exist in the import stream and are applied directly, keeping the
-// event log from growing on every import.
-// ReplayEvent inserts a fully-populated event using its original TimestampUTC
 // and EntityID (no payload reparse). EntityPathChangedEvent is skipped without
 // error and returns 0 — the import path omits these from replay and validates
-// them separately (see ADR-0005). See also: the event-log-growth issue filed
-// against this behaviour.
+// them separately (see ADR-0005). Relocating events update the projection
+// without regenerating EntityPathChangedEvents (they already exist in the
+// import stream) and return the expected payloads for that validation.
 func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []EntityPathChangedPayload, error) {
 	if ev.EventType == inventory.EntityPathChangedEvent {
 		return 0, nil, nil
 	}
 	var payloads []EntityPathChangedPayload
 	id, err := b.writeEvent(ctx, ev, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-		if ev.EventType == inventory.EntityReparentedEvent {
+		if ev.EventType.Relocates() {
 			var applyErr error
-			payloads, applyErr = b.handleEntityReparentedComputePayloadsTx(ctx, tx, ev)
+			payloads, applyErr = b.handleRelocationComputePayloadsTx(ctx, tx, ev)
 			return applyErr
 		}
 		return b.applyEventProjectionOnlyTx(ctx, tx, ev)
@@ -240,7 +246,7 @@ func (b *Bus) applyEventTx(ctx context.Context, tx store.Tx, ev *inventory.Event
 }
 
 // applyEventProjectionOnlyTx is like applyEventTx but never writes new events.
-// EntityReparentedEvent uses handleEntityReparentedProjectionOnlyTx (skips
+// Relocating events use handleRelocationProjectionOnlyTx (skips
 // propagatePathChangesTx); EntityPathChangedEvent is applied normally via
 // handleEntityPathChanged. Used by ReplayEvent (import) and TruncateAndReplay
 // (projection rebuild) so neither path grows the event log.

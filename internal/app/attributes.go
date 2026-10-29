@@ -87,6 +87,9 @@ func lockedChange(e *inventory.Entity, locked bool) (attrChange, error) {
 			"cannot lock %q: entity is %s (only ok or borrowed entities can be locked)",
 			e.FullPathDisplay, e.Status,
 		)
+	case e.IsDisplaced():
+		return attrChange{}, rejection([]error{ErrDisplaced},
+			"cannot lock %q: entity is displaced — return it first", e.FullPathDisplay)
 	default:
 		return newAttrChange(inventory.EntityLockedEvent, eventbus.EntityLockedPayload{EntityID: e.EntityID})
 	}
@@ -118,6 +121,9 @@ func (a *App) discreteChange(
 	if n > 0 {
 		return attrChange{}, fmt.Errorf("cannot mark %q discrete (%d inside; move or remove them first): %w",
 			e.FullPathDisplay, n, ErrHasChildren)
+	}
+	if err = a.checkNotHomeTx(ctx, tx, e, "mark discrete"); err != nil {
+		return attrChange{}, err
 	}
 	return newAttrChange(inventory.EntityDiscreteSetEvent, eventbus.EntityDiscreteSetPayload{EntityID: e.EntityID})
 }

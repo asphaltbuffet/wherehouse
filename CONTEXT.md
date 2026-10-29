@@ -14,7 +14,7 @@ The single unified domain type. Everything in the inventory — a storage place,
 
 ### locked
 
-A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Conversely, an entity can only be locked while its status is `ok` or `borrowed`, so a locked entity is never `missing` or `loaned`. Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
+A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Conversely, an entity can only be locked while its status is `ok` or `borrowed` and it is not displaced, so a locked entity is never `missing`, `loaned`, or displaced. Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
 
 ### discrete
 
@@ -26,7 +26,25 @@ An entity that may receive a new child (via `add`, `borrow`, or `move`): any ent
 
 ### Move
 
-Changing an entity's parent (recorded as `EntityReparentedEvent`). Move changes location only — never status. Only an entity that is not `locked` and whose status is `ok` or `borrowed` may be moved; a `missing` entity must first be found, and a `loaned` entity must first be returned. The destination must be an eligible parent (including the root) and may not be the entity itself, any of its descendants, or its current parent (a move must change location).
+Permanently relocating an entity: changing its parent (recorded as `EntityReparentedEvent`) and setting its **home** to the new parent. Move changes location only — never status. Only an entity that is not `locked` and whose status is `ok` or `borrowed` may be moved; a `missing` entity must first be found, and a `loaned` entity must first be returned. The destination must be an eligible parent (including the root) and may not be the entity itself, any of its descendants, or its current parent (a move must change location). There is one exception: a displaced entity may be moved to its current parent, which makes that parent its new home. A displaced entity may not be moved to its home, because that is a **return**.
+
+### Home
+
+An entity's designated location: the parent it belongs in. Every entity has a home, which is an entity reference rather than a path, so it stays valid when an ancestor is moved. A **move** sets both the parent and the home. A **use** changes only the parent.
+
+A home is always a valid place to return to. The home of a non-removed entity is never `removed`, never `discrete`, and never the entity itself or one of its descendants. While an entity is the home of any non-removed displaced entity, removing it or setting it `discrete` is rejected. Any move or use that would place a home inside the subtree of an entity it is home to is also rejected.
+
+### Displaced
+
+The condition of an entity whose current parent is not its home. Displaced is derived, not stored, and it is **not** an `EntityStatus`: it is independent of status, so a `borrowed` or `missing` entity can also be displaced. A descendant that travels with a displaced ancestor is not itself displaced, because its parent has not changed.
+
+### Use
+
+Temporarily relocating an entity: changing its parent without changing its home, which leaves it **displaced**. Use has the same preconditions as **move**, and in addition the destination may not be the entity's home (that is a **return**). An entity that is already displaced may be used again somewhere else, and its home stays the same.
+
+### Return
+
+Restoring an entity to how it should be. For a displaced `ok` entity, it moves the entity home. For a `loaned` entity, it sets the status back to `ok` and, if the entity is displaced, also moves it home. For a `borrowed` entity, it removes the entity without relocating it. `return` is rejected when there is nothing to restore (an `ok` entity already at home) and for a `missing` entity, which must be found first. Finding an entity does not move it home. See [ADR 0039](docs/adr/0039-home-is-a-persistent-reference-and-displaced-is-derived.md).
 
 ### EntityStatus
 
@@ -71,6 +89,11 @@ The event types currently implemented:
 | `EntityDiscreteSetEvent` | Entity's `discrete` flag set to `true` |
 | `EntityDiscreteClearedEvent` | Entity's `discrete` flag set to `false` |
 | `EntityBorrowedEvent` | A new entity was created directly in `borrowed` status (atomic; no preceding `EntityCreatedEvent`) |
+| `EntityUsedEvent` | An entity was moved to a new parent temporarily; its home did not change (a **use**) |
+| `EntityReturnedHomeEvent` | A displaced entity was moved back to its home (part of a **return**) |
+| `EntityRehomedEvent` | An entity's home was changed to its current parent, without a reparent |
+
+`EntityCreatedEvent` and `EntityBorrowedEvent` set the home to the initial parent. `EntityReparentedEvent` sets both the parent and the home.
 
 ### Projection
 
@@ -158,6 +181,7 @@ A user-assigned display label for a database file, stored in `schema_metadata` u
 - Every `ORDER BY` that could tie must include `event_id ASC` as a tiebreaker.
 - All projection tables (`entities_current`, `entity_tags`) must be fully rebuildable by replaying the event stream. `TruncateAndReplay` truncates all projection tables before replaying.
 - Entity canonical names are not globally unique and uniqueness within a parent is not enforced. Multiple entities may share a name (e.g. three identical "10mm socket" entities in the same drawer) — each is distinct by `entity_id` and has its own history and status. Disambiguation between same-name entities is a UI concern, not a data model concern.
+- Every non-removed entity's home is non-removed, non-discrete, and not the entity itself or one of its descendants.
 - Path propagation is recursive: reparenting an entity triggers `EntityPathChangedEvent` for all descendants.
 - `EntityRemovedEvent` sets `status = "removed"`. Removed entities remain in `entities_current` (soft delete).
 - No silent repair. No application-level auto-retry: SQLite lock contention is absorbed only by the connection's busy timeout, after which the operation fails.

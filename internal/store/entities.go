@@ -18,14 +18,14 @@ func (s *Store) InsertEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 		INSERT INTO entities_current (
 			entity_id, display_name, canonical_name, locked, discrete,
 			parent_id, full_path_display, full_path_canonical,
-			depth, status, status_context, last_event_id, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			depth, status, status_context, last_event_id, updated_at, home_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := tx.ExecContext(ctx, query,
 		e.EntityID, e.DisplayName, e.CanonicalName, e.Locked, e.Discrete,
 		e.ParentID, e.FullPathDisplay, e.FullPathCanonical,
 		e.Depth, e.Status, e.StatusContext, e.LastEventID,
-		e.UpdatedAt.UTC().Format(time.RFC3339),
+		e.UpdatedAt.UTC().Format(time.RFC3339), e.HomeID,
 	)
 	if err != nil {
 		return fmt.Errorf("insert entity %s: %w", e.EntityID, err)
@@ -40,14 +40,14 @@ func (s *Store) UpdateEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 			display_name = ?, canonical_name = ?, locked = ?, discrete = ?,
 			parent_id = ?, full_path_display = ?, full_path_canonical = ?,
 			depth = ?, status = ?, status_context = ?,
-			last_event_id = ?, updated_at = ?
+			last_event_id = ?, updated_at = ?, home_id = ?
 		WHERE entity_id = ?`
 
 	_, err := tx.ExecContext(ctx, query,
 		e.DisplayName, e.CanonicalName, e.Locked, e.Discrete,
 		e.ParentID, e.FullPathDisplay, e.FullPathCanonical,
 		e.Depth, e.Status, e.StatusContext,
-		e.LastEventID, e.UpdatedAt.UTC().Format(time.RFC3339),
+		e.LastEventID, e.UpdatedAt.UTC().Format(time.RFC3339), e.HomeID,
 		e.EntityID,
 	)
 	if err != nil {
@@ -61,7 +61,7 @@ func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Enti
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE entity_id = ? AND status != 'removed'`
 
 	row := s.db.QueryRowContext(ctx, query, entityID)
@@ -80,7 +80,7 @@ func (s *Store) GetEntityAnyStatus(ctx context.Context, entityID string) (*inven
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE entity_id = ?`
 
 	row := s.db.QueryRowContext(ctx, query, entityID)
@@ -102,7 +102,7 @@ func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE canonical_name = ? AND status != 'removed'
 		ORDER BY full_path_canonical ASC, entity_id ASC`
 
@@ -122,7 +122,7 @@ func (s *Store) GetEntitiesByCanonicalNameAnyStatus(
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE canonical_name = ?
 		ORDER BY full_path_canonical ASC, last_event_id DESC`
 
@@ -141,7 +141,7 @@ func (s *Store) GetEntitiesByCanonicalNameTx(
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE canonical_name = ? AND status != 'removed'
 		ORDER BY full_path_canonical ASC, entity_id ASC`
 
@@ -165,7 +165,7 @@ func (s *Store) GetChildren(ctx context.Context, parentID string) ([]ChildRow, e
 	const query = `
 		SELECT ec.entity_id, ec.display_name, ec.canonical_name, ec.locked, ec.discrete,
 		       ec.parent_id, ec.full_path_display, ec.full_path_canonical,
-		       ec.depth, ec.status, ec.status_context, ec.last_event_id, ec.updated_at,
+		       ec.depth, ec.status, ec.status_context, ec.last_event_id, ec.updated_at, ec.home_id,
 		       EXISTS (
 		           SELECT 1 FROM entities_current c
 		           WHERE c.parent_id = ec.entity_id AND c.status != 'removed'
@@ -216,7 +216,7 @@ func (s *Store) GetDescendants(ctx context.Context, entityID string) ([]*invento
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\' AND status != 'removed'
 		ORDER BY depth ASC, display_name ASC, entity_id ASC`
 
@@ -234,7 +234,7 @@ func (s *Store) ListEntities(ctx context.Context) ([]*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current
 		WHERE status != 'removed'
 		ORDER BY full_path_display ASC, entity_id ASC`
@@ -252,7 +252,7 @@ func (s *Store) ListAllEntities(ctx context.Context) ([]*inventory.Entity, error
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current
 		ORDER BY full_path_display ASC, entity_id ASC`
 
@@ -314,7 +314,7 @@ func scanEntity(scan scanFunc) (*inventory.Entity, error) {
 	if err := scan(
 		&e.EntityID, &e.DisplayName, &e.CanonicalName, &e.Locked, &e.Discrete,
 		&e.ParentID, &e.FullPathDisplay, &e.FullPathCanonical,
-		&e.Depth, &e.Status, &e.StatusContext, &e.LastEventID, &updatedAtStr,
+		&e.Depth, &e.Status, &e.StatusContext, &e.LastEventID, &updatedAtStr, &e.HomeID,
 	); err != nil {
 		return nil, err
 	}
@@ -358,7 +358,7 @@ func (s *Store) GetEntityTx(ctx context.Context, tx Tx, entityID string) (*inven
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE entity_id = ?`
 
 	row := tx.QueryRowContext(ctx, query, entityID)
@@ -379,7 +379,7 @@ func (s *Store) GetLiveEntityTx(ctx context.Context, tx Tx, entityID string) (*i
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE entity_id = ? AND status != 'removed'`
 
 	row := tx.QueryRowContext(ctx, query, entityID)
@@ -408,7 +408,7 @@ func (s *Store) GetDescendantsTx(ctx context.Context, tx Tx, entityID string) ([
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at
+		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\'
 		ORDER BY depth ASC, display_name ASC, entity_id ASC`
 
@@ -433,4 +433,18 @@ func escapeLIKE(s string) string {
 	s = strings.ReplaceAll(s, `%`, `\%`)
 	s = strings.ReplaceAll(s, `_`, `\_`)
 	return s
+}
+
+// CountDisplacedWithHomeTx counts non-removed entities whose home is homeID but
+// which currently sit elsewhere (CONTEXT.md "Home": such a home may not be
+// removed or made discrete). IS NOT treats NULL parent (root) correctly.
+func (s *Store) CountDisplacedWithHomeTx(ctx context.Context, tx Tx, homeID string) (int, error) {
+	const q = `
+		SELECT COUNT(*) FROM entities_current
+		WHERE home_id = ? AND status != 'removed' AND parent_id IS NOT home_id`
+	var n int
+	if err := tx.QueryRowContext(ctx, q, homeID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count displaced with home %s: %w", homeID, err)
+	}
+	return n, nil
 }
