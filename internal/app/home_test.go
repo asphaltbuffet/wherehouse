@@ -135,6 +135,29 @@ func TestReparent_ToHomeWhenDisplacedRejected(t *testing.T) {
 		EntityID: f.drill.EntityID, NewParentID: f.garage.EntityID, ActorID: "t",
 	})
 	require.ErrorIs(t, err, app.ErrDestinationIsHome)
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.Contains(t, err.Error(), "use 'return' instead")
+}
+
+func TestHomeGuard_ReturnBorrowedRejectedWhileHomeOfDisplaced(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	borrowed, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{DisplayName: "Case", StatusContext: "Alice", ActorID: "t"},
+	})
+	require.NoError(t, err)
+	caseID := borrowed[0].EntityID
+	bit, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Bit", ParentID: caseID, ActorID: "t"})
+	require.NoError(t, err)
+	deck, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Deck", ActorID: "t"})
+	require.NoError(t, err)
+	_, err = a.UseEntity(ctx, app.UseEntityRequest{EntityID: bit.EntityID, NewParentID: deck.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+
+	_, err = a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: caseID, ActorID: "t"}})
+	require.ErrorIs(t, err, app.ErrIsHome)
+	assert.Contains(t, err.Error(),
+		`cannot return "Case": it is home to 1 displaced entities — return them first`)
 }
 
 func TestReparent_ElsewhereClearsDisplacement(t *testing.T) {

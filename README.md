@@ -332,7 +332,7 @@ Non-status actions, by interface:
 | loan | ✅ | ✅ | web form asks for "Loaned to" and an optional note; disabled for locked entities |
 | borrow | ✅ | ✅ | web creates one entity per submit, with a searchable location picker defaulting to the entity being viewed |
 | use | ✅ | ✅ | temporary move that keeps the entity's home; web form labelled "Use at" |
-| return | ✅ | ✅ | web asks for confirmation before returning a borrowed entity |
+| return | ✅ | ✅ | also sends displaced entities home; web asks for confirmation before returning a borrowed entity |
 | scry / list | ✅ | ✅ | web has search and tree browsing; no status filter |
 | history | ✅ | ❌ | |
 | export / doctor | ✅ | ❌ | |

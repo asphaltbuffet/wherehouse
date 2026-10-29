@@ -205,6 +205,9 @@ func (a *App) returnBorrowedTx(
 		return fmt.Errorf("cannot return %q (%d inside; return or move them first): %w",
 			entity.FullPathDisplay, n, ErrHasChildren)
 	}
+	if err = a.checkNotHomeTx(ctx, tx, entity, "return"); err != nil {
+		return err
+	}
 	return a.dispatchStatusTx(ctx, tx, entity, inventory.EntityStatusRemoved, actorID, note)
 }
 

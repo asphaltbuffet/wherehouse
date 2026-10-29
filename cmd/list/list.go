@@ -38,7 +38,7 @@ func buildListCmd() *cobra.Command {
 		Short: "List entities in the inventory",
 		Long: `List entities in the inventory.
 
-Use --under to restrict to children of a specific entity path, and --status to filter by lifecycle status.
+Use --under to restrict to children of a specific entity path, and --status to filter by lifecycle status. Use --displaced to show only entities away from their home, and --home-under to restrict those to entities whose home is under a path.
 
 Examples:
   wherehouse list                                    # All entities

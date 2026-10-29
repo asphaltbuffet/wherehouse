@@ -629,6 +629,13 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 		return
 	}
 
+	if errors.Is(err, app.ErrIsHome) {
+		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
+		stale.Error = "return failed: it is home to entities that are away — return them first"
+		s.renderDetailSection(w, r, stale)
+		return
+	}
+
 	fresh, ferr := s.buildDetailData(r.Context(), entityID)
 	if ferr != nil {
 		s.serverError(w, "build detail data", ferr)

@@ -479,6 +479,24 @@ func TestHandleReturn_HasChildrenShowsMessage(t *testing.T) {
 	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
 }
 
+func TestHandleReturn_IsHomeShowsMessage(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{
+		entities: []app.EntityResult{
+			{EntityID: "abc", DisplayName: "Case", FullPathDisplay: "Case",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+		},
+		returnErr: fmt.Errorf("return: %w", app.ErrIsHome),
+	})
+	defer ts.Close()
+
+	resp := postHTMX(t, ts, "/entities/abc/actions/return")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), "return failed: it is home to entities that are away — return them first")
+}
+
 // Review Focus #1 (#292): a concurrent Return removed the borrowed entity
 // between our detail read and our MarkReturned call.
 func TestHandleReturn_ConcurrentBorrowedShowsRemoval(t *testing.T) {
