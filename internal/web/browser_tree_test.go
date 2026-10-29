@@ -22,10 +22,12 @@ func TestBrowserTreeNavigation(t *testing.T) {
 		s.click(s.treeRow("Drawer"))
 
 		require.NoError(s.t, expect.Locator(s.detailHeading("Drawer")).ToBeVisible())
-		require.NoError(s.t, expect.Locator(s.treeItem("Drawer")).ToHaveAttribute("aria-selected", "true"))
 		if s.layout == narrow {
 			// Loading a detail from the tree closes the drawer to show it.
 			require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
+			// A closed drawer hides its items from role locators; reopen it.
+			s.openTree()
 		}
+		require.NoError(s.t, expect.Locator(s.treeItem("Drawer")).ToHaveAttribute("aria-selected", "true"))
 	})
 }
