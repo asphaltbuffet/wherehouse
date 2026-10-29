@@ -272,6 +272,39 @@ func (s *session) expandTreeItem(name string) {
 	require.NoError(s.t, expect.Locator(s.treeItem(name)).ToHaveAttribute("aria-expanded", "true"))
 }
 
+// button is the button named name in the main content area.
+func (s *session) button(name string) playwright.Locator {
+	main := s.page.GetByRole(*playwright.AriaRoleMain)
+	return main.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
+		Name:  name,
+		Exact: new(true),
+	})
+}
+
+// childLink is the row for name in the shown entity's (or home's) contents.
+func (s *session) childLink(name string) playwright.Locator {
+	contents := s.page.GetByRole(*playwright.AriaRoleRegion, playwright.PageGetByRoleOptions{Name: "Contents"})
+	return contents.GetByRole(*playwright.AriaRoleLink, playwright.LocatorGetByRoleOptions{
+		Name:  name,
+		Exact: new(true),
+	})
+}
+
+// requireChild returns parentID's live child named name ("" for a root),
+// failing if the database has none.
+func (s *session) requireChild(parentID, name string) app.EntityResult {
+	s.t.Helper()
+	live, err := s.app.ListEntities(s.t.Context())
+	require.NoError(s.t, err)
+	for _, e := range live {
+		if e.ParentID == parentID && e.DisplayName == name {
+			return e
+		}
+	}
+	require.Failf(s.t, "child not in database", "no %q under parent %q", name, parentID)
+	return app.EntityResult{}
+}
+
 // detailHeading is the entity name heading in the main content area.
 func (s *session) detailHeading(name string) playwright.Locator {
 	main := s.page.GetByRole(*playwright.AriaRoleMain)
