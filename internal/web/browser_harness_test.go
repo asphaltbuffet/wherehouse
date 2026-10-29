@@ -120,6 +120,10 @@ type session struct {
 // device's defaults.
 type sessionConfig struct {
 	colorScheme *playwright.ColorScheme // nil leaves prefers-color-scheme at light
+	// actorHeader configures the server's identity header (ADR 0031) and
+	// has the browser send it with value actor, as a trusted proxy would.
+	actorHeader string
+	actor       string
 }
 
 // forEachDevice runs fn as a parallel subtest per device, each against its own
@@ -143,10 +147,21 @@ func forEachDeviceWith(t *testing.T, cfg sessionConfig, fn func(s *session)) {
 func newSession(t *testing.T, d device, cfg sessionConfig) *session {
 	t.Helper()
 	a := apptesting.OpenApp(t)
-	srv, err := web.New(web.Config{App: a, Bind: "127.0.0.1", Port: 0, Output: io.Discard})
+	srv, err := web.New(web.Config{
+		App:         a,
+		Bind:        "127.0.0.1",
+		Port:        0,
+		Output:      io.Discard,
+		ActorHeader: cfg.actorHeader,
+	})
 	require.NoError(t, err)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
+
+	var headers map[string]string
+	if cfg.actorHeader != "" {
+		headers = map[string]string{cfg.actorHeader: cfg.actor}
+	}
 
 	ctx, err := browsers[d.desc.DefaultBrowserType].NewContext(playwright.BrowserNewContextOptions{
 		BaseURL:           new(ts.URL),
@@ -157,6 +172,7 @@ func newSession(t *testing.T, d device, cfg sessionConfig) *session {
 		IsMobile:          new(d.desc.IsMobile),
 		HasTouch:          new(d.desc.HasTouch),
 		ColorScheme:       cfg.colorScheme,
+		ExtraHttpHeaders:  headers,
 	})
 	require.NoError(t, err)
 	page, err := ctx.NewPage()
