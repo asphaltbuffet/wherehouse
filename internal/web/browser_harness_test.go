@@ -116,19 +116,31 @@ type session struct {
 	touch  bool // the device has a touch screen, so `pointer: coarse` applies
 }
 
+// sessionConfig adjusts a session's browser context; the zero value is the
+// device's defaults.
+type sessionConfig struct {
+	colorScheme *playwright.ColorScheme // nil leaves prefers-color-scheme at light
+}
+
 // forEachDevice runs fn as a parallel subtest per device, each against its own
 // server and database seeded through s.app.
 func forEachDevice(t *testing.T, fn func(s *session)) {
 	t.Helper()
+	forEachDeviceWith(t, sessionConfig{}, fn)
+}
+
+// forEachDeviceWith is forEachDevice with each session adjusted by cfg.
+func forEachDeviceWith(t *testing.T, cfg sessionConfig, fn func(s *session)) {
+	t.Helper()
 	for _, d := range devices {
 		t.Run(d.name, func(t *testing.T) {
 			t.Parallel()
-			fn(newSession(t, d))
+			fn(newSession(t, d, cfg))
 		})
 	}
 }
 
-func newSession(t *testing.T, d device) *session {
+func newSession(t *testing.T, d device, cfg sessionConfig) *session {
 	t.Helper()
 	a := apptesting.OpenApp(t)
 	srv, err := web.New(web.Config{App: a, Bind: "127.0.0.1", Port: 0, Output: io.Discard})
@@ -144,6 +156,7 @@ func newSession(t *testing.T, d device) *session {
 		DeviceScaleFactor: new(d.desc.DeviceScaleFactor),
 		IsMobile:          new(d.desc.IsMobile),
 		HasTouch:          new(d.desc.HasTouch),
+		ColorScheme:       cfg.colorScheme,
 	})
 	require.NoError(t, err)
 	page, err := ctx.NewPage()
