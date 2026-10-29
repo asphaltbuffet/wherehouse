@@ -133,7 +133,9 @@ func (a *App) CheckProjectionConsistency(ctx context.Context) ([]DoctorIssue, er
 		return nil, fmt.Errorf("check projection consistency: %w", err)
 	}
 
-	return checkProjectionRows(projRows, expectedPresent, maxEventID), nil
+	issues := checkProjectionRows(projRows, expectedPresent, maxEventID)
+	issues = append(issues, checkHomeRows(projRows)...)
+	return issues, nil
 }
 
 // RunDoctorChecks fetches the event log and projection rows once (concurrently)
@@ -160,6 +162,7 @@ func (a *App) RunDoctorChecks(ctx context.Context) ([]DoctorIssue, error) {
 	issues := validateEventLog(events, a.bus.PayloadFactories())
 	expectedPresent, maxEventID := buildProjectionSets(events)
 	issues = append(issues, checkProjectionRows(projRows, expectedPresent, maxEventID)...)
+	issues = append(issues, checkHomeRows(projRows)...)
 	return issues, nil
 }
 
@@ -243,4 +246,53 @@ func checkProjectionRows(
 	}
 
 	return issues
+}
+
+// checkHomeRows reports violations of the home invariant (CONTEXT.md "Hard
+// Invariants"): every non-removed entity's home is non-removed, non-discrete,
+// and neither the entity itself nor one of its descendants.
+func checkHomeRows(rows []*inventory.Entity) []DoctorIssue {
+	byID := make(map[string]*inventory.Entity, len(rows))
+	for _, e := range rows {
+		byID[e.EntityID] = e
+	}
+	var issues []DoctorIssue
+	report := func(e *inventory.Entity, why string) {
+		issues = append(issues, DoctorIssue{
+			Kind:        DoctorKindProjection,
+			Description: fmt.Sprintf("entity %s: home %s %s", e.EntityID, *e.HomeID, why),
+		})
+	}
+	for _, e := range rows {
+		if e.Status == inventory.EntityStatusRemoved || e.HomeID == nil {
+			continue
+		}
+		home, ok := byID[*e.HomeID]
+		switch {
+		case !ok || home.Status == inventory.EntityStatusRemoved:
+			report(e, "is removed or missing")
+		case home.Discrete:
+			report(e, "is discrete")
+		case homeInsideEntity(byID, e.EntityID, home.EntityID):
+			report(e, "is the entity itself or one of its descendants")
+		}
+	}
+	return issues
+}
+
+// homeInsideEntity walks homeID's ancestors (bounded by len(byID) to survive a
+// damaged, looping tree) looking for entityID.
+func homeInsideEntity(byID map[string]*inventory.Entity, entityID, homeID string) bool {
+	id := homeID
+	for range len(byID) + 1 {
+		if id == entityID {
+			return true
+		}
+		e, ok := byID[id]
+		if !ok || e.ParentID == nil {
+			return false
+		}
+		id = *e.ParentID
+	}
+	return false
 }

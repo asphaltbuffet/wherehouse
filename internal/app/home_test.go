@@ -327,3 +327,117 @@ func TestReturn_LoanedAndDisplacedIsAtomicWhenHomeInvalid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, after, len(before), "neither event lands")
 }
+
+func TestHomeGuard_RemoveRejectedWhileHomeOfDisplaced(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	shelf, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Shelf", ParentID: f.garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: f.drill.EntityID, NewParentID: shelf.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+
+	err = f.a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: shelf.EntityID, ActorID: "t"})
+	require.ErrorIs(t, err, app.ErrIsHome)
+	assert.Contains(t, err.Error(), "return them first")
+}
+
+func TestHomeGuard_DiscreteRejectedWhileHomeOfDisplaced(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	// Garage's only child (Drill) is away, so only the home guard can reject this.
+	discrete := true
+	_, err = f.a.SetAttributes(ctx, []app.SetAttributesRequest{{
+		EntityID: f.garage.EntityID, Discrete: &discrete, ActorID: "t",
+	}})
+	require.ErrorIs(t, err, app.ErrIsHome)
+}
+
+func TestHomeGuard_LockRejectedWhileDisplaced(t *testing.T) {
+	f := newHomeFixture(t)
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	locked := true
+	_, err = f.a.SetAttributes(t.Context(), []app.SetAttributesRequest{{
+		EntityID: f.drill.EntityID, Locked: &locked, ActorID: "t",
+	}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "entity is displaced — return it first")
+}
+
+func TestHomeGuard_DirectCycleRejected(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	shelf, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Shelf", ParentID: f.garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: f.drill.EntityID, NewParentID: shelf.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: shelf.EntityID, NewParentID: f.drill.EntityID, ActorID: "t",
+	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.Contains(t, err.Error(), "home would end up inside it")
+}
+
+func TestHomeGuard_IndirectCycleRejected(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	shelf, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Shelf", ParentID: f.garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: f.drill.EntityID, NewParentID: shelf.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID) // drill home = Shelf, inside Garage
+	require.NoError(t, err)
+
+	// Garage contains the drill's home (Shelf); moving it into the drill would nest the home in the drill.
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: f.garage.EntityID, NewParentID: f.drill.EntityID, ActorID: "t",
+	})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.Contains(t, err.Error(), "home would end up inside it")
+
+	// Same through use, into a descendant of the drill.
+	_, err = f.use(t, f.garage.EntityID, f.bit.EntityID)
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+	assert.Contains(t, err.Error(), "home would end up inside it")
+
+	// Moving Deck (which holds the drill) somewhere harmless is fine.
+	yard, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Yard", ActorID: "t"})
+	require.NoError(t, err)
+	_, err = f.a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: f.deck.EntityID, NewParentID: yard.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+}
+
+func TestHomeGuard_ReturnedHomeAllowsRemove(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	_, err := f.use(t, f.bit.EntityID, f.deck.EntityID) // bit home = Drill
+	require.NoError(t, err)
+	_, err = f.ret(t, f.bit.EntityID)
+	require.NoError(t, err)
+	err = f.a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: f.bit.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+	// Drill now has no live children and is home to nobody displaced.
+	err = f.a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: f.drill.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+}

@@ -221,7 +221,8 @@ func (a *App) isSelfOrDescendant(ctx context.Context, tx store.Tx, entityID, can
 
 // RemoveEntity permanently marks an entity as removed. It refuses an entity
 // that still contains non-removed entities (#287): they would be left live
-// under a removed parent, unreachable from the tree.
+// under a removed parent, unreachable from the tree. It also refuses an entity
+// that is home to displaced entities (ErrIsHome): they must be returned first.
 func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 	var note *string
 	if req.Note != "" {
@@ -245,6 +246,9 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 		if n > 0 {
 			return fmt.Errorf("cannot remove %q (%d inside; remove or move them first): %w",
 				entity.FullPathDisplay, n, ErrHasChildren)
+		}
+		if err = a.checkNotHomeTx(ctx, tx, entity, "remove"); err != nil {
+			return err
 		}
 
 		raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: entity.EntityID})

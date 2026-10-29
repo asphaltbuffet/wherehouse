@@ -161,3 +161,18 @@ func (a *App) returnHomeTx(
 	}
 	return nil
 }
+
+// checkNotHomeTx rejects action on e while any non-removed displaced entity
+// belongs in it (CONTEXT.md "Home"). action is the verb for the message
+// ("remove", "mark discrete").
+func (a *App) checkNotHomeTx(ctx context.Context, tx store.Tx, e *inventory.Entity, action string) error {
+	n, err := a.store.CountDisplacedWithHomeTx(ctx, tx, e.EntityID)
+	if err != nil {
+		return fmt.Errorf("%s %q: %w", action, e.FullPathDisplay, err)
+	}
+	if n > 0 {
+		return fmt.Errorf("cannot %s %q: it is home to %d displaced entities — return them first: %w",
+			action, e.FullPathDisplay, n, ErrIsHome)
+	}
+	return nil
+}
