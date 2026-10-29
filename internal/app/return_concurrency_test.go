@@ -103,7 +103,7 @@ func TestMarkReturned_ConcurrentLoanedOneWinner(t *testing.T) {
 	before := historyLen(t, a, e.EntityID)
 
 	for _, err := range assertOneWinner(t, raceMarkReturned(t, a, e.EntityID)) {
-		require.ErrorContains(t, err, "only loaned or borrowed entities can be returned")
+		require.ErrorContains(t, err, "already at home")
 	}
 	assertOneStatusEvent(t, a, e.EntityID, before, inventory.EntityStatusOk)
 }

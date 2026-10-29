@@ -155,49 +155,72 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 		return "", wrapEntityError(req.EntityID, err)
 	}
 
-	if entity.Status != inventory.EntityStatusLoaned && entity.Status != inventory.EntityStatusBorrowed {
-		return "", fmt.Errorf(
-			"cannot return %q: entity is %s (only loaned or borrowed entities can be returned)",
-			entity.FullPathDisplay, entity.Status,
-		)
-	}
-
-	// Borrowed entities are removed from inventory when returned, not reset to ok.
-	targetStatus := inventory.EntityStatusOk
-	if entity.Status == inventory.EntityStatusBorrowed {
-		var n int
-		n, err = a.store.CountLiveChildrenTx(ctx, tx, entity.EntityID)
-		if err != nil {
-			return "", fmt.Errorf("return %q: %w", entity.FullPathDisplay, err)
-		}
-		if n > 0 {
-			return "", fmt.Errorf("cannot return %q (%d inside; return or move them first): %w",
-				entity.FullPathDisplay, n, ErrHasChildren)
-		}
-		targetStatus = inventory.EntityStatusRemoved
-	}
-
-	payload := eventbus.EntityStatusChangedPayload{
-		EntityID: entity.EntityID,
-		Status:   targetStatus.String(),
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("marshal payload: %w", err)
-	}
-
 	var note *string
 	if req.Note != "" {
 		note = &req.Note
 	}
 
-	if _, err = a.bus.DispatchInTx(
-		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
-	); err != nil {
-		return "", fmt.Errorf("mark returned %q: %w", req.EntityID, err)
+	switch entity.Status { //nolint:exhaustive // removed is excluded by GetLiveEntityTx
+	case inventory.EntityStatusBorrowed:
+		// Borrowed entities leave the inventory without a trip home (ADR 0039).
+		if err = a.returnBorrowedTx(ctx, tx, entity, req.ActorID, note); err != nil {
+			return "", err
+		}
+		return entity.EntityID, nil
+	case inventory.EntityStatusLoaned:
+		if err = a.dispatchStatusTx(ctx, tx, entity, inventory.EntityStatusOk, req.ActorID, note); err != nil {
+			return "", err
+		}
+		note = nil // the note rides on the first event of the return only
+	case inventory.EntityStatusOk:
+		if !entity.IsDisplaced() {
+			return "", fmt.Errorf("cannot return %q: entity is ok and already at home", entity.FullPathDisplay)
+		}
+	case inventory.EntityStatusMissing:
+		return "", fmt.Errorf("cannot return %q: entity is missing — mark it found first", entity.FullPathDisplay)
+	default:
+		return "", fmt.Errorf(
+			"cannot return %q: entity is %s (only loaned, borrowed, or displaced entities can be returned)",
+			entity.FullPathDisplay, entity.Status,
+		)
 	}
 
+	if entity.IsDisplaced() {
+		if err = a.returnHomeTx(ctx, tx, entity, req.ActorID, note); err != nil {
+			return "", err
+		}
+	}
 	return entity.EntityID, nil
+}
+
+// returnBorrowedTx removes a borrowed entity; it must hold no live children (ADR 0032).
+func (a *App) returnBorrowedTx(
+	ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string,
+) error {
+	n, err := a.store.CountLiveChildrenTx(ctx, tx, entity.EntityID)
+	if err != nil {
+		return fmt.Errorf("return %q: %w", entity.FullPathDisplay, err)
+	}
+	if n > 0 {
+		return fmt.Errorf("cannot return %q (%d inside; return or move them first): %w",
+			entity.FullPathDisplay, n, ErrHasChildren)
+	}
+	return a.dispatchStatusTx(ctx, tx, entity, inventory.EntityStatusRemoved, actorID, note)
+}
+
+// dispatchStatusTx writes an EntityStatusChangedEvent with no status context.
+func (a *App) dispatchStatusTx(
+	ctx context.Context, tx store.Tx, entity *inventory.Entity,
+	status inventory.EntityStatus, actorID string, note *string,
+) error {
+	raw, err := json.Marshal(eventbus.EntityStatusChangedPayload{EntityID: entity.EntityID, Status: status.String()})
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityStatusChangedEvent, actorID, raw, note); err != nil {
+		return fmt.Errorf("mark returned %q: %w", entity.EntityID, err)
+	}
+	return nil
 }
 
 func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {

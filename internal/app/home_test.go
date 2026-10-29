@@ -1,6 +1,8 @@
 package app_test
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,7 +10,9 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 type homeFixture struct {
@@ -155,4 +159,171 @@ func TestUseEntity_DescendantsNotDisplaced(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Deck:Drill:Bit", bit.FullPathDisplay)
 	assert.False(t, bit.IsDisplaced())
+}
+
+func (f homeFixture) ret(t *testing.T, id string) ([]app.EntityResult, error) {
+	t.Helper()
+	return f.a.MarkReturned(t.Context(), []app.ChangeStatusRequest{{EntityID: id, ActorID: "t"}})
+}
+
+func TestReturn_DisplacedOkGoesHome(t *testing.T) {
+	f := newHomeFixture(t)
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	got, err := f.ret(t, f.drill.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, "Garage:Drill", got[0].FullPathDisplay)
+	assert.Equal(t, inventory.EntityStatusOk, got[0].Status)
+	assert.False(t, got[0].IsDisplaced())
+	bit, err := f.a.GetEntityByID(t.Context(), f.bit.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, "Garage:Drill:Bit", bit.FullPathDisplay)
+}
+
+func TestReturn_OkAtHomeRejected(t *testing.T) {
+	f := newHomeFixture(t)
+	_, err := f.ret(t, f.drill.EntityID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already at home")
+}
+
+func TestReturn_MissingRejected(t *testing.T) {
+	f := newHomeFixture(t)
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	_, err = f.a.MarkLost(t.Context(), []app.ChangeStatusRequest{{EntityID: f.drill.EntityID, ActorID: "t"}})
+	require.NoError(t, err)
+	_, err = f.ret(t, f.drill.EntityID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mark it found first")
+
+	found, err := f.a.MarkFound(t.Context(), []app.ChangeStatusRequest{{EntityID: f.drill.EntityID, ActorID: "t"}})
+	require.NoError(t, err)
+	assert.True(t, found[0].IsDisplaced(), "found does not relocate")
+}
+
+func TestReturn_LoanedAndDisplacedRestoresBoth(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	_, err = f.a.MarkLoaned(ctx, []app.ChangeStatusRequest{
+		{EntityID: f.drill.EntityID, StatusContext: "Sam", ActorID: "t"},
+	})
+	require.NoError(t, err)
+
+	got, err := f.ret(t, f.drill.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, inventory.EntityStatusOk, got[0].Status)
+	assert.Equal(t, "Garage:Drill", got[0].FullPathDisplay)
+
+	hist, err := f.a.GetHistory(ctx, app.GetHistoryRequest{EntityID: f.drill.EntityID})
+	require.NoError(t, err)
+	// History is newest-first: returned_home landed after status_changed.
+	require.GreaterOrEqual(t, len(hist), 2)
+	assert.Equal(t, inventory.EntityStatusChangedEvent, hist[1].EventType)
+	assert.Equal(t, inventory.EntityReturnedHomeEvent, hist[0].EventType)
+}
+
+func TestReturn_LoanedAtHomeStatusOnly(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	_, err := f.a.MarkLoaned(ctx, []app.ChangeStatusRequest{
+		{EntityID: f.drill.EntityID, StatusContext: "Sam", ActorID: "t"},
+	})
+	require.NoError(t, err)
+	got, err := f.ret(t, f.drill.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, "Garage:Drill", got[0].FullPathDisplay)
+	hist, err := f.a.GetHistory(ctx, app.GetHistoryRequest{EntityID: f.drill.EntityID})
+	require.NoError(t, err)
+	require.NotEmpty(t, hist)
+	assert.Equal(t, inventory.EntityStatusChangedEvent, hist[0].EventType)
+}
+
+func TestReturn_BorrowedDisplacedRemovedWithoutRelocation(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	b, err := f.a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{DisplayName: "Ladder", ParentID: f.garage.EntityID, StatusContext: "Neighbor"},
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, b[0].EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	got, err := f.ret(t, b[0].EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, inventory.EntityStatusRemoved, got[0].Status)
+	assert.Equal(t, "Deck:Ladder", got[0].FullPathDisplay, "no trip home before leaving")
+}
+
+func TestReturn_RootHome(t *testing.T) {
+	f := newHomeFixture(t)
+	_, err := f.use(t, f.deck.EntityID, f.garage.EntityID)
+	require.NoError(t, err)
+	got, err := f.ret(t, f.deck.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, "Deck", got[0].FullPathDisplay)
+	assert.Empty(t, got[0].ParentID)
+}
+
+func TestReturn_BatchReturnsEverythingAtDeck(t *testing.T) {
+	f := newHomeFixture(t)
+	ctx := t.Context()
+	saw, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Saw", ParentID: f.garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	_, err = f.use(t, saw.EntityID, f.deck.EntityID)
+	require.NoError(t, err)
+	got, err := f.a.MarkReturned(ctx, []app.ChangeStatusRequest{
+		{EntityID: f.drill.EntityID, ActorID: "t"}, {EntityID: saw.EntityID, ActorID: "t"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Garage:Drill", got[0].FullPathDisplay)
+	assert.Equal(t, "Garage:Saw", got[1].FullPathDisplay)
+}
+
+func TestReturn_LoanedAndDisplacedIsAtomicWhenHomeInvalid(t *testing.T) {
+	ctx := t.Context()
+	s, err := store.Open(store.Config{Path: filepath.Join(t.TempDir(), "test.db"), AutoMigrate: true})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	a := app.New(s)
+
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "t"})
+	require.NoError(t, err)
+	deck, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Deck", ActorID: "t"})
+	require.NoError(t, err)
+	drill, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Drill", ParentID: garage.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	_, err = a.UseEntity(ctx, app.UseEntityRequest{EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+	_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{
+		{EntityID: drill.EntityID, StatusContext: "Sam", ActorID: "t"},
+	})
+	require.NoError(t, err)
+
+	// Make the home an invalid destination by bypassing app guards.
+	raw, err := json.Marshal(eventbus.EntityDiscreteSetPayload{EntityID: garage.EntityID})
+	require.NoError(t, err)
+	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityDiscreteSetEvent, "t", raw, nil)
+	require.NoError(t, err)
+
+	before, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityID: drill.EntityID})
+	require.NoError(t, err)
+
+	_, err = a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: drill.EntityID, ActorID: "t"}})
+	require.ErrorIs(t, err, app.ErrInvalidDestination)
+
+	got, err := a.GetEntityByID(ctx, drill.EntityID)
+	require.NoError(t, err)
+	assert.Equal(t, inventory.EntityStatusLoaned, got.Status, "status_changed must roll back")
+	assert.Equal(t, "Deck:Drill", got.FullPathDisplay)
+	after, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityID: drill.EntityID})
+	require.NoError(t, err)
+	assert.Len(t, after, len(before), "neither event lands")
 }

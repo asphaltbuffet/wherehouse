@@ -323,6 +323,12 @@ func TestCountDisplacedWithHomeTx(t *testing.T) {
 	assert.Equal(t, 0, count(deck), "deck is not the drill's home")
 	assert.Equal(t, 0, count("drill00001"), "the bit travels with the drill and is not displaced")
 
+	returnDrill(t, b, &garage)
+	assert.Equal(t, 0, count(garage), "a drill returned home is no longer displaced")
+
+	useDrill(t, b, &deck)
+	assert.Equal(t, 1, count(garage), "using it again displaces it again")
+
 	dispatch(t, b, inventory.EntityRemovedEvent, eventbus.EntityRemovedPayload{EntityID: "drill00001"})
 	assert.Equal(t, 0, count(garage), "a removed displaced entity is not counted")
 }

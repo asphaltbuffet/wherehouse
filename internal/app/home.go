@@ -140,3 +140,24 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (EntityResult
 	// AnyStatus: a concurrent remove may commit between our commit and this read.
 	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
 }
+
+// returnHomeTx moves a displaced entity back to its home. The home is re-checked
+// as a destination; the home invariants make that pass in practice, but a
+// failed check rolls back the whole return.
+func (a *App) returnHomeTx(
+	ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string,
+) error {
+	if entity.HomeID != nil {
+		if err := a.checkMoveDestinationTx(ctx, tx, entity, *entity.HomeID); err != nil {
+			return err
+		}
+	}
+	raw, err := json.Marshal(eventbus.EntityReturnedHomePayload{EntityID: entity.EntityID, ParentID: entity.HomeID})
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityReturnedHomeEvent, actorID, raw, note); err != nil {
+		return fmt.Errorf("return %q home: %w", entity.FullPathDisplay, err)
+	}
+	return nil
+}
