@@ -168,6 +168,14 @@ func newSession(t *testing.T, d device) *session {
 	return &session{t: t, app: a, page: page, layout: d.layout, touch: d.desc.HasTouch}
 }
 
+// requireLayout skips the device subtest unless it has layout l.
+func (s *session) requireLayout(l layout) {
+	s.t.Helper()
+	if s.layout != l {
+		s.t.Skipf("%s layout only", l)
+	}
+}
+
 func saveArtifacts(t *testing.T, ctx playwright.BrowserContext, page playwright.Page, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -221,6 +229,13 @@ func (s *session) treeToggle() playwright.Locator {
 	return s.page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{
 		Name:  "Inventory",
 		Exact: new(true),
+	})
+}
+
+// treePanel is the inventory tree's navigation landmark.
+func (s *session) treePanel() playwright.Locator {
+	return s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{
+		Name: "Inventory tree",
 	})
 }
 
