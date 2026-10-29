@@ -56,17 +56,26 @@ Every `ORDER BY` that could tie **must** include `event_id ASC` as a tiebreaker.
 
 ```
 cmd/                     # CLI commands (cobra); one subdir per command
-  add/                   # add item / add location
+  add/                   # add entities (batch, --file CSV)
   attr/                  # show/set locked and discrete attributes
+  borrow/                # create entities in borrowed status
   config/                # config init/get/set/check/edit/path
-  history/               # event timeline for an item
-  list/                  # list items/locations
-  move/                  # move items between locations
-  remove/                # remove items
-  rename/                # rename items/locations
-  scry/                  # find/search items
+  db/                    # database settings (display name)
+  doctor/                # inventory health checks
+  export/ import/        # NDJSON event export / import
+  found/ lost/           # missing ↔ ok status transitions
+  history/               # event timeline for an entity
+  info/                  # database info and entity counts
+  list/                  # list entities (--under, --status)
+  loan/ return/          # loan out / return status transitions
+  man/                   # man page generation
+  move/                  # reparent an entity
+  remove/                # soft-remove entities
+  rename/                # rename an entity
+  scry/                  # Levenshtein search
   serve/                 # local web server (shell only — no HTTP/template/embed code)
-  status/                # item status commands
+  status/                # read-only status display (ADR 0023)
+  tag/                   # add/remove/list tags
   root.go                # root command, registers via NewDefaultXxxCmd()
 internal/
   app/                   # business logic layer (App struct, EntityResult, HistoryResult)
@@ -110,7 +119,7 @@ A command's `--json` shape is an **app-owned** type with JSON tags in `internal/
 
 **Handler file layout** — handlers are split by operation cluster; add new handlers to the matching file:
 - `handlers_browse.go` — index, tree children, search (entity discovery/navigation)
-- `handlers_entity.go` — entity detail, edit name, lost/found, `buildDetailData`, `renderDetailSection`
+- `handlers_entity.go` — entity detail and per-entity actions: edit name, lost/found, loan/return, move, remove, attr; `buildDetailData`, `renderDetailSection`
 - `handlers_add.go` — add item forms and creation flow
 - `handlers_borrow.go` — borrow form, default-parent resolution, borrow creation
 - `handlers_util.go` — `renderHTML`, `renderHTMLAppend`, `serverError`, `handleHealthz`, shared constants
@@ -118,7 +127,7 @@ A command's `--json` shape is an **app-owned** type with JSON tags in `internal/
 
 **Handler test layout** — `handlers_test.go` holds shared fixtures only (`fakeApp`, `newTestServer`, `errTest`); test functions mirror the production file they cover (`handlers_browse_test.go`, `handlers_entity_test.go`, etc.).
 
-**Web layer growth intent** — `internal/web` is planned to reach parity with the CLI: move, full status transitions (borrowed/loaned), import, export, and history views are all forthcoming. This is why the handler split happened before the file was critically large.
+**Web layer growth intent** — `internal/web` aims for parity with the CLI. Already present: add, borrow, rename, move, remove, attr, lost/found, loan/return, search. Not yet present: history, tags, import/export, doctor/info, and list filters. This is why the handler split happened before the file was critically large.
 
 **`EntityResult` field pitfall:** `CanonicalName` is the normalized *leaf name only* (no colons). `FullPathDisplay` is the full colon-separated path (e.g. `"Garage:Toolbox"`). Use `FullPathDisplay` when checking entity depth or path structure.
 
