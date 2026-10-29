@@ -113,6 +113,7 @@ type session struct {
 	app    *app.App
 	page   playwright.Page
 	layout layout
+	touch  bool // the device has a touch screen, so `pointer: coarse` applies
 }
 
 // forEachDevice runs fn as a parallel subtest per device, each against its own
@@ -164,7 +165,7 @@ func newSession(t *testing.T, d device) *session {
 		_ = ctx.Close()
 	})
 
-	return &session{t: t, app: a, page: page, layout: d.layout}
+	return &session{t: t, app: a, page: page, layout: d.layout, touch: d.desc.HasTouch}
 }
 
 func saveArtifacts(t *testing.T, ctx playwright.BrowserContext, page playwright.Page, dir string) {
