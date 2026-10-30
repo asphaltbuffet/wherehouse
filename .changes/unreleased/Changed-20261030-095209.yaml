@@ -1,0 +1,5 @@
+kind: Changed
+body: Locked entities are marked with an anchor instead of a padlock in `list` and the web UI, since locking only fixes location; the web tree also announces "locked" to screen readers
+time: 2026-10-30T09:52:09.661698902-04:00
+custom:
+    Issue: ""

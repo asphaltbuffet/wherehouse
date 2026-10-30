@@ -356,7 +356,7 @@ h1, h2, h3 {
 .chevron svg { width: 0.6em; height: 0.6em; }
 .chevron.open { transform: rotate(90deg); }
 
-.padlock { width: 0.7rem; height: 0.85rem; color: var(--color-text-muted); flex-shrink: 0; }
+.anchor { width: 0.85rem; height: 0.85rem; color: var(--color-text-muted); flex-shrink: 0; }
 
 /* ── Status marks (shape first, colour second) ───────────────────────── */
 .badge {

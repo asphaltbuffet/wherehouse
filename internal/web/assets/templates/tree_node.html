@@ -3,7 +3,7 @@
     role="treeitem"
     aria-selected="false"
     {{if .HasChildren}}aria-expanded="false"{{end}}
-    aria-labelledby="tree-label-{{.EntityID}}">
+    aria-labelledby="tree-label-{{.EntityID}} tree-lock-{{.EntityID}}">
   <div class="tree-item"
        tabindex="0"
        data-entity-id="{{.EntityID}}"
@@ -25,7 +25,7 @@
 </li>
 {{end}}
 
-{{define "tree_lock"}}{{if .Locked}}{{template "padlock"}}{{end}}{{end}}
+{{define "tree_lock"}}{{if .Locked}}{{template "anchor"}}{{end}}{{end}}
 
 {{define "tree_add_btn"}}{{if not .Discrete}}<button class="add-btn"
             type="button"

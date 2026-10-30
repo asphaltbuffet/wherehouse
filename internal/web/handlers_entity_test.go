@@ -1906,7 +1906,7 @@ func TestDetail_ChildrenList_RowsInAppOrder(t *testing.T) {
 
 	assert.Contains(t, childRow(t, body, "b1"), `hx-get="/entities/b1"`)
 	assert.Contains(t, childRow(t, body, "b1"), `hx-push-url="true"`)
-	assert.Contains(t, childRow(t, body, "d1"), `class="padlock"`)
+	assert.Contains(t, childRow(t, body, "d1"), `class="anchor"`)
 	assert.Contains(t, childRow(t, body, "d1"), `class="chevron"`)
 	assert.NotContains(t, childRow(t, body, "b1"), `class="chevron"`)
 	assert.Contains(t, childRow(t, body, "w1"), `<span class="visually-hidden">loaned</span>`)

@@ -32,7 +32,7 @@ func TestHandleIndex(t *testing.T) {
 	assert.Contains(t, string(body), "Garage")
 }
 
-func TestIndex_TreeMarksAndPadlock(t *testing.T) {
+func TestIndex_TreeMarksAndAnchor(t *testing.T) {
 	entities := []app.EntityResult{
 		{EntityID: "g1", DisplayName: "Garage", CanonicalName: "garage", FullPathDisplay: "Garage",
 			Status: inventory.EntityStatusOk, Locked: true},
@@ -51,9 +51,11 @@ func TestIndex_TreeMarksAndPadlock(t *testing.T) {
 	assert.Contains(t, body, `<span id="tree-badge-g1" class="badge "></span>`)
 	assert.Contains(t, body,
 		`<span id="tree-badge-w1" class="badge loaned"><span class="visually-hidden">loaned</span></span>`)
-	// padlock is an svg, not an emoji
-	assert.Contains(t, body, `class="padlock"`)
-	assert.NotContains(t, body, "🔒")
+	// anchor is an svg, not an emoji, and is announced as part of the row name
+	assert.Contains(t, body, `class="anchor"`)
+	assert.NotContains(t, body, "⚓")
+	assert.Contains(t, body, `<span class="visually-hidden">locked</span>`)
+	assert.Contains(t, body, `aria-labelledby="tree-label-g1 tree-lock-g1"`)
 }
 
 func TestIndex_HomeListsRoots(t *testing.T) {
@@ -301,8 +303,8 @@ func TestHandleTreeNode(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), `id="tree-node-abc"`)
-	// Named by its label span, so a rename's out-of-band label swap renames it.
-	assert.Contains(t, string(body), `aria-labelledby="tree-label-abc"`)
+	// Named by its label and lock spans, so out-of-band swaps of either rename it.
+	assert.Contains(t, string(body), `aria-labelledby="tree-label-abc tree-lock-abc"`)
 	assert.NotContains(t, string(body), `aria-label="Drill"`)
 
 	resp2, err := ts.Client().Get(ts.URL + "/entities/nope/tree-node")
