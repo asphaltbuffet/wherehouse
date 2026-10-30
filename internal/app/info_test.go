@@ -89,3 +89,17 @@ func TestSetWherehouseName_MaxLength(t *testing.T) {
 
 	assert.NoError(t, a.SetWherehouseName(ctx, strings.Repeat("x", 255)))
 }
+
+func TestGetWherehouseName(t *testing.T) {
+	a, _ := openTestAppWithPath(t)
+	ctx := context.Background()
+
+	name, err := a.GetWherehouseName(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "(unnamed)", name)
+
+	require.NoError(t, a.SetWherehouseName(ctx, "123 Fake Street"))
+	name, err = a.GetWherehouseName(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "123 Fake Street", name)
+}

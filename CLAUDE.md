@@ -48,7 +48,7 @@ events (event_id PK, event_type, timestamp_utc, actor_user_id, payload JSON, not
 ```
 
 **Projection tables (derived, rebuildable):**
-- `entities_current` — current entity state (places, containers, items) and hierarchy; `home_id` is the persistent home reference (displaced = parent differs from home); `status` is `TEXT NOT NULL DEFAULT 'ok'` with a `CHECK` constraint over the status names
+- `entities_current` — current entity state (all entities; there are no entity types) and hierarchy; `home_id` is the persistent home reference (displaced = parent differs from home); `status` is `TEXT NOT NULL DEFAULT 'ok'` with a `CHECK` constraint over the status names
 
 Every `ORDER BY` that could tie **must** include `event_id ASC` as a tiebreaker.
 
@@ -123,12 +123,13 @@ A command's `--json` shape is an **app-owned** type with JSON tags in `internal/
 - `handlers_entity.go` — entity detail and per-entity actions: edit name, lost/found, loan/return, move, remove, attr; `buildDetailData`, `renderDetailSection`
 - `handlers_add.go` — add item forms and creation flow
 - `handlers_borrow.go` — borrow form, default-parent resolution, borrow creation
+- `handlers_report.go` — Reports page and CSV/JSON export (`GET /reports`)
 - `handlers_util.go` — `renderHTML`, `renderHTMLAppend`, `serverError`, `handleHealthz`, shared constants
 - `handlers_data.go` — create this when import/export handlers arrive (not yet present)
 
 **Handler test layout** — `handlers_test.go` holds shared fixtures only (`fakeApp`, `newTestServer`, `errTest`); test functions mirror the production file they cover (`handlers_browse_test.go`, `handlers_entity_test.go`, etc.).
 
-**Web layer growth intent** — `internal/web` aims for parity with the CLI. Already present: add, borrow, rename, move, remove, attr, lost/found, loan/return, use, search. Not yet present: history, tags, import/export, doctor/info, and list filters. This is why the handler split happened before the file was critically large.
+**Web layer growth intent** — `internal/web` aims for parity with the CLI. Already present: add, borrow, rename, move, remove, attr, lost/found, loan/return, use, search, reports (list filters). Not yet present: history, tags, import/export, and doctor/info. This is why the handler split happened before the file was critically large.
 
 **`EntityResult` field pitfall:** `CanonicalName` is the normalized *leaf name only* (no colons). `FullPathDisplay` is the full colon-separated path (e.g. `"Garage:Toolbox"`). Use `FullPathDisplay` when checking entity depth or path structure.
 

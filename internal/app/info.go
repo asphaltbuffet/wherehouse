@@ -14,15 +14,9 @@ const maxNameLength = 255
 
 // GetInfo returns the database display name, path, and entity counts by status.
 func (a *App) GetInfo(ctx context.Context) (InfoResult, error) {
-	name, err := a.store.GetMetadata(ctx, displayNameKey)
-	if errors.Is(err, store.ErrNotFound) {
-		name = ""
-	} else if err != nil {
+	name, err := a.GetWherehouseName(ctx)
+	if err != nil {
 		return InfoResult{}, fmt.Errorf("get info: %w", err)
-	}
-
-	if name == "" {
-		name = "(unnamed)"
 	}
 
 	counts, err := a.store.CountEntitiesByStatus(ctx)
@@ -35,6 +29,21 @@ func (a *App) GetInfo(ctx context.Context) (InfoResult, error) {
 		DatabasePath: a.store.Path(),
 		EntityCounts: counts,
 	}, nil
+}
+
+// GetWherehouseName returns the database display name, or "(unnamed)".
+func (a *App) GetWherehouseName(ctx context.Context) (string, error) {
+	name, err := a.store.GetMetadata(ctx, displayNameKey)
+	if errors.Is(err, store.ErrNotFound) {
+		name = ""
+	} else if err != nil {
+		return "", fmt.Errorf("get display name: %w", err)
+	}
+
+	if name == "" {
+		name = "(unnamed)"
+	}
+	return name, nil
 }
 
 // SetWherehouseName stores a display name for this database.

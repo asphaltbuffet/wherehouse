@@ -1,0 +1,5 @@
+kind: Added
+body: 'Web UI Reports page: missing, loaned, borrowed, displaced, by-parent, and all-entity reports with filters, CSV/JSON download, and a print view'
+time: 2026-10-30T14:18:39.105719531-04:00
+custom:
+    Issue: "355"

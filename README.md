@@ -47,7 +47,7 @@ Wherehouse tracks every entity's location with a complete audit trail. Event-sou
 - **Status Tracking** — mark entities as `ok`, `missing`, `borrowed`, `loaned`, or `removed`
 - **Home and Displaced** — an entity remembers its home; `use` moves it temporarily and `return` sends it back
 - **Full History** — every move, rename, and status change is recorded with actor and timestamp
-- **Web UI** — local HTTP server for browsing (including tags), searching, adding, editing, locking, marking discrete, borrowing, loaning, and returning inventory; works on phones (tree drawer, full-width detail with a contents list)
+- **Web UI** — local HTTP server for browsing (including tags), searching, adding, editing, locking, marking discrete, borrowing, loaning, and returning inventory; reports (missing, loaned, borrowed, displaced, by parent, all) with CSV/JSON export and a printable view; works on phones (tree drawer, full-width detail with a contents list)
 - **Single-Host Storage** — one SQLite file in WAL mode; share an inventory across machines through the web UI, not by opening the file from more than one host
 - **Multi-User Attribution** — trust-based; tracks who made changes, no permissions enforcement
 - **Single File Database** — entire inventory in one portable SQLite file

@@ -127,6 +127,10 @@ The act of translating a user-supplied colon-separated path string into an `enti
 
 The `scry` command searches for entities by name (fuzzy, using Levenshtein distance). It is a **search/find** command — not an inference engine for missing items. Results are `FindResult` values with `Entity` and `Distance` fields.
 
+### Report
+
+A named, read-only preset of the entity filter (the same AND-combination of status, under, displaced, and home-under that `list` uses), giving a starting point for a cross-cutting question about the inventory. The reports are **Missing**, **Loaned**, **Borrowed**, **Displaced**, **By parent** (an entity and its whole subtree at their current location; "under X" always includes X), and **All**. A report matches each entity on its own status and location; an entity is not included because of an ancestor's status (an `ok` wrench inside a `loaned` toolbox is not in the Loaned report). Removed entities never appear. _Avoid_: query, view, saved search.
+
 ### Tag
 
 A short, user-defined classification label applied to an entity. Tags are bare strings (no key-value pairs). They are stored in their canonical form only (via `CanonicalizeString`: lowercase, whitespace/`-`/`_` collapsed to `_`, leading/trailing `_` stripped). Any entity type (`place`, `container`, `leaf`) may have zero or more tags. Tags are used to group or filter entities across the hierarchy regardless of location or status.
