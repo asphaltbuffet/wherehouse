@@ -237,7 +237,7 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.renderDetailSection(w, r, fresh)
-	if wantsFragment(r) {
+	if wantsFragment(w, r) {
 		s.renderHTMLAppend(w, "tree_attrs_oob", fresh.Entity)
 	}
 }
@@ -463,7 +463,7 @@ func (s *Server) handleEntityDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, data detailData) {
-	if wantsFragment(r) {
+	if wantsFragment(w, r) {
 		s.renderHTML(w, "detail_section", data)
 		return
 	}
@@ -523,7 +523,7 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.renderDetailSection(w, r, fresh)
-	if wantsFragment(r) {
+	if wantsFragment(w, r) {
 		s.renderHTMLAppend(w, "tree_label_oob", fresh.Entity)
 		s.renderHTMLAppend(w, "tree_attrs_oob", fresh.Entity) // the add button's label names it
 	}
@@ -628,7 +628,7 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 // place, plus the out-of-band tree badge update.
 func (s *Server) renderStatusChanged(w http.ResponseWriter, r *http.Request, fresh detailData) {
 	s.renderDetailSection(w, r, fresh)
-	if wantsFragment(r) {
+	if wantsFragment(w, r) {
 		s.renderHTMLAppend(w, "tree_badge_oob", fresh.Entity)
 	}
 }
@@ -1218,7 +1218,7 @@ func (s *Server) renderGone(w http.ResponseWriter, r *http.Request, entityID str
 	removed.Error = staleMessage
 	s.setTreeNodeDetachedTrigger(w, r, removed.Entity)
 	s.renderDetailSection(w, r, removed)
-	if wantsFragment(r) {
+	if wantsFragment(w, r) {
 		s.renderHTMLAppend(w, "tree_node_delete_oob", removed.Entity)
 	}
 }

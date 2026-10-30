@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
@@ -55,6 +56,7 @@ const (
 	maxQueryLen          = 100
 	maxFormBytes         = 16 * 1024 // upper bound for POST form bodies
 	htmxHeaderVal        = "true"
+	htmxRequestHeader    = "Hx-Request"
 	historyRestoreHeader = "Hx-History-Restore-Request"
 )
 
@@ -74,8 +76,18 @@ func (s *Server) serverError(w http.ResponseWriter, op string, err error) {
 // rather than a full page. htmx sends its history-cache-miss reload with
 // Hx-Request set, but swaps the response into <body>, so that request needs
 // the full page. Security checks (csrfGuard) must read Hx-Request directly.
-func wantsFragment(r *http.Request) bool {
-	return r.Header.Get("Hx-Request") == htmxHeaderVal &&
+//
+// Because the answer shapes the response, it also adds both headers to Vary on
+// w, so caches never serve a fragment for a full navigation or the reverse.
+// Call it before the response is written.
+func wantsFragment(w http.ResponseWriter, r *http.Request) bool {
+	h := w.Header()
+	for _, name := range []string{htmxRequestHeader, historyRestoreHeader} {
+		if !slices.Contains(h.Values("Vary"), name) {
+			h.Add("Vary", name)
+		}
+	}
+	return r.Header.Get(htmxRequestHeader) == htmxHeaderVal &&
 		r.Header.Get(historyRestoreHeader) != htmxHeaderVal
 }
 
