@@ -59,15 +59,19 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 	return b.store.InsertEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityRenamed(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+// renameEntityTx is the pathChangeFn for EntityRenamedEvent. Descendants are
+// returned only when the canonical name changed.
+func (b *Bus) renameEntityTx(
+	ctx context.Context, tx store.Tx, ev *inventory.Event,
+) (*inventory.Entity, []*inventory.Entity, error) {
 	var p EntityRenamedPayload
 	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityRenamed: unmarshal: %w", err)
+		return nil, nil, fmt.Errorf("handleEntityRenamed: unmarshal: %w", err)
 	}
 
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
-		return fmt.Errorf("handleEntityRenamed: get entity: %w", err)
+		return nil, nil, fmt.Errorf("handleEntityRenamed: get entity: %w", err)
 	}
 
 	oldCanonical := entity.CanonicalName
@@ -76,7 +80,7 @@ func (b *Bus) handleEntityRenamed(ctx context.Context, tx store.Tx, ev *inventor
 	// matches the old canonical path stored in the DB.
 	descendants, err := b.store.GetDescendantsTx(ctx, tx, p.EntityID)
 	if err != nil {
-		return fmt.Errorf("handleEntityRenamed: get descendants: %w", err)
+		return nil, nil, fmt.Errorf("handleEntityRenamed: get descendants: %w", err)
 	}
 
 	entity.DisplayName = p.DisplayName
@@ -85,23 +89,20 @@ func (b *Bus) handleEntityRenamed(ctx context.Context, tx store.Tx, ev *inventor
 		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
 	)
 	if err != nil {
-		return fmt.Errorf("handleEntityRenamed: recompute path: %w", err)
+		return nil, nil, fmt.Errorf("handleEntityRenamed: recompute path: %w", err)
 	}
 
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 
 	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
-		return fmt.Errorf("handleEntityRenamed: %w", err)
+		return nil, nil, fmt.Errorf("handleEntityRenamed: %w", err)
 	}
 
-	if entity.CanonicalName != oldCanonical {
-		if err = b.propagatePathChangesTx(ctx, tx, ev, entity, descendants); err != nil {
-			return fmt.Errorf("handleEntityRenamed: propagate: %w", err)
-		}
+	if entity.CanonicalName == oldCanonical {
+		return entity, nil, nil
 	}
-
-	return nil
+	return entity, descendants, nil
 }
 
 func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
@@ -275,7 +276,9 @@ func (b *Bus) handleEntityDiscreteCleared(ctx context.Context, tx store.Tx, ev *
 }
 
 // propagatePathChangesTx emits entity.path_changed derived events for all descendants
-// and updates each projection within the same transaction.
+// and updates each projection within the same transaction. The derived events carry
+// the triggering event's timestamp, so an import reproduces the source rows. It
+// returns the payloads it wrote, in descendant order.
 //
 // descendants must be fetched BEFORE the parent entity is updated in the DB, so that
 // path-prefix queries still match the old canonical path. They must be ordered depth ASC
@@ -288,10 +291,10 @@ func (b *Bus) propagatePathChangesTx(
 	triggeringEv *inventory.Event,
 	parent *inventory.Entity,
 	descendants []*inventory.Entity,
-) error {
+) ([]EntityPathChangedPayload, error) {
 	payloads, err := ComputeDescendantPathPayloads(parent, descendants)
 	if err != nil {
-		return fmt.Errorf("compute descendant paths: %w", err)
+		return nil, fmt.Errorf("compute descendant paths: %w", err)
 	}
 
 	for i, d := range descendants {
@@ -305,7 +308,7 @@ func (b *Bus) propagatePathChangesTx(
 		var payloadJSON []byte
 		payloadJSON, err = json.Marshal(p)
 		if err != nil {
-			return fmt.Errorf("marshal path_changed payload for %s: %w", d.EntityID, err)
+			return nil, fmt.Errorf("marshal path_changed payload for %s: %w", d.EntityID, err)
 		}
 
 		const q = `
@@ -313,21 +316,21 @@ func (b *Bus) propagatePathChangesTx(
             VALUES (?, ?, ?, ?, NULL, ?)`
 		_, err = tx.ExecContext(ctx, q,
 			inventory.EntityPathChangedEvent,
-			time.Now().UTC().Format(time.RFC3339),
+			triggeringEv.TimestampUTC,
 			triggeringEv.ActorUserID,
 			string(payloadJSON),
 			d.EntityID,
 		)
 		if err != nil {
-			return fmt.Errorf("insert path_changed event for %s: %w", d.EntityID, err)
+			return nil, fmt.Errorf("insert path_changed event for %s: %w", d.EntityID, err)
 		}
 
 		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
-			return fmt.Errorf("update descendant %s: %w", d.EntityID, err)
+			return nil, fmt.Errorf("update descendant %s: %w", d.EntityID, err)
 		}
 	}
 
-	return nil
+	return payloads, nil
 }
 
 // ComputeDescendantPathPayloads computes the new EntityPathChangedPayload for

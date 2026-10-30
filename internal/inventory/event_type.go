@@ -64,8 +64,7 @@ var eventTypeByName = map[string]EventType{
 	EntityRehomedEvent.String():         EntityRehomedEvent,
 }
 
-// Relocates reports whether the event changes an entity's parent, and so
-// emits (live) or is followed by (log) EntityPathChangedEvents for descendants.
+// Relocates reports whether the event changes an entity's parent.
 func (t EventType) Relocates() bool {
 	switch t { //nolint:exhaustive // only parent-changing events relocate
 	case EntityReparentedEvent, EntityUsedEvent, EntityReturnedHomeEvent:
@@ -73,6 +72,12 @@ func (t EventType) Relocates() bool {
 	default:
 		return false
 	}
+}
+
+// PropagatesPaths reports whether the event can change descendants' paths, and
+// so emits (live and import) or is followed by (log) EntityPathChangedEvents.
+func (t EventType) PropagatesPaths() bool {
+	return t.Relocates() || t == EntityRenamedEvent
 }
 
 // ParseEventType converts a string to an EventType, returning an error for unknown values.

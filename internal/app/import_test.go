@@ -395,3 +395,84 @@ func TestImport_RoundTripPreservesHomes(t *testing.T) {
 		})
 	}
 }
+
+// Regression for #357: a rebuild of an imported log must leave descendants at
+// their post-change paths, must not grow the log, and must match the source log.
+func TestImport_RebuildKeepsDescendantPaths(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(t *testing.T, a *app.App, b, d app.EntityResult)
+		want   string
+	}{
+		{
+			name: "move",
+			change: func(t *testing.T, a *app.App, b, d app.EntityResult) {
+				t.Helper()
+				_, err := a.ReparentEntity(t.Context(), app.ReparentEntityRequest{
+					EntityID: b.EntityID, NewParentID: d.EntityID, ActorID: "t",
+				})
+				require.NoError(t, err)
+			},
+			want: "D:B:C",
+		},
+		{
+			name: "rename",
+			change: func(t *testing.T, a *app.App, b, _ app.EntityResult) {
+				t.Helper()
+				_, err := a.RenameEntity(t.Context(), app.RenameEntityRequest{
+					EntityID: b.EntityID, NewName: "Bee", ActorID: "t",
+				})
+				require.NoError(t, err)
+			},
+			want: "A:Bee:C",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			src := apptesting.OpenApp(t)
+			a, err := src.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "A", ActorID: "t"})
+			require.NoError(t, err)
+			b, err := src.CreateEntity(
+				ctx,
+				app.CreateEntityRequest{DisplayName: "B", ParentID: a.EntityID, ActorID: "t"},
+			)
+			require.NoError(t, err)
+			c, err := src.CreateEntity(
+				ctx,
+				app.CreateEntityRequest{DisplayName: "C", ParentID: b.EntityID, ActorID: "t"},
+			)
+			require.NoError(t, err)
+			d, err := src.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "D", ActorID: "t"})
+			require.NoError(t, err)
+			tt.change(t, src, b, d)
+
+			srcEvents, err := src.GetAllEvents(ctx)
+			require.NoError(t, err)
+
+			dst := apptesting.OpenApp(t)
+			res, err := dst.ImportEvents(ctx, srcEvents, app.ImportOptions{})
+			require.NoError(t, err)
+			assert.Zero(t, res.WarningCount, "warnings: %v", res.Warnings)
+
+			dstEvents, err := dst.GetAllEvents(ctx)
+			require.NoError(t, err)
+			require.Len(t, dstEvents, len(srcEvents), "imported log must match the source log")
+			for i := range srcEvents {
+				assert.Equal(t, srcEvents[i].EventType, dstEvents[i].EventType, "event %d type", i)
+				assert.JSONEq(t, string(srcEvents[i].Payload), string(dstEvents[i].Payload), "event %d payload", i)
+			}
+
+			_, err = dst.TruncateAndReplay(ctx)
+			require.NoError(t, err)
+
+			got, err := dst.GetEntityByID(ctx, c.EntityID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got.FullPathDisplay)
+
+			rebuilt, err := dst.GetAllEvents(ctx)
+			require.NoError(t, err)
+			assert.Len(t, rebuilt, len(srcEvents), "rebuild must not write events")
+		})
+	}
+}

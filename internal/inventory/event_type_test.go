@@ -42,6 +42,16 @@ func TestEventType_Relocates(t *testing.T) {
 	assert.True(t, inventory.EntityReturnedHomeEvent.Relocates())
 	assert.False(t, inventory.EntityRehomedEvent.Relocates(), "rehome changes home only, no paths move")
 	assert.False(t, inventory.EntityStatusChangedEvent.Relocates())
+	assert.False(t, inventory.EntityRenamedEvent.Relocates())
+}
+
+func TestEventType_PropagatesPaths(t *testing.T) {
+	assert.True(t, inventory.EntityReparentedEvent.PropagatesPaths())
+	assert.True(t, inventory.EntityUsedEvent.PropagatesPaths())
+	assert.True(t, inventory.EntityReturnedHomeEvent.PropagatesPaths())
+	assert.True(t, inventory.EntityRenamedEvent.PropagatesPaths())
+	assert.False(t, inventory.EntityRehomedEvent.PropagatesPaths())
+	assert.False(t, inventory.EntityPathChangedEvent.PropagatesPaths())
 }
 
 func TestParseEventType_HomeEvents(t *testing.T) {
