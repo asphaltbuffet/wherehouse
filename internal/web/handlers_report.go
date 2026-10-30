@@ -142,12 +142,12 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, "list entities", err)
 		return
 	}
-	info, err := s.cfg.App.GetInfo(ctx)
+	name, err := s.cfg.App.GetWherehouseName(ctx)
 	if err != nil {
-		s.serverError(w, "get info", err)
+		s.serverError(w, "get wherehouse name", err)
 		return
 	}
-	report := app.BuildReport(all, filter, info.Name, time.Now())
+	report := app.BuildReport(all, filter, name, time.Now())
 
 	switch format {
 	case formatCSV:

@@ -17,7 +17,7 @@ import (
 type fakeApp struct{}
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) { return nil, nil }
-func (f *fakeApp) GetInfo(_ context.Context) (app.InfoResult, error)          { return app.InfoResult{}, nil }
+func (f *fakeApp) GetWherehouseName(_ context.Context) (string, error)        { return "", nil }
 func (f *fakeApp) GetEntityByID(_ context.Context, _ string) (app.EntityResult, error) {
 	return app.EntityResult{}, nil
 }

@@ -11,7 +11,7 @@ import (
 // App is the dependency contract the web package requires from the app layer.
 type App interface {
 	ListEntities(ctx context.Context) ([]app.EntityResult, error)
-	GetInfo(ctx context.Context) (app.InfoResult, error)
+	GetWherehouseName(ctx context.Context) (string, error)
 	GetEntityByID(ctx context.Context, entityID string) (app.EntityResult, error)
 	GetChildren(ctx context.Context, parentID string) ([]app.EntityResult, error)
 	HasLiveChildren(ctx context.Context, parentID string) (bool, error)

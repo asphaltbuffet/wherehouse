@@ -19,7 +19,7 @@ import (
 // Garage but is in the Attic; Gone is removed and must never show.
 func reportFixture() *fakeApp {
 	return &fakeApp{
-		info: app.InfoResult{Name: "Home inventory"},
+		name: "Home inventory",
 		entities: []app.EntityResult{
 			{
 				EntityID: "garage0001", DisplayName: "Garage",
@@ -147,9 +147,9 @@ func TestHandleReports_ListErrorIs500(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
-func TestHandleReports_InfoErrorIs500(t *testing.T) {
+func TestHandleReports_NameErrorIs500(t *testing.T) {
 	fake := reportFixture()
-	fake.infoErr = errTest
+	fake.nameErr = errTest
 	resp, _ := getPath(t, fake, "/reports")
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
