@@ -61,8 +61,35 @@ const (
 )
 
 // staleMessage is the inline error shown when an action's panel was stale:
-// the entity changed elsewhere, so its fresh state is rendered instead.
+// the entity changed elsewhere, so its fresh state is rendered instead. Use it
+// only when the code knows the entity changed (#336); otherwise see
+// unavailableError.
 const staleMessage = "Already changed elsewhere; showing current state."
+
+// unavailableMessage is the neutral inline error for an action the fresh read
+// doesn't offer, when there is no blocked reason to explain why (#336).
+const unavailableMessage = "That action isn't available; showing current state."
+
+// unavailableError is the inline error for an action the fresh read doesn't
+// offer: blocked (the action's disabled-button tooltip) when set, else the
+// neutral unavailableMessage. It reads the same for a stale panel and a
+// never-eligible URL, since the code can't tell them apart.
+func unavailableError(blocked string) string {
+	if blocked != "" {
+		return blocked
+	}
+	return unavailableMessage
+}
+
+// rejectedError is the inline error for a write the fresh read no longer
+// offers. If the pre-write read offered it, the entity changed during the
+// request, so staleMessage is known to be true.
+func rejectedError(offeredBefore bool, blocked string) string {
+	if offeredBefore {
+		return staleMessage
+	}
+	return unavailableError(blocked)
+}
 
 // serverError logs the internal detail and returns a generic 500 to the client.
 // Use this for any failure that originates inside the server (DB, template, app

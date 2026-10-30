@@ -3,6 +3,7 @@ package web_test
 import (
 	"context"
 	"errors"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,15 @@ var errTest = errors.New("test error")
 
 // staleText mirrors web.staleMessage (unexported) for body assertions.
 const staleText = "Already changed elsewhere; showing current state."
+
+// unavailableText mirrors web.unavailableMessage (unexported).
+const unavailableText = "That action isn't available; showing current state."
+
+// alert is msg as the detail panel's inline error renders it, so a blocked
+// reason is told apart from the same text in a disabled button's tooltip.
+func alert(msg string) string {
+	return `role="alert">` + html.EscapeString(msg) + `</div>`
+}
 
 // recordingLogger satisfies logging.Logger and keeps the messages of Error calls.
 type recordingLogger struct {
