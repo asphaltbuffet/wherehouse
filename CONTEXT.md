@@ -14,7 +14,7 @@ The single unified domain type. Everything in the inventory — a storage place,
 
 ### locked
 
-A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Conversely, an entity can only be locked while its status is `ok` or `borrowed` and it is not displaced, so a locked entity is never `missing`, `loaned`, or displaced. Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`.
+A mutable boolean attribute on an entity. When `true`, the entity cannot be directly reparented by the user, and cannot be set to `EntityStatusMissing` or `EntityStatusLoaned` (its location is fixed by assertion). Conversely, an entity can only be locked while its status is `ok` or `borrowed` and it is not displaced, so a locked entity is never `missing`, `loaned`, or displaced. Cascade path updates from an ancestor reparent still propagate normally — a locked entity moves with its parent. Defaults to `false` at creation. Toggled via `EntityLockedEvent` / `EntityUnlockedEvent`. Locking restricts location only; name, tags, other attributes, and removal are unaffected. It says nothing about physical security (a padlocked box is not a locked entity). _Avoid_: anchored, pinned, fixed.
 
 ### discrete
 

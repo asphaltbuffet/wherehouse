@@ -126,7 +126,8 @@ func formatLabel(e app.EntityResult, isMatch, verbose bool, s *styles.Styles) st
 	}
 
 	if e.Locked {
-		b.WriteString(" 🔒")
+		b.WriteString(" ")
+		b.WriteString(s.TextDim().Render("⚓"))
 	}
 
 	if e.IsDisplaced() {

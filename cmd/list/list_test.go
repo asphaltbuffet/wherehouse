@@ -87,6 +87,23 @@ func TestRunList_ShowsStatusBadge(t *testing.T) {
 	assert.NotContains(t, out, "[OK]")
 }
 
+// TestRunList_MarksLockedWithAnchor: locked entities carry an anchor, not a padlock.
+func TestRunList_MarksLockedWithAnchor(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	_, err := a.CreateEntity(t.Context(), app.CreateEntityRequest{
+		DisplayName: "Workbench",
+		Locked:      true,
+		ActorID:     "test",
+	})
+	require.NoError(t, err)
+
+	out := runCmd(t, a)
+
+	assert.Contains(t, out, "Workbench")
+	assert.Contains(t, out, "⚓")
+	assert.NotContains(t, out, "🔒")
+}
+
 // TestRunList_FilterPrunesUnrelatedBranches: filtering removes branches with no matches.
 func TestRunList_FilterPrunesUnrelatedBranches(t *testing.T) {
 	a := apptesting.OpenApp(t)

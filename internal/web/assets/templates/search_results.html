@@ -11,7 +11,7 @@
             hx-swap="innerHTML"
             hx-push-url="true"
             tabindex="0">
-          {{if .Entity.Locked}}{{template "padlock"}}{{end}}
+          {{if .Entity.Locked}}{{template "anchor"}}{{end}}
           <div>
             <div class="sr-name">{{.Entity.DisplayName}}</div>
             <div class="sr-path">{{.Entity.FullPathDisplay}}</div>
