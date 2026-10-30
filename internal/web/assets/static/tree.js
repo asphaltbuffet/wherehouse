@@ -155,20 +155,56 @@
     if (narrow.matches) closeTree(document.getElementById('detail-panel'));
   }
 
+  // shownId is the entity the detail panel last showed. revealId is set when
+  // that changes and cleared once the entity's ancestors are all expanded, so
+  // a branch the user collapses afterwards stays collapsed.
+  var shownId = '';
+  var revealId = '';
+
+  // expandAncestors expands the shown entity's ancestors (data-ancestor-ids,
+  // root first). It returns true while a branch is still loading; that
+  // branch's settle runs syncTreeSelection again to continue down the path.
+  function expandAncestors(section) {
+    var ids = (section.dataset.ancestorIds || '').split(' ').filter(Boolean);
+    for (var i = 0; i < ids.length; i++) {
+      var item = document.querySelector('#tree-root-list .tree-item[data-entity-id="' + ids[i] + '"]');
+      if (!item) return false;
+      if (!item.dataset.expanded) {
+        toggleNode(item); // fetches the children (a no-op on a leaf)
+        return !!item.dataset.expanded;
+      }
+      var list = document.getElementById('tree-children-' + ids[i]);
+      if (!list) return false;
+      if (list.classList.contains('collapsed')) toggleNode(item);
+      if (!list.children.length) return true; // fetched, not yet swapped in
+    }
+    return false;
+  }
+
   // Highlight the tree row of the entity the detail panel shows (none on
-  // home). Runs after every settle, so it also catches navigation from
-  // breadcrumbs, the children list and search, and tree nodes that load
-  // after the detail did (a borrow's new node, an expanded branch).
+  // home), expanding its ancestors when the shown entity changes. Runs after
+  // every settle, so it also catches navigation from breadcrumbs, the
+  // children list and search, and tree nodes that load after the detail did
+  // (a borrow's new node, an expanded branch).
   function syncTreeSelection() {
     var section = document.querySelector('#detail-panel #entity-detail');
     var id = section ? section.dataset.entityId : '';
+    if (id !== shownId) {
+      shownId = id;
+      revealId = id;
+    }
     clearTreeSelection();
     if (!id) return;
+    var reveal = revealId === id;
+    if (reveal && expandAncestors(section)) return;
+    revealId = '';
     var item = document.querySelector('#tree-root-list .tree-item[data-entity-id="' + id + '"]');
     if (!item) return;
     item.classList.add('selected');
     var li = item.closest('[role="treeitem"]');
     if (li) li.setAttribute('aria-selected', 'true');
+    // The narrow drawer scrolls on open instead (openTree focuses the row).
+    if (reveal && !narrow.matches) item.scrollIntoView({ block: 'nearest' });
   }
 
   function onTreeKeydown(root, e) {
