@@ -48,19 +48,24 @@ func decodeRelocation(ev *inventory.Event) (relocation, error) {
 	}
 }
 
-// relocateEntityTx updates the moved entity's parent, home, and path, and
-// returns it together with its descendants as they were before the move.
-// Descendants are read first so the path-prefix query still matches the old path.
+// relocateEntityTx is the pathChangeFn for every relocating event. It updates
+// the moved entity's parent, home, and path, and returns it together with its
+// descendants as they were before the move. Descendants are read first so the
+// path-prefix query still matches the old path.
 func (b *Bus) relocateEntityTx(
-	ctx context.Context, tx store.Tx, ev *inventory.Event, rel relocation,
+	ctx context.Context, tx store.Tx, ev *inventory.Event,
 ) (*inventory.Entity, []*inventory.Entity, error) {
+	rel, err := decodeRelocation(ev)
+	if err != nil {
+		return nil, nil, err
+	}
 	descendants, err := b.store.GetDescendantsTx(ctx, tx, rel.entityID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get descendants: %w", err)
+		return nil, nil, fmt.Errorf("%s: get descendants: %w", ev.EventType, err)
 	}
 	entity, err := b.store.GetEntityTx(ctx, tx, rel.entityID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get entity: %w", err)
+		return nil, nil, fmt.Errorf("%s: get entity: %w", ev.EventType, err)
 	}
 
 	entity.ParentID = rel.newParentID
@@ -69,76 +74,14 @@ func (b *Bus) relocateEntityTx(
 		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("recompute path: %w", err)
+		return nil, nil, fmt.Errorf("%s: recompute path: %w", ev.EventType, err)
 	}
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%s: %w", ev.EventType, err)
 	}
 	return entity, descendants, nil
-}
-
-// handleRelocation is the live applyFn for every relocating event: it writes
-// EntityPathChangedEvents for the descendants.
-func (b *Bus) handleRelocation(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	rel, err := decodeRelocation(ev)
-	if err != nil {
-		return err
-	}
-	entity, descendants, err := b.relocateEntityTx(ctx, tx, ev, rel)
-	if err != nil {
-		return fmt.Errorf("%s: %w", ev.EventType, err)
-	}
-	if err = b.propagatePathChangesTx(ctx, tx, ev, entity, descendants); err != nil {
-		return fmt.Errorf("%s: propagate: %w", ev.EventType, err)
-	}
-	return nil
-}
-
-// handleRelocationProjectionOnlyTx is the replayFn: the log already holds the
-// descendants' EntityPathChangedEvents, so only the moved entity is updated.
-func (b *Bus) handleRelocationProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	rel, err := decodeRelocation(ev)
-	if err != nil {
-		return err
-	}
-	if _, _, err = b.relocateEntityTx(ctx, tx, ev, rel); err != nil {
-		return fmt.Errorf("%s (projection only): %w", ev.EventType, err)
-	}
-	return nil
-}
-
-// handleRelocationComputePayloadsTx updates the entity and its descendants in
-// the projection without writing events, and returns the expected
-// EntityPathChangedPayloads so import can validate them (ADR 0005).
-func (b *Bus) handleRelocationComputePayloadsTx(
-	ctx context.Context, tx store.Tx, ev *inventory.Event,
-) ([]EntityPathChangedPayload, error) {
-	rel, err := decodeRelocation(ev)
-	if err != nil {
-		return nil, err
-	}
-	entity, descendants, err := b.relocateEntityTx(ctx, tx, ev, rel)
-	if err != nil {
-		return nil, fmt.Errorf("%s (compute payloads): %w", ev.EventType, err)
-	}
-	payloads, err := ComputeDescendantPathPayloads(entity, descendants)
-	if err != nil {
-		return nil, fmt.Errorf("%s: compute descendant paths: %w", ev.EventType, err)
-	}
-	for i, d := range descendants {
-		dp := payloads[i]
-		d.FullPathDisplay = dp.FullPathDisplay
-		d.FullPathCanonical = dp.FullPathCanonical
-		d.Depth = dp.Depth
-		d.LastEventID = ev.EventID
-		d.UpdatedAt = time.Now().UTC()
-		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
-			return nil, fmt.Errorf("%s: update descendant %s: %w", ev.EventType, d.EntityID, err)
-		}
-	}
-	return payloads, nil
 }
 
 // handleEntityRehomed sets home to the payload's home_id. The parent does not

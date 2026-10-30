@@ -12,10 +12,16 @@ import (
 
 type eventHandlerFn func(context.Context, store.Tx, *inventory.Event) error
 
+// pathChangeFn applies a path-propagating event to its own entity and returns
+// that entity with the descendants whose paths follow it, as they were before
+// the change. The bus decides whether to write EntityPathChangedEvents for them.
+type pathChangeFn func(context.Context, store.Tx, *inventory.Event) (*inventory.Entity, []*inventory.Entity, error)
+
+// eventRegistration sets exactly one of applyFn or pathChangeFn.
 type eventRegistration struct {
 	payloadFactory func() any
 	applyFn        eventHandlerFn
-	replayFn       eventHandlerFn // nil falls back to applyFn
+	pathChangeFn   pathChangeFn // set for events where PropagatesPaths() is true
 }
 
 // Bus is the single entry point for persisting events and updating projections.
@@ -41,12 +47,11 @@ func (b *Bus) registerAll() {
 	}
 	b.registry[inventory.EntityRenamedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityRenamedPayload{} },
-		applyFn:        b.handleEntityRenamed,
+		pathChangeFn:   b.renameEntityTx,
 	}
 	b.registry[inventory.EntityReparentedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityReparentedPayload{} },
-		applyFn:        b.handleRelocation,
-		replayFn:       b.handleRelocationProjectionOnlyTx,
+		pathChangeFn:   b.relocateEntityTx,
 	}
 	b.registry[inventory.EntityPathChangedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityPathChangedPayload{} },
@@ -90,13 +95,11 @@ func (b *Bus) registerAll() {
 	}
 	b.registry[inventory.EntityUsedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityUsedPayload{} },
-		applyFn:        b.handleRelocation,
-		replayFn:       b.handleRelocationProjectionOnlyTx,
+		pathChangeFn:   b.relocateEntityTx,
 	}
 	b.registry[inventory.EntityReturnedHomeEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityReturnedHomePayload{} },
-		applyFn:        b.handleRelocation,
-		replayFn:       b.handleRelocationProjectionOnlyTx,
+		pathChangeFn:   b.relocateEntityTx,
 	}
 	b.registry[inventory.EntityRehomedEvent] = eventRegistration{
 		payloadFactory: func() any { return &EntityRehomedPayload{} },
@@ -165,22 +168,20 @@ func (b *Bus) DispatchInTx(
 
 // ReplayEvent inserts a fully-populated event using its original TimestampUTC
 // and EntityID (no payload reparse). EntityPathChangedEvent is skipped without
-// error and returns 0 — the import path omits these from replay and validates
-// them separately (see ADR-0005). Relocating events update the projection
-// without regenerating EntityPathChangedEvents (they already exist in the
-// import stream) and return the expected payloads for that validation.
+// error and returns 0. Path-propagating events regenerate their descendants'
+// EntityPathChangedEvents in the destination log, exactly as live dispatch
+// does, so a later TruncateAndReplay finds them (ADR 0009). The written
+// payloads are returned so import can validate the source stream's copies
+// against them (ADR 0005).
 func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []EntityPathChangedPayload, error) {
 	if ev.EventType == inventory.EntityPathChangedEvent {
 		return 0, nil, nil
 	}
 	var payloads []EntityPathChangedPayload
 	id, err := b.writeEvent(ctx, ev, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-		if ev.EventType.Relocates() {
-			var applyErr error
-			payloads, applyErr = b.handleRelocationComputePayloadsTx(ctx, tx, ev)
-			return applyErr
-		}
-		return b.applyEventProjectionOnlyTx(ctx, tx, ev)
+		var applyErr error
+		payloads, applyErr = b.applyAndPropagateTx(ctx, tx, ev)
+		return applyErr
 	})
 	return id, payloads, err
 }
@@ -238,28 +239,49 @@ func (b *Bus) writeEventInTx(
 }
 
 func (b *Bus) applyEventTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	_, err := b.applyAndPropagateTx(ctx, tx, ev)
+	return err
+}
+
+// applyAndPropagateTx applies ev and, for a path-propagating event, writes an
+// EntityPathChangedEvent per descendant and returns their payloads. Used by
+// live dispatch and by ReplayEvent (import).
+func (b *Bus) applyAndPropagateTx(
+	ctx context.Context, tx store.Tx, ev *inventory.Event,
+) ([]EntityPathChangedPayload, error) {
 	reg, ok := b.registry[ev.EventType]
 	if !ok {
-		return fmt.Errorf("unknown event type: %s", ev.EventType)
+		return nil, fmt.Errorf("unknown event type: %s", ev.EventType)
 	}
-	return reg.applyFn(ctx, tx, ev)
+	if reg.pathChangeFn == nil {
+		return nil, reg.applyFn(ctx, tx, ev)
+	}
+	entity, descendants, err := reg.pathChangeFn(ctx, tx, ev)
+	if err != nil {
+		return nil, err
+	}
+	payloads, err := b.propagatePathChangesTx(ctx, tx, ev, entity, descendants)
+	if err != nil {
+		return nil, fmt.Errorf("%s: propagate: %w", ev.EventType, err)
+	}
+	return payloads, nil
 }
 
 // applyEventProjectionOnlyTx is like applyEventTx but never writes new events.
-// Relocating events use handleRelocationProjectionOnlyTx (skips
-// propagatePathChangesTx); EntityPathChangedEvent is applied normally via
-// handleEntityPathChanged. Used by ReplayEvent (import) and TruncateAndReplay
-// (projection rebuild) so neither path grows the event log.
+// Path-propagating events update only their own entity; the descendants'
+// EntityPathChangedEvents already in the log are applied normally via
+// handleEntityPathChanged. Used by TruncateAndReplay so a rebuild never grows
+// the event log.
 func (b *Bus) applyEventProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
 	reg, ok := b.registry[ev.EventType]
 	if !ok {
 		return fmt.Errorf("unknown event type: %s", ev.EventType)
 	}
-	fn := reg.applyFn
-	if reg.replayFn != nil {
-		fn = reg.replayFn
+	if reg.pathChangeFn == nil {
+		return reg.applyFn(ctx, tx, ev)
 	}
-	return fn(ctx, tx, ev)
+	_, _, err := reg.pathChangeFn(ctx, tx, ev)
+	return err
 }
 
 // TruncateAndReplay rebuilds entities_current from the full event log.

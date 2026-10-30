@@ -16,3 +16,5 @@ Both `Dispatch` and `ReplayEvent` delegate to a private `Bus.writeEvent(ctx, *in
 ## ReplayEvent return signature
 
 `ReplayEvent` returns `(int64, []EntityPathChangedPayload, error)`. The payload slice is non-nil only when the replayed event is an `EntityReparentedEvent`; it carries the expected `EntityPathChangedPayload` for each affected descendant, computed from the post-reparent projection state. The import layer uses these to validate the path-changed records buffered from the export stream without relying on `GetEventsAfter` side effects. See ADR-0005.
+
+*Amended (#357).* The payload slice is returned for every path-propagating event (`EventType.PropagatesPaths()`), and the payloads are the `EntityPathChangedEvent` rows `ReplayEvent` wrote to the destination log. See the ADR 0005 amendment.

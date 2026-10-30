@@ -1,0 +1,5 @@
+kind: Fixed
+body: Rebuilding an imported database (`doctor --rebuild`) keeps moved entities' descendants at their new paths, and rebuilding after a rename no longer duplicates path-change events
+time: 2026-10-30T00:38:25.221588888-04:00
+custom:
+    Issue: "357"
