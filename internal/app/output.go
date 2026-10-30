@@ -1,6 +1,10 @@
 package app
 
-import "github.com/asphaltbuffet/wherehouse/internal/inventory"
+import (
+	"time"
+
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+)
 
 // This file holds the CLI JSON output types and the pure projector functions
 // that build them from the rich app.*Result types. Per ADR 0014, each command's
@@ -257,5 +261,74 @@ func ToInfoOutput(r InfoResult) InfoOutput {
 		Name:     r.Name,
 		Database: r.DatabasePath,
 		Entities: r.EntityCounts,
+	}
+}
+
+// ReportRow is one entity in a report export; CSV and JSON share it.
+type ReportRow struct {
+	Path          string                 `json:"path"`
+	Status        inventory.EntityStatus `json:"status"`
+	StatusContext string                 `json:"status_context,omitempty"`
+	Home          string                 `json:"home,omitempty"` // set only when displaced
+	Locked        bool                   `json:"locked"`
+	Discrete      bool                   `json:"discrete"`
+	Tags          []string               `json:"tags"`
+	EntityID      string                 `json:"entity_id"`
+}
+
+// ReportFilterOutput is a report's filter as recorded in its JSON export.
+type ReportFilterOutput struct {
+	Status    string `json:"status,omitempty"`
+	Under     string `json:"under,omitempty"`
+	Displaced bool   `json:"displaced,omitempty"`
+	HomeUnder string `json:"home_under,omitempty"`
+}
+
+// ReportOutput is the JSON export envelope: the rows plus what produced them.
+type ReportOutput struct {
+	Report      string             `json:"report"`
+	Filter      ReportFilterOutput `json:"filter"`
+	Database    string             `json:"database"`
+	GeneratedAt string             `json:"generated_at"`
+	Count       int                `json:"count"`
+	Entities    []ReportRow        `json:"entities"`
+}
+
+// ToReportRows projects a report's entities into export rows (never nil).
+func ToReportRows(r Report) []ReportRow {
+	rows := make([]ReportRow, len(r.Entities))
+	for i, e := range r.Entities {
+		tags := e.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		rows[i] = ReportRow{
+			Path:          e.FullPathDisplay,
+			Status:        e.Status,
+			StatusContext: e.StatusContext,
+			Home:          homeField(e),
+			Locked:        e.Locked,
+			Discrete:      e.Discrete,
+			Tags:          tags,
+			EntityID:      e.EntityID,
+		}
+	}
+	return rows
+}
+
+// ToReportOutput projects a report into its JSON export envelope.
+func ToReportOutput(r Report) ReportOutput {
+	return ReportOutput{
+		Report: r.Slug,
+		Filter: ReportFilterOutput{
+			Status:    r.Filter.Status,
+			Under:     r.Filter.Under.String(),
+			Displaced: r.Filter.Displaced,
+			HomeUnder: r.Filter.HomeUnder.String(),
+		},
+		Database:    r.Database,
+		GeneratedAt: r.GeneratedAt.UTC().Format(time.RFC3339),
+		Count:       r.Count(),
+		Entities:    ToReportRows(r),
 	}
 }
