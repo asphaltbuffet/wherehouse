@@ -35,7 +35,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, "build home", err)
 		return
 	}
-	if wantsFragment(r) {
+	if wantsFragment(w, r) {
 		s.renderHTML(w, "home_section", home)
 		return
 	}
@@ -89,7 +89,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	q = strings.TrimSpace(q)
 
-	htmx := wantsFragment(r)
+	htmx := wantsFragment(w, r)
 
 	var searchData any
 	if q != "" {
