@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'Web pages that htmx can load as a fragment now send `Vary: Hx-Request, Hx-History-Restore-Request`, so a browser cache never serves a fragment for a full page load or the reverse'
-time: 2026-10-30T15:21:06.348055635-04:00
-custom:
-    Issue: "296"
