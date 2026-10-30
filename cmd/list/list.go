@@ -89,11 +89,11 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 		return fmt.Errorf("list failed: %w", err)
 	}
 
-	matched := filterEntities(all, listFilter{
-		under:     underParsed,
-		homeUnder: homeUnderParsed,
-		status:    statusFilter,
-		displaced: displaced,
+	matched := app.FilterEntities(all, app.EntityFilter{
+		Under:     underParsed,
+		HomeUnder: homeUnderParsed,
+		Status:    statusFilter,
+		Displaced: displaced,
 	})
 
 	cfg, ok := cli.GetConfig(ctx)
@@ -105,62 +105,4 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 	return out.Render(app.ToListItems(matched), func() string {
 		return buildTree(all, matched, verbose)
 	})
-}
-
-// listFilter is the AND of list's filter flags; zero values match everything.
-type listFilter struct {
-	under     entitypath.Path
-	homeUnder entitypath.Path
-	status    string
-	displaced bool
-}
-
-func filterEntities(all []app.EntityResult, f listFilter) []app.EntityResult {
-	var out []app.EntityResult
-
-	for _, e := range all {
-		if f.status != "" && e.Status.String() != f.status {
-			continue
-		}
-
-		if f.displaced && !e.IsDisplaced() {
-			continue
-		}
-
-		if !f.under.IsEmpty() && !pathHasPrefix(e.FullPathDisplay, f.under) {
-			continue
-		}
-
-		if !f.homeUnder.IsEmpty() && !pathHasPrefix(homePath(e), f.homeUnder) {
-			continue
-		}
-
-		out = append(out, e)
-	}
-
-	return out
-}
-
-// homePath is the display path of e's home: its parent's path when at home.
-// Root-homed entities yield "" and never match a prefix.
-func homePath(e app.EntityResult) string {
-	if e.IsDisplaced() {
-		return e.HomePathDisplay
-	}
-
-	p, err := entitypath.Parse(e.FullPathDisplay)
-	if err != nil {
-		return ""
-	}
-
-	return p.Dir().String()
-}
-
-func pathHasPrefix(p string, prefix entitypath.Path) bool {
-	ep, err := entitypath.Parse(p)
-	if err != nil {
-		return false
-	}
-
-	return ep.HasPrefix(prefix)
 }
