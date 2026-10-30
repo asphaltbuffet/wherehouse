@@ -1,0 +1,99 @@
+{{define "reports"}}{{template "shell_start" .Shell}}
+<section id="reports" class="report">
+  <div class="tape-row report-chrome">
+    <div class="tape"><h2>Reports</h2></div>
+  </div>
+
+  <nav class="report-presets report-chrome" aria-label="Reports">
+    {{range .Presets}}
+    {{if .Href}}<a class="report-preset" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}{{if .HasCount}} <span class="report-count">{{.Count}}</span>{{end}}</a>{{else}}<label class="report-preset" for="report_under_q"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</label>{{end}}
+    {{end}}
+  </nav>
+
+  <form class="report-filter report-chrome" method="get" action="/reports" aria-label="Filter">
+    <label for="report_status">Status</label>
+    <select id="report_status" name="status">
+      <option value="">Any</option>
+      {{range .Form.Statuses}}<option value="{{.}}"{{if eq . $.Form.Status}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+
+    {{/* Picker search boxes use form="report-picker-search" (no such form) so
+         their q is never submitted with the filter; htmx still sends it. */}}
+    <div class="report-picker" data-parent-picker>
+      <label for="report_under_q">Under</label>
+      <input type="hidden" name="under" value="{{.Form.UnderID}}" data-parent-input>
+      <div class="parent-chosen">
+        <span data-parent-label>{{if .Form.UnderPath}}{{.Form.UnderPath}}{{else}}Anywhere{{end}}</span>
+        <button type="button" class="btn-link" data-action="clear-parent" data-empty-label="Anywhere"
+                aria-label="Clear under">✕</button>
+      </div>
+      <input id="report_under_q" type="search" name="q" form="report-picker-search" autocomplete="off"
+             placeholder="Search locations…" data-parent-search
+             hx-get="/entities/parent-options"
+             hx-trigger="input changed delay:200ms"
+             hx-target="#report_under_options"
+             hx-swap="innerHTML"
+             hx-include="this">
+      <ul id="report_under_options" class="parent-options" aria-label="Matching locations" data-parent-options></ul>
+    </div>
+
+    <label class="report-check"><input type="checkbox" name="displaced" value="1"{{if .Form.Displaced}} checked{{end}}> Displaced only</label>
+
+    <div class="report-picker" data-parent-picker>
+      <label for="report_home_under_q">Home under</label>
+      <input type="hidden" name="home_under" value="{{.Form.HomeUnderID}}" data-parent-input>
+      <div class="parent-chosen">
+        <span data-parent-label>{{if .Form.HomeUnderPath}}{{.Form.HomeUnderPath}}{{else}}Anywhere{{end}}</span>
+        <button type="button" class="btn-link" data-action="clear-parent" data-empty-label="Anywhere"
+                aria-label="Clear home under">✕</button>
+      </div>
+      <input id="report_home_under_q" type="search" name="q" form="report-picker-search" autocomplete="off"
+             placeholder="Search locations…" data-parent-search
+             hx-get="/entities/parent-options"
+             hx-trigger="input changed delay:200ms"
+             hx-target="#report_home_under_options"
+             hx-swap="innerHTML"
+             hx-include="this">
+      <ul id="report_home_under_options" class="parent-options" aria-label="Matching locations" data-parent-options></ul>
+    </div>
+
+    <div class="report-filter-actions">
+      <button class="btn-primary" type="submit">Apply</button>
+      <a class="btn-link" href="/reports">Clear</a>
+    </div>
+  </form>
+
+  <header class="report-head">
+    <h3 class="report-title">{{.Report.Title}}</h3>
+    <p class="report-filter-label">{{.Report.FilterLabel}}</p>
+    <p class="report-meta">{{.Report.Database}} · generated <time datetime="{{.Generated}}">{{.Generated}}</time> · {{.Report.Count}} {{if eq .Report.Count 1}}entity{{else}}entities{{end}}</p>
+    <div class="report-exports report-chrome" role="group" aria-label="Export">
+      <a class="btn-ghost" href="{{.CSVHref}}" download>CSV</a>
+      <a class="btn-ghost" href="{{.JSONHref}}" download>JSON</a>
+      <button class="btn-ghost" type="button" data-action="print">Print</button>
+    </div>
+  </header>
+
+  {{if .Report.Entities}}
+  <table class="report-table">
+    <thead>
+      <tr><th scope="col">Path</th><th scope="col">Status</th><th scope="col">With</th><th scope="col">Home</th><th scope="col">Tags</th><th scope="col">Flags</th></tr>
+    </thead>
+    <tbody>
+      {{range .Report.Entities}}
+      <tr>
+        <td data-label="Path"><a href="/entities/{{.EntityID}}">{{.FullPathDisplay}}</a></td>
+        <td data-label="Status"><span class="status-text {{statusClass .Status}}">{{.Status}}</span></td>
+        <td data-label="With">{{.StatusContext}}</td>
+        <td data-label="Home">{{if .IsDisplaced}}{{.HomeLabel}}{{end}}</td>
+        <td data-label="Tags">{{range $i, $t := .Tags}}{{if $i}}, {{end}}{{$t}}{{end}}</td>
+        <td data-label="Flags">{{if .Locked}}locked{{end}}{{if and .Locked .Discrete}}, {{end}}{{if .Discrete}}discrete{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="report-empty">No entities match.</p>
+  {{end}}
+</section>
+{{template "shell_end" .Shell}}{{end}}

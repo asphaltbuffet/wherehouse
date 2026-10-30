@@ -40,4 +40,5 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /entities/{entityID}/actions/remove", s.handleRemoveForm)
 	mux.HandleFunc("POST /entities/{entityID}/actions/remove", s.handleRemove)
 	mux.HandleFunc("GET /search", s.handleSearch)
+	mux.HandleFunc("GET /reports", s.handleReports)
 }

@@ -103,6 +103,9 @@ type fakeApp struct {
 	removeCalls   int
 	lastRemoveReq app.RemoveEntityRequest
 	onRemove      func(*fakeApp) // runs inside RemoveEntity; simulates a concurrent writer
+
+	info    app.InfoResult // GetInfo result
+	infoErr error
 }
 
 func (f *fakeApp) RemoveEntity(_ context.Context, req app.RemoveEntityRequest) error {
@@ -188,6 +191,10 @@ func (f *fakeApp) SetAttributes(_ context.Context, reqs []app.SetAttributesReque
 
 func (f *fakeApp) ListEntities(_ context.Context) ([]app.EntityResult, error) {
 	return f.entities, f.err
+}
+
+func (f *fakeApp) GetInfo(_ context.Context) (app.InfoResult, error) {
+	return f.info, f.infoErr
 }
 
 func (f *fakeApp) GetEntityByID(_ context.Context, entityID string) (app.EntityResult, error) {

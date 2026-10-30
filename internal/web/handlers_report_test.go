@@ -1,0 +1,146 @@
+package web_test
+
+import (
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/web"
+)
+
+// reportFixture: Garage holds a loaned Drill; the Ladder belongs in the
+// Garage but is in the Attic; Gone is removed and must never show.
+func reportFixture() *fakeApp {
+	return &fakeApp{
+		info: app.InfoResult{Name: "Home inventory"},
+		entities: []app.EntityResult{
+			{
+				EntityID: "garage0001", DisplayName: "Garage",
+				FullPathDisplay: "Garage", Status: inventory.EntityStatusOk,
+			},
+			{
+				EntityID: "drill00001", DisplayName: "Drill", ParentID: "garage0001", HomeID: "garage0001",
+				FullPathDisplay: "Garage:Drill", Status: inventory.EntityStatusLoaned, StatusContext: "Sam",
+			},
+			{
+				EntityID: "attic00001", DisplayName: "Attic",
+				FullPathDisplay: "Attic", Status: inventory.EntityStatusOk,
+			},
+			{
+				EntityID: "ladder0001", DisplayName: "Ladder", ParentID: "attic00001", HomeID: "garage0001",
+				HomePathDisplay: "Garage", FullPathDisplay: "Attic:Ladder", Status: inventory.EntityStatusOk,
+			},
+			{
+				EntityID: "gone000001", DisplayName: "Gone", ParentID: "garage0001", HomeID: "garage0001",
+				FullPathDisplay: "Garage:Gone", Status: inventory.EntityStatusRemoved,
+			},
+		},
+	}
+}
+
+func getPath(t *testing.T, a web.App, path string) (*http.Response, string) {
+	t.Helper()
+	ts := newTestServer(t, a)
+	t.Cleanup(ts.Close)
+	resp, err := ts.Client().Get(ts.URL + path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp, readBody(t, resp)
+}
+
+func TestHandleReports_LandingShowsAllWithCounts(t *testing.T) {
+	resp, body := getPath(t, reportFixture(), "/reports")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	assert.Contains(t, body,
+		`<a class="report-preset" href="/reports?status=loaned">Loaned <span class="report-count">1</span></a>`)
+	assert.Contains(t, body,
+		`<a class="report-preset" href="/reports" aria-current="page">All <span class="report-count">4</span></a>`)
+	assert.Contains(t, body, `<label class="report-preset" for="report_under_q">By parent</label>`)
+	assert.Contains(t, body, "Home inventory")
+	assert.Contains(t, body, "Everything")
+	assert.Contains(t, body, "Garage:Drill")
+	assert.Contains(t, body, "Attic:Ladder")
+	assert.NotContains(t, body, "Garage:Gone")
+}
+
+func TestHandleReports_StatusPreset(t *testing.T) {
+	_, body := getPath(t, reportFixture(), "/reports?status=loaned")
+	assert.Contains(t, body, `href="/reports?status=loaned" aria-current="page"`)
+	assert.Contains(t, body, "Garage:Drill")
+	assert.Contains(t, body, "Sam")
+	assert.NotContains(t, body, "Attic:Ladder")
+	assert.Contains(t, body, `href="/reports?format=csv&amp;status=loaned"`)
+	assert.Contains(t, body, `href="/reports?format=json&amp;status=loaned"`)
+}
+
+func TestHandleReports_DisplacedShowsHome(t *testing.T) {
+	_, body := getPath(t, reportFixture(), "/reports?displaced=1")
+	assert.Contains(t, body, "Attic:Ladder")
+	assert.Contains(t, body, `<td data-label="Home">Garage</td>`)
+	assert.NotContains(t, body, "Garage:Drill")
+}
+
+func TestHandleReports_UnderResolvesIDToPath(t *testing.T) {
+	_, body := getPath(t, reportFixture(), "/reports?under=garage0001")
+	assert.Contains(t, body, `<h3 class="report-title">By parent</h3>`)
+	assert.Contains(t, body, `<p class="report-filter-label">under Garage</p>`)
+	assert.Contains(t, body, `name="under" value="garage0001"`)
+	assert.Contains(t, body, "Garage:Drill")
+	assert.NotContains(t, body, "Attic:Ladder")
+}
+
+func TestHandleReports_CustomFilter(t *testing.T) {
+	_, body := getPath(t, reportFixture(), "/reports?status=ok&home_under=garage0001")
+	assert.Contains(t, body, "Custom filter")
+	assert.Contains(t, body, "Ok · home under Garage")
+	assert.Contains(t, body, "Attic:Ladder")
+}
+
+func TestHandleReports_EmptyState(t *testing.T) {
+	_, body := getPath(t, reportFixture(), "/reports?status=missing")
+	assert.Contains(t, body, "No entities match.")
+	assert.NotContains(t, body, `<table class="report-table">`)
+}
+
+func TestHandleReports_UnknownUnderIs404(t *testing.T) {
+	for _, q := range []string{"under=nope", "home_under=nope", "under=gone000001"} {
+		resp, body := getPath(t, reportFixture(), "/reports?"+q)
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode, q)
+		assert.Contains(t, body, "entity not found", q)
+	}
+}
+
+func TestHandleReports_BadParamsAre400(t *testing.T) {
+	for _, q := range []string{"status=removed", "status=bogus", "format=xml"} {
+		resp, body := getPath(t, reportFixture(), "/reports?"+q)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, q)
+		assert.Contains(t, body, "bad report parameter", q)
+	}
+}
+
+func TestHandleReports_ListErrorIs500(t *testing.T) {
+	fake := reportFixture()
+	fake.err = errTest
+	resp, _ := getPath(t, fake, "/reports")
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func TestHandleReports_InfoErrorIs500(t *testing.T) {
+	fake := reportFixture()
+	fake.infoErr = errTest
+	resp, _ := getPath(t, fake, "/reports")
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func TestReportLinks_HeaderAndDetail(t *testing.T) {
+	_, index := getPath(t, reportFixture(), "/")
+	assert.Contains(t, index, `<a class="app-nav-link" href="/reports">Reports</a>`)
+
+	_, detail := getPath(t, reportFixture(), "/entities/garage0001")
+	assert.Contains(t, detail, `href="/reports?under=garage0001"`)
+}
