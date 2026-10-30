@@ -246,24 +246,32 @@
     if (dialog) dialog.close();
   }
 
-  // Parent pickers (borrow, move): picking a type-ahead result fills the
-  // hidden input and the visible label. The clear button writes its own
-  // data-parent-value: '' (borrow's root) or 'root' (move's root).
+  // Parent pickers (borrow, move, reports): picking a type-ahead result fills
+  // the hidden input and the visible label of its own picker — the nearest
+  // [data-parent-picker], else the form (a form may hold several pickers).
+  // The clear button writes its data-parent-value ('' for borrow's root,
+  // 'root' for move's) and shows its data-empty-label, default '(root)'.
   function onParentPick(e) {
     var pick = e.target.closest && e.target.closest('[data-action="pick-parent"]');
     var clear = e.target.closest && e.target.closest('[data-action="clear-parent"]');
     if (!pick && !clear) return;
     var form = e.target.closest('form');
     if (!form) return;
-    form.querySelector('[data-parent-input]').value = pick ? pick.dataset.parentId : (clear.dataset.parentValue || '');
-    form.querySelector('[data-parent-label]').textContent = pick ? pick.dataset.parentPath : '(root)';
-    form.querySelector('[data-parent-options]').innerHTML = '';
-    form.querySelector('[data-parent-search]').value = '';
+    var scope = e.target.closest('[data-parent-picker]') || form;
+    scope.querySelector('[data-parent-input]').value = pick ? pick.dataset.parentId : (clear.dataset.parentValue || '');
+    scope.querySelector('[data-parent-label]').textContent = pick ? pick.dataset.parentPath : (clear.dataset.emptyLabel || '(root)');
+    scope.querySelector('[data-parent-options]').innerHTML = '';
+    scope.querySelector('[data-parent-search]').value = '';
   }
 
   // Enter in a parent search box must not submit its form.
   function onParentSearchKeydown(e) {
     if (e.key === 'Enter' && e.target.matches && e.target.matches('[data-parent-search]')) e.preventDefault();
+  }
+
+  // Reports' Print button (CSP forbids inline onclick).
+  function onPrintClick(e) {
+    if (e.target.closest && e.target.closest('[data-action="print"]')) window.print();
   }
 
   // Insert a node that joined parentId's list (borrow, move) when that list is
@@ -346,6 +354,7 @@
     document.body.addEventListener('click', onDetailAddClick);
     document.body.addEventListener('click', onAddModalCancel);
     document.body.addEventListener('click', onParentPick);
+    document.body.addEventListener('click', onPrintClick);
     document.body.addEventListener('keydown', onParentSearchKeydown);
     document.body.addEventListener('entity-created', onEntityCreated);
     document.body.addEventListener('tree-node-detached', onTreeNodeDetached);
