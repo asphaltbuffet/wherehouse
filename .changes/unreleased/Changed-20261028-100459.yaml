@@ -1,5 +1,0 @@
-kind: Changed
-body: '`config set output.quiet` now takes a quiet level (0-2) instead of true/false; the Nix module''s output.quiet accepts 0-2 (booleans still work), and existing config files with quiet = true/false still load'
-time: 2026-10-28T10:04:59.556439339-04:00
-custom:
-    Issue: '#279'

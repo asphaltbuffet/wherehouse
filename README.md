@@ -80,7 +80,7 @@ cp dist/wherehouse ~/.local/bin/
 **Standalone install**:
 
 ```bash
-nix profile install github:asphaltbuffet/wherehouse/v0.9.1
+nix profile install github:asphaltbuffet/wherehouse/v0.10.0
 ```
 
 **Home Manager** — add as an input and load the bundled module:
@@ -91,7 +91,7 @@ nix profile install github:asphaltbuffet/wherehouse/v0.9.1
   inputs = {
     nixpkgs.url      = "github:NixOS/nixpkgs/nixpkgs-unstable";
     home-manager.url = "github:nix-community/home-manager";
-    wherehouse.url   = "github:asphaltbuffet/wherehouse/v0.9.1";
+    wherehouse.url   = "github:asphaltbuffet/wherehouse/v0.10.0";
     wherehouse.inputs.nixpkgs.follows = "nixpkgs";
   };
 

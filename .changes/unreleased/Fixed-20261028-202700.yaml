@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'Web UI: renaming an entity also renames its tree item and add button for screen readers'
-time: 2026-10-28T20:27:00.046630177-04:00
-custom:
-    Issue: '#348'
