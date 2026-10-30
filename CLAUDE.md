@@ -48,7 +48,7 @@ events (event_id PK, event_type, timestamp_utc, actor_user_id, payload JSON, not
 ```
 
 **Projection tables (derived, rebuildable):**
-- `entities_current` — current entity state (places, containers, items) and hierarchy; `home_id` is the persistent home reference (displaced = parent differs from home); `status` is `TEXT NOT NULL DEFAULT 'ok'` with a `CHECK` constraint over the status names
+- `entities_current` — current entity state (all entities; there are no entity types) and hierarchy; `home_id` is the persistent home reference (displaced = parent differs from home); `status` is `TEXT NOT NULL DEFAULT 'ok'` with a `CHECK` constraint over the status names
 
 Every `ORDER BY` that could tie **must** include `event_id ASC` as a tiebreaker.
 
