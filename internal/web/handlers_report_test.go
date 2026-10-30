@@ -111,7 +111,10 @@ func TestHandleReports_EmptyState(t *testing.T) {
 }
 
 func TestHandleReports_UnknownUnderIs404(t *testing.T) {
-	for _, q := range []string{"under=nope", "home_under=nope", "under=gone000001"} {
+	for _, q := range []string{
+		"under=nope", "home_under=nope", "under=gone000001",
+		"under=nope&format=csv", "home_under=nope&format=json",
+	} {
 		resp, body := getPath(t, reportFixture(), "/reports?"+q)
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode, q)
 		assert.Contains(t, body, "entity not found", q)
@@ -119,7 +122,10 @@ func TestHandleReports_UnknownUnderIs404(t *testing.T) {
 }
 
 func TestHandleReports_BadParamsAre400(t *testing.T) {
-	for _, q := range []string{"status=removed", "status=bogus", "format=xml"} {
+	for _, q := range []string{
+		"status=removed", "status=bogus", "format=xml", "displaced=0", "displaced=false",
+		"under=" + strings.Repeat("x", 101),
+	} {
 		resp, body := getPath(t, reportFixture(), "/reports?"+q)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, q)
 		assert.Contains(t, body, "bad report parameter", q)

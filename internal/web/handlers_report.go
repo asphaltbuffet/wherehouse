@@ -19,6 +19,8 @@ import (
 const (
 	formatCSV  = "csv"
 	formatJSON = "json"
+	// displacedOn is the only accepted value of ?displaced= (the checkbox's value).
+	displacedOn = "1"
 )
 
 var errBadReportParam = errors.New("bad report parameter")
@@ -36,10 +38,16 @@ func parseReportParams(q url.Values) (reportParams, error) {
 	p := reportParams{
 		UnderID:     q.Get("under"),
 		HomeUnderID: q.Get("home_under"),
-		Displaced:   q.Get("displaced") != "",
 	}
 	if len(p.UnderID) > maxQueryLen || len(p.HomeUnderID) > maxQueryLen {
 		return reportParams{}, fmt.Errorf("%w: entity id too long", errBadReportParam)
+	}
+	switch d := q.Get("displaced"); d {
+	case "":
+	case displacedOn:
+		p.Displaced = true
+	default:
+		return reportParams{}, fmt.Errorf("%w: displaced %q (use %s)", errBadReportParam, d, displacedOn)
 	}
 	if s := q.Get("status"); s != "" {
 		st, err := inventory.ParseEntityStatus(s)
@@ -61,7 +69,7 @@ func (p reportParams) href(format string) string {
 		v.Set("under", p.UnderID)
 	}
 	if p.Displaced {
-		v.Set("displaced", "1")
+		v.Set("displaced", displacedOn)
 	}
 	if p.HomeUnderID != "" {
 		v.Set("home_under", p.HomeUnderID)
