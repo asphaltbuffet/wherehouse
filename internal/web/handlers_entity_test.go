@@ -226,19 +226,19 @@ func TestHandleMissingActions(t *testing.T) {
 			// missing elsewhere must not mark it found.
 			name: "stale lost on missing", path: lost, entities: ent(inventory.EntityStatusMissing, false),
 			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
-			want:    []string{staleText, `hx-post="/entities/abc/actions/found"`},
-			notWant: []string{"status change failed"},
+			want:    []string{alert(unavailableText), `hx-post="/entities/abc/actions/found"`},
+			notWant: []string{"status change failed", staleText},
 		},
 		{
 			name: "stale found on ok", path: found, entities: ent(inventory.EntityStatusOk, false),
 			statusErr: errTest, wantCode: http.StatusOK, wantFound: 1,
-			want: []string{staleText, `hx-post="/entities/abc/actions/lost"`},
+			want: []string{alert(unavailableText), `hx-post="/entities/abc/actions/lost"`},
 		},
 		{
 			// Review Focus #2: locked after the panel rendered.
 			name: "stale lost on locked", path: lost, entities: ent(inventory.EntityStatusOk, true),
 			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
-			want:    []string{staleText},
+			want:    []string{alert(unavailableText)},
 			notWant: []string{`hx-post="/entities/abc/actions/lost"`, "status change failed"},
 		},
 		{
@@ -712,12 +712,18 @@ func TestHandleLoanForm(t *testing.T) {
 			notWant: []string{staleText},
 		},
 		{
-			name: "locked is stale", entities: drill(inventory.EntityStatusOk, true), wantCode: http.StatusOK,
-			want: []string{`id="entity-detail"`, staleText}, notWant: []string{formPost},
+			// #336: a blocked reason explains why, stale panel or typed URL alike.
+			name: "locked shows blocked reason", entities: drill(inventory.EntityStatusOk, true),
+			wantCode: http.StatusOK,
+			want:     []string{`id="entity-detail"`, alert("Locked entities cannot be loaned"), `id="tree-badge-abc"`},
+			notWant:  []string{formPost, staleText},
 		},
 		{
-			name: "loaned is stale", entities: drill(inventory.EntityStatusLoaned, false), wantCode: http.StatusOK,
-			want: []string{`id="entity-detail"`, staleText}, notWant: []string{formPost},
+			// #336: no blocked reason, so the neutral wording; #335: badge refreshed.
+			name: "loaned is unavailable", entities: drill(inventory.EntityStatusLoaned, false),
+			wantCode: http.StatusOK,
+			want:     []string{`id="entity-detail"`, alert(unavailableText), `id="tree-badge-abc"`},
+			notWant:  []string{formPost, staleText},
 		},
 		{
 			name: "removed shows removed panel", entities: drill(inventory.EntityStatusRemoved, false),
@@ -991,6 +997,47 @@ func TestHandleLoan_BlankRecipientReopensForm(t *testing.T) {
 	assert.NotContains(t, body, `id="tree-badge-abc"`)
 }
 
+// #334: a whitespace recipient on a stale panel must not re-open the loan form
+// on an entity that can no longer be loaned.
+func TestHandleLoan_BlankRecipientOnStalePanelShowsCurrentState(t *testing.T) {
+	tests := []struct {
+		name   string
+		entity app.EntityResult
+		want   string
+	}{
+		{
+			name: "locked",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+				Status: inventory.EntityStatusOk, Locked: true},
+			want: "Locked entities cannot be loaned",
+		},
+		{
+			name: "already loaned",
+			entity: app.EntityResult{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
+			want: unavailableText,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeApp{
+				entities: []app.EntityResult{tt.entity},
+				loanErr:  fmt.Errorf("mark loaned: %w", app.ErrRecipientRequired),
+			}
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			resp, body := postLoan(t, ts, url.Values{"recipient": {"   "}})
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Contains(t, body, alert(tt.want))
+			assert.Contains(t, body, `id="tree-badge-abc"`)
+			assert.NotContains(t, body, "Loaned to is required.")
+			assert.NotContains(t, body, `hx-post="/entities/abc/actions/loan"`)
+		})
+	}
+}
+
 func TestHandleLoan_ConcurrentLoanShowsFreshState(t *testing.T) {
 	fake := &fakeApp{
 		entities: loanableHammer(),
@@ -1049,16 +1096,19 @@ func TestHandleLoan_Rejected(t *testing.T) {
 	tests := []struct {
 		name     string
 		entities []app.EntityResult
+		want     string
 	}{
 		{
 			name: "locked",
 			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
 				Status: inventory.EntityStatusOk, Locked: true}},
+			want: "Locked entities cannot be loaned",
 		},
 		{
 			name: "already loaned",
 			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
 				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"}},
+			want: unavailableText,
 		},
 	}
 	for _, tt := range tests {
@@ -1071,7 +1121,8 @@ func TestHandleLoan_Rejected(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 			assert.Equal(t, 1, fake.loanCalls, "the app layer decides")
-			assert.Contains(t, body, staleText)
+			assert.Contains(t, body, alert(tt.want))
+			assert.NotContains(t, body, staleText, "nothing changed during the request (#336)")
 			assert.NotContains(t, body, "loan failed")
 			assert.NotContains(t, body, `hx-post="/entities/abc/actions/loan"`)
 		})
@@ -1174,10 +1225,13 @@ func TestHandleMoveForm(t *testing.T) {
 			wantCode: http.StatusOK, wantForm: true,
 		},
 		{
-			name: "missing is stale",
+			name: "missing shows blocked reason",
 			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
 				Status: inventory.EntityStatusMissing}},
-			wantCode: http.StatusOK, want: []string{`id="entity-detail"`, staleText},
+			wantCode: http.StatusOK, want: []string{
+				`id="entity-detail"`, alert("Missing entities cannot be moved — mark found first"),
+				`id="tree-badge-abc"`,
+			},
 		},
 		{
 			name: "removed shows removed panel",
@@ -1360,7 +1414,8 @@ func TestHandleMove_Rejected(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, 1, fake.moveCalls, "the app layer decides")
-	assert.Contains(t, body, staleText)
+	assert.Contains(t, body, alert("Loaned entities cannot be moved — return it first"))
+	assert.NotContains(t, body, staleText)
 	assert.NotContains(t, body, "move failed")
 }
 
@@ -1482,13 +1537,18 @@ func TestHandleRemoveForm(t *testing.T) {
 			notWant: []string{"hx-confirm", staleText},
 		},
 		{
-			name: "borrowed is stale", entities: hammer(inventory.EntityStatusBorrowed), wantCode: http.StatusOK,
-			want: []string{`id="entity-detail"`, staleText}, notWant: []string{formPost},
+			name: "borrowed is unavailable", entities: hammer(inventory.EntityStatusBorrowed),
+			wantCode: http.StatusOK,
+			want:     []string{`id="entity-detail"`, alert(unavailableText), `id="tree-badge-abc"`},
+			notWant:  []string{formPost, staleText},
 		},
 		{
-			name: "live children is stale", entities: hammer(inventory.EntityStatusOk), hasChildren: true,
+			name: "live children shows blocked reason", entities: hammer(inventory.EntityStatusOk), hasChildren: true,
 			wantCode: http.StatusOK,
-			want:     []string{`id="entity-detail"`, staleText}, notWant: []string{formPost},
+			want: []string{
+				`id="entity-detail"`, alert("Contains other entities — remove or move them first"),
+			},
+			notWant: []string{formPost, staleText},
 		},
 		{
 			name: "removed shows removed panel", entities: hammer(inventory.EntityStatusRemoved),
@@ -1596,7 +1656,8 @@ func TestHandleRemove_BorrowedRejectedShowsCurrentState(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, 1, fake.removeCalls, "the app layer decides")
-	assert.Contains(t, body, staleText)
+	assert.Contains(t, body, alert(unavailableText))
+	assert.Contains(t, body, `id="tree-badge-abc"`, "#335: status badge refreshed")
 	assert.NotContains(t, body, "remove failed")
 }
 
@@ -1859,7 +1920,7 @@ func TestHandleMove_BlankDestinationOnStalePanelShowsCurrentState(t *testing.T) 
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Zero(t, fake.moveCalls)
-	assert.Contains(t, body, staleText)
+	assert.Contains(t, body, alert("Loaned entities cannot be moved — return it first"))
 	assert.NotContains(t, body, "Choose a destination.")
 	assert.NotContains(t, body, `hx-post="/entities/abc/actions/move"`)
 	assert.Contains(t, body, `id="tree-badge-abc"`)

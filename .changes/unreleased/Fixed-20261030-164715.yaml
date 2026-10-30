@@ -1,0 +1,5 @@
+kind: Fixed
+body: Web actions that aren't available now show why (the disabled button's reason) or a neutral "That action isn't available" instead of claiming the entity changed elsewhere; a whitespace loan recipient on a stale panel no longer reopens the loan form (#334); and stale form opens and removes refresh the tree status badge (#335)
+time: 2026-10-30T16:47:15.469690465-04:00
+custom:
+    Issue: "336"

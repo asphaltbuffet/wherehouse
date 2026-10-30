@@ -479,9 +479,9 @@ func (s *Server) renderDetailSection(w http.ResponseWriter, r *http.Request, dat
 // handleEditNameForm handles GET /entities/{entityID}/edit/name, re-rendering
 // the detail section with the rename form in place of the name tape.
 func (s *Server) handleEditNameForm(w http.ResponseWriter, r *http.Request) {
-	s.renderFormOpen(w, r, func(d *detailData) bool {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
 		d.EditNameForm = &editNameFormData{EntityID: d.Entity.EntityID, CurrentName: d.Entity.DisplayName}
-		return true
+		return "", true
 	})
 }
 
@@ -569,8 +569,9 @@ func (s *Server) changeMissing(
 		s.cfg.Logger.Error("change status", "error", changeErr, "entity_id", entityID)
 		fresh.Error = "status change failed"
 	default:
-		s.cfg.Logger.Info("status change rejected: panel was stale", "error", changeErr, "entity_id", entityID)
-		fresh.Error = staleMessage
+		// No pre-write read, so a stale panel and a replayed request look alike.
+		s.cfg.Logger.Info("status change rejected: not offered", "error", changeErr, "entity_id", entityID)
+		fresh.Error = unavailableMessage
 	}
 	s.renderStatusChanged(w, r, fresh)
 }
@@ -674,11 +675,15 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 	}
 }
 
+// formOpener sets a form on d and reports whether the entity allows the
+// action. When it doesn't, blocked is the action's blocked reason, if any.
+type formOpener func(d *detailData) (blocked string, opened bool)
+
 // renderFormOpen answers a form-opening GET with the fresh detail section, so
-// a stale panel is refreshed rather than left to fail silently (#306). open
-// sets the form on data and reports whether the entity still allows the
-// action; if not, the panel was stale and staleMessage is shown instead.
-func (s *Server) renderFormOpen(w http.ResponseWriter, r *http.Request, open func(*detailData) bool) {
+// a stale panel is refreshed rather than left to fail silently (#306). If the
+// action isn't offered, the current state is shown with unavailableError and
+// the tree badge, since the status may have changed elsewhere (#335).
+func (s *Server) renderFormOpen(w http.ResponseWriter, r *http.Request, open formOpener) {
 	entityID := r.PathValue("entityID")
 
 	data, err := s.buildDetailData(r.Context(), entityID)
@@ -690,22 +695,25 @@ func (s *Server) renderFormOpen(w http.ResponseWriter, r *http.Request, open fun
 		s.renderGone(w, r, entityID)
 		return
 	}
-	if !open(&data) {
-		s.cfg.Logger.Info("form not opened: panel was stale", "entity_id", entityID)
-		data.Error = staleMessage
+	blocked, opened := open(&data)
+	if opened {
+		s.renderDetailSection(w, r, data)
+		return
 	}
-	s.renderDetailSection(w, r, data)
+	s.cfg.Logger.Info("form not opened: action not offered", "entity_id", entityID)
+	data.Error = unavailableError(blocked)
+	s.renderStatusChanged(w, r, data)
 }
 
 // handleLoanForm handles GET /entities/{entityID}/actions/loan, re-rendering
 // the detail section with the inline loan form open.
 func (s *Server) handleLoanForm(w http.ResponseWriter, r *http.Request) {
-	s.renderFormOpen(w, r, func(d *detailData) bool {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
 		if !d.CanLoan {
-			return false
+			return d.LoanBlockedReason, false
 		}
 		d.LoanForm = &loanFormData{EntityID: d.Entity.EntityID}
-		return true
+		return "", true
 	})
 }
 
@@ -761,6 +769,14 @@ func (s *Server) renderLoanFailure(
 	w http.ResponseWriter, r *http.Request, stale detailData, form loanFormData, err error,
 ) {
 	if errors.Is(err, app.ErrRecipientRequired) {
+		// The recipient check runs first, so re-check here: never re-open the
+		// form on a panel whose entity can't be loaned (#334).
+		if !stale.CanLoan {
+			s.cfg.Logger.Info("loan rejected: not offered", "error", err, "entity_id", stale.Entity.EntityID)
+			stale.Error = unavailableError(stale.LoanBlockedReason)
+			s.renderStatusChanged(w, r, stale)
+			return
+		}
 		form.Error = "Loaned to is required."
 		stale.LoanForm = &form
 		s.renderDetailSection(w, r, stale)
@@ -782,8 +798,8 @@ func (s *Server) renderLoanFailure(
 		s.cfg.Logger.Error("loan entity", "error", err, "entity_id", entityID)
 		fresh.Error = "loan failed"
 	} else {
-		s.cfg.Logger.Info("loan rejected: panel was stale", "error", err, "entity_id", entityID)
-		fresh.Error = staleMessage
+		s.cfg.Logger.Info("loan rejected: not offered", "error", err, "entity_id", entityID)
+		fresh.Error = rejectedError(stale.CanLoan, fresh.LoanBlockedReason)
 	}
 	s.renderStatusChanged(w, r, fresh)
 }
@@ -791,14 +807,17 @@ func (s *Server) renderLoanFailure(
 // handleRemoveForm handles GET /entities/{entityID}/actions/remove,
 // re-rendering the detail section with the inline remove form open.
 func (s *Server) handleRemoveForm(w http.ResponseWriter, r *http.Request) {
-	s.renderFormOpen(w, r, func(d *detailData) bool {
-		if !d.CanRemove || d.RemoveBlockedReason != "" {
-			return false
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.removeOffered() {
+			return d.RemoveBlockedReason, false
 		}
 		d.RemoveForm = &removeFormData{EntityID: d.Entity.EntityID, DisplayName: d.Entity.DisplayName}
-		return true
+		return "", true
 	})
 }
+
+// removeOffered reports whether the panel shows an enabled Remove button.
+func (d *detailData) removeOffered() bool { return d.CanRemove && d.RemoveBlockedReason == "" }
 
 // handleRemove handles POST /entities/{entityID}/actions/remove. Eligibility,
 // including the live children guard (#287), is left to the app layer (ADR
@@ -868,10 +887,10 @@ func (s *Server) renderRemoveFailure(
 			s.cfg.Logger.Error("remove entity", "error", err, "entity_id", entityID)
 			fresh.Error = "remove failed"
 		} else {
-			s.cfg.Logger.Info("remove rejected: panel was stale", "error", err, "entity_id", entityID)
-			fresh.Error = staleMessage
+			s.cfg.Logger.Info("remove rejected: not offered", "error", err, "entity_id", entityID)
+			fresh.Error = rejectedError(stale.removeOffered(), fresh.RemoveBlockedReason)
 		}
-		s.renderDetailSection(w, r, fresh)
+		s.renderStatusChanged(w, r, fresh)
 	}
 }
 
@@ -923,14 +942,14 @@ func (s *Server) renderAlreadyRemoved(w http.ResponseWriter, r *http.Request, en
 // handleMoveForm handles GET /entities/{entityID}/actions/move, re-rendering
 // the detail section with the inline move form open.
 func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
-	s.renderFormOpen(w, r, func(d *detailData) bool {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
 		if !d.CanMove {
-			return false
+			return d.MoveBlockedReason, false
 		}
 		d.MoveForm = &moveFormData{
 			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbMove), Verb: verbMove,
 		}
-		return true
+		return "", true
 	})
 }
 
@@ -941,15 +960,23 @@ const moveRootValue = "root"
 // handleUseForm handles GET /entities/{entityID}/actions/use: the move form in
 // use mode (CONTEXT.md "Use": same preconditions as move).
 func (s *Server) handleUseForm(w http.ResponseWriter, r *http.Request) {
-	s.renderFormOpen(w, r, func(d *detailData) bool {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
 		if !d.CanUse {
-			return false
+			return d.UseBlockedReason, false
 		}
 		d.UseForm = &moveFormData{
 			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbUse), Verb: verbUse,
 		}
-		return true
+		return "", true
 	})
+}
+
+// relocateBlocked is the blocked reason of the Move or Use button, per verb.
+func (d *detailData) relocateBlocked(verb string) string {
+	if verb == verbUse {
+		return d.UseBlockedReason
+	}
+	return d.MoveBlockedReason
 }
 
 // Verbs of the relocate form: a move changes home, a use keeps it.
@@ -1024,8 +1051,8 @@ func (s *Server) handleRelocate(w http.ResponseWriter, r *http.Request, verb str
 		// No write to fail, so re-check here: never re-open the form on a
 		// stale panel whose entity can no longer move.
 		if !data.CanMove {
-			s.cfg.Logger.Info("relocate rejected: panel was stale", "verb", verb, "entity_id", entityID)
-			data.Error = staleMessage
+			s.cfg.Logger.Info("relocate rejected: not offered", "verb", verb, "entity_id", entityID)
+			data.Error = unavailableError(data.relocateBlocked(verb))
 			s.renderStatusChanged(w, r, data)
 			return
 		}
@@ -1097,8 +1124,8 @@ func (s *Server) renderMoveFailure(
 		s.cfg.Logger.Error(form.Verb+" entity", "error", err, "entity_id", entityID)
 		fresh.Error = form.Verb + " failed"
 	} else {
-		s.cfg.Logger.Info(form.Verb+" rejected: panel was stale", "error", err, "entity_id", entityID)
-		fresh.Error = staleMessage
+		s.cfg.Logger.Info(form.Verb+" rejected: not offered", "error", err, "entity_id", entityID)
+		fresh.Error = rejectedError(stale.CanMove, fresh.relocateBlocked(form.Verb))
 	}
 	s.renderStatusChanged(w, r, fresh)
 }
