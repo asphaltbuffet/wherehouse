@@ -71,6 +71,14 @@ func TestHandleReports_LandingShowsAllWithCounts(t *testing.T) {
 	assert.NotContains(t, body, "Garage:Gone")
 }
 
+// The picker search boxes belong to an empty hidden form, so the filter form
+// never submits their q and the markup names a real form.
+func TestHandleReports_PickerSearchFormExists(t *testing.T) {
+	_, body := getPath(t, reportFixture(), "/reports")
+	assert.Contains(t, body, `<form id="report-picker-search" hidden></form>`)
+	assert.Equal(t, 2, strings.Count(body, `form="report-picker-search"`))
+}
+
 func TestHandleReports_StatusPreset(t *testing.T) {
 	_, body := getPath(t, reportFixture(), "/reports?status=loaned")
 	assert.Contains(t, body, `href="/reports?status=loaned" aria-current="page"`)

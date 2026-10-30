@@ -10,6 +10,10 @@
     {{end}}
   </nav>
 
+  {{/* The picker search boxes below belong to this empty form, not the
+       filter form, so their q is never submitted with the filter; htmx
+       still sends it to /entities/parent-options. */}}
+  <form id="report-picker-search" hidden></form>
   <form class="report-filter report-chrome" method="get" action="/reports" aria-label="Filter">
     <div class="report-field">
       <label for="report_status">Status</label>
@@ -19,8 +23,6 @@
       </select>
     </div>
 
-    {{/* Picker search boxes use form="report-picker-search" (no such form) so
-         their q is never submitted with the filter; htmx still sends it. */}}
     <div class="report-picker" data-parent-picker>
       <label for="report_under_q">Under</label>
       <input type="hidden" name="under" value="{{.Form.UnderID}}" data-parent-input>
