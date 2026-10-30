@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'Web: the tree expands to and highlights the entity shown in the detail panel when you navigate there from the children list, breadcrumbs, search, or a direct URL; deep branches no longer overflow the tree on touch devices'
-time: 2026-10-30T15:01:38.956168275-04:00
-custom:
-    Issue: "363"
