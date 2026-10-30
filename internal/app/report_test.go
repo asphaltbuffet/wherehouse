@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -119,3 +121,22 @@ func TestCountPresets(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{"missing": 0, "loaned": 1, "borrowed": 0, "displaced": 1, "all": 4}, counts)
 }
+
+func TestReport_FilenameCapsLongPaths(t *testing.T) {
+	deep := strings.Repeat("Very Long Shelf Name:", 30) + "End"
+	f := app.EntityFilter{
+		Status:    inventory.EntityStatusLoaned.String(),
+		Displaced: true,
+		Under:     entitypath.Path(deep),
+		HomeUnder: entitypath.Path(deep),
+	}
+	name := app.BuildReport(nil, f, "Home", reportNow).Filename("json")
+
+	assert.LessOrEqual(t, len(name), maxPortableFilename)
+	assert.True(t, strings.HasPrefix(name, "wherehouse-loaned-displaced-under-very-long-shelf-name"), name)
+	assert.True(t, strings.HasSuffix(name, "-20261030T140211Z.json"), name)
+	assert.NotContains(t, name, "--")
+}
+
+// maxPortableFilename is the common filesystem limit on a filename's bytes.
+const maxPortableFilename = 255

@@ -160,9 +160,18 @@ func (r Report) FilterLabel() string {
 
 var slugUnsafe = regexp.MustCompile(`[^a-z0-9]+`)
 
-// slugify reduces s to lowercase ASCII words joined by "-"; it may be "".
+// maxSlugLen caps one path's slug so a filename with two of them stays well
+// under the common 255-byte filename limit.
+const maxSlugLen = 60
+
+// slugify reduces s to at most maxSlugLen bytes of lowercase ASCII words
+// joined by "-"; it may be "".
 func slugify(s string) string {
-	return strings.Trim(slugUnsafe.ReplaceAllString(strings.ToLower(s), "-"), "-")
+	slug := strings.Trim(slugUnsafe.ReplaceAllString(strings.ToLower(s), "-"), "-")
+	if len(slug) > maxSlugLen {
+		slug = strings.TrimRight(slug[:maxSlugLen], "-")
+	}
+	return slug
 }
 
 // Filename is the export filename for r with extension ext ("csv", "json"):
