@@ -1,7 +1,10 @@
 package web_test
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -143,4 +146,45 @@ func TestReportLinks_HeaderAndDetail(t *testing.T) {
 
 	_, detail := getPath(t, reportFixture(), "/entities/garage0001")
 	assert.Contains(t, detail, `href="/reports?under=garage0001"`)
+}
+
+func TestHandleReports_CSVDownload(t *testing.T) {
+	resp, body := getPath(t, reportFixture(), "/reports?status=loaned&under=garage0001&format=csv")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "text/csv; charset=utf-8", resp.Header.Get("Content-Type"))
+	assert.Regexp(t,
+		`^attachment; filename=wherehouse-loaned-under-garage-\d{8}T\d{6}Z\.csv$`,
+		resp.Header.Get("Content-Disposition"))
+
+	rows, err := csv.NewReader(strings.NewReader(body)).ReadAll()
+	require.NoError(t, err)
+	assert.Equal(t, [][]string{
+		{"path", "status", "status_context", "home", "locked", "discrete", "tags", "entity_id"},
+		{"Garage:Drill", "loaned", "Sam", "", "false", "false", "", "drill00001"},
+	}, rows)
+}
+
+func TestHandleReports_JSONDownload(t *testing.T) {
+	resp, body := getPath(t, reportFixture(), "/reports?displaced=1&format=json")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	assert.Regexp(t,
+		`^attachment; filename=wherehouse-displaced-\d{8}T\d{6}Z\.json$`,
+		resp.Header.Get("Content-Disposition"))
+
+	var out app.ReportOutput
+	require.NoError(t, json.Unmarshal([]byte(body), &out))
+	assert.Equal(t, "displaced", out.Report)
+	assert.Equal(t, "Home inventory", out.Database)
+	assert.True(t, out.Filter.Displaced)
+	assert.Equal(t, 1, out.Count)
+	require.Len(t, out.Entities, 1)
+	assert.Equal(t, "Attic:Ladder", out.Entities[0].Path)
+	assert.Equal(t, "Garage", out.Entities[0].Home)
+	assert.Regexp(t, `^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`, out.GeneratedAt)
+}
+
+func TestHandleReports_EmptyExportStillHasHeader(t *testing.T) {
+	_, body := getPath(t, reportFixture(), "/reports?status=missing&format=csv")
+	assert.Equal(t, "path,status,status_context,home,locked,discrete,tags,entity_id\n", body)
 }

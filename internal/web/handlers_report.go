@@ -1,9 +1,12 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
 	"time"
@@ -138,7 +141,42 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	}
 	report := app.BuildReport(all, filter, info.Name, time.Now())
 
-	s.renderReportPage(w, r, params, report, all)
+	switch format {
+	case formatCSV:
+		s.writeReportCSV(w, report)
+	case formatJSON:
+		s.writeReportJSON(w, report)
+	default:
+		s.renderReportPage(w, r, params, report, all)
+	}
+}
+
+// writeDownload sends body as an attachment named filename. The body is
+// built before anything is written, so a failure is still a clean 500.
+func (s *Server) writeDownload(w http.ResponseWriter, contentType, filename string, body []byte) {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	if _, err := w.Write(body); err != nil {
+		s.cfg.Logger.Error("write download", "error", err, "filename", filename)
+	}
+}
+
+func (s *Server) writeReportCSV(w http.ResponseWriter, report app.Report) {
+	var buf bytes.Buffer
+	if err := app.WriteReportCSV(&buf, report); err != nil {
+		s.serverError(w, "write report csv", err)
+		return
+	}
+	s.writeDownload(w, "text/csv; charset=utf-8", report.Filename(formatCSV), buf.Bytes())
+}
+
+func (s *Server) writeReportJSON(w http.ResponseWriter, report app.Report) {
+	body, err := json.MarshalIndent(app.ToReportOutput(report), "", "  ")
+	if err != nil {
+		s.serverError(w, "marshal report json", err)
+		return
+	}
+	s.writeDownload(w, "application/json", report.Filename(formatJSON), body)
 }
 
 // reportPresetView is one preset link; By parent has no Href and renders as
