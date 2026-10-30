@@ -880,7 +880,7 @@ dialog#add-modal input[type="checkbox"],
   align-items: start;
   margin-block: var(--space-3);
 }
-.report-picker, .report-filter-actions { display: grid; gap: var(--space-1); }
+.report-field, .report-picker, .report-filter-actions { display: grid; gap: var(--space-1); }
 .report-filter-actions { align-self: end; grid-auto-flow: column; justify-content: start; }
 
 .report-head { margin-block: var(--space-4) var(--space-2); }

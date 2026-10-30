@@ -90,3 +90,16 @@ func TestBrowserReportsDetailLinkAndPrint(t *testing.T) {
 		require.NoError(s.t, expect.Locator(s.reportRow("Garage:Drill")).ToBeVisible())
 	})
 }
+
+func TestBrowserReportsStatusLabelSitsOverItsSelect(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		s.visit("/reports")
+		label, err := s.page.Locator(`label[for="report_status"]`).BoundingBox()
+		require.NoError(s.t, err)
+		sel, err := s.page.Locator("#report_status").BoundingBox()
+		require.NoError(s.t, err)
+		require.InDelta(s.t, label.X, sel.X, 1, "label and select share a column")
+		require.LessOrEqual(s.t, label.Y+label.Height, sel.Y+1, "label sits above its select")
+	})
+}
