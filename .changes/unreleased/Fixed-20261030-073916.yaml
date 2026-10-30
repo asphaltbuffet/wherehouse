@@ -1,0 +1,5 @@
+kind: Fixed
+body: Renaming an entity in a way that keeps its canonical name (e.g. `Garage` → `garage`) updates its descendants' displayed paths
+time: 2026-10-30T07:39:16.59124985-04:00
+custom:
+    Issue: "357"

@@ -426,6 +426,17 @@ func TestImport_RebuildKeepsDescendantPaths(t *testing.T) {
 			},
 			want: "A:Bee:C",
 		},
+		{
+			name: "case-only rename",
+			change: func(t *testing.T, a *app.App, b, _ app.EntityResult) {
+				t.Helper()
+				_, err := a.RenameEntity(t.Context(), app.RenameEntityRequest{
+					EntityID: b.EntityID, NewName: "b", ActorID: "t",
+				})
+				require.NoError(t, err)
+			},
+			want: "A:b:C",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

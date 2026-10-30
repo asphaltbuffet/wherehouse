@@ -61,6 +61,36 @@ func TestEntityLifecycle_PathPropagation(t *testing.T) {
 	assert.Equal(t, "Workshop:Toolbox:Socket Set", socketSet.FullPathDisplay)
 }
 
+// A rename that keeps the canonical name still changes descendants' display paths.
+func TestEntityLifecycle_DisplayOnlyRenamePropagates(t *testing.T) {
+	for _, newName := range []string{"garage", "GARAGE"} {
+		t.Run(newName, func(t *testing.T) {
+			s := openTestStore(t)
+			b := eventbus.New(s)
+			ctx := t.Context()
+
+			createPlace(t, b, "p1", "Garage", nil)
+			p1ID := "p1"
+			createPlace(t, b, "p2", "Toolbox", &p1ID)
+
+			renamePayload, err := json.Marshal(eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: newName})
+			require.NoError(t, err)
+			_, err = b.Dispatch(ctx, inventory.EntityRenamedEvent, "alice", renamePayload, nil)
+			require.NoError(t, err)
+
+			toolbox, err := s.GetEntity(ctx, "p2")
+			require.NoError(t, err)
+			assert.Equal(t, newName+":Toolbox", toolbox.FullPathDisplay)
+
+			_, err = b.TruncateAndReplay(ctx)
+			require.NoError(t, err)
+			rebuilt, err := s.GetEntity(ctx, "p2")
+			require.NoError(t, err)
+			assert.Equal(t, newName+":Toolbox", rebuilt.FullPathDisplay, "after rebuild")
+		})
+	}
+}
+
 func TestEntityLifecycle_Reparent(t *testing.T) {
 	s := openTestStore(t)
 	b := eventbus.New(s)

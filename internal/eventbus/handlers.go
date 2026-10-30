@@ -60,7 +60,8 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 }
 
 // renameEntityTx is the pathChangeFn for EntityRenamedEvent. Descendants are
-// returned only when the canonical name changed.
+// returned whenever the display name changed: descendants' display paths follow
+// it even when the canonical name does not (e.g. "Garage" → "garage").
 func (b *Bus) renameEntityTx(
 	ctx context.Context, tx store.Tx, ev *inventory.Event,
 ) (*inventory.Entity, []*inventory.Entity, error) {
@@ -74,7 +75,7 @@ func (b *Bus) renameEntityTx(
 		return nil, nil, fmt.Errorf("handleEntityRenamed: get entity: %w", err)
 	}
 
-	oldCanonical := entity.CanonicalName
+	oldDisplay := entity.DisplayName
 
 	// Fetch descendants before updating the parent so the path-prefix query still
 	// matches the old canonical path stored in the DB.
@@ -99,7 +100,7 @@ func (b *Bus) renameEntityTx(
 		return nil, nil, fmt.Errorf("handleEntityRenamed: %w", err)
 	}
 
-	if entity.CanonicalName == oldCanonical {
+	if entity.DisplayName == oldDisplay {
 		return entity, nil, nil
 	}
 	return entity, descendants, nil
