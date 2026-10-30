@@ -2007,6 +2007,23 @@ func TestDetail_SectionCarriesEntityID(t *testing.T) {
 	assert.Contains(t, getDetail(t, ts, "g"), `<section id="entity-detail" data-entity-id="g">`)
 }
 
+// tree.js expands the tree along data-ancestor-ids (root first) to reveal
+// an entity whose row is not rendered yet (#363).
+func TestDetail_SectionCarriesAncestorIDs(t *testing.T) {
+	fake := &fakeApp{entities: []app.EntityResult{
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "t", DisplayName: "Toolbox", FullPathDisplay: "Garage:Toolbox", ParentID: "g", HomeID: "g",
+			Status: inventory.EntityStatusOk},
+		{EntityID: "d", DisplayName: "Drawer", FullPathDisplay: "Garage:Toolbox:Drawer", ParentID: "t", HomeID: "t",
+			Status: inventory.EntityStatusOk},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	assert.Contains(t, getDetail(t, ts, "d"),
+		`<section id="entity-detail" data-entity-id="d" data-ancestor-ids="g t">`)
+}
+
 func getBody(t *testing.T, ts *httptest.Server, path string) string {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)

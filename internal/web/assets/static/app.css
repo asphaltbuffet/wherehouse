@@ -771,6 +771,10 @@ dialog#add-modal input[type="checkbox"],
     align-self: stretch;
     justify-content: center;
   }
+  /* The touch targets above leave little row width; indent less so a deep
+     branch still fits a tablet's tree panel or a phone's drawer (#363). */
+  .tree-item { gap: var(--space-1); }
+  .tree-children { padding-left: 0.5em; margin-left: 0.25em; }
   dialog#add-modal input[type="checkbox"], .form-panel input[type="checkbox"] {
     width: 1.375rem; height: 1.375rem;
   }

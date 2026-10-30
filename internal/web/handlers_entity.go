@@ -44,6 +44,7 @@ type detailData struct {
 	RemoveForm          *removeFormData   // non-nil re-opens the remove form (guard tripped at submit)
 	EditNameForm        *editNameFormData // non-nil swaps the name tape for the rename form
 	Breadcrumbs         []Breadcrumb
+	AncestorIDs         string    // space-separated, root first; tree.js expands along them (#363)
 	Error               string    // populated by edit POST handlers; rendered inline above the detail dl
 	Removed             bool      // read-only view of a removed entity: last location + history, no actions
 	ChildList           childList // live children; empty for discrete entities (never fetched)
@@ -247,6 +248,18 @@ type detailPageData struct {
 	Detail detailData
 }
 
+// ancestorIDs is the space-separated IDs of the crumbs' entities, root first.
+func ancestorIDs(crumbs []Breadcrumb) string {
+	ids := make([]string, 0, len(crumbs))
+	for _, c := range crumbs {
+		if c.EntityID != "" {
+			ids = append(ids, c.EntityID)
+		}
+	}
+
+	return strings.Join(ids, " ")
+}
+
 // Breadcrumb is one segment of the entity path shown above the detail heading.
 // EntityID is empty for the last (current) crumb — it renders as plain text.
 type Breadcrumb struct {
@@ -350,6 +363,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 			return detailData{}, fmt.Errorf("list entities: %w", err)
 		}
 	}
+	crumbs := BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay)
 
 	dateAdded, history, err := s.detailHistory(ctx, entityID)
 	if err != nil {
@@ -407,7 +421,8 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		DiscreteAction:      discrete,
 		CanRemove:           canRemove,
 		RemoveBlockedReason: removeBlockedReason,
-		Breadcrumbs:         BreadcrumbsForEntity(crumbEntities, entity.FullPathDisplay),
+		Breadcrumbs:         crumbs,
+		AncestorIDs:         ancestorIDs(crumbs),
 		ChildList:           childList{ParentID: entity.EntityID, Children: children},
 	}, nil
 }
