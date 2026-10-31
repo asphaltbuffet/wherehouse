@@ -1,0 +1,5 @@
+kind: Changed
+body: 'Web tree: clicking an item''s name (or pressing Enter/Space) selects it without expanding or collapsing it; the chevron and the arrow keys expand and collapse without changing the selection'
+time: 2026-10-31T16:57:21.662592915-04:00
+custom:
+    Issue: '#364'

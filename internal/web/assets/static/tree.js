@@ -212,6 +212,7 @@
     if (reveal && !narrow.matches) item.scrollIntoView({ block: 'nearest' });
   }
 
+  // Arrows expand/collapse and move focus; Enter/Space select (WAI-ARIA tree).
   function onTreeKeydown(root, e) {
     var div = e.target.closest('.tree-item');
     if (!div) return;
@@ -231,7 +232,7 @@
         e.preventDefault();
         var expanded = li && li.getAttribute('aria-expanded');
         if (expanded === 'false') {
-          div.click();
+          toggleNode(div);
         } else if (expanded === 'true') {
           var childLi = li && li.querySelector('ul [role="treeitem"]');
           focusItem(childLi);
@@ -240,7 +241,7 @@
       case 'ArrowLeft':
         e.preventDefault();
         if (li && li.getAttribute('aria-expanded') === 'true') {
-          div.click();
+          toggleNode(div);
         } else {
           var parentLi = li && li.parentElement && li.parentElement.closest('[role="treeitem"]');
           focusItem(parentLi);
@@ -249,7 +250,7 @@
       case 'Enter':
       case ' ':
         e.preventDefault();
-        div.click();
+        div.click(); // selects: the row's hx-get loads its detail
         break;
       case 'Home':
         e.preventDefault();
