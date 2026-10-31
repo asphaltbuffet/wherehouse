@@ -42,3 +42,27 @@ func TestBrowserTags(t *testing.T) {
 		assert.Equal(s.t, []string{"power_tools"}, got)
 	})
 }
+
+// A tag with quotes and angle brackets survives the HTML round trip: the ×
+// posts the decoded hidden value, which canonicalizes back to the stored tag.
+func TestBrowserTagMetacharacters(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		bench := s.createEntity("Bench", "")
+		const odd = `a"b<c>`
+
+		s.visit("/entities/" + bench.EntityID)
+		s.click(s.button("+ tag"))
+		input := s.page.GetByLabel("New tag")
+		s.fill(input, odd)
+		s.press(input, "Enter")
+		require.NoError(s.t, expect.Locator(s.button("Remove tag "+odd)).ToBeVisible())
+
+		s.click(s.button("Remove tag " + odd))
+		require.NoError(s.t, expect.Locator(s.button("Remove tag "+odd)).ToHaveCount(0))
+
+		got, err := s.app.ListTags(s.t.Context(), app.ListTagsRequest{EntityID: bench.EntityID})
+		require.NoError(s.t, err)
+		assert.Empty(s.t, got)
+	})
+}
