@@ -105,3 +105,13 @@ func (a *App) ListTags(ctx context.Context, req ListTagsRequest) ([]string, erro
 	}
 	return tags, nil
 }
+
+// AllTags returns the tag vocabulary: every distinct tag in the inventory,
+// including tags on removed entities, sorted alphabetically.
+func (a *App) AllTags(ctx context.Context) ([]string, error) {
+	tags, err := a.store.GetDistinctTags(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("all tags: %w", err)
+	}
+	return tags, nil
+}

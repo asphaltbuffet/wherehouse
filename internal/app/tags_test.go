@@ -242,3 +242,24 @@ func TestTagEntity_RemoveEmptyWritesNoEvent(t *testing.T) {
 		assert.NotEqual(t, inventory.EntityTagRemovedEvent, h.EventType)
 	}
 }
+
+func TestAllTags(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForTags(t, a)
+	ctx := context.Background()
+
+	garage, err := a.LookupEntityByPath(ctx, "Garage")
+	require.NoError(t, err)
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
+	require.NoError(t, err)
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityID: garage.EntityID, ActorID: "alice", Add: []string{"Place", "tool"},
+	}))
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityID: wrench.EntityID, ActorID: "alice", Add: []string{"tool"},
+	}))
+
+	tags, err := a.AllTags(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"place", "tool"}, tags)
+}

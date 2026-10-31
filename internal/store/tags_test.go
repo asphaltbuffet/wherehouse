@@ -158,3 +158,38 @@ func TestTruncateTagsTx(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, tags)
 }
+
+func TestGetDistinctTags(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	entityID := seedTagEntity(t, s)
+
+	tags, err := s.GetDistinctTags(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{}, tags, "empty table yields an empty, non-nil slice")
+
+	other := &inventory.Entity{
+		EntityID: "e-tag-2", DisplayName: "Saw", CanonicalName: "saw",
+		FullPathDisplay: "Saw", FullPathCanonical: "saw",
+		Status: inventory.EntityStatusRemoved, LastEventID: 2, UpdatedAt: time.Now(),
+	}
+	err = s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		if insErr := s.InsertEntityTx(ctx, tx, other); insErr != nil {
+			return insErr
+		}
+		for _, row := range [][2]string{
+			{entityID, "tool"}, {entityID, "garage"}, {other.EntityID, "tool"}, {other.EntityID, "retired"},
+		} {
+			if insErr := s.InsertTagTx(ctx, tx, row[0], row[1]); insErr != nil {
+				return insErr
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	tags, err = s.GetDistinctTags(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"garage", "retired", "tool"}, tags,
+		"distinct, sorted, and includes tags on removed entities")
+}
