@@ -285,20 +285,19 @@ func (b *Bus) applyEventProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *i
 }
 
 // TruncateAndReplay rebuilds entities_current from the full event log.
-// Events are loaded before the write transaction opens (read-then-write) to
-// minimise the window during which a concurrent write could be missed.
-// EntityPathChangedEvent rows are applied directly via applyEventProjectionOnlyTx
+// Events are loaded inside the write transaction, which BEGIN IMMEDIATE opens
+// holding the write lock, so no concurrent event can commit between the load
+// and the replay. EntityPathChangedEvent rows are applied directly via applyEventProjectionOnlyTx
 // (no new events are written). Returns the count of non-EntityPathChangedEvent
 // events applied; on any error the transaction rolls back and the projection is
 // left intact.
 func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
-	events, err := b.store.GetAllEvents(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("TruncateAndReplay: load events: %w", err)
-	}
-
 	var count int
-	err = b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+	err := b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		events, loadErr := b.store.GetAllEventsTx(ctx, tx)
+		if loadErr != nil {
+			return fmt.Errorf("TruncateAndReplay: load events: %w", loadErr)
+		}
 		if truncErr := b.store.TruncateTagsTx(ctx, tx); truncErr != nil {
 			return fmt.Errorf("truncate tags: %w", truncErr)
 		}

@@ -110,6 +110,32 @@ func TestClearAllData_PreservesSchemaMetadata(t *testing.T) {
 	assert.NotEmpty(t, val, "schema_metadata should survive ClearAllData")
 }
 
+func TestGetAllEventsTx_SeesUncommittedRows(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	entityID := "e1"
+	payload := json.RawMessage(`{"entity_id":"e1","display_name":"Garage","entity_type":"place"}`)
+	_, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
+	require.NoError(t, err)
+
+	err = s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		_, execErr := tx.ExecContext(ctx,
+			`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+			 VALUES (?, ?, ?, ?, NULL, ?)`,
+			"entity.renamed", "2026-01-01T00:00:00Z", "alice", `{}`, &entityID,
+		)
+		require.NoError(t, execErr)
+
+		events, getErr := s.GetAllEventsTx(ctx, tx)
+		require.NoError(t, getErr)
+		require.Len(t, events, 2)
+		assert.Less(t, events[0].EventID, events[1].EventID)
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 func TestGetAllEventsRaw(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

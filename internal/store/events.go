@@ -74,12 +74,19 @@ func (s *Store) GetEventsByEntity(ctx context.Context, entityID string) ([]*inve
 	return scanEvents(rows)
 }
 
+const allEventsQuery = `
+	SELECT event_id, event_type, timestamp_utc, actor_user_id, payload, note, entity_id
+	FROM events ORDER BY event_id ASC`
+
 // GetAllEvents retrieves all events ordered by event_id ASC.
 func (s *Store) GetAllEvents(ctx context.Context) ([]*inventory.Event, error) {
-	const query = `
-		SELECT event_id, event_type, timestamp_utc, actor_user_id, payload, note, entity_id
-		FROM events ORDER BY event_id ASC`
-	rows, err := s.db.QueryContext(ctx, query)
+	return s.GetAllEventsTx(ctx, s.db)
+}
+
+// GetAllEventsTx retrieves all events ordered by event_id ASC through tx, so a
+// caller holding the write lock sees exactly the log it is about to act on.
+func (s *Store) GetAllEventsTx(ctx context.Context, tx Tx) ([]*inventory.Event, error) {
+	rows, err := tx.QueryContext(ctx, allEventsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("query all events: %w", err)
 	}
