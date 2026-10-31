@@ -1829,7 +1829,8 @@ func TestHandleRemoveForm(t *testing.T) {
 				`id="entity-detail"`, formPost,
 				// renderAfterRemoval may return home_section, which has no #entity-detail wrapper.
 				`hx-target="#detail-panel"`, `name="note"`,
-				"Remove Hammer from the inventory? This cannot be undone.",
+				`<p id="remove_prompt">Remove Hammer from the inventory? This cannot be undone.</p>`,
+				`aria-describedby="remove_prompt"`,
 			},
 			notWant: []string{"hx-confirm", staleText},
 		},
