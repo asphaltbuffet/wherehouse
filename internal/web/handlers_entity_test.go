@@ -2413,8 +2413,10 @@ func TestHandleTagForm(t *testing.T) {
 			entities: taggedDrill(inventory.EntityStatusOk, "tools"),
 			wantCode: http.StatusOK,
 			want: []string{formPost, `id="tag_add"`, `list="tag-vocabulary"`, `<option value="garden">`,
-				`hx-trigger="keyup[key=='Escape']"`},
-			notWant: []string{`<option value="tools">`, staleText},
+				`data-esc-cancel`, `data-action="cancel"`},
+			// htmx trigger filters need eval, which the CSP blocks: the filter is
+			// skipped and the trigger fires on every key (Esc goes via tree.js).
+			notWant: []string{`<option value="tools">`, staleText, "hx-trigger"},
 		},
 		{
 			name:     "removed shows removed panel",
