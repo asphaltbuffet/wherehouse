@@ -15,7 +15,8 @@ import (
 // Tags in both Add and Remove cancel each other out (a warning is logged).
 // Adding an existing tag or removing a missing tag are no-ops. An Add tag
 // whose canonical form is empty fails the whole call with ErrEmptyTag before
-// anything is written; an empty Remove tag is ignored.
+// anything is written; an empty Remove tag is a no-op unless the entity holds
+// an empty tag recorded by an older build.
 func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 	addSet, removeSet, setsErr := tagSets(req)
 	if setsErr != nil {
@@ -30,43 +31,54 @@ func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 	// One transaction for the whole call, checked against the live entity
 	// inside it (ADR 0035): either every tag change commits or none does.
 	// Each change is still its own event, so replay is unaffected.
-	// Removals first to avoid spurious duplicate-tag warnings.
 	return a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
-		if err != nil {
-			return wrapEntityError(req.EntityID, err)
-		}
-
-		for tag := range removeSet {
-			raw, marshalErr := json.Marshal(eventbus.EntityTagRemovedPayload{EntityID: entity.EntityID, Tag: tag})
-			if marshalErr != nil {
-				return fmt.Errorf("marshal tag_removed payload: %w", marshalErr)
-			}
-			if _, dispErr := a.bus.DispatchInTx(
-				ctx, tx, inventory.EntityTagRemovedEvent, req.ActorID, raw, note,
-			); dispErr != nil {
-				return fmt.Errorf("remove tag %q: %w", tag, dispErr)
-			}
-		}
-
-		for tag := range addSet {
-			raw, marshalErr := json.Marshal(eventbus.EntityTagAddedPayload{EntityID: entity.EntityID, Tag: tag})
-			if marshalErr != nil {
-				return fmt.Errorf("marshal tag_added payload: %w", marshalErr)
-			}
-			if _, dispErr := a.bus.DispatchInTx(
-				ctx, tx, inventory.EntityTagAddedEvent, req.ActorID, raw, note,
-			); dispErr != nil {
-				return fmt.Errorf("add tag %q: %w", tag, dispErr)
-			}
-		}
-		return nil
+		return a.applyTagChangesTx(ctx, tx, req, note, addSet, removeSet)
 	})
+}
+
+// applyTagChangesTx records one event per tag in removeSet and addSet against
+// the live entity req.EntityID. Removals go first to avoid spurious
+// duplicate-tag warnings.
+func (a *App) applyTagChangesTx(
+	ctx context.Context, tx store.Tx, req TagEntityRequest, note *string, addSet, removeSet map[string]bool,
+) error {
+	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+	if err != nil {
+		return wrapEntityError(req.EntityID, err)
+	}
+	if err = a.dropAbsentEmptyTag(ctx, tx, entity.EntityID, removeSet); err != nil {
+		return err
+	}
+
+	for tag := range removeSet {
+		raw, marshalErr := json.Marshal(eventbus.EntityTagRemovedPayload{EntityID: entity.EntityID, Tag: tag})
+		if marshalErr != nil {
+			return fmt.Errorf("marshal tag_removed payload: %w", marshalErr)
+		}
+		if _, dispErr := a.bus.DispatchInTx(
+			ctx, tx, inventory.EntityTagRemovedEvent, req.ActorID, raw, note,
+		); dispErr != nil {
+			return fmt.Errorf("remove tag %q: %w", tag, dispErr)
+		}
+	}
+
+	for tag := range addSet {
+		raw, marshalErr := json.Marshal(eventbus.EntityTagAddedPayload{EntityID: entity.EntityID, Tag: tag})
+		if marshalErr != nil {
+			return fmt.Errorf("marshal tag_added payload: %w", marshalErr)
+		}
+		if _, dispErr := a.bus.DispatchInTx(
+			ctx, tx, inventory.EntityTagAddedEvent, req.ActorID, raw, note,
+		); dispErr != nil {
+			return fmt.Errorf("add tag %q: %w", tag, dispErr)
+		}
+	}
+	return nil
 }
 
 // tagSets canonicalizes req's Add and Remove tags. A tag in both sets cancels
 // out of both (a warning is logged). An Add tag with an empty canonical form
-// is ErrEmptyTag; an empty Remove tag is dropped.
+// is ErrEmptyTag; an empty Remove tag is kept for dropAbsentEmptyTag.
 func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool, error) {
 	addSet := make(map[string]bool, len(req.Add))
 	for _, t := range req.Add {
@@ -78,9 +90,7 @@ func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool, error) {
 	}
 	removeSet := make(map[string]bool, len(req.Remove))
 	for _, t := range req.Remove {
-		if c := inventory.CanonicalizeString(t); c != "" {
-			removeSet[c] = true
-		}
+		removeSet[inventory.CanonicalizeString(t)] = true
 	}
 
 	for tag := range addSet {
@@ -91,6 +101,23 @@ func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool, error) {
 		}
 	}
 	return addSet, removeSet, nil
+}
+
+// dropAbsentEmptyTag removes "" from removeSet unless entityID actually has
+// the empty tag, which builds before #324 could record. Removing it is then
+// the only cleanup; an absent "" must write no event.
+func (a *App) dropAbsentEmptyTag(ctx context.Context, tx store.Tx, entityID string, removeSet map[string]bool) error {
+	if !removeSet[""] {
+		return nil
+	}
+	has, err := a.store.HasTagTx(ctx, tx, entityID, "")
+	if err != nil {
+		return fmt.Errorf("check empty tag: %w", err)
+	}
+	if !has {
+		delete(removeSet, "")
+	}
+	return nil
 }
 
 // ListTags returns the canonical tags for the entity identified by req.EntityID, sorted alphabetically.

@@ -43,10 +43,24 @@ func (s *Store) GetTagsByEntity(ctx context.Context, entityID string) ([]string,
 	return scanTags(rows)
 }
 
-// GetDistinctTags returns every distinct tag in entity_tags, sorted
-// alphabetically. Tags on removed entities are included.
+// HasTagTx reports whether entityID currently has tag, within the given transaction.
+func (s *Store) HasTagTx(ctx context.Context, tx Tx, entityID, tag string) (bool, error) {
+	var n int
+	err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM entity_tags WHERE entity_id = ? AND tag = ?`,
+		entityID, tag,
+	).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("has tag %q for entity %q: %w", tag, entityID, err)
+	}
+	return n > 0, nil
+}
+
+// GetDistinctTags returns every distinct non-empty tag in entity_tags, sorted
+// alphabetically. Tags on removed entities are included; the empty tag that
+// older builds could record is not.
 func (s *Store) GetDistinctTags(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT tag FROM entity_tags ORDER BY tag ASC`)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT tag FROM entity_tags WHERE tag <> '' ORDER BY tag ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("get distinct tags: %w", err)
 	}

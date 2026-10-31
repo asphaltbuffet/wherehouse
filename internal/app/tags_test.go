@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -262,4 +264,51 @@ func TestAllTags(t *testing.T) {
 	tags, err := a.AllTags(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"place", "tool"}, tags)
+}
+
+// seedLegacyEmptyTag imports an entity carrying the "" tag that builds before
+// #324 recorded for `tag -a "--"`, and returns its ID.
+func seedLegacyEmptyTag(t *testing.T, a *app.App) string {
+	t.Helper()
+	ctx := context.Background()
+	entityID := "e1"
+	payload, err := json.Marshal(eventbus.EntityTagAddedPayload{EntityID: entityID, Tag: ""})
+	require.NoError(t, err)
+	_, err = a.ImportEvents(ctx, []app.ExportResult{
+		createdRecord(1, entityID, "Garage"),
+		{
+			EventID: 2, EventType: inventory.EntityTagAddedEvent.String(),
+			TimestampUTC: "2020-01-01T00:00:00Z", ActorUserID: "alice",
+			EntityID: &entityID, Payload: payload,
+		},
+	}, app.ImportOptions{})
+	require.NoError(t, err)
+
+	tags, err := a.ListTags(ctx, app.ListTagsRequest{EntityID: entityID})
+	require.NoError(t, err)
+	require.Equal(t, []string{""}, tags)
+	return entityID
+}
+
+func TestTagEntity_RemoveLegacyEmptyTag(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := context.Background()
+	entityID := seedLegacyEmptyTag(t, a)
+
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityID: entityID, ActorID: "alice", Remove: []string{"--"},
+	}))
+
+	tags, err := a.ListTags(ctx, app.ListTagsRequest{EntityID: entityID})
+	require.NoError(t, err)
+	assert.Empty(t, tags, "a recorded empty tag can still be removed")
+}
+
+func TestAllTags_ExcludesLegacyEmptyTag(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedLegacyEmptyTag(t, a)
+
+	tags, err := a.AllTags(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, tags, "the empty tag is never suggested")
 }

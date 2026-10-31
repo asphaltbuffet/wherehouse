@@ -193,3 +193,23 @@ func TestGetDistinctTags(t *testing.T) {
 	assert.Equal(t, []string{"garage", "retired", "tool"}, tags,
 		"distinct, sorted, and includes tags on removed entities")
 }
+
+func TestHasTagTx(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	entityID := seedTagEntity(t, s)
+
+	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		if insErr := s.InsertTagTx(ctx, tx, entityID, "tool"); insErr != nil {
+			return insErr
+		}
+		has, hasErr := s.HasTagTx(ctx, tx, entityID, "tool")
+		require.NoError(t, hasErr)
+		assert.True(t, has)
+		has, hasErr = s.HasTagTx(ctx, tx, entityID, "")
+		require.NoError(t, hasErr)
+		assert.False(t, has)
+		return nil
+	})
+	require.NoError(t, err)
+}
