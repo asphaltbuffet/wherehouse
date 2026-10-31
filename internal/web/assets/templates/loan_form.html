@@ -1,5 +1,5 @@
 {{define "loan_form"}}
-<form class="loan-form form-panel" data-action="loan"
+<form class="loan-form form-panel" data-action="loan" data-esc-cancel
       hx-post="/entities/{{.EntityID}}/actions/loan"
       hx-target="#entity-detail" hx-swap="outerHTML">
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
@@ -10,7 +10,7 @@
   <input id="loan_note" type="text" name="note" value="{{.Note}}">
   <div class="loan-form-buttons">
     <button type="submit" class="btn-primary">Loan</button>
-    <button type="button" class="btn-ghost"
+    <button type="button" class="btn-ghost" data-action="cancel"
             hx-get="/entities/{{.EntityID}}"
             hx-target="#entity-detail" hx-swap="outerHTML">Cancel</button>
   </div>

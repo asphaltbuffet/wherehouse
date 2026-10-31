@@ -1,5 +1,5 @@
 {{define "remove_form"}}
-<form class="remove-form form-panel" data-action="remove"
+<form class="remove-form form-panel" data-action="remove" data-esc-cancel
       hx-post="/entities/{{.EntityID}}/actions/remove"
       hx-target="#detail-panel" hx-swap="innerHTML">
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
@@ -8,7 +8,7 @@
   <input id="remove_note" type="text" name="note" value="{{.Note}}" autofocus>
   <div class="remove-form-buttons">
     <button type="submit" class="btn-primary">Remove</button>
-    <button type="button" class="btn-ghost"
+    <button type="button" class="btn-ghost" data-action="cancel"
             hx-get="/entities/{{.EntityID}}"
             hx-target="#entity-detail" hx-swap="outerHTML">Cancel</button>
   </div>
