@@ -1,0 +1,27 @@
+{{define "tag_list"}}
+<div class="tag-row">
+  {{with .Entity.Tags}}<ul class="tag-list" aria-label="Tags">{{range .}}<li class="tag">{{.}}{{if $.CanTag}}<form class="tag-remove-form" hx-post="/entities/{{$.Entity.EntityID}}/actions/untag" hx-target="#entity-detail" hx-swap="outerHTML"><input type="hidden" name="tag" value="{{.}}"><button type="submit" class="tag-remove" aria-label="Remove tag {{.}}">×</button></form>{{end}}</li>{{end}}</ul>{{end}}
+  {{if .TagForm}}
+  {{template "tag_form" .TagForm}}
+  {{else if .CanTag}}
+  <button type="button" class="btn-link tag-add"
+          hx-get="/entities/{{.Entity.EntityID}}/actions/tag"
+          hx-target="#entity-detail" hx-swap="outerHTML">+ tag</button>
+  {{end}}
+</div>
+{{end}}
+
+{{define "tag_form"}}
+<form class="tag-form" data-esc-cancel hx-post="/entities/{{.EntityID}}/actions/tag"
+      hx-target="#entity-detail" hx-swap="outerHTML">
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+  <label for="tag_add" class="visually-hidden">New tag</label>
+  <input id="tag_add" type="text" name="tag" value="{{.Value}}"
+         list="tag-vocabulary" autocomplete="off" autofocus>
+  <datalist id="tag-vocabulary">{{range .Suggestions}}<option value="{{.}}">{{end}}</datalist>
+  <button type="submit" class="btn-primary">Add</button>
+  <button type="button" class="btn-ghost" data-action="cancel"
+          hx-get="/entities/{{.EntityID}}"
+          hx-target="#entity-detail" hx-swap="outerHTML">Cancel</button>
+</form>
+{{end}}

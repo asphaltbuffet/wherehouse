@@ -133,11 +133,15 @@ A named, read-only preset of the entity filter (the same AND-combination of stat
 
 ### Tag
 
-A short, user-defined classification label applied to an entity. Tags are bare strings (no key-value pairs). They are stored in their canonical form only (via `CanonicalizeString`: lowercase, whitespace/`-`/`_` collapsed to `_`, leading/trailing `_` stripped). Any entity type (`place`, `container`, `leaf`) may have zero or more tags. Tags are used to group or filter entities across the hierarchy regardless of location or status.
+A short, user-defined classification label applied to an entity. Tags are bare strings (no key-value pairs). They are stored in their canonical form only (via `CanonicalizeString`: lowercase, whitespace/`-`/`_` collapsed to `_`, leading/trailing `_` stripped). A tag whose canonical form is empty (e.g. `--`) is rejected, never recorded. Any entity may have zero or more tags. Tags are used to group or filter entities across the hierarchy regardless of location or status.
 
 Tag mutations are recorded as events (`EntityTagAddedEvent`, `EntityTagRemovedEvent`). Current tags are maintained in the `entity_tags` projection table (`entity_id`, `tag`), which is rebuildable from the event stream. Tags are retained when an entity is removed (soft-delete consistency).
 
 Adding a tag that already exists, or removing a tag that is not present, is a silent no-op (warning logged). If the same tag appears in both `--add` and `--remove` in a single invocation, they cancel each other out (warning shown to user).
+
+### Tag vocabulary
+
+The set of distinct tags in use across the whole inventory, including tags on removed entities. It is what the web UI suggests when adding a tag. _Avoid_: tag list (ambiguous with one entity's tags), tag catalog.
 
 ### Actor
 

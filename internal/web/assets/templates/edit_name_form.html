@@ -1,12 +1,12 @@
 {{define "edit_name_form"}}
 <div class="tape-row">
   <form class="tape-edit-form" hx-post="/entities/{{.EntityID}}/edit/name"
-        hx-target="#entity-detail" hx-swap="outerHTML">
+        hx-target="#entity-detail" hx-swap="outerHTML" data-esc-cancel>
     <label for="display_name_edit" class="visually-hidden">New name</label>
     <input id="display_name_edit" type="text" name="display_name"
            value="{{.CurrentName}}" required autofocus>
     <button type="submit" class="btn-primary">Save</button>
-    <button type="button" class="btn-ghost"
+    <button type="button" class="btn-ghost" data-action="cancel"
             hx-get="/entities/{{.EntityID}}"
             hx-target="#entity-detail" hx-swap="outerHTML">Cancel</button>
   </form>

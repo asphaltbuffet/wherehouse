@@ -305,6 +305,17 @@
     if (e.key === 'Enter' && e.target.matches && e.target.matches('[data-parent-search]')) e.preventDefault();
   }
 
+  // Esc in a [data-esc-cancel] form clicks its Cancel button. An htmx
+  // keyup[...] trigger filter needs eval, which CSP forbids.
+  function onEscCancelKeydown(e) {
+    if (e.key !== 'Escape' || !e.target.closest) return;
+    var form = e.target.closest('form[data-esc-cancel]');
+    var cancel = form && form.querySelector('[data-action="cancel"]');
+    if (!cancel) return;
+    e.preventDefault();
+    cancel.click();
+  }
+
   // Reports' Print button (CSP forbids inline onclick).
   function onPrintClick(e) {
     if (e.target.closest && e.target.closest('[data-action="print"]')) window.print();
@@ -392,6 +403,7 @@
     document.body.addEventListener('click', onParentPick);
     document.body.addEventListener('click', onPrintClick);
     document.body.addEventListener('keydown', onParentSearchKeydown);
+    document.body.addEventListener('keydown', onEscCancelKeydown);
     document.body.addEventListener('entity-created', onEntityCreated);
     document.body.addEventListener('tree-node-detached', onTreeNodeDetached);
     document.body.addEventListener('tree-node-attached', onTreeNodeAttached);

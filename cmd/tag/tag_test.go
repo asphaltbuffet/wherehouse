@@ -139,3 +139,17 @@ func TestTagCmd_UnknownEntity(t *testing.T) {
 	_, _, err := runTagCmd(t.Context(), t, a, "Nope:DoesNotExist", "--add", "tool")
 	require.Error(t, err)
 }
+
+func TestTagCmd_EmptyTagRejected(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForTagCmd(t, a)
+
+	_, _, err := runTagCmd(t.Context(), t, a, "Garage:Wrench", "--add", "tool", "--add=--")
+	require.ErrorIs(t, err, app.ErrEmptyTag)
+
+	wrench, err := a.LookupEntityByPath(t.Context(), "Garage:Wrench")
+	require.NoError(t, err)
+	tags, err := a.ListTags(t.Context(), app.ListTagsRequest{EntityID: wrench.EntityID})
+	require.NoError(t, err)
+	assert.Empty(t, tags, "the valid tag in the same call is not written either")
+}

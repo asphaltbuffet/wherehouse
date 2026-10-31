@@ -43,6 +43,8 @@ type detailData struct {
 	RemoveBlockedReason string            // non-empty when Remove is shown disabled
 	RemoveForm          *removeFormData   // non-nil re-opens the remove form (guard tripped at submit)
 	EditNameForm        *editNameFormData // non-nil swaps the name tape for the rename form
+	CanTag              bool              // live: any status, locked or not (locking restricts location only)
+	TagForm             *tagFormData      // non-nil opens the add-tag input (also kept open after an add)
 	Breadcrumbs         []Breadcrumb
 	AncestorIDs         string    // space-separated, root first; tree.js expands along them (#363)
 	Error               string    // populated by edit POST handlers; rendered inline above the detail dl
@@ -63,6 +65,21 @@ type loanFormData struct {
 	Recipient string
 	Note      string
 	Error     string
+}
+
+// blankTagMessage and emptyTagMessage are the inline errors for a tag with an
+// empty canonical form: nothing typed, or only separators.
+const (
+	blankTagMessage = "Tag is required."
+	emptyTagMessage = "Tag can't be only spaces, dashes, or underscores."
+)
+
+// tagFormData is the view model for the inline add-tag input.
+type tagFormData struct {
+	EntityID    string
+	Value       string
+	Suggestions []string // tag vocabulary minus the entity's own tags
+	Error       string
 }
 
 // loanLockedReason is the tooltip on a disabled Loan button.
@@ -421,6 +438,7 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		DiscreteAction:      discrete,
 		CanRemove:           canRemove,
 		RemoveBlockedReason: removeBlockedReason,
+		CanTag:              true, // buildDetailData only sees live entities
 		Breadcrumbs:         crumbs,
 		AncestorIDs:         ancestorIDs(crumbs),
 		ChildList:           childList{ParentID: entity.EntityID, Children: children},
@@ -527,6 +545,110 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 		s.renderHTMLAppend(w, "tree_label_oob", fresh.Entity)
 		s.renderHTMLAppend(w, "tree_attrs_oob", fresh.Entity) // the add button's label names it
 	}
+}
+
+// openTagForm opens the add-tag input on d with value and errMsg. Suggestions
+// are a convenience: if the vocabulary can't be read, the input opens without them.
+func (s *Server) openTagForm(ctx context.Context, d *detailData, value, errMsg string) {
+	vocab, err := s.cfg.App.AllTags(ctx)
+	if err != nil {
+		s.cfg.Logger.Error("load tag vocabulary", "error", err, "entity_id", d.Entity.EntityID)
+	}
+	own := d.Entity.Tags
+	d.TagForm = &tagFormData{
+		EntityID:    d.Entity.EntityID,
+		Value:       value,
+		Suggestions: slices.DeleteFunc(vocab, func(t string) bool { return slices.Contains(own, t) }),
+		Error:       errMsg,
+	}
+}
+
+// handleTagForm handles GET /entities/{entityID}/actions/tag, re-rendering
+// the detail section with the add-tag input open.
+func (s *Server) handleTagForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.CanTag {
+			return "", false
+		}
+		s.openTagForm(r.Context(), d, "", "")
+		return "", true
+	})
+}
+
+// handleTag handles POST /entities/{entityID}/actions/tag, adding one tag and
+// keeping the input open for the next. A duplicate is a silent no-op; an
+// empty tag re-opens the input with the user's text. The app layer decides
+// (ADR 0035), so a stale panel reaches renderGone.
+func (s *Server) handleTag(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	value := r.FormValue("tag")
+
+	tagErr := s.cfg.App.TagEntity(r.Context(), app.TagEntityRequest{
+		EntityID: entityID,
+		ActorID:  s.actorFor(r),
+		Add:      []string{value},
+	})
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		s.renderGone(w, r, entityID)
+		return
+	}
+
+	switch {
+	case errors.Is(tagErr, app.ErrEmptyTag) && strings.TrimSpace(value) == "":
+		s.openTagForm(r.Context(), &fresh, value, blankTagMessage)
+	case errors.Is(tagErr, app.ErrEmptyTag):
+		s.openTagForm(r.Context(), &fresh, value, emptyTagMessage)
+	case tagErr != nil:
+		s.cfg.Logger.Error("tag entity", "error", tagErr, "entity_id", entityID)
+		fresh.Error = "tag failed"
+		s.openTagForm(r.Context(), &fresh, value, "")
+	default:
+		s.openTagForm(r.Context(), &fresh, "", "")
+	}
+	s.renderDetailSection(w, r, fresh)
+}
+
+// handleUntag handles POST /entities/{entityID}/actions/untag, removing one
+// tag. Removing a tag that is already gone is a silent no-op.
+func (s *Server) handleUntag(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	tagErr := s.cfg.App.TagEntity(r.Context(), app.TagEntityRequest{
+		EntityID: entityID,
+		ActorID:  s.actorFor(r),
+		Remove:   []string{r.FormValue("tag")},
+	})
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		s.renderGone(w, r, entityID)
+		return
+	}
+	if tagErr != nil {
+		s.cfg.Logger.Error("untag entity", "error", tagErr, "entity_id", entityID)
+		fresh.Error = "remove tag failed"
+	}
+	s.renderDetailSection(w, r, fresh)
 }
 
 // missingChange is app.MarkLost or app.MarkFound.

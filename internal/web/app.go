@@ -33,4 +33,6 @@ type App interface {
 		ctx context.Context, entityID string, relocation app.Relocation, req app.FindEntitiesRequest,
 	) ([]app.FindResult, error)
 	RemoveEntity(ctx context.Context, req app.RemoveEntityRequest) error
+	TagEntity(ctx context.Context, req app.TagEntityRequest) error
+	AllTags(ctx context.Context) ([]string, error)
 }

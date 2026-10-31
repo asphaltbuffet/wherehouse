@@ -1,0 +1,5 @@
+kind: Added
+body: 'Web UI: add and remove tags from the detail panel, with suggestions from tags already in use'
+time: 2026-10-31T01:00:45.978775796-04:00
+custom:
+    Issue: "324"

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 
@@ -113,6 +114,14 @@ type fakeApp struct {
 	removeCalls   int
 	lastRemoveReq app.RemoveEntityRequest
 	onRemove      func(*fakeApp) // runs inside RemoveEntity; simulates a concurrent writer
+
+	tagErr     error
+	tagCalls   int
+	lastTagReq app.TagEntityRequest
+	onTag      func(*fakeApp) // runs inside TagEntity; simulates a concurrent writer
+
+	allTags    []string // AllTags result
+	allTagsErr error
 
 	name    string // GetWherehouseName result
 	nameErr error
@@ -402,4 +411,36 @@ func (f *fakeApp) UseEntity(_ context.Context, req app.UseEntityRequest) (app.En
 		return f.entities[i], nil
 	}
 	return app.EntityResult{}, app.ErrNotFound
+}
+
+func (f *fakeApp) TagEntity(_ context.Context, req app.TagEntityRequest) error {
+	f.tagCalls++
+	f.lastActor = req.ActorID
+	f.lastTagReq = req
+	if f.onTag != nil {
+		f.onTag(f)
+	}
+	if f.tagErr != nil {
+		return f.tagErr
+	}
+	for i := range f.entities {
+		if f.entities[i].EntityID != req.EntityID {
+			continue
+		}
+		tags := slices.DeleteFunc(slices.Clone(f.entities[i].Tags), func(t string) bool {
+			return slices.Contains(req.Remove, t)
+		})
+		for _, t := range req.Add {
+			if c := inventory.CanonicalizeString(t); !slices.Contains(tags, c) {
+				tags = append(tags, c)
+			}
+		}
+		slices.Sort(tags)
+		f.entities[i].Tags = tags
+	}
+	return nil
+}
+
+func (f *fakeApp) AllTags(context.Context) ([]string, error) {
+	return slices.Clone(f.allTags), f.allTagsErr
 }

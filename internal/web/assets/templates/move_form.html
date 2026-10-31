@@ -1,5 +1,5 @@
 {{define "move_form"}}
-<form class="loan-form form-panel" data-action="{{.Verb}}"
+<form class="loan-form form-panel" data-action="{{.Verb}}" data-esc-cancel
       hx-post="/entities/{{.EntityID}}/actions/{{.Verb}}"
       hx-target="#entity-detail" hx-swap="outerHTML">
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
@@ -25,7 +25,7 @@
   <input id="move_note" type="text" name="note" value="{{.Note}}">
   <div class="loan-form-buttons">
     <button type="submit" class="btn-primary">{{if eq .Verb "use"}}Use{{else}}Move{{end}}</button>
-    <button type="button" class="btn-ghost"
+    <button type="button" class="btn-ghost" data-action="cancel"
             hx-get="/entities/{{.EntityID}}"
             hx-target="#entity-detail" hx-swap="outerHTML">Cancel</button>
   </div>

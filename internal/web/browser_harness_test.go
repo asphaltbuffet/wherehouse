@@ -275,6 +275,13 @@ func (s *session) fill(l playwright.Locator, value string) {
 	require.NoError(s.t, l.Fill(value))
 }
 
+// press presses key in l once htmx has settled.
+func (s *session) press(l playwright.Locator, key string) {
+	s.t.Helper()
+	s.settle()
+	require.NoError(s.t, l.Press(key))
+}
+
 // typeText types text into l key by key once htmx has settled.
 func (s *session) typeText(l playwright.Locator, text string) {
 	s.t.Helper()

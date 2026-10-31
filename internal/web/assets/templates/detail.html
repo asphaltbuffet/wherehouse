@@ -19,7 +19,7 @@
   {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
   {{template "status_line" .Entity}}
   {{if .Displaced}}<span class="tag tag-away">away</span>{{end}}
-  {{with .Entity.Tags}}<ul class="tag-list" aria-label="Tags">{{range .}}<li class="tag">{{.}}</li>{{end}}</ul>{{end}}
+  {{template "tag_list" .}}
   <dl class="detail-facts">
     {{if .Entity.Locked}}<div><dt>Locked</dt><dd>yes</dd></div>{{end}}
     {{if .Entity.Discrete}}<div><dt>Discrete</dt><dd>yes</dd></div>{{end}}
