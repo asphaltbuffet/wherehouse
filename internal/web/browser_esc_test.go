@@ -17,6 +17,7 @@ func TestBrowserEscCancelsInlineForms(t *testing.T) {
 	}{
 		{open: "Edit name", field: "New name"},
 		{open: "Loan", field: "Loaned to"},
+		{open: "Mark missing", field: "Note (optional)"},
 		{open: "Move", field: "Move to"},
 		{open: "Use", field: "Use at"},
 		{open: "Remove", field: "Note (optional)"},

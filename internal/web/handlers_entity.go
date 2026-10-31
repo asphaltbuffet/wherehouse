@@ -22,22 +22,23 @@ type detailData struct {
 	DateAdded         string
 	History           []app.HistoryResult
 	CanAddChild       bool
-	CanMarkLost       bool          // ok and not locked (ADR 0024)
-	CanMarkFound      bool          // missing; found has no locked guard (ADR 0024)
-	CanReturn         bool          // borrowed, loaned, or displaced ok
-	ReturnConfirm     string        // non-empty only for borrowed: returning removes the entity
-	CanLoan           bool          // ok/missing and not locked (ADR 0024)
-	LoanBlockedReason string        // non-empty when Loan is shown disabled
-	LoanForm          *loanFormData // non-nil re-opens the loan form (validation error)
-	CanMove           bool          // not locked; ok or borrowed (ADR 0034)
-	MoveBlockedReason string        // non-empty when Move is shown disabled
-	UseBlockedReason  string        // non-empty when Use is shown disabled
-	MoveForm          *moveFormData // non-nil re-opens the move form (validation error)
-	CanUse            bool          // same as CanMove (use = move preconditions)
-	UseForm           *moveFormData // non-nil re-opens the use form (validation error)
-	Displaced         bool          // parent differs from home (CONTEXT.md "Displaced")
-	LockAction        attrAction    // Lock / Unlock button
-	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
+	CanMarkLost       bool            // ok and not locked (ADR 0024)
+	CanMarkFound      bool            // missing; found has no locked guard (ADR 0024)
+	CanReturn         bool            // borrowed, loaned, or displaced ok
+	ReturnConfirm     string          // non-empty only for borrowed: returning removes the entity
+	MissingForm       *statusFormData // non-nil opens the Mark missing / Mark found note form
+	CanLoan           bool            // ok/missing and not locked (ADR 0024)
+	LoanBlockedReason string          // non-empty when Loan is shown disabled
+	LoanForm          *loanFormData   // non-nil re-opens the loan form (validation error)
+	CanMove           bool            // not locked; ok or borrowed (ADR 0034)
+	MoveBlockedReason string          // non-empty when Move is shown disabled
+	UseBlockedReason  string          // non-empty when Use is shown disabled
+	MoveForm          *moveFormData   // non-nil re-opens the move form (validation error)
+	CanUse            bool            // same as CanMove (use = move preconditions)
+	UseForm           *moveFormData   // non-nil re-opens the use form (validation error)
+	Displaced         bool            // parent differs from home (CONTEXT.md "Displaced")
+	LockAction        attrAction      // Lock / Unlock button
+	DiscreteAction    attrAction      // Mark discrete / Clear discrete button
 	// CanRemove is false for borrowed: a borrowed entity exits via Return (ADR 0022).
 	CanRemove           bool
 	RemoveBlockedReason string            // non-empty when Remove is shown disabled
@@ -118,6 +119,16 @@ type removeFormData struct {
 	DisplayName string
 	Note        string
 	Error       string
+}
+
+// statusFormData is the view model for the inline note form of a status
+// action: Mark missing, Mark found, or Return (#291).
+type statusFormData struct {
+	EntityID string
+	Action   string // "lost", "found" or "return": form action path and data-action
+	Submit   string // submit button label, the same as the button that opened the form
+	Prompt   string // optional confirmation text above the note
+	Note     string
 }
 
 // removeHasChildrenReason is the tooltip on a disabled Remove button (#287).
@@ -675,14 +686,40 @@ func (s *Server) handleUntag(w http.ResponseWriter, r *http.Request) {
 // missingChange is app.MarkLost or app.MarkFound.
 type missingChange func(context.Context, []app.ChangeStatusRequest) ([]app.EntityResult, error)
 
-// handleLost handles POST /entities/{entityID}/actions/lost.
+// handleLost handles POST /entities/{entityID}/actions/lost, recording the
+// form's optional note.
 func (s *Server) handleLost(w http.ResponseWriter, r *http.Request) {
 	s.changeMissing(w, r, s.cfg.App.MarkLost, func(d detailData) bool { return d.CanMarkLost })
 }
 
-// handleFound handles POST /entities/{entityID}/actions/found.
+// handleFound handles POST /entities/{entityID}/actions/found, recording the
+// form's optional note.
 func (s *Server) handleFound(w http.ResponseWriter, r *http.Request) {
 	s.changeMissing(w, r, s.cfg.App.MarkFound, func(d detailData) bool { return d.CanMarkFound })
+}
+
+// handleLostForm handles GET /entities/{entityID}/actions/lost, re-rendering
+// the detail section with the Mark missing note form open.
+func (s *Server) handleLostForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.CanMarkLost {
+			return "", false
+		}
+		d.MissingForm = &statusFormData{EntityID: d.Entity.EntityID, Action: "lost", Submit: "Mark missing"}
+		return "", true
+	})
+}
+
+// handleFoundForm handles GET /entities/{entityID}/actions/found, re-rendering
+// the detail section with the Mark found note form open.
+func (s *Server) handleFoundForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.CanMarkFound {
+			return "", false
+		}
+		d.MissingForm = &statusFormData{EntityID: d.Entity.EntityID, Action: "found", Submit: "Mark found"}
+		return "", true
+	})
 }
 
 // changeMissing applies an explicit lost/found change. The button names its
@@ -694,7 +731,15 @@ func (s *Server) changeMissing(
 	w http.ResponseWriter, r *http.Request, change missingChange, offered func(detailData) bool,
 ) {
 	entityID := r.PathValue("entityID")
-	_, changeErr := change(r.Context(), []app.ChangeStatusRequest{{EntityID: entityID, ActorID: s.actorFor(r)}})
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	_, changeErr := change(r.Context(), []app.ChangeStatusRequest{{
+		EntityID: entityID,
+		Note:     strings.TrimSpace(r.FormValue("note")),
+		ActorID:  s.actorFor(r),
+	}})
 
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {

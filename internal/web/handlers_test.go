@@ -54,17 +54,18 @@ func (l *recordingLogger) With(...any) logging.Logger { return l }
 
 // fakeApp satisfies web.App for tests.
 type fakeApp struct {
-	entities     []app.EntityResult
-	history      []app.HistoryResult
-	err          error
-	renameResult app.EntityResult
-	renameErr    error
-	statusErr    error
-	lostCalls    int
-	foundCalls   int
-	findResults  []app.FindResult
-	findErr      error
-	lastActor    string // ActorID from the most recent mutating call
+	entities       []app.EntityResult
+	history        []app.HistoryResult
+	err            error
+	renameResult   app.EntityResult
+	renameErr      error
+	statusErr      error
+	lostCalls      int
+	foundCalls     int
+	lastMissingReq app.ChangeStatusRequest // most recent MarkLost/MarkFound request
+	findResults    []app.FindResult
+	findErr        error
+	lastActor      string // ActorID from the most recent mutating call
 
 	lastCreateReq app.CreateEntityRequest // most recent CreateEntity request
 	createResult  app.EntityResult
@@ -278,6 +279,7 @@ func (f *fakeApp) MarkLost(_ context.Context, reqs []app.ChangeStatusRequest) ([
 	f.lostCalls++
 	if len(reqs) > 0 {
 		f.lastActor = reqs[0].ActorID
+		f.lastMissingReq = reqs[0]
 	}
 	return nil, f.statusErr
 }
@@ -286,6 +288,7 @@ func (f *fakeApp) MarkFound(_ context.Context, reqs []app.ChangeStatusRequest) (
 	f.foundCalls++
 	if len(reqs) > 0 {
 		f.lastActor = reqs[0].ActorID
+		f.lastMissingReq = reqs[0]
 	}
 	return nil, f.statusErr
 }
