@@ -321,9 +321,31 @@
     if (e.target.closest && e.target.closest('[data-action="print"]')) window.print();
   }
 
-  // Insert a node that joined parentId's list (borrow, move) when that list is
-  // already loaded (root, or a parent expanded at least once). A never-expanded
-  // parent only needs its chevron revealed; children load on expand.
+  // treeNodeName is the display name a tree <li> shows.
+  function treeNodeName(li) {
+    var label = li.querySelector(':scope > .tree-item > [id^="tree-label-"]');
+    return label ? label.textContent : '';
+  }
+
+  // placeSorted moves entityId's tree node to where the server would list it
+  // among its siblings: by display name, then entity ID, compared by code
+  // unit to match SQLite's BINARY collation (so not localeCompare).
+  function placeSorted(entityId) {
+    var li = document.getElementById('tree-node-' + entityId);
+    if (!li || !li.parentElement) return;
+    var name = treeNodeName(li);
+    var next = Array.from(li.parentElement.children).find(function (sib) {
+      if (sib === li) return false;
+      var sibName = treeNodeName(sib);
+      return sibName > name || (sibName === name && sib.id > li.id);
+    });
+    li.parentElement.insertBefore(li, next || null);
+  }
+
+  // Insert a node that joined parentId's list (add, borrow, move) in sorted
+  // position when that list is already loaded (root, or a parent expanded at
+  // least once). A never-expanded parent only needs its chevron revealed;
+  // children load on expand.
   function onTreeNodeAttached(e) {
     var parentId = e.detail.parentId;
     var listId = parentId ? 'tree-children-' + parentId : 'tree-root-list';
@@ -338,10 +360,16 @@
         return;
       }
     }
-    htmx.ajax('GET', '/entities/' + e.detail.entityId + '/tree-node', {
+    var entityId = e.detail.entityId;
+    htmx.ajax('GET', '/entities/' + entityId + '/tree-node', {
       target: '#' + listId,
       swap: 'beforeend',
-    });
+    }).then(function () { placeSorted(entityId); });
+  }
+
+  // After a rename (once the OOB label swap is in): re-sort the node.
+  function onTreeNodeRenamed(e) {
+    placeSorted(e.detail.entityId);
   }
 
   // After an add or borrow: close the modal, then insert the new node.
@@ -407,5 +435,6 @@
     document.body.addEventListener('entity-created', onEntityCreated);
     document.body.addEventListener('tree-node-detached', onTreeNodeDetached);
     document.body.addEventListener('tree-node-attached', onTreeNodeAttached);
+    document.body.addEventListener('tree-node-renamed', onTreeNodeRenamed);
   });
 }());

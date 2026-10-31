@@ -33,3 +33,22 @@ func TestBrowserRename(t *testing.T) {
 		assert.Equal(s.t, "Workbench", got.DisplayName)
 	})
 }
+
+func TestBrowserRenameSortsTreeNode(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		attic := s.createEntity("Attic", "")
+		s.createEntity("Basement", "")
+		s.createEntity("Garage", "")
+
+		s.visit("/entities/" + attic.EntityID)
+		s.click(s.button("Edit name"))
+		s.fill(s.page.GetByLabel("New name"), "Cellar")
+		s.click(s.button("Save"))
+
+		require.NoError(s.t, expect.Locator(s.detailHeading("Cellar")).ToBeVisible())
+		s.openTree()
+		require.NoError(s.t, expect.Locator(s.treeLabels("#tree-root-list")).
+			ToHaveText([]string{"Basement", "Cellar", "Garage"}))
+	})
+}

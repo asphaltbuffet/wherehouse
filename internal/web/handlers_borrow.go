@@ -88,8 +88,13 @@ func (s *Server) handleBorrow(w http.ResponseWriter, r *http.Request) {
 		Note:          form.Note,
 	}})
 	if err != nil {
-		s.cfg.Logger.Error("borrow entity", "error", err)
-		s.renderBorrowFormError(w, s.withParentLabel(r.Context(), form, err), borrowErrorMessage(err))
+		msg, invalid := borrowErrorMessage(err)
+		if invalid {
+			s.cfg.Logger.Info("borrow rejected: invalid input", "error", err)
+		} else {
+			s.cfg.Logger.Error("borrow entity", "error", err)
+		}
+		s.renderBorrowFormError(w, s.withParentLabel(r.Context(), form, err), msg)
 		return
 	}
 	if len(results) == 0 {
@@ -147,22 +152,24 @@ func (s *Server) withParentLabel(ctx context.Context, form borrowFormData, err e
 	return form
 }
 
-// borrowErrorMessage maps app-layer validation errors to form messages.
-func borrowErrorMessage(err error) string {
+// borrowErrorMessage maps app-layer validation errors to form messages. The
+// bool reports whether err is one of those expected user mistakes rather
+// than a failure.
+func borrowErrorMessage(err error) (string, bool) {
 	switch {
 	case errors.Is(err, app.ErrNotFound):
-		return "That location no longer exists — choose another."
+		return "That location no longer exists — choose another.", true
 	case errors.Is(err, app.ErrInvalidDestination):
-		return "That location can't hold items — choose another."
+		return "That location can't hold items — choose another.", true
 	case errors.Is(err, app.ErrLenderRequired):
-		return "Borrowed from is required."
+		return "Borrowed from is required.", true
 	case errors.Is(err, entitypath.ErrEmptySegment):
-		return "Name is required."
+		return "Name is required.", true
 	case errors.Is(err, entitypath.ErrSegmentContainsSeparator):
-		return `Name cannot contain ":".`
+		return `Name cannot contain ":".`, true
 	case errors.Is(err, entitypath.ErrInvalidSegment):
-		return "Name contains invalid characters."
+		return "Name contains invalid characters.", true
 	default:
-		return "borrow failed"
+		return "borrow failed", false
 	}
 }

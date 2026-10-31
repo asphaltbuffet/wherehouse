@@ -121,6 +121,8 @@ func TestHandleEditName_Success(t *testing.T) {
 	assert.Contains(t, string(body), `<span id="tree-label-abc" hx-swap-oob="true">`)
 	// The tree's add button names the entity, so it is re-rendered too.
 	assert.Contains(t, string(body), `<span id="tree-add-abc" class="tree-slot" hx-swap-oob="true">`)
+	// tree.js re-sorts the node once the new label is swapped in.
+	assert.JSONEq(t, `{"tree-node-renamed":{"entityId":"abc"}}`, resp.Header.Get("Hx-Trigger-After-Swap"))
 }
 
 func TestHandleEditName_AppError(t *testing.T) {
@@ -146,6 +148,7 @@ func TestHandleEditName_AppError(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "rename failed")
+	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
 }
 
 func TestHandleEditName_EmptyName(t *testing.T) {
