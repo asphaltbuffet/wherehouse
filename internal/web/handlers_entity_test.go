@@ -248,7 +248,7 @@ func TestHandleMissingActions(t *testing.T) {
 		{
 			name: "genuine failure", path: lost, entities: ent(inventory.EntityStatusOk, false),
 			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
-			want:    []string{"status change failed", `hx-get="/entities/abc/actions/lost"`},
+			want:    []string{"status change failed", `hx-post="/entities/abc/actions/lost"`},
 			notWant: []string{staleText},
 		},
 		{
@@ -623,6 +623,67 @@ func TestHandleReturn_HasChildrenShowsMessage(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), "still contains other entities")
 	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
+}
+
+// A failure that leaves the action offered re-opens its form with the typed
+// note and the error, as loan_form and remove_form do.
+func TestStatusFailureKeepsNote(t *testing.T) {
+	ent := func(status inventory.EntityStatus) []app.EntityResult {
+		return []app.EntityResult{{EntityID: "abc", DisplayName: "Case", FullPathDisplay: "Case",
+			Status: status, StatusContext: "Alice"}}
+	}
+	tests := []struct {
+		name      string
+		path      string
+		entities  []app.EntityResult
+		statusErr error
+		returnErr error
+		wantError string
+		want      []string
+	}{
+		{
+			name: "lost genuine failure", path: "/entities/abc/actions/lost",
+			entities: ent(inventory.EntityStatusOk), statusErr: errTest, wantError: "status change failed",
+		},
+		{
+			name: "found genuine failure", path: "/entities/abc/actions/found",
+			entities: ent(inventory.EntityStatusMissing), statusErr: errTest, wantError: "status change failed",
+		},
+		{
+			name: "return has children", path: "/entities/abc/actions/return",
+			entities:  ent(inventory.EntityStatusBorrowed),
+			returnErr: fmt.Errorf("return: %w", app.ErrHasChildren),
+			wantError: "return failed: it still contains other entities — return or move them first",
+			want:      []string{`id="status_prompt"`},
+		},
+		{
+			name: "return is home", path: "/entities/abc/actions/return",
+			entities:  ent(inventory.EntityStatusBorrowed),
+			returnErr: fmt.Errorf("return: %w", app.ErrIsHome),
+			wantError: "return failed: it is home to entities that are away — return them first",
+		},
+		{
+			name: "return genuine failure", path: "/entities/abc/actions/return",
+			entities: ent(inventory.EntityStatusLoaned), returnErr: errTest, wantError: "return failed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: tt.entities, statusErr: tt.statusErr, returnErr: tt.returnErr})
+			defer ts.Close()
+
+			resp, body := postNote(t, ts, tt.path, "  keep me  ")
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Contains(t, body, `hx-post="`+tt.path+`"`, "form re-opened")
+			assert.Contains(t, body, `value="keep me"`)
+			assert.Contains(t, body, `<div class="error" role="alert">`+tt.wantError+`</div>`)
+			assert.Equal(t, 1, strings.Count(body, `role="alert"`), "error shown once, inside the form")
+			for _, s := range tt.want {
+				assert.Contains(t, body, s)
+			}
+		})
+	}
 }
 
 func TestHandleReturn_IsHomeShowsMessage(t *testing.T) {

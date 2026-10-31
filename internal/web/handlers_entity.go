@@ -130,6 +130,22 @@ type statusFormData struct {
 	Submit   string // submit button label, the same as the button that opened the form
 	Prompt   string // optional confirmation text above the note
 	Note     string
+	Error    string // set when a failed submit re-opens the form
+}
+
+// lostForm, foundForm and returnForm build each status action's note form.
+func lostForm(entityID, note string) *statusFormData {
+	return &statusFormData{EntityID: entityID, Action: "lost", Submit: "Mark missing", Note: note}
+}
+
+func foundForm(entityID, note string) *statusFormData {
+	return &statusFormData{EntityID: entityID, Action: "found", Submit: "Mark found", Note: note}
+}
+
+func returnForm(d detailData, note string) *statusFormData {
+	return &statusFormData{
+		EntityID: d.Entity.EntityID, Action: "return", Submit: "Return", Prompt: d.ReturnConfirm, Note: note,
+	}
 }
 
 // removeHasChildrenReason is the tooltip on a disabled Remove button (#287).
@@ -690,13 +706,13 @@ type missingChange func(context.Context, []app.ChangeStatusRequest) ([]app.Entit
 // handleLost handles POST /entities/{entityID}/actions/lost, recording the
 // form's optional note.
 func (s *Server) handleLost(w http.ResponseWriter, r *http.Request) {
-	s.changeMissing(w, r, s.cfg.App.MarkLost, func(d detailData) bool { return d.CanMarkLost })
+	s.changeMissing(w, r, s.cfg.App.MarkLost, func(d detailData) bool { return d.CanMarkLost }, lostForm)
 }
 
 // handleFound handles POST /entities/{entityID}/actions/found, recording the
 // form's optional note.
 func (s *Server) handleFound(w http.ResponseWriter, r *http.Request) {
-	s.changeMissing(w, r, s.cfg.App.MarkFound, func(d detailData) bool { return d.CanMarkFound })
+	s.changeMissing(w, r, s.cfg.App.MarkFound, func(d detailData) bool { return d.CanMarkFound }, foundForm)
 }
 
 // handleLostForm handles GET /entities/{entityID}/actions/lost, re-rendering
@@ -706,7 +722,7 @@ func (s *Server) handleLostForm(w http.ResponseWriter, r *http.Request) {
 		if !d.CanMarkLost {
 			return "", false
 		}
-		d.MissingForm = &statusFormData{EntityID: d.Entity.EntityID, Action: "lost", Submit: "Mark missing"}
+		d.MissingForm = lostForm(d.Entity.EntityID, "")
 		return "", true
 	})
 }
@@ -718,7 +734,7 @@ func (s *Server) handleFoundForm(w http.ResponseWriter, r *http.Request) {
 		if !d.CanMarkFound {
 			return "", false
 		}
-		d.MissingForm = &statusFormData{EntityID: d.Entity.EntityID, Action: "found", Submit: "Mark found"}
+		d.MissingForm = foundForm(d.Entity.EntityID, "")
 		return "", true
 	})
 }
@@ -727,18 +743,21 @@ func (s *Server) handleFoundForm(w http.ResponseWriter, r *http.Request) {
 // target, so a stale click fails the app layer's source-status guard (ADR
 // 0024, 0035) instead of flipping the status the other way (#306). offered
 // reports whether the fresh panel still offers this change: if not, the
-// failure was a stale panel, not an error.
+// failure was a stale panel, not an error. If it is still offered, form
+// re-opens the note form with the user's note and the error.
 func (s *Server) changeMissing(
 	w http.ResponseWriter, r *http.Request, change missingChange, offered func(detailData) bool,
+	form func(entityID, note string) *statusFormData,
 ) {
 	entityID := r.PathValue("entityID")
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
+	note := strings.TrimSpace(r.FormValue("note"))
 	_, changeErr := change(r.Context(), []app.ChangeStatusRequest{{
 		EntityID: entityID,
-		Note:     strings.TrimSpace(r.FormValue("note")),
+		Note:     note,
 		ActorID:  s.actorFor(r),
 	}})
 
@@ -756,7 +775,8 @@ func (s *Server) changeMissing(
 	case changeErr == nil:
 	case offered(fresh):
 		s.cfg.Logger.Error("change status", "error", changeErr, "entity_id", entityID)
-		fresh.Error = "status change failed"
+		fresh.MissingForm = form(entityID, note)
+		fresh.MissingForm.Error = "status change failed"
 	default:
 		// No pre-write read, so a stale panel and a replayed request look alike.
 		s.cfg.Logger.Info("status change rejected: not offered", "error", changeErr, "entity_id", entityID)
@@ -790,13 +810,14 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 
 	wasDisplaced := data.Entity.IsDisplaced()
 
+	note := strings.TrimSpace(r.FormValue("note"))
 	_, err = s.cfg.App.MarkReturned(r.Context(), []app.ChangeStatusRequest{{
 		EntityID: entityID,
-		Note:     strings.TrimSpace(r.FormValue("note")),
+		Note:     note,
 		ActorID:  s.actorFor(r),
 	}})
 	if err != nil {
-		s.renderReturnFailure(w, r, data, err)
+		s.renderReturnFailure(w, r, data, note, err)
 		return
 	}
 
@@ -827,9 +848,7 @@ func (s *Server) handleReturnForm(w http.ResponseWriter, r *http.Request) {
 		if !d.CanReturn {
 			return "", false
 		}
-		d.ReturnForm = &statusFormData{
-			EntityID: d.Entity.EntityID, Action: "return", Submit: "Return", Prompt: d.ReturnConfirm,
-		}
+		d.ReturnForm = returnForm(*d, "")
 		return "", true
 	})
 }
@@ -846,20 +865,25 @@ func (s *Server) renderStatusChanged(w http.ResponseWriter, r *http.Request, fre
 // renderReturnFailure handles a failed MarkReturned. stale was read before the
 // write; a concurrent Return may have committed since (#292), leaving a
 // borrowed entity removed or a loaned one back to ok. Re-read and render that
-// outcome instead of a stale "return failed" with a live Return button.
-func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, stale detailData, err error) {
+// outcome instead of a stale "return failed" with a live Return button. A
+// failure that leaves Return offered re-opens the form with the user's note.
+func (s *Server) renderReturnFailure(
+	w http.ResponseWriter, r *http.Request, stale detailData, note string, err error,
+) {
 	entityID := stale.Entity.EntityID
 
 	if errors.Is(err, app.ErrHasChildren) {
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
-		stale.Error = "return failed: it still contains other entities — return or move them first"
+		stale.ReturnForm = returnForm(stale, note)
+		stale.ReturnForm.Error = "return failed: it still contains other entities — return or move them first"
 		s.renderDetailSection(w, r, stale)
 		return
 	}
 
 	if errors.Is(err, app.ErrIsHome) {
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
-		stale.Error = "return failed: it is home to entities that are away — return them first"
+		stale.ReturnForm = returnForm(stale, note)
+		stale.ReturnForm.Error = "return failed: it is home to entities that are away — return them first"
 		s.renderDetailSection(w, r, stale)
 		return
 	}
@@ -879,7 +903,8 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 		s.renderStatusChanged(w, r, fresh)
 	default:
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
-		fresh.Error = "return failed"
+		fresh.ReturnForm = returnForm(fresh, note)
+		fresh.ReturnForm.Error = "return failed"
 		s.renderDetailSection(w, r, fresh)
 	}
 }

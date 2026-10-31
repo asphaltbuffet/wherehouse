@@ -2,6 +2,7 @@
 <form class="status-form form-panel" data-action="{{.Action}}" data-esc-cancel
       hx-post="/entities/{{.EntityID}}/actions/{{.Action}}"
       hx-target="#detail-panel" hx-swap="innerHTML">
+  {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
   {{with .Prompt}}<p id="status_prompt">{{.}}</p>{{end}}
   <label for="status_note">Note (optional)</label>
   <input id="status_note" type="text" name="note" value="{{.Note}}"
