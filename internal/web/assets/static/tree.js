@@ -95,12 +95,17 @@
     if (narrow.matches && e.target.closest && e.target.closest('.app-search')) closeTree(null);
   }
 
-  // A chevron click only expands and a + click only opens the add modal;
-  // neither may also load the row's detail (which would close the drawer).
+  // liveChevron matches a chevron that is showing (a leaf's is hidden, and a
+  // click there is a plain row click).
+  var liveChevron = '.chevron:not(.chevron-hidden)';
+
+  // A chevron click only expands or collapses and a + click only opens the
+  // add modal; neither may also load the row's detail (which would change the
+  // selection and close the drawer).
   function onTreeBeforeRequest(e) {
     var ev = e.detail && e.detail.requestConfig && e.detail.requestConfig.triggeringEvent;
     var control = ev && ev.target && ev.target.closest &&
-      ev.target.closest('.chevron:not(.chevron-hidden), .add-btn');
+      ev.target.closest(liveChevron + ', .add-btn');
     if (control && e.target.classList && e.target.classList.contains('tree-item')) e.preventDefault();
   }
 
@@ -130,8 +135,10 @@
   }
 
   // Handle clicks anywhere in the tree:
-  //   .add-btn  → open add-child modal
-  //   .tree-item → toggle expand/collapse (selection is set after the htmx request)
+  //   .add-btn → open add-child modal
+  //   chevron  → expand/collapse (onTreeBeforeRequest cancels the detail load)
+  // Any other click on a .tree-item only selects: the row's hx-get loads the
+  // detail and syncTreeSelection highlights the row (#364).
   function onTreeClick(e) {
     var addBtn = e.target.closest('.add-btn');
     if (addBtn) {
@@ -141,10 +148,8 @@
       openAddModal(addBtn.dataset.parentId || '');
       return;
     }
-    var item = e.target.closest('.tree-item');
-    if (item) {
-      toggleNode(item);
-    }
+    var chevron = e.target.closest(liveChevron);
+    if (chevron) toggleNode(chevron.closest('.tree-item'));
   }
 
   // After a tree row loads its detail, close the drawer on narrow screens
