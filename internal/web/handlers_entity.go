@@ -613,6 +613,38 @@ func (s *Server) handleTag(w http.ResponseWriter, r *http.Request) {
 	s.renderDetailSection(w, r, fresh)
 }
 
+// handleUntag handles POST /entities/{entityID}/actions/untag, removing one
+// tag. Removing a tag that is already gone is a silent no-op.
+func (s *Server) handleUntag(w http.ResponseWriter, r *http.Request) {
+	entityID := r.PathValue("entityID")
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	tagErr := s.cfg.App.TagEntity(r.Context(), app.TagEntityRequest{
+		EntityID: entityID,
+		ActorID:  s.actorFor(r),
+		Remove:   []string{r.FormValue("tag")},
+	})
+
+	fresh, err := s.buildDetailData(r.Context(), entityID)
+	if err != nil {
+		s.serverError(w, "build detail data", err)
+		return
+	}
+	if fresh.Entity.EntityID == "" {
+		s.renderGone(w, r, entityID)
+		return
+	}
+	if tagErr != nil {
+		s.cfg.Logger.Error("untag entity", "error", tagErr, "entity_id", entityID)
+		fresh.Error = "remove tag failed"
+	}
+	s.renderDetailSection(w, r, fresh)
+}
+
 // missingChange is app.MarkLost or app.MarkFound.
 type missingChange func(context.Context, []app.ChangeStatusRequest) ([]app.EntityResult, error)
 

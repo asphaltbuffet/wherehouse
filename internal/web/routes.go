@@ -29,6 +29,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /entities/{entityID}/edit/name", s.handleEditName)
 	mux.HandleFunc("GET /entities/{entityID}/actions/tag", s.handleTagForm)
 	mux.HandleFunc("POST /entities/{entityID}/actions/tag", s.handleTag)
+	mux.HandleFunc("POST /entities/{entityID}/actions/untag", s.handleUntag)
 	mux.HandleFunc("POST /entities/{entityID}/actions/lost", s.handleLost)
 	mux.HandleFunc("POST /entities/{entityID}/actions/found", s.handleFound)
 	mux.HandleFunc("POST /entities/{entityID}/actions/attr", s.handleAttr)

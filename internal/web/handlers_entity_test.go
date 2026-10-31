@@ -836,7 +836,7 @@ func TestDetail_Tags(t *testing.T) {
 		wantNot string
 	}{
 		{"sorted chips", []string{"auto", "calibrated"},
-			`<ul class="tag-list" aria-label="Tags"><li class="tag">auto</li><li class="tag">calibrated</li></ul>`, ""},
+			`(?s)<ul class="tag-list" aria-label="Tags"><li class="tag">auto<.*</li><li class="tag">calibrated<`, ""},
 		{"nil tags omit row", nil, "", `class="tag-list"`},
 		{"empty tags omit row", []string{}, "", `class="tag-list"`},
 	}
@@ -846,7 +846,7 @@ func TestDetail_Tags(t *testing.T) {
 				CanonicalName: "wrench", FullPathDisplay: "Wrench",
 				Status: inventory.EntityStatusOk, Tags: tc.tags})
 			if tc.want != "" {
-				assert.Contains(t, body, tc.want)
+				assert.Regexp(t, tc.want, body)
 			}
 			if tc.wantNot != "" {
 				assert.NotContains(t, body, tc.wantNot)
@@ -2551,4 +2551,102 @@ func TestHandleTag_UnknownEntityNotFound(t *testing.T) {
 	resp, _ := postTagAction(t, ts, "tag", url.Values{"tag": {"tools"}})
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestEntityDetail_RemoveTagButtons(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: taggedDrill(inventory.EntityStatusOk, "garden", "tools")})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/abc")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+
+	assert.Contains(t, body, `aria-label="Remove tag garden"`)
+	assert.Contains(t, body, `aria-label="Remove tag tools"`)
+	assert.Contains(t, body, `hx-post="/entities/abc/actions/untag"`)
+}
+
+func TestEntityDetail_RemovedEntityHasNoRemoveButtons(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: taggedDrill(inventory.EntityStatusRemoved, "tools")})
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/abc")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+
+	assert.Contains(t, body, `<li class="tag">tools`)
+	assert.NotContains(t, body, "Remove tag")
+}
+
+func TestHandleUntag_Success(t *testing.T) {
+	fake := &fakeApp{entities: taggedDrill(inventory.EntityStatusOk, "garden", "tools")}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postTagAction(t, ts, "untag", url.Values{"tag": {"garden"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, []string{"garden"}, fake.lastTagReq.Remove)
+	assert.Empty(t, fake.lastTagReq.Add)
+	assert.NotContains(t, body, `aria-label="Remove tag garden"`)
+	assert.Contains(t, body, `aria-label="Remove tag tools"`)
+	assert.NotContains(t, body, `role="alert"`)
+}
+
+func TestHandleUntag_MissingTagIsSilent(t *testing.T) {
+	fake := &fakeApp{entities: taggedDrill(inventory.EntityStatusOk, "tools")}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postTagAction(t, ts, "untag", url.Values{"tag": {"garden"}})
+
+	assert.Contains(t, body, `aria-label="Remove tag tools"`)
+	assert.NotContains(t, body, `role="alert"`)
+}
+
+func TestHandleUntag_RemovedConcurrentlyShowsRemovedPanel(t *testing.T) {
+	fake := &fakeApp{
+		entities: taggedDrill(inventory.EntityStatusOk, "tools"),
+		tagErr:   fmt.Errorf("untag: %w", app.ErrNotFound),
+		onTag:    func(f *fakeApp) { f.entities[0].Status = inventory.EntityStatusRemoved },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postTagAction(t, ts, "untag", url.Values{"tag": {"tools"}})
+
+	assert.Contains(t, body, staleText)
+	assert.NotContains(t, body, "Remove tag")
+}
+
+func TestHandleUntag_GenericFailureShowsError(t *testing.T) {
+	fake := &fakeApp{entities: taggedDrill(inventory.EntityStatusOk, "tools"), tagErr: errTest}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postTagAction(t, ts, "untag", url.Values{"tag": {"tools"}})
+
+	assert.Contains(t, body, alert("remove tag failed"))
+}
+
+// Review Focus #3: canonical tags keep quotes and angle brackets; they must be
+// escaped everywhere they're rendered and still round-trip through the form.
+func TestHandleUntag_MetacharacterTag(t *testing.T) {
+	const odd = `a"b<c>`
+	fake := &fakeApp{entities: taggedDrill(inventory.EntityStatusOk, odd, "tools")}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/abc")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+	assert.NotContains(t, body, odd, "raw metacharacters never reach the markup")
+	assert.Contains(t, body, `aria-label="Remove tag a&#34;b&lt;c&gt;"`)
+
+	_, body = postTagAction(t, ts, "untag", url.Values{"tag": {odd}})
+	assert.Equal(t, []string{odd}, fake.lastTagReq.Remove)
+	assert.NotContains(t, body, "Remove tag a&#34;b")
 }

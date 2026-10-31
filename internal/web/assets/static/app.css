@@ -490,6 +490,19 @@ h1, h2, h3 {
   margin: 0;
   padding: 0;
 }
+.tag-remove-form {
+  display: inline;
+}
+.tag-remove {
+  margin-left: var(--space-1);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
 .tag-form {
   display: flex;
   flex-wrap: wrap;
