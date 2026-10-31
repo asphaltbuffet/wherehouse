@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'Web: items added, borrowed, moved, or renamed now appear in alphabetical order in the inventory tree instead of at the end of their list'
-time: 2026-10-31T13:06:42.659225674-04:00
-custom:
-    Issue: '#295'
