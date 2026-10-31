@@ -36,9 +36,8 @@ func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 	})
 }
 
-// applyTagChangesTx records one event per tag in removeSet and addSet against
-// the live entity req.EntityID. Removals go first to avoid spurious
-// duplicate-tag warnings.
+// applyTagChangesTx records one event per tag in removeSet and addSet that
+// changes the live entity req.EntityID; no-ops are pruned first.
 func (a *App) applyTagChangesTx(
 	ctx context.Context, tx store.Tx, req TagEntityRequest, note *string, addSet, removeSet map[string]bool,
 ) error {
@@ -46,7 +45,7 @@ func (a *App) applyTagChangesTx(
 	if err != nil {
 		return wrapEntityError(req.EntityID, err)
 	}
-	if err = a.dropAbsentEmptyTag(ctx, tx, entity.EntityID, removeSet); err != nil {
+	if err = a.pruneNoOpTagsTx(ctx, tx, entity.EntityID, addSet, removeSet); err != nil {
 		return err
 	}
 
@@ -78,7 +77,7 @@ func (a *App) applyTagChangesTx(
 
 // tagSets canonicalizes req's Add and Remove tags. A tag in both sets cancels
 // out of both (a warning is logged). An Add tag with an empty canonical form
-// is ErrEmptyTag; an empty Remove tag is kept for dropAbsentEmptyTag.
+// is ErrEmptyTag; an empty Remove tag is kept for pruneNoOpTagsTx.
 func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool, error) {
 	addSet := make(map[string]bool, len(req.Add))
 	for _, t := range req.Add {
@@ -103,19 +102,32 @@ func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool, error) {
 	return addSet, removeSet, nil
 }
 
-// dropAbsentEmptyTag removes "" from removeSet unless entityID actually has
-// the empty tag, which builds before #324 could record. Removing it is then
-// the only cleanup; an absent "" must write no event.
-func (a *App) dropAbsentEmptyTag(ctx context.Context, tx store.Tx, entityID string, removeSet map[string]bool) error {
-	if !removeSet[""] {
-		return nil
+// pruneNoOpTagsTx drops removes of tags entityID doesn't have and adds of tags
+// it already has, so a no-op writes no event (a warning is logged). This also
+// lets the empty tag that builds before #324 could record be removed, while
+// an absent "" stays a no-op.
+func (a *App) pruneNoOpTagsTx(
+	ctx context.Context, tx store.Tx, entityID string, addSet, removeSet map[string]bool,
+) error {
+	for tag := range removeSet {
+		has, err := a.store.HasTagTx(ctx, tx, entityID, tag)
+		if err != nil {
+			return fmt.Errorf("check tag %q: %w", tag, err)
+		}
+		if !has {
+			logging.Warn("tag not present, skipping remove", "entity_id", entityID, "tag", tag)
+			delete(removeSet, tag)
+		}
 	}
-	has, err := a.store.HasTagTx(ctx, tx, entityID, "")
-	if err != nil {
-		return fmt.Errorf("check empty tag: %w", err)
-	}
-	if !has {
-		delete(removeSet, "")
+	for tag := range addSet {
+		has, err := a.store.HasTagTx(ctx, tx, entityID, tag)
+		if err != nil {
+			return fmt.Errorf("check tag %q: %w", tag, err)
+		}
+		if has {
+			logging.Warn("tag already present, skipping add", "entity_id", entityID, "tag", tag)
+			delete(addSet, tag)
+		}
 	}
 	return nil
 }

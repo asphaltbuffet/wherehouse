@@ -1,0 +1,5 @@
+kind: Fixed
+body: Adding a tag an entity already has, or removing one it lacks, no longer adds an entry to its history
+time: 2026-10-31T01:30:44.141656292-04:00
+custom:
+    Issue: "324"

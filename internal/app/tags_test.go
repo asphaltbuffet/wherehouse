@@ -312,3 +312,37 @@ func TestAllTags_ExcludesLegacyEmptyTag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, tags, "the empty tag is never suggested")
 }
+
+// tagEventCount counts the tag add/remove events in entityID's history.
+func tagEventCount(t *testing.T, a *app.App, entityID string) int {
+	t.Helper()
+	history, err := a.GetHistory(context.Background(), app.GetHistoryRequest{EntityID: entityID})
+	require.NoError(t, err)
+	n := 0
+	for _, h := range history {
+		if h.EventType == inventory.EntityTagAddedEvent || h.EventType == inventory.EntityTagRemovedEvent {
+			n++
+		}
+	}
+	return n
+}
+
+func TestTagEntity_NoOpsWriteNoEvents(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForTags(t, a)
+	ctx := context.Background()
+
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
+	require.NoError(t, err)
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityID: wrench.EntityID, ActorID: "alice", Add: []string{"tool"},
+	}))
+	require.Equal(t, 1, tagEventCount(t, a, wrench.EntityID))
+
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityID: wrench.EntityID, ActorID: "alice", Add: []string{"Tool"}, Remove: []string{"absent"},
+	}))
+
+	assert.Equal(t, 1, tagEventCount(t, a, wrench.EntityID),
+		"a duplicate add and an absent remove append nothing to the log")
+}
