@@ -1,5 +1,0 @@
-kind: Added
-body: 'Web UI: Esc closes the inline rename, loan, move, use, remove, and tag forms'
-time: 2026-10-31T01:37:41.986269259-04:00
-custom:
-    Issue: "324"

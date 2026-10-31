@@ -1,5 +1,0 @@
-kind: Fixed
-body: '`doctor --rebuild` no longer drops an event that another writer (such as `serve`) commits while the rebuild is loading the event log'
-time: 2026-10-31T14:00:00.000000000-04:00
-custom:
-    Issue: '#302'
