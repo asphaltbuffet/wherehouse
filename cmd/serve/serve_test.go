@@ -91,6 +91,14 @@ func (f *fakeApp) RemoveEntity(_ context.Context, _ app.RemoveEntityRequest) err
 	return nil
 }
 
+func (f *fakeApp) TagEntity(_ context.Context, _ app.TagEntityRequest) error {
+	return nil
+}
+
+func (f *fakeApp) AllTags(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func TestBuildServeCmd_FlagDefaults(t *testing.T) {
 	cmd := serve.NewServeCmd(&fakeApp{})
 

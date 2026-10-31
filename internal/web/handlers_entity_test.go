@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -2317,4 +2318,237 @@ func TestDetail_UseButtonDisabledTooltipsSayUsed(t *testing.T) {
 			assert.Contains(t, body, `title="`+tt.use+`"`)
 		})
 	}
+}
+
+const emptyTagText = "Tag can't be only spaces, dashes, or underscores."
+
+func taggedDrill(status inventory.EntityStatus, tags ...string) []app.EntityResult {
+	return []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+		Status: status, Tags: tags}}
+}
+
+var tagInputRequired = regexp.MustCompile(`<input id="tag_add"[^>]*\brequired\b`)
+
+func postTagAction(t *testing.T, ts *httptest.Server, action string, form url.Values) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/entities/abc/actions/"+action,
+		strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { resp.Body.Close() })
+	return resp, readBody(t, resp)
+}
+
+func getTagForm(t *testing.T, ts *httptest.Server) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc/actions/tag", nil)
+	require.NoError(t, err)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { resp.Body.Close() })
+	return resp, readBody(t, resp)
+}
+
+func TestEntityDetail_AddTagButton(t *testing.T) {
+	tests := []struct {
+		name     string
+		entities []app.EntityResult
+		want     []string
+		notWant  []string
+	}{
+		{
+			name:     "live untagged entity offers + tag",
+			entities: taggedDrill(inventory.EntityStatusOk),
+			want:     []string{`hx-get="/entities/abc/actions/tag"`, "+ tag"},
+		},
+		{
+			name: "locked loaned entity still offers + tag",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusLoaned, Locked: true}},
+			want: []string{`hx-get="/entities/abc/actions/tag"`},
+		},
+		{
+			name:     "removed entity shows chips without + tag",
+			entities: taggedDrill(inventory.EntityStatusRemoved, "tools"),
+			want:     []string{`<li class="tag">tools`, "Last location"},
+			notWant:  []string{`hx-get="/entities/abc/actions/tag"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: tt.entities})
+			defer ts.Close()
+
+			resp, err := ts.Client().Get(ts.URL + "/entities/abc")
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body := readBody(t, resp)
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			for _, s := range tt.want {
+				assert.Contains(t, body, s)
+			}
+			for _, s := range tt.notWant {
+				assert.NotContains(t, body, s)
+			}
+		})
+	}
+}
+
+func TestHandleTagForm(t *testing.T) {
+	formPost := `hx-post="/entities/abc/actions/tag"`
+	tests := []struct {
+		name     string
+		entities []app.EntityResult
+		wantCode int
+		want     []string
+		notWant  []string
+	}{
+		{
+			name:     "opens input with vocabulary minus own tags",
+			entities: taggedDrill(inventory.EntityStatusOk, "tools"),
+			wantCode: http.StatusOK,
+			want: []string{formPost, `id="tag_add"`, `list="tag-vocabulary"`, `<option value="garden">`,
+				`hx-trigger="keyup[key=='Escape']"`},
+			notWant: []string{`<option value="tools">`, staleText},
+		},
+		{
+			name:     "removed shows removed panel",
+			entities: taggedDrill(inventory.EntityStatusRemoved, "tools"),
+			wantCode: http.StatusOK,
+			want:     []string{staleText, "Last location"},
+			notWant:  []string{formPost},
+		},
+		{name: "unknown id", wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: tt.entities, allTags: []string{"garden", "tools"}})
+			defer ts.Close()
+
+			resp, body := getTagForm(t, ts)
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			for _, s := range tt.want {
+				assert.Contains(t, body, s)
+			}
+			for _, s := range tt.notWant {
+				assert.NotContains(t, body, s)
+			}
+			assert.NotRegexp(t, tagInputRequired, body, "blank input must reach the server")
+		})
+	}
+}
+
+// Review Focus #4: suggestions are optional; a vocabulary failure still opens the input.
+func TestHandleTagForm_VocabularyErrorStillOpens(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{entities: taggedDrill(inventory.EntityStatusOk), allTagsErr: errTest})
+	defer ts.Close()
+
+	resp, body := getTagForm(t, ts)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, `id="tag_add"`)
+	assert.NotContains(t, body, "<option")
+}
+
+func TestHandleTag_SuccessKeepsInputOpen(t *testing.T) {
+	fake := &fakeApp{entities: taggedDrill(inventory.EntityStatusOk, "tools"), allTags: []string{"garden", "tools"}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postTagAction(t, ts, "tag", url.Values{"tag": {"Garden"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, []string{"Garden"}, fake.lastTagReq.Add)
+	assert.Empty(t, fake.lastTagReq.Remove)
+	assert.Contains(t, body, `<li class="tag">garden`, "chip shows the canonical form")
+	assert.Contains(t, body, `id="tag_add"`, "input stays open for the next tag")
+	assert.Contains(t, body, `name="tag" value=""`, "input is cleared")
+	assert.NotContains(t, body, `<option value="garden">`, "just-added tag leaves the suggestions")
+	assert.NotContains(t, body, `role="alert"`)
+}
+
+func TestHandleTag_DuplicateIsSilent(t *testing.T) {
+	fake := &fakeApp{entities: taggedDrill(inventory.EntityStatusOk, "tools")}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postTagAction(t, ts, "tag", url.Values{"tag": {"Tools"}})
+
+	assert.Equal(t, 1, strings.Count(body, `<li class="tag">tools`))
+	assert.NotContains(t, body, `role="alert"`)
+}
+
+func TestHandleTag_EmptyReopensForm(t *testing.T) {
+	fake := &fakeApp{
+		entities: taggedDrill(inventory.EntityStatusOk),
+		tagErr:   fmt.Errorf("add tag %q: %w", "--", app.ErrEmptyTag),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postTagAction(t, ts, "tag", url.Values{"tag": {"--"}})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, alert(emptyTagText))
+	assert.Contains(t, body, `id="tag_add"`)
+	assert.Contains(t, body, `value="--"`, "user's text is kept")
+}
+
+// Review Focus #2: the empty check runs before the live check, so a removed
+// entity reports ErrEmptyTag — never re-open the input on it.
+func TestHandleTag_EmptyOnRemovedEntityShowsRemovedPanel(t *testing.T) {
+	fake := &fakeApp{
+		entities: taggedDrill(inventory.EntityStatusRemoved),
+		tagErr:   fmt.Errorf("add tag: %w", app.ErrEmptyTag),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postTagAction(t, ts, "tag", url.Values{"tag": {" "}})
+
+	assert.Contains(t, body, staleText)
+	assert.Contains(t, body, "Last location")
+	assert.NotContains(t, body, `id="tag_add"`)
+}
+
+func TestHandleTag_RemovedConcurrentlyShowsRemovedPanel(t *testing.T) {
+	fake := &fakeApp{
+		entities: taggedDrill(inventory.EntityStatusOk),
+		tagErr:   fmt.Errorf("tag: %w", app.ErrNotFound),
+		onTag:    func(f *fakeApp) { f.entities[0].Status = inventory.EntityStatusRemoved },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postTagAction(t, ts, "tag", url.Values{"tag": {"tools"}})
+
+	assert.Contains(t, body, staleText)
+	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.NotContains(t, body, `id="tag_add"`)
+}
+
+func TestHandleTag_GenericFailureShowsError(t *testing.T) {
+	fake := &fakeApp{entities: taggedDrill(inventory.EntityStatusOk), tagErr: errTest}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := postTagAction(t, ts, "tag", url.Values{"tag": {"tools"}})
+
+	assert.Contains(t, body, alert("tag failed"))
+	assert.Contains(t, body, `value="tools"`, "input re-opens with the text for a retry")
+}
+
+func TestHandleTag_UnknownEntityNotFound(t *testing.T) {
+	ts := newTestServer(t, &fakeApp{tagErr: fmt.Errorf("tag: %w", app.ErrNotFound)})
+	defer ts.Close()
+
+	resp, _ := postTagAction(t, ts, "tag", url.Values{"tag": {"tools"}})
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
