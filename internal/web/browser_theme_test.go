@@ -37,6 +37,17 @@ func TestBrowserDarkModeNarrow(t *testing.T) {
 	})
 }
 
+// The report's path links must use the theme text color, not the browser's
+// default link blue, which is unreadable on the dark surface (#372).
+func TestBrowserDarkModeReportLink(t *testing.T) {
+	t.Parallel()
+	forDevices(t, devices, darkScheme, func(s *session) {
+		s.createEntity("Garage", "")
+		s.visit("/reports")
+		require.NoError(s.t, expect.Locator(s.reportRow("Garage").Locator("a")).ToHaveCSS("color", darkText))
+	})
+}
+
 func (s *session) requireDarkPage() {
 	s.t.Helper()
 	body := s.page.Locator("body")
