@@ -1,0 +1,5 @@
+kind: Fixed
+body: '`tag --add` rejects a tag that is only spaces, dashes, or underscores instead of recording an empty tag'
+time: 2026-10-31T00:45:22.006654416-04:00
+custom:
+    Issue: "324"

@@ -13,9 +13,14 @@ import (
 
 // TagEntity adds and/or removes tags on the entity identified by req.EntityID.
 // Tags in both Add and Remove cancel each other out (a warning is logged).
-// Adding an existing tag or removing a missing tag are no-ops.
+// Adding an existing tag or removing a missing tag are no-ops. An Add tag
+// whose canonical form is empty fails the whole call with ErrEmptyTag before
+// anything is written; an empty Remove tag is ignored.
 func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
-	addSet, removeSet := tagSets(req)
+	addSet, removeSet, setsErr := tagSets(req)
+	if setsErr != nil {
+		return setsErr
+	}
 
 	var note *string
 	if req.Note != "" {
@@ -60,15 +65,22 @@ func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 }
 
 // tagSets canonicalizes req's Add and Remove tags. A tag in both sets cancels
-// out of both (a warning is logged).
-func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool) {
+// out of both (a warning is logged). An Add tag with an empty canonical form
+// is ErrEmptyTag; an empty Remove tag is dropped.
+func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool, error) {
 	addSet := make(map[string]bool, len(req.Add))
 	for _, t := range req.Add {
-		addSet[inventory.CanonicalizeString(t)] = true
+		c := inventory.CanonicalizeString(t)
+		if c == "" {
+			return nil, nil, fmt.Errorf("add tag %q: %w", t, ErrEmptyTag)
+		}
+		addSet[c] = true
 	}
 	removeSet := make(map[string]bool, len(req.Remove))
 	for _, t := range req.Remove {
-		removeSet[inventory.CanonicalizeString(t)] = true
+		if c := inventory.CanonicalizeString(t); c != "" {
+			removeSet[c] = true
+		}
 	}
 
 	for tag := range addSet {
@@ -78,7 +90,7 @@ func tagSets(req TagEntityRequest) (map[string]bool, map[string]bool) {
 			delete(removeSet, tag)
 		}
 	}
-	return addSet, removeSet
+	return addSet, removeSet, nil
 }
 
 // ListTags returns the canonical tags for the entity identified by req.EntityID, sorted alphabetically.

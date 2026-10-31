@@ -195,3 +195,50 @@ func TestTagEntity_AppearsInHistory(t *testing.T) {
 	}
 	assert.Contains(t, eventTypes, inventory.EntityTagAddedEvent.String())
 }
+
+func TestTagEntity_EmptyCanonicalAddRejected(t *testing.T) {
+	tests := []struct {
+		name string
+		add  []string
+	}{
+		{name: "blank", add: []string{"   "}},
+		{name: "separators only", add: []string{"--"}},
+		{name: "valid alongside empty", add: []string{"tool", "_ _"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := apptesting.OpenApp(t)
+			seedForTags(t, a)
+			ctx := context.Background()
+
+			wrench, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
+			require.NoError(t, err)
+			err = a.TagEntity(ctx, app.TagEntityRequest{
+				EntityID: wrench.EntityID, ActorID: "alice", Add: tt.add,
+			})
+			require.ErrorIs(t, err, app.ErrEmptyTag)
+
+			tags, err := a.ListTags(ctx, app.ListTagsRequest{EntityID: wrench.EntityID})
+			require.NoError(t, err)
+			assert.Empty(t, tags, "a rejected call writes no tag")
+		})
+	}
+}
+
+func TestTagEntity_RemoveEmptyWritesNoEvent(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	seedForTags(t, a)
+	ctx := context.Background()
+
+	wrench, err := a.LookupEntityByPath(ctx, "Garage:Wrench")
+	require.NoError(t, err)
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityID: wrench.EntityID, ActorID: "alice", Remove: []string{"--"},
+	}))
+
+	history, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityID: wrench.EntityID})
+	require.NoError(t, err)
+	for _, h := range history {
+		assert.NotEqual(t, inventory.EntityTagRemovedEvent, h.EventType)
+	}
+}

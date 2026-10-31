@@ -16,6 +16,10 @@ var ErrLenderRequired = errors.New("lender is required")
 // ErrRecipientRequired is returned when a loan request has no recipient (StatusContext).
 var ErrRecipientRequired = errors.New("recipient is required")
 
+// ErrEmptyTag is returned when a tag to add has an empty canonical form:
+// blank, or only spaces, dashes, and underscores (e.g. "--").
+var ErrEmptyTag = errors.New("tag is empty")
+
 // ErrHasChildren is returned when an operation that removes an entity finds it
 // still has non-removed children.
 var ErrHasChildren = errors.New("entity still contains other entities")
