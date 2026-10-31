@@ -18,11 +18,16 @@ func TestBrowserLostAndFound(t *testing.T) {
 
 		s.visit("/entities/" + drill.EntityID)
 		s.click(s.button("Mark missing"))
+		s.fill(s.page.GetByLabel("Note (optional)"), "left at the site")
+		s.click(s.button("Mark missing"))
 		require.NoError(s.t, expect.Locator(s.mainText("Missing")).ToBeVisible())
+		require.NoError(s.t, expect.Locator(s.mainText("left at the site")).ToBeVisible())
 		require.NoError(s.t, expect.Locator(s.button("Mark found")).ToBeVisible())
 		assert.Equal(s.t, inventory.EntityStatusMissing, s.stored(drill.EntityID).Status)
 
+		// No note, submitted with Enter.
 		s.click(s.button("Mark found"))
+		s.press(s.page.GetByLabel("Note (optional)"), "Enter")
 		require.NoError(s.t, expect.Locator(s.button("Mark missing")).ToBeVisible())
 		require.NoError(s.t, expect.Locator(s.mainText("Missing")).ToHaveCount(0))
 		assert.Equal(s.t, inventory.EntityStatusOk, s.stored(drill.EntityID).Status)

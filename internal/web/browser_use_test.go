@@ -40,6 +40,7 @@ func TestBrowserUseAndReturn(t *testing.T) {
 		assert.Equal(s.t, garage.EntityID, s.stored(drill.EntityID).HomeID)
 
 		s.click(s.button("Return"))
+		s.click(s.button("Return"))
 		require.NoError(s.t, expect.Locator(path).ToHaveText("Inventory › Garage › Drill"))
 		s.openTree()
 		s.expandTreeItem("Garage")

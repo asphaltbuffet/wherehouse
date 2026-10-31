@@ -46,15 +46,17 @@
       {{if .CanAddChild}}
       <button class="btn-ghost detail-action-btn" type="button" aria-haspopup="dialog" aria-controls="add-modal" hx-get="/entities/borrow?parent={{.Entity.EntityID}}" hx-target="#add-modal-body" hx-swap="innerHTML">Borrow into here</button>
       {{end}}
-      {{if .CanMarkFound}}
-      <button class="btn-primary detail-action-btn"
-              hx-post="/entities/{{.Entity.EntityID}}/actions/found"
+      {{if .MissingForm}}
+      {{template "status_form" .MissingForm}}
+      {{else if .CanMarkFound}}
+      <button class="btn-primary detail-action-btn" data-action="found"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/found"
               hx-target="#entity-detail" hx-swap="outerHTML">
         Mark found
       </button>
       {{else if .CanMarkLost}}
-      <button class="btn-ghost detail-action-btn"
-              hx-post="/entities/{{.Entity.EntityID}}/actions/lost"
+      <button class="btn-ghost detail-action-btn" data-action="lost"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/lost"
               hx-target="#entity-detail" hx-swap="outerHTML">
         Mark missing
       </button>
@@ -64,11 +66,12 @@
         Mark missing
       </button>
       {{end}}
-      {{if .CanReturn}}
-      <button class="btn-primary detail-action-btn"
-              hx-post="/entities/{{.Entity.EntityID}}/actions/return"
-              hx-target="#detail-panel" hx-swap="innerHTML"
-              {{if .ReturnConfirm}}hx-confirm="{{.ReturnConfirm}}"{{end}}>
+      {{if .ReturnForm}}
+      {{template "status_form" .ReturnForm}}
+      {{else if .CanReturn}}
+      <button class="btn-primary detail-action-btn" data-action="return"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/return"
+              hx-target="#entity-detail" hx-swap="outerHTML">
         Return
       </button>
       {{end}}

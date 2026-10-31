@@ -22,22 +22,24 @@ type detailData struct {
 	DateAdded         string
 	History           []app.HistoryResult
 	CanAddChild       bool
-	CanMarkLost       bool          // ok and not locked (ADR 0024)
-	CanMarkFound      bool          // missing; found has no locked guard (ADR 0024)
-	CanReturn         bool          // borrowed, loaned, or displaced ok
-	ReturnConfirm     string        // non-empty only for borrowed: returning removes the entity
-	CanLoan           bool          // ok/missing and not locked (ADR 0024)
-	LoanBlockedReason string        // non-empty when Loan is shown disabled
-	LoanForm          *loanFormData // non-nil re-opens the loan form (validation error)
-	CanMove           bool          // not locked; ok or borrowed (ADR 0034)
-	MoveBlockedReason string        // non-empty when Move is shown disabled
-	UseBlockedReason  string        // non-empty when Use is shown disabled
-	MoveForm          *moveFormData // non-nil re-opens the move form (validation error)
-	CanUse            bool          // same as CanMove (use = move preconditions)
-	UseForm           *moveFormData // non-nil re-opens the use form (validation error)
-	Displaced         bool          // parent differs from home (CONTEXT.md "Displaced")
-	LockAction        attrAction    // Lock / Unlock button
-	DiscreteAction    attrAction    // Mark discrete / Clear discrete button
+	CanMarkLost       bool            // ok and not locked (ADR 0024)
+	CanMarkFound      bool            // missing; found has no locked guard (ADR 0024)
+	CanReturn         bool            // borrowed, loaned, or displaced ok
+	ReturnConfirm     string          // non-empty only for borrowed: the Return form's prompt (returning removes the entity)
+	MissingForm       *statusFormData // non-nil opens the Mark missing / Mark found note form
+	ReturnForm        *statusFormData // non-nil opens the Return note form
+	CanLoan           bool            // ok/missing and not locked (ADR 0024)
+	LoanBlockedReason string          // non-empty when Loan is shown disabled
+	LoanForm          *loanFormData   // non-nil re-opens the loan form (validation error)
+	CanMove           bool            // not locked; ok or borrowed (ADR 0034)
+	MoveBlockedReason string          // non-empty when Move is shown disabled
+	UseBlockedReason  string          // non-empty when Use is shown disabled
+	MoveForm          *moveFormData   // non-nil re-opens the move form (validation error)
+	CanUse            bool            // same as CanMove (use = move preconditions)
+	UseForm           *moveFormData   // non-nil re-opens the use form (validation error)
+	Displaced         bool            // parent differs from home (CONTEXT.md "Displaced")
+	LockAction        attrAction      // Lock / Unlock button
+	DiscreteAction    attrAction      // Mark discrete / Clear discrete button
 	// CanRemove is false for borrowed: a borrowed entity exits via Return (ADR 0022).
 	CanRemove           bool
 	RemoveBlockedReason string            // non-empty when Remove is shown disabled
@@ -118,6 +120,32 @@ type removeFormData struct {
 	DisplayName string
 	Note        string
 	Error       string
+}
+
+// statusFormData is the view model for the inline note form of a status
+// action: Mark missing, Mark found, or Return (#291).
+type statusFormData struct {
+	EntityID string
+	Action   string // "lost", "found" or "return": form action path and data-action
+	Submit   string // submit button label, the same as the button that opened the form
+	Prompt   string // optional confirmation text above the note
+	Note     string
+	Error    string // set when a failed submit re-opens the form
+}
+
+// lostForm, foundForm and returnForm build each status action's note form.
+func lostForm(entityID, note string) *statusFormData {
+	return &statusFormData{EntityID: entityID, Action: "lost", Submit: "Mark missing", Note: note}
+}
+
+func foundForm(entityID, note string) *statusFormData {
+	return &statusFormData{EntityID: entityID, Action: "found", Submit: "Mark found", Note: note}
+}
+
+func returnForm(d detailData, note string) *statusFormData {
+	return &statusFormData{
+		EntityID: d.Entity.EntityID, Action: "return", Submit: "Return", Prompt: d.ReturnConfirm, Note: note,
+	}
 }
 
 // removeHasChildrenReason is the tooltip on a disabled Remove button (#287).
@@ -445,8 +473,8 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	}, nil
 }
 
-// returnConfirm builds the confirmation prompt for returning a borrowed entity.
-// Loaned returns are low-stakes and get no prompt.
+// returnConfirm builds the Return form's prompt for a borrowed entity.
+// Loaned and displaced returns are low-stakes and get no prompt.
 func returnConfirm(e app.EntityResult) string {
 	if e.Status != inventory.EntityStatusBorrowed {
 		return ""
@@ -675,26 +703,63 @@ func (s *Server) handleUntag(w http.ResponseWriter, r *http.Request) {
 // missingChange is app.MarkLost or app.MarkFound.
 type missingChange func(context.Context, []app.ChangeStatusRequest) ([]app.EntityResult, error)
 
-// handleLost handles POST /entities/{entityID}/actions/lost.
+// handleLost handles POST /entities/{entityID}/actions/lost, recording the
+// form's optional note.
 func (s *Server) handleLost(w http.ResponseWriter, r *http.Request) {
-	s.changeMissing(w, r, s.cfg.App.MarkLost, func(d detailData) bool { return d.CanMarkLost })
+	s.changeMissing(w, r, s.cfg.App.MarkLost, func(d detailData) bool { return d.CanMarkLost }, lostForm)
 }
 
-// handleFound handles POST /entities/{entityID}/actions/found.
+// handleFound handles POST /entities/{entityID}/actions/found, recording the
+// form's optional note.
 func (s *Server) handleFound(w http.ResponseWriter, r *http.Request) {
-	s.changeMissing(w, r, s.cfg.App.MarkFound, func(d detailData) bool { return d.CanMarkFound })
+	s.changeMissing(w, r, s.cfg.App.MarkFound, func(d detailData) bool { return d.CanMarkFound }, foundForm)
+}
+
+// handleLostForm handles GET /entities/{entityID}/actions/lost, re-rendering
+// the detail section with the Mark missing note form open.
+func (s *Server) handleLostForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.CanMarkLost {
+			return "", false
+		}
+		d.MissingForm = lostForm(d.Entity.EntityID, "")
+		return "", true
+	})
+}
+
+// handleFoundForm handles GET /entities/{entityID}/actions/found, re-rendering
+// the detail section with the Mark found note form open.
+func (s *Server) handleFoundForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.CanMarkFound {
+			return "", false
+		}
+		d.MissingForm = foundForm(d.Entity.EntityID, "")
+		return "", true
+	})
 }
 
 // changeMissing applies an explicit lost/found change. The button names its
 // target, so a stale click fails the app layer's source-status guard (ADR
 // 0024, 0035) instead of flipping the status the other way (#306). offered
 // reports whether the fresh panel still offers this change: if not, the
-// failure was a stale panel, not an error.
+// failure was a stale panel, not an error. If it is still offered, form
+// re-opens the note form with the user's note and the error.
 func (s *Server) changeMissing(
 	w http.ResponseWriter, r *http.Request, change missingChange, offered func(detailData) bool,
+	form func(entityID, note string) *statusFormData,
 ) {
 	entityID := r.PathValue("entityID")
-	_, changeErr := change(r.Context(), []app.ChangeStatusRequest{{EntityID: entityID, ActorID: s.actorFor(r)}})
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	note := strings.TrimSpace(r.FormValue("note"))
+	_, changeErr := change(r.Context(), []app.ChangeStatusRequest{{
+		EntityID: entityID,
+		Note:     note,
+		ActorID:  s.actorFor(r),
+	}})
 
 	fresh, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
@@ -710,7 +775,8 @@ func (s *Server) changeMissing(
 	case changeErr == nil:
 	case offered(fresh):
 		s.cfg.Logger.Error("change status", "error", changeErr, "entity_id", entityID)
-		fresh.Error = "status change failed"
+		fresh.MissingForm = form(entityID, note)
+		fresh.MissingForm.Error = "status change failed"
 	default:
 		// No pre-write read, so a stale panel and a replayed request look alike.
 		s.cfg.Logger.Info("status change rejected: not offered", "error", changeErr, "entity_id", entityID)
@@ -727,6 +793,10 @@ func (s *Server) changeMissing(
 // renderReturnFailure instead of a bare 403 (#306).
 func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
 
 	data, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
@@ -740,12 +810,14 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 
 	wasDisplaced := data.Entity.IsDisplaced()
 
+	note := strings.TrimSpace(r.FormValue("note"))
 	_, err = s.cfg.App.MarkReturned(r.Context(), []app.ChangeStatusRequest{{
 		EntityID: entityID,
+		Note:     note,
 		ActorID:  s.actorFor(r),
 	}})
 	if err != nil {
-		s.renderReturnFailure(w, r, data, err)
+		s.renderReturnFailure(w, r, data, note, err)
 		return
 	}
 
@@ -768,6 +840,19 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	s.renderStatusChanged(w, r, fresh)
 }
 
+// handleReturnForm handles GET /entities/{entityID}/actions/return,
+// re-rendering the detail section with the Return note form open. A borrowed
+// entity's form shows ReturnConfirm, since returning removes it.
+func (s *Server) handleReturnForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.CanReturn {
+			return "", false
+		}
+		d.ReturnForm = returnForm(*d, "")
+		return "", true
+	})
+}
+
 // renderStatusChanged renders the detail of an entity whose status changed in
 // place, plus the out-of-band tree badge update.
 func (s *Server) renderStatusChanged(w http.ResponseWriter, r *http.Request, fresh detailData) {
@@ -780,20 +865,25 @@ func (s *Server) renderStatusChanged(w http.ResponseWriter, r *http.Request, fre
 // renderReturnFailure handles a failed MarkReturned. stale was read before the
 // write; a concurrent Return may have committed since (#292), leaving a
 // borrowed entity removed or a loaned one back to ok. Re-read and render that
-// outcome instead of a stale "return failed" with a live Return button.
-func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, stale detailData, err error) {
+// outcome instead of a stale "return failed" with a live Return button. A
+// failure that leaves Return offered re-opens the form with the user's note.
+func (s *Server) renderReturnFailure(
+	w http.ResponseWriter, r *http.Request, stale detailData, note string, err error,
+) {
 	entityID := stale.Entity.EntityID
 
 	if errors.Is(err, app.ErrHasChildren) {
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
-		stale.Error = "return failed: it still contains other entities — return or move them first"
+		stale.ReturnForm = returnForm(stale, note)
+		stale.ReturnForm.Error = "return failed: it still contains other entities — return or move them first"
 		s.renderDetailSection(w, r, stale)
 		return
 	}
 
 	if errors.Is(err, app.ErrIsHome) {
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
-		stale.Error = "return failed: it is home to entities that are away — return them first"
+		stale.ReturnForm = returnForm(stale, note)
+		stale.ReturnForm.Error = "return failed: it is home to entities that are away — return them first"
 		s.renderDetailSection(w, r, stale)
 		return
 	}
@@ -813,7 +903,8 @@ func (s *Server) renderReturnFailure(w http.ResponseWriter, r *http.Request, sta
 		s.renderStatusChanged(w, r, fresh)
 	default:
 		s.cfg.Logger.Error("return entity", "error", err, "entity_id", entityID)
-		fresh.Error = "return failed"
+		fresh.ReturnForm = returnForm(fresh, note)
+		fresh.ReturnForm.Error = "return failed"
 		s.renderDetailSection(w, r, fresh)
 	}
 }

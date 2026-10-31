@@ -699,11 +699,11 @@ dialog#add-modal input[type="checkbox"],
 /* Inline forms use sibling <label for>, so labels hug their input instead. */
 .form-panel > label { margin-bottom: 0; }
 .form-panel > input + label { margin-top: var(--space-2); }
-.loan-form-buttons, .remove-form-buttons, .modal-actions {
+.loan-form-buttons, .remove-form-buttons, .status-form-buttons, .modal-actions {
   display: flex;
   gap: var(--space-2);
 }
-.loan-form-buttons, .remove-form-buttons { margin-top: var(--space-2); }
+.loan-form-buttons, .remove-form-buttons, .status-form-buttons { margin-top: var(--space-2); }
 .modal-actions { margin-top: var(--space-4); justify-content: flex-end; }
 
 /* ── Footer ──────────────────────────────────────────────────────────── */
@@ -840,8 +840,8 @@ dialog#add-modal input[type="checkbox"],
     border-top: 1px solid var(--color-border);
   }
   dialog#add-modal .modal-actions > * { flex: 1; }
-  .loan-form-buttons, .remove-form-buttons { flex-direction: column; }
-  .loan-form-buttons > *, .remove-form-buttons > * { width: 100%; }
+  .loan-form-buttons, .remove-form-buttons, .status-form-buttons { flex-direction: column; }
+  .loan-form-buttons > *, .remove-form-buttons > *, .status-form-buttons > * { width: 100%; }
   .detail-actions .detail-action-btn { flex: 1 1 calc(50% - var(--space-2)); }
   .tape h2, .tape-id { overflow-wrap: anywhere; }
   .app-footer { flex-wrap: wrap; row-gap: var(--space-1); }

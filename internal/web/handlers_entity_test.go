@@ -230,20 +230,20 @@ func TestHandleMissingActions(t *testing.T) {
 			// missing elsewhere must not mark it found.
 			name: "stale lost on missing", path: lost, entities: ent(inventory.EntityStatusMissing, false),
 			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
-			want:    []string{alert(unavailableText), `hx-post="/entities/abc/actions/found"`},
+			want:    []string{alert(unavailableText), `hx-get="/entities/abc/actions/found"`},
 			notWant: []string{"status change failed", staleText},
 		},
 		{
 			name: "stale found on ok", path: found, entities: ent(inventory.EntityStatusOk, false),
 			statusErr: errTest, wantCode: http.StatusOK, wantFound: 1,
-			want: []string{alert(unavailableText), `hx-post="/entities/abc/actions/lost"`},
+			want: []string{alert(unavailableText), `hx-get="/entities/abc/actions/lost"`},
 		},
 		{
 			// Review Focus #2: locked after the panel rendered.
 			name: "stale lost on locked", path: lost, entities: ent(inventory.EntityStatusOk, true),
 			statusErr: errTest, wantCode: http.StatusOK, wantLost: 1,
 			want:    []string{alert(unavailableText)},
-			notWant: []string{`hx-post="/entities/abc/actions/lost"`, "status change failed"},
+			notWant: []string{`hx-get="/entities/abc/actions/lost"`, "status change failed"},
 		},
 		{
 			name: "genuine failure", path: lost, entities: ent(inventory.EntityStatusOk, false),
@@ -289,6 +289,148 @@ func postHTMX(t *testing.T, ts *httptest.Server, path string) *http.Response {
 	resp, err := ts.Client().Do(req)
 	require.NoError(t, err)
 	return resp
+}
+
+func getHTMX(t *testing.T, ts *httptest.Server, path string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)
+	require.NoError(t, err)
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func postNote(t *testing.T, ts *httptest.Server, path, note string) (*http.Response, string) {
+	t.Helper()
+	form := url.Values{"note": {note}}
+	req, err := http.NewRequest(http.MethodPost, ts.URL+path, strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Hx-Request", "true")
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func TestHandleMissingForms(t *testing.T) {
+	const (
+		lost  = "/entities/abc/actions/lost"
+		found = "/entities/abc/actions/found"
+	)
+	ent := func(status inventory.EntityStatus, locked bool) []app.EntityResult {
+		return []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer", FullPathDisplay: "Hammer",
+			Status: status, Locked: locked}}
+	}
+	tests := []struct {
+		name     string
+		path     string
+		entities []app.EntityResult
+		wantCode int
+		want     []string
+		notWant  []string
+	}{
+		{
+			name: "lost on ok opens form", path: lost, entities: ent(inventory.EntityStatusOk, false),
+			wantCode: http.StatusOK,
+			want: []string{
+				`id="entity-detail"`, `hx-post="/entities/abc/actions/lost"`, `hx-target="#detail-panel"`,
+				`data-esc-cancel`, `name="note"`, `autofocus`,
+				`<button type="submit" class="btn-primary">Mark missing</button>`,
+			},
+			notWant: []string{unavailableText, `hx-get="/entities/abc/actions/lost"`},
+		},
+		{
+			name: "found on missing opens form", path: found, entities: ent(inventory.EntityStatusMissing, false),
+			wantCode: http.StatusOK,
+			want: []string{
+				`hx-post="/entities/abc/actions/found"`,
+				`<button type="submit" class="btn-primary">Mark found</button>`,
+			},
+			notWant: []string{unavailableText},
+		},
+		{
+			name: "stale lost on missing", path: lost, entities: ent(inventory.EntityStatusMissing, false),
+			wantCode: http.StatusOK,
+			want:     []string{alert(unavailableText), `id="tree-badge-abc"`, `hx-get="/entities/abc/actions/found"`},
+			notWant:  []string{`hx-post="/entities/abc/actions/lost"`},
+		},
+		{
+			name: "stale found on ok", path: found, entities: ent(inventory.EntityStatusOk, false),
+			wantCode: http.StatusOK,
+			want:     []string{alert(unavailableText), `id="tree-badge-abc"`, `hx-get="/entities/abc/actions/lost"`},
+			notWant:  []string{`hx-post="/entities/abc/actions/found"`},
+		},
+		{
+			name: "lost on locked", path: lost, entities: ent(inventory.EntityStatusOk, true),
+			wantCode: http.StatusOK,
+			want:     []string{alert(unavailableText)},
+			notWant:  []string{`hx-post="/entities/abc/actions/lost"`},
+		},
+		{
+			name: "removed shows removed panel", path: lost, entities: ent(inventory.EntityStatusRemoved, false),
+			wantCode: http.StatusOK,
+			want:     []string{staleText, "Last location", `id="tree-node-abc" hx-swap-oob="delete"`},
+		},
+		{name: "unknown id", path: lost, wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &fakeApp{entities: tt.entities}
+			ts := newTestServer(t, fa)
+			defer ts.Close()
+
+			resp, body := getHTMX(t, ts, tt.path)
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			assert.Zero(t, fa.lostCalls+fa.foundCalls, "opening the form must not write")
+			for _, s := range tt.want {
+				assert.Contains(t, body, s)
+			}
+			for _, s := range tt.notWant {
+				assert.NotContains(t, body, s)
+			}
+		})
+	}
+}
+
+func TestHandleMissingActions_Note(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		status   inventory.EntityStatus
+		note     string
+		wantNote string
+	}{
+		{name: "lost with note", path: "/entities/abc/actions/lost", status: inventory.EntityStatusOk,
+			note: "left at the site", wantNote: "left at the site"},
+		{name: "found with padded note", path: "/entities/abc/actions/found", status: inventory.EntityStatusMissing,
+			note: "  in the van  ", wantNote: "in the van"},
+		{name: "lost without note", path: "/entities/abc/actions/lost", status: inventory.EntityStatusOk,
+			note: "", wantNote: ""},
+		{name: "found with whitespace-only note", path: "/entities/abc/actions/found",
+			status: inventory.EntityStatusMissing, note: "   ", wantNote: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &fakeApp{entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Hammer",
+				FullPathDisplay: "Hammer", Status: tt.status}}}
+			ts := newTestServer(t, fa)
+			defer ts.Close()
+
+			resp, body := postNote(t, ts, tt.path, tt.note)
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, 1, fa.lostCalls+fa.foundCalls)
+			assert.Equal(t, "abc", fa.lastMissingReq.EntityID)
+			assert.Equal(t, tt.wantNote, fa.lastMissingReq.Note)
+			assert.Contains(t, body, `id="tree-badge-abc"`)
+		})
+	}
 }
 
 func TestHandleReturn_LoanedRerendersInPlace(t *testing.T) {
@@ -431,7 +573,7 @@ func TestHandleReturn_StaleOnOkShowsCurrentState(t *testing.T) {
 	assert.Equal(t, "abc", fake.lastReturnReq.EntityID, "the app layer decides (ADR 0035)")
 	assert.Contains(t, string(body), `id="tree-badge-abc"`)
 	assert.NotContains(t, string(body), "return failed")
-	assert.NotContains(t, string(body), `hx-post="/entities/abc/actions/return"`)
+	assert.NotContains(t, string(body), `hx-get="/entities/abc/actions/return"`)
 }
 
 // Review Focus #3: the entity left the inventory elsewhere (returned or
@@ -481,6 +623,67 @@ func TestHandleReturn_HasChildrenShowsMessage(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), "still contains other entities")
 	assert.Empty(t, resp.Header.Get("Hx-Trigger-After-Swap"))
+}
+
+// A failure that leaves the action offered re-opens its form with the typed
+// note and the error, as loan_form and remove_form do.
+func TestStatusFailureKeepsNote(t *testing.T) {
+	ent := func(status inventory.EntityStatus) []app.EntityResult {
+		return []app.EntityResult{{EntityID: "abc", DisplayName: "Case", FullPathDisplay: "Case",
+			Status: status, StatusContext: "Alice"}}
+	}
+	tests := []struct {
+		name      string
+		path      string
+		entities  []app.EntityResult
+		statusErr error
+		returnErr error
+		wantError string
+		want      []string
+	}{
+		{
+			name: "lost genuine failure", path: "/entities/abc/actions/lost",
+			entities: ent(inventory.EntityStatusOk), statusErr: errTest, wantError: "status change failed",
+		},
+		{
+			name: "found genuine failure", path: "/entities/abc/actions/found",
+			entities: ent(inventory.EntityStatusMissing), statusErr: errTest, wantError: "status change failed",
+		},
+		{
+			name: "return has children", path: "/entities/abc/actions/return",
+			entities:  ent(inventory.EntityStatusBorrowed),
+			returnErr: fmt.Errorf("return: %w", app.ErrHasChildren),
+			wantError: "return failed: it still contains other entities — return or move them first",
+			want:      []string{`id="status_prompt"`},
+		},
+		{
+			name: "return is home", path: "/entities/abc/actions/return",
+			entities:  ent(inventory.EntityStatusBorrowed),
+			returnErr: fmt.Errorf("return: %w", app.ErrIsHome),
+			wantError: "return failed: it is home to entities that are away — return them first",
+		},
+		{
+			name: "return genuine failure", path: "/entities/abc/actions/return",
+			entities: ent(inventory.EntityStatusLoaned), returnErr: errTest, wantError: "return failed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := newTestServer(t, &fakeApp{entities: tt.entities, statusErr: tt.statusErr, returnErr: tt.returnErr})
+			defer ts.Close()
+
+			resp, body := postNote(t, ts, tt.path, "  keep me  ")
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Contains(t, body, `hx-post="`+tt.path+`"`, "form re-opened")
+			assert.Contains(t, body, `value="keep me"`)
+			assert.Contains(t, body, `<div class="error" role="alert">`+tt.wantError+`</div>`)
+			assert.Equal(t, 1, strings.Count(body, `role="alert"`), "error shown once, inside the form")
+			for _, s := range tt.want {
+				assert.Contains(t, body, s)
+			}
+		})
+	}
 }
 
 func TestHandleReturn_IsHomeShowsMessage(t *testing.T) {
@@ -594,48 +797,138 @@ func TestHandleReturn_RereadFailureServerError(t *testing.T) {
 
 func TestEntityDetail_ReturnButton(t *testing.T) {
 	tests := []struct {
-		name        string
-		entity      app.EntityResult
-		wantButton  bool
-		wantConfirm string
+		name       string
+		status     inventory.EntityStatus
+		wantButton bool
 	}{
-		{
-			name: "borrowed confirms with lender",
-			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
-				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
-			wantButton:  true,
-			wantConfirm: `hx-confirm="Return Drill to Alice? It will be removed from the inventory."`,
-		},
-		{
-			name: "loaned has no confirm",
-			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
-				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
-			wantButton: true,
-		},
-		{
-			name: "ok has no return",
-			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
-				Status: inventory.EntityStatusOk},
-		},
+		{name: "borrowed opens form", status: inventory.EntityStatusBorrowed, wantButton: true},
+		{name: "loaned opens form", status: inventory.EntityStatusLoaned, wantButton: true},
+		{name: "ok has no return", status: inventory.EntityStatusOk},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{tt.entity}})
+			ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill",
+				FullPathDisplay: "Drill", Status: tt.status, StatusContext: "Alice"}}})
 			defer ts.Close()
 
-			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
-			req.Header.Set("Hx-Request", "true")
-			resp, err := ts.Client().Do(req)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			body, _ := io.ReadAll(resp.Body)
+			_, body := getHTMX(t, ts, "/entities/abc")
 
-			assert.Equal(t, tt.wantButton, strings.Contains(string(body), "/actions/return"))
-			if tt.wantConfirm != "" {
-				assert.Contains(t, string(body), tt.wantConfirm)
-			} else {
-				assert.NotContains(t, string(body), "hx-confirm")
+			assert.Equal(t, tt.wantButton, strings.Contains(body, `hx-get="/entities/abc/actions/return"`))
+			assert.NotContains(t, body, `hx-post="/entities/abc/actions/return"`)
+			assert.NotContains(t, body, "hx-confirm")
+		})
+	}
+}
+
+func TestHandleReturnForm(t *testing.T) {
+	formPost := `hx-post="/entities/abc/actions/return"`
+	tests := []struct {
+		name     string
+		entities []app.EntityResult
+		wantCode int
+		want     []string
+		notWant  []string
+	}{
+		{
+			name: "borrowed prompts with lender",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"}},
+			wantCode: http.StatusOK,
+			want: []string{
+				formPost, `hx-target="#detail-panel"`, `name="note"`, `autofocus`, `data-esc-cancel`,
+				`<p id="status_prompt">Return Drill to Alice? It will be removed from the inventory.</p>`,
+				`aria-describedby="status_prompt"`,
+				`<button type="submit" class="btn-primary">Return</button>`,
+			},
+			notWant: []string{"hx-confirm", unavailableText},
+		},
+		{
+			name: "loaned has no prompt",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"}},
+			wantCode: http.StatusOK,
+			want:     []string{formPost, `name="note"`},
+			notWant:  []string{"It will be removed", "hx-confirm", "aria-describedby"},
+		},
+		{
+			name: "displaced ok opens form",
+			entities: []app.EntityResult{
+				{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+				{EntityID: "d", DisplayName: "Deck", FullPathDisplay: "Deck", Status: inventory.EntityStatusOk},
+				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Deck:Drill", ParentID: "d", HomeID: "g",
+					Status: inventory.EntityStatusOk},
+			},
+			wantCode: http.StatusOK,
+			want:     []string{formPost},
+		},
+		{
+			name: "stale on home ok",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk}},
+			wantCode: http.StatusOK,
+			want:     []string{alert(unavailableText), `id="tree-badge-abc"`},
+			notWant:  []string{formPost, `hx-get="/entities/abc/actions/return"`},
+		},
+		{
+			name: "returned elsewhere shows removed panel",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusRemoved}},
+			wantCode: http.StatusOK,
+			want:     []string{staleText, "Last location", `id="tree-node-abc" hx-swap-oob="delete"`},
+			notWant:  []string{formPost},
+		},
+		{name: "unknown id", wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &fakeApp{entities: tt.entities}
+			ts := newTestServer(t, fa)
+			defer ts.Close()
+
+			resp, body := getHTMX(t, ts, "/entities/abc/actions/return")
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			assert.Empty(t, fa.lastReturnReq.EntityID, "opening the form must not write")
+			for _, s := range tt.want {
+				assert.Contains(t, body, s)
 			}
+			for _, s := range tt.notWant {
+				assert.NotContains(t, body, s)
+			}
+		})
+	}
+}
+
+func TestHandleReturn_Note(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   inventory.EntityStatus
+		note     string
+		wantNote string
+	}{
+		{name: "loaned with note", status: inventory.EntityStatusLoaned, note: "came back scratched",
+			wantNote: "came back scratched"},
+		{name: "borrowed with padded note", status: inventory.EntityStatusBorrowed, note: "  thanked Alice  ",
+			wantNote: "thanked Alice"},
+		{name: "loaned without note", status: inventory.EntityStatusLoaned, note: "", wantNote: ""},
+		{name: "borrowed with whitespace-only note", status: inventory.EntityStatusBorrowed, note: "   ",
+			wantNote: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &fakeApp{entities: []app.EntityResult{
+				{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
+					Status: tt.status, StatusContext: "Alice"},
+			}}
+			ts := newTestServer(t, fa)
+			defer ts.Close()
+
+			resp, _ := postNote(t, ts, "/entities/abc/actions/return", tt.note)
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "abc", fa.lastReturnReq.EntityID)
+			assert.Equal(t, tt.wantNote, fa.lastReturnReq.Note)
 		})
 	}
 }
@@ -1536,7 +1829,8 @@ func TestHandleRemoveForm(t *testing.T) {
 				`id="entity-detail"`, formPost,
 				// renderAfterRemoval may return home_section, which has no #entity-detail wrapper.
 				`hx-target="#detail-panel"`, `name="note"`,
-				"Remove Hammer from the inventory? This cannot be undone.",
+				`<p id="remove_prompt">Remove Hammer from the inventory? This cannot be undone.</p>`,
+				`aria-describedby="remove_prompt"`,
 			},
 			notWant: []string{"hx-confirm", staleText},
 		},
@@ -2129,7 +2423,7 @@ func TestDetail_ShowsHomeAndAwayWhenDisplaced(t *testing.T) {
 	body := getBody(t, ts, "/entities/drill00001")
 	assert.Contains(t, body, "<dt>Home</dt><dd>Garage</dd>")
 	assert.Contains(t, body, ">away<")
-	assert.Contains(t, body, `hx-post="/entities/drill00001/actions/return"`)
+	assert.Contains(t, body, `hx-get="/entities/drill00001/actions/return"`)
 	assert.Contains(t, body, `title="Displaced entities cannot be locked — return it first"`)
 }
 
