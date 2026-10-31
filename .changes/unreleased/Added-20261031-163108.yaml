@@ -1,0 +1,5 @@
+kind: Added
+body: 'Web UI: Mark missing, Mark found and Return open an inline form with an optional note, recorded on the event'
+time: 2026-10-31T16:31:08.835646941-04:00
+custom:
+    Issue: "291"

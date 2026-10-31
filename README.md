@@ -328,11 +328,11 @@ Non-status actions, by interface:
 | attr (lock / discrete) | ✅ | ✅ | web has one button per attribute; disabled with a tooltip when blocked |
 | move | ✅ | ✅ | web form has a searchable destination picker and a "Move to root" choice; disabled with a tooltip for locked, missing, or loaned entities |
 | remove | ✅ | ✅ | web form asks for an optional note; hidden for borrowed entities (use Return); disabled with a tooltip while the entity contains other entities |
-| lost / found | ✅ | ✅ | web uses one toggle that is hidden for locked entities (a locked entity can never be `missing`; unlock it first) |
+| lost / found | ✅ | ✅ | web form asks for an optional note; hidden for locked entities (a locked entity can never be `missing`; unlock it first) |
 | loan | ✅ | ✅ | web form asks for "Loaned to" and an optional note; disabled for locked entities |
 | borrow | ✅ | ✅ | web creates one entity per submit, with a searchable location picker defaulting to the entity being viewed |
 | use | ✅ | ✅ | temporary move that keeps the entity's home; web form labelled "Use at" |
-| return | ✅ | ✅ | also sends displaced entities home; web asks for confirmation before returning a borrowed entity |
+| return | ✅ | ✅ | also sends displaced entities home; web form asks for an optional note and, for a borrowed entity, confirms that it will be removed |
 | scry / list | ✅ | ✅ | web has search and tree browsing; no status filter |
 | history | ✅ | ❌ | |
 | export / doctor | ✅ | ❌ | |
