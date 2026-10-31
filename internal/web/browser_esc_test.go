@@ -35,5 +35,15 @@ func TestBrowserEscCancelsInlineForms(t *testing.T) {
 			s.press(field, "Escape")
 			require.NoError(s.t, expect.Locator(field).ToHaveCount(0), f.open)
 		}
+
+		// Return is offered only away from ok-at-home, so it needs its own entity.
+		ladder := s.borrowEntity("Ladder", "", "Bob")
+		s.visit("/entities/" + ladder.EntityID)
+		s.click(s.button("Return"))
+		field := s.page.GetByLabel("Note (optional)", playwright.PageGetByLabelOptions{Exact: new(true)})
+		require.NoError(s.t, expect.Locator(field).ToBeVisible(), "Return")
+		s.press(field, "Escape")
+		require.NoError(s.t, expect.Locator(field).ToHaveCount(0), "Return")
+		require.NoError(s.t, expect.Locator(s.button("Return")).ToBeVisible())
 	})
 }
