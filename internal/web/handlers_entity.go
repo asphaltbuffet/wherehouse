@@ -25,7 +25,7 @@ type detailData struct {
 	CanMarkLost       bool            // ok and not locked (ADR 0024)
 	CanMarkFound      bool            // missing; found has no locked guard (ADR 0024)
 	CanReturn         bool            // borrowed, loaned, or displaced ok
-	ReturnConfirm     string          // non-empty only for borrowed: returning removes the entity
+	ReturnConfirm     string          // non-empty only for borrowed: the Return form's prompt (returning removes the entity)
 	MissingForm       *statusFormData // non-nil opens the Mark missing / Mark found note form
 	ReturnForm        *statusFormData // non-nil opens the Return note form
 	CanLoan           bool            // ok/missing and not locked (ADR 0024)

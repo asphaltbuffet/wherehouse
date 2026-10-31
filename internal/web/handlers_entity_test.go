@@ -775,7 +775,8 @@ func TestHandleReturnForm(t *testing.T) {
 			wantCode: http.StatusOK,
 			want: []string{
 				formPost, `hx-target="#detail-panel"`, `name="note"`, `autofocus`, `data-esc-cancel`,
-				"<p>Return Drill to Alice? It will be removed from the inventory.</p>",
+				`<p id="status_prompt">Return Drill to Alice? It will be removed from the inventory.</p>`,
+				`aria-describedby="status_prompt"`,
 				`<button type="submit" class="btn-primary">Return</button>`,
 			},
 			notWant: []string{"hx-confirm", unavailableText},
@@ -786,7 +787,7 @@ func TestHandleReturnForm(t *testing.T) {
 				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"}},
 			wantCode: http.StatusOK,
 			want:     []string{formPost, `name="note"`},
-			notWant:  []string{"It will be removed", "hx-confirm"},
+			notWant:  []string{"It will be removed", "hx-confirm", "aria-describedby"},
 		},
 		{
 			name: "displaced ok opens form",
