@@ -35,6 +35,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /entities/{entityID}/actions/found", s.handleFoundForm)
 	mux.HandleFunc("POST /entities/{entityID}/actions/found", s.handleFound)
 	mux.HandleFunc("POST /entities/{entityID}/actions/attr", s.handleAttr)
+	mux.HandleFunc("GET /entities/{entityID}/actions/return", s.handleReturnForm)
 	mux.HandleFunc("POST /entities/{entityID}/actions/return", s.handleReturn)
 	mux.HandleFunc("GET /entities/{entityID}/actions/loan", s.handleLoanForm)
 	mux.HandleFunc("POST /entities/{entityID}/actions/loan", s.handleLoan)

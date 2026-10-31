@@ -573,7 +573,7 @@ func TestHandleReturn_StaleOnOkShowsCurrentState(t *testing.T) {
 	assert.Equal(t, "abc", fake.lastReturnReq.EntityID, "the app layer decides (ADR 0035)")
 	assert.Contains(t, string(body), `id="tree-badge-abc"`)
 	assert.NotContains(t, string(body), "return failed")
-	assert.NotContains(t, string(body), `hx-post="/entities/abc/actions/return"`)
+	assert.NotContains(t, string(body), `hx-get="/entities/abc/actions/return"`)
 }
 
 // Review Focus #3: the entity left the inventory elsewhere (returned or
@@ -736,48 +736,137 @@ func TestHandleReturn_RereadFailureServerError(t *testing.T) {
 
 func TestEntityDetail_ReturnButton(t *testing.T) {
 	tests := []struct {
-		name        string
-		entity      app.EntityResult
-		wantButton  bool
-		wantConfirm string
+		name       string
+		status     inventory.EntityStatus
+		wantButton bool
 	}{
-		{
-			name: "borrowed confirms with lender",
-			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
-				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
-			wantButton:  true,
-			wantConfirm: `hx-confirm="Return Drill to Alice? It will be removed from the inventory."`,
-		},
-		{
-			name: "loaned has no confirm",
-			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
-				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"},
-			wantButton: true,
-		},
-		{
-			name: "ok has no return",
-			entity: app.EntityResult{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
-				Status: inventory.EntityStatusOk},
-		},
+		{name: "borrowed opens form", status: inventory.EntityStatusBorrowed, wantButton: true},
+		{name: "loaned opens form", status: inventory.EntityStatusLoaned, wantButton: true},
+		{name: "ok has no return", status: inventory.EntityStatusOk},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{tt.entity}})
+			ts := newTestServer(t, &fakeApp{entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill",
+				FullPathDisplay: "Drill", Status: tt.status, StatusContext: "Alice"}}})
 			defer ts.Close()
 
-			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc", nil)
-			req.Header.Set("Hx-Request", "true")
-			resp, err := ts.Client().Do(req)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			body, _ := io.ReadAll(resp.Body)
+			_, body := getHTMX(t, ts, "/entities/abc")
 
-			assert.Equal(t, tt.wantButton, strings.Contains(string(body), "/actions/return"))
-			if tt.wantConfirm != "" {
-				assert.Contains(t, string(body), tt.wantConfirm)
-			} else {
-				assert.NotContains(t, string(body), "hx-confirm")
+			assert.Equal(t, tt.wantButton, strings.Contains(body, `hx-get="/entities/abc/actions/return"`))
+			assert.NotContains(t, body, `hx-post="/entities/abc/actions/return"`)
+			assert.NotContains(t, body, "hx-confirm")
+		})
+	}
+}
+
+func TestHandleReturnForm(t *testing.T) {
+	formPost := `hx-post="/entities/abc/actions/return"`
+	tests := []struct {
+		name     string
+		entities []app.EntityResult
+		wantCode int
+		want     []string
+		notWant  []string
+	}{
+		{
+			name: "borrowed prompts with lender",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"}},
+			wantCode: http.StatusOK,
+			want: []string{
+				formPost, `hx-target="#detail-panel"`, `name="note"`, `autofocus`, `data-esc-cancel`,
+				"<p>Return Drill to Alice? It will be removed from the inventory.</p>",
+				`<button type="submit" class="btn-primary">Return</button>`,
+			},
+			notWant: []string{"hx-confirm", unavailableText},
+		},
+		{
+			name: "loaned has no prompt",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusLoaned, StatusContext: "Bob"}},
+			wantCode: http.StatusOK,
+			want:     []string{formPost, `name="note"`},
+			notWant:  []string{"It will be removed", "hx-confirm"},
+		},
+		{
+			name: "displaced ok opens form",
+			entities: []app.EntityResult{
+				{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+				{EntityID: "d", DisplayName: "Deck", FullPathDisplay: "Deck", Status: inventory.EntityStatusOk},
+				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Deck:Drill", ParentID: "d", HomeID: "g",
+					Status: inventory.EntityStatusOk},
+			},
+			wantCode: http.StatusOK,
+			want:     []string{formPost},
+		},
+		{
+			name: "stale on home ok",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusOk}},
+			wantCode: http.StatusOK,
+			want:     []string{alert(unavailableText), `id="tree-badge-abc"`},
+			notWant:  []string{formPost, `hx-get="/entities/abc/actions/return"`},
+		},
+		{
+			name: "returned elsewhere shows removed panel",
+			entities: []app.EntityResult{{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Drill",
+				Status: inventory.EntityStatusRemoved}},
+			wantCode: http.StatusOK,
+			want:     []string{staleText, "Last location", `id="tree-node-abc" hx-swap-oob="delete"`},
+			notWant:  []string{formPost},
+		},
+		{name: "unknown id", wantCode: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &fakeApp{entities: tt.entities}
+			ts := newTestServer(t, fa)
+			defer ts.Close()
+
+			resp, body := getHTMX(t, ts, "/entities/abc/actions/return")
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			assert.Empty(t, fa.lastReturnReq.EntityID, "opening the form must not write")
+			for _, s := range tt.want {
+				assert.Contains(t, body, s)
 			}
+			for _, s := range tt.notWant {
+				assert.NotContains(t, body, s)
+			}
+		})
+	}
+}
+
+func TestHandleReturn_Note(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   inventory.EntityStatus
+		note     string
+		wantNote string
+	}{
+		{name: "loaned with note", status: inventory.EntityStatusLoaned, note: "came back scratched",
+			wantNote: "came back scratched"},
+		{name: "borrowed with padded note", status: inventory.EntityStatusBorrowed, note: "  thanked Alice  ",
+			wantNote: "thanked Alice"},
+		{name: "loaned without note", status: inventory.EntityStatusLoaned, note: "", wantNote: ""},
+		{name: "borrowed with whitespace-only note", status: inventory.EntityStatusBorrowed, note: "   ",
+			wantNote: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &fakeApp{entities: []app.EntityResult{
+				{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+				{EntityID: "abc", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
+					Status: tt.status, StatusContext: "Alice"},
+			}}
+			ts := newTestServer(t, fa)
+			defer ts.Close()
+
+			resp, _ := postNote(t, ts, "/entities/abc/actions/return", tt.note)
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "abc", fa.lastReturnReq.EntityID)
+			assert.Equal(t, tt.wantNote, fa.lastReturnReq.Note)
 		})
 	}
 }
@@ -2271,7 +2360,7 @@ func TestDetail_ShowsHomeAndAwayWhenDisplaced(t *testing.T) {
 	body := getBody(t, ts, "/entities/drill00001")
 	assert.Contains(t, body, "<dt>Home</dt><dd>Garage</dd>")
 	assert.Contains(t, body, ">away<")
-	assert.Contains(t, body, `hx-post="/entities/drill00001/actions/return"`)
+	assert.Contains(t, body, `hx-get="/entities/drill00001/actions/return"`)
 	assert.Contains(t, body, `title="Displaced entities cannot be locked — return it first"`)
 }
 

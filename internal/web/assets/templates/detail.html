@@ -66,11 +66,12 @@
         Mark missing
       </button>
       {{end}}
-      {{if .CanReturn}}
-      <button class="btn-primary detail-action-btn"
-              hx-post="/entities/{{.Entity.EntityID}}/actions/return"
-              hx-target="#detail-panel" hx-swap="innerHTML"
-              {{if .ReturnConfirm}}hx-confirm="{{.ReturnConfirm}}"{{end}}>
+      {{if .ReturnForm}}
+      {{template "status_form" .ReturnForm}}
+      {{else if .CanReturn}}
+      <button class="btn-primary detail-action-btn" data-action="return"
+              hx-get="/entities/{{.Entity.EntityID}}/actions/return"
+              hx-target="#entity-detail" hx-swap="outerHTML">
         Return
       </button>
       {{end}}

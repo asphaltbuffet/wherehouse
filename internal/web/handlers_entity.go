@@ -27,6 +27,7 @@ type detailData struct {
 	CanReturn         bool            // borrowed, loaned, or displaced ok
 	ReturnConfirm     string          // non-empty only for borrowed: returning removes the entity
 	MissingForm       *statusFormData // non-nil opens the Mark missing / Mark found note form
+	ReturnForm        *statusFormData // non-nil opens the Return note form
 	CanLoan           bool            // ok/missing and not locked (ADR 0024)
 	LoanBlockedReason string          // non-empty when Loan is shown disabled
 	LoanForm          *loanFormData   // non-nil re-opens the loan form (validation error)
@@ -456,8 +457,8 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	}, nil
 }
 
-// returnConfirm builds the confirmation prompt for returning a borrowed entity.
-// Loaned returns are low-stakes and get no prompt.
+// returnConfirm builds the Return form's prompt for a borrowed entity.
+// Loaned and displaced returns are low-stakes and get no prompt.
 func returnConfirm(e app.EntityResult) string {
 	if e.Status != inventory.EntityStatusBorrowed {
 		return ""
@@ -772,6 +773,10 @@ func (s *Server) changeMissing(
 // renderReturnFailure instead of a bare 403 (#306).
 func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	entityID := r.PathValue("entityID")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
 
 	data, err := s.buildDetailData(r.Context(), entityID)
 	if err != nil {
@@ -787,6 +792,7 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 
 	_, err = s.cfg.App.MarkReturned(r.Context(), []app.ChangeStatusRequest{{
 		EntityID: entityID,
+		Note:     strings.TrimSpace(r.FormValue("note")),
 		ActorID:  s.actorFor(r),
 	}})
 	if err != nil {
@@ -811,6 +817,21 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderStatusChanged(w, r, fresh)
+}
+
+// handleReturnForm handles GET /entities/{entityID}/actions/return,
+// re-rendering the detail section with the Return note form open. A borrowed
+// entity's form shows ReturnConfirm, since returning removes it.
+func (s *Server) handleReturnForm(w http.ResponseWriter, r *http.Request) {
+	s.renderFormOpen(w, r, func(d *detailData) (string, bool) {
+		if !d.CanReturn {
+			return "", false
+		}
+		d.ReturnForm = &statusFormData{
+			EntityID: d.Entity.EntityID, Action: "return", Submit: "Return", Prompt: d.ReturnConfirm,
+		}
+		return "", true
+	})
 }
 
 // renderStatusChanged renders the detail of an entity whose status changed in

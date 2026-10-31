@@ -81,6 +81,14 @@ func TestBrowserLoan(t *testing.T) {
 		got := s.stored(ladder.EntityID)
 		assert.Equal(s.t, inventory.EntityStatusLoaned, got.Status)
 		assert.Equal(s.t, "Carol", got.StatusContext)
+
+		// Return with a note, submitted with Enter.
+		s.click(s.button("Return"))
+		note := s.page.GetByLabel("Note (optional)")
+		s.fill(note, "came back scratched")
+		s.press(note, "Enter")
+		require.NoError(s.t, expect.Locator(s.mainText("came back scratched")).ToBeVisible())
+		assert.Equal(s.t, inventory.EntityStatusOk, s.stored(ladder.EntityID).Status)
 	})
 }
 
@@ -89,9 +97,12 @@ func TestBrowserReturnBorrowed(t *testing.T) {
 	forEachDevice(t, func(s *session) {
 		garage := s.createEntity("Garage", "")
 		ladder := s.borrowEntity("Ladder", garage.EntityID, "Bob")
-		s.acceptDialogs()
 
 		s.visit("/entities/" + ladder.EntityID)
+		s.click(s.button("Return"))
+		require.NoError(s.t, expect.Locator(s.mainText("Return Ladder to Bob? It will be removed from the inventory.")).
+			ToBeVisible())
+		s.fill(s.page.GetByLabel("Note (optional)"), "thanked Bob")
 		s.click(s.button("Return"))
 
 		// Returning a borrowed entity removes it and shows its parent.
@@ -106,9 +117,9 @@ func TestBrowserReturnRefusedWithChildren(t *testing.T) {
 	forEachDevice(t, func(s *session) {
 		crate := s.borrowEntity("Crate", "", "Bob")
 		s.createEntity("Bolt", crate.EntityID)
-		s.acceptDialogs()
 
 		s.visit("/entities/" + crate.EntityID)
+		s.click(s.button("Return"))
 		s.click(s.button("Return"))
 
 		alert := s.page.GetByRole(*playwright.AriaRoleMain).GetByRole(*playwright.AriaRoleAlert)
@@ -130,12 +141,4 @@ func (s *session) borrowEntity(name, parentID, from string) app.EntityResult {
 	require.NoError(s.t, err)
 	require.Len(s.t, results, 1)
 	return results[0]
-}
-
-// acceptDialogs confirms every native dialog, such as hx-confirm's; by
-// default Playwright dismisses them.
-func (s *session) acceptDialogs() {
-	s.page.OnDialog(func(d playwright.Dialog) {
-		_ = d.Accept()
-	})
 }
