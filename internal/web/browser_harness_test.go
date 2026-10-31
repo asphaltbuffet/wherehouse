@@ -350,8 +350,14 @@ func (s *session) treeRow(name string) playwright.Locator {
 	return s.treeItem(name).Locator(":scope > .tree-item")
 }
 
-// expandTreeItem expands a tree item via its chevron, which (unlike the row)
-// expands without loading the item's detail, and waits for its children.
+// treeLabel is the name label in a tree item's row; clicking it selects the
+// item without expanding or collapsing it.
+func (s *session) treeLabel(name string) playwright.Locator {
+	return s.treeRow(name).Locator(`:scope > [id^="tree-label-"]`)
+}
+
+// expandTreeItem expands a tree item via its chevron, which only expands
+// (selecting is the label's job), and waits for its children.
 func (s *session) expandTreeItem(name string) {
 	s.t.Helper()
 	s.click(s.treeRow(name).Locator(".chevron"))

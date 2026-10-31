@@ -70,3 +70,150 @@ func TestBrowserTreeFollowsDirectURL(t *testing.T) {
 		require.NoError(s.t, expect.Locator(s.treeItem("Drawer")).ToHaveAttribute("aria-selected", "true"))
 	})
 }
+
+// Clicking a row's label selects it and leaves its expansion alone (#364).
+func TestBrowserTreeLabelSelectsWithoutToggling(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		shed := s.createEntity("Shed", "")
+		s.createEntity("Bin", shed.EntityID)
+		garage := s.createEntity("Garage", "")
+		s.createEntity("Toolbox", garage.EntityID)
+
+		s.visit("/")
+		s.openTree()
+
+		// Collapsed container: selected, stays collapsed, children never fetched.
+		s.click(s.treeLabel("Shed"))
+		require.NoError(s.t, expect.Locator(s.detailHeading("Shed")).ToBeVisible())
+		if s.layout == narrow {
+			require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
+			s.openTree()
+		}
+		require.NoError(s.t, expect.Locator(s.treeItem("Shed")).ToHaveAttribute("aria-selected", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Shed")).ToHaveAttribute("aria-expanded", "false"))
+		s.settle() // a stray children fetch would have landed by now
+		require.NoError(s.t, expect.Locator(s.treeItem("Bin")).ToHaveCount(0))
+
+		// Expanded container: selected, stays expanded.
+		s.expandTreeItem("Garage")
+		s.click(s.treeLabel("Garage"))
+		if s.layout == narrow {
+			require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
+		}
+		require.NoError(s.t, expect.Locator(s.detailHeading("Garage")).ToBeVisible())
+		s.settle()
+		s.openTree()
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-selected", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Toolbox")).ToBeVisible())
+	})
+}
+
+// A chevron click expands or collapses without touching the selection, the
+// detail panel, or the narrow drawer (#364, ADR 0037).
+func TestBrowserTreeChevronTogglesWithoutSelecting(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		shed := s.createEntity("Shed", "")
+		garage := s.createEntity("Garage", "")
+		s.createEntity("Toolbox", garage.EntityID)
+
+		s.visit("/entities/" + shed.EntityID)
+		s.settle()
+		s.openTree()
+
+		chevron := s.treeRow("Garage").Locator(".chevron")
+		for _, want := range []string{"true", "false"} {
+			s.click(chevron)
+			require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", want))
+			s.settle()
+			require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-selected", "false"))
+			require.NoError(s.t, expect.Locator(s.treeItem("Shed")).ToHaveAttribute("aria-selected", "true"))
+			if s.layout == narrow {
+				require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "true"))
+			}
+		}
+
+		s.closeTree()
+		require.NoError(s.t, expect.Locator(s.detailHeading("Shed")).ToBeVisible())
+	})
+}
+
+// Opening a container from the Contents list expands only its ancestors, so
+// the container itself stays collapsed.
+func TestBrowserTreeChildrenListSelectsWithoutExpanding(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		garage := s.createEntity("Garage", "")
+		toolbox := s.createEntity("Toolbox", garage.EntityID)
+		s.createEntity("Drawer", toolbox.EntityID)
+
+		s.visit("/entities/" + garage.EntityID)
+		s.click(s.childLink("Toolbox"))
+		require.NoError(s.t, expect.Locator(s.detailHeading("Toolbox")).ToBeVisible())
+
+		s.settle()
+		s.openTree()
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Toolbox")).ToHaveAttribute("aria-selected", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Toolbox")).ToHaveAttribute("aria-expanded", "false"))
+		s.settle() // a stray children fetch would have landed by now
+		require.NoError(s.t, expect.Locator(s.treeItem("Drawer")).ToHaveCount(0))
+	})
+}
+
+// Keyboard follows the WAI-ARIA tree pattern: arrows expand and collapse
+// without selecting; Enter and Space select without toggling (#364).
+func TestBrowserTreeKeyboard(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		shed := s.createEntity("Shed", "")
+		garage := s.createEntity("Garage", "")
+		s.createEntity("Toolbox", garage.EntityID)
+
+		s.visit("/entities/" + shed.EntityID)
+		s.settle()
+		s.openTree()
+
+		requireUnselected := func() {
+			s.t.Helper()
+			require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-selected", "false"))
+			require.NoError(s.t, expect.Locator(s.treeItem("Shed")).ToHaveAttribute("aria-selected", "true"))
+			if s.layout == narrow {
+				require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "true"))
+			}
+		}
+
+		s.press(s.treeRow("Garage"), "ArrowRight")
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", "true"))
+		s.settle()
+		require.NoError(s.t, expect.Locator(s.treeItem("Toolbox")).ToBeVisible())
+		requireUnselected()
+
+		// Focus stayed on Garage, so ArrowDown reaches its first child.
+		require.NoError(s.t, s.page.Keyboard().Press("ArrowDown"))
+		require.NoError(s.t, expect.Locator(s.treeRow("Toolbox")).ToBeFocused())
+
+		s.press(s.treeRow("Garage"), "ArrowLeft")
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", "false"))
+		s.settle()
+		requireUnselected()
+
+		s.press(s.treeRow("Garage"), "Enter")
+		if s.layout == narrow {
+			require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
+		}
+		require.NoError(s.t, expect.Locator(s.detailHeading("Garage")).ToBeVisible())
+		s.settle()
+		s.openTree()
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-selected", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", "false"))
+
+		s.press(s.treeRow("Shed"), "Space")
+		if s.layout == narrow {
+			require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "false"))
+		}
+		require.NoError(s.t, expect.Locator(s.detailHeading("Shed")).ToBeVisible())
+	})
+}
