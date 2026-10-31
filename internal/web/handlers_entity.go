@@ -67,8 +67,12 @@ type loanFormData struct {
 	Error     string
 }
 
-// emptyTagMessage is the inline error for a tag with an empty canonical form.
-const emptyTagMessage = "Tag can't be only spaces, dashes, or underscores."
+// blankTagMessage and emptyTagMessage are the inline errors for a tag with an
+// empty canonical form: nothing typed, or only separators.
+const (
+	blankTagMessage = "Tag is required."
+	emptyTagMessage = "Tag can't be only spaces, dashes, or underscores."
+)
 
 // tagFormData is the view model for the inline add-tag input.
 type tagFormData struct {
@@ -601,6 +605,8 @@ func (s *Server) handleTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+	case errors.Is(tagErr, app.ErrEmptyTag) && strings.TrimSpace(value) == "":
+		s.openTagForm(r.Context(), &fresh, value, blankTagMessage)
 	case errors.Is(tagErr, app.ErrEmptyTag):
 		s.openTagForm(r.Context(), &fresh, value, emptyTagMessage)
 	case tagErr != nil:

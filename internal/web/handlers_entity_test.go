@@ -2652,3 +2652,26 @@ func TestHandleUntag_MetacharacterTag(t *testing.T) {
 	assert.Equal(t, []string{odd}, fake.lastTagReq.Remove)
 	assert.NotContains(t, body, "Remove tag a&#34;b")
 }
+
+func TestHandleTag_EmptyMessageMatchesInput(t *testing.T) {
+	tests := []struct {
+		name, value, want string
+	}{
+		{name: "blank", value: "   ", want: "Tag is required."},
+		{name: "separators only", value: "--", want: emptyTagText},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeApp{
+				entities: taggedDrill(inventory.EntityStatusOk),
+				tagErr:   fmt.Errorf("add tag: %w", app.ErrEmptyTag),
+			}
+			ts := newTestServer(t, fake)
+			defer ts.Close()
+
+			_, body := postTagAction(t, ts, "tag", url.Values{"tag": {tt.value}})
+
+			assert.Contains(t, body, alert(tt.want))
+		})
+	}
+}
