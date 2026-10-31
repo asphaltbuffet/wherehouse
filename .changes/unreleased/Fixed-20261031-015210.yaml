@@ -1,0 +1,5 @@
+kind: Fixed
+body: Entity paths in the web Reports table are readable in dark mode
+time: 2026-10-31T01:52:10.111369799-04:00
+custom:
+    Issue: "372"
