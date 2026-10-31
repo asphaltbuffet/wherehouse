@@ -92,6 +92,7 @@ func TestBrowserTreeLabelSelectsWithoutToggling(t *testing.T) {
 		}
 		require.NoError(s.t, expect.Locator(s.treeItem("Shed")).ToHaveAttribute("aria-selected", "true"))
 		require.NoError(s.t, expect.Locator(s.treeItem("Shed")).ToHaveAttribute("aria-expanded", "false"))
+		s.settle() // a stray children fetch would have landed by now
 		require.NoError(s.t, expect.Locator(s.treeItem("Bin")).ToHaveCount(0))
 
 		// Expanded container: selected, stays expanded.
@@ -145,16 +146,20 @@ func TestBrowserTreeChildrenListSelectsWithoutExpanding(t *testing.T) {
 	t.Parallel()
 	forEachDevice(t, func(s *session) {
 		garage := s.createEntity("Garage", "")
-		s.createEntity("Toolbox", garage.EntityID)
+		toolbox := s.createEntity("Toolbox", garage.EntityID)
+		s.createEntity("Drawer", toolbox.EntityID)
 
-		s.visit("/")
-		s.click(s.childLink("Garage"))
-		require.NoError(s.t, expect.Locator(s.detailHeading("Garage")).ToBeVisible())
+		s.visit("/entities/" + garage.EntityID)
+		s.click(s.childLink("Toolbox"))
+		require.NoError(s.t, expect.Locator(s.detailHeading("Toolbox")).ToBeVisible())
 
 		s.settle()
 		s.openTree()
-		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-selected", "true"))
-		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", "false"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Garage")).ToHaveAttribute("aria-expanded", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Toolbox")).ToHaveAttribute("aria-selected", "true"))
+		require.NoError(s.t, expect.Locator(s.treeItem("Toolbox")).ToHaveAttribute("aria-expanded", "false"))
+		s.settle() // a stray children fetch would have landed by now
+		require.NoError(s.t, expect.Locator(s.treeItem("Drawer")).ToHaveCount(0))
 	})
 }
 

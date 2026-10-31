@@ -19,6 +19,10 @@ import (
 // `pointer: coarse` block (16px root font size).
 const minTouchTarget = 44
 
+// minPointerTarget is WCAG 2.5.8's minimum target size, which a control
+// next to another target (a chevron beside its row) must meet on any pointer.
+const minPointerTarget = 24
+
 // settleTimeout matches the default timeout of the auto-retrying expect
 // assertions.
 const settleTimeout = 5 * time.Second
@@ -79,6 +83,26 @@ func TestBrowserTouchTargetSize(t *testing.T) {
 			}
 		}
 		assert.Empty(s.t, small, "controls shorter than the %dpx touch target", minTouchTarget)
+	})
+}
+
+// The chevron is the only mouse target that expands a row, and a near-miss
+// selects the row instead (#364), so it must meet the minimum target size.
+func TestBrowserChevronTargetSize(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		garage := s.createEntity("Garage", "")
+		s.createEntity("Toolbox", garage.EntityID)
+
+		s.visit("/")
+		s.openTree()
+
+		chevron := s.treeRow("Garage").Locator(".chevron")
+		require.NoError(s.t, expect.Locator(chevron).ToBeVisible())
+		box, err := chevron.BoundingBox()
+		require.NoError(s.t, err)
+		assert.GreaterOrEqual(s.t, box.Width, float64(minPointerTarget), "chevron width")
+		assert.GreaterOrEqual(s.t, box.Height, float64(minPointerTarget), "chevron height")
 	})
 }
 

@@ -1,0 +1,5 @@
+kind: Changed
+body: 'Web tree: the expand/collapse chevron has a larger click area on desktop (at least 24px), so it is easier to hit'
+time: 2026-10-31T17:14:13.261565418-04:00
+custom:
+    Issue: '#364'
