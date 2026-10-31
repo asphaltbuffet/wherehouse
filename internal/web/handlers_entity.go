@@ -540,11 +540,32 @@ func (s *Server) handleEditName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fragment := wantsFragment(w, r)
+	if fragment {
+		s.setTreeNodeRenamedTrigger(w, entityID)
+	}
 	s.renderDetailSection(w, r, fresh)
-	if wantsFragment(w, r) {
+	if fragment {
 		s.renderHTMLAppend(w, "tree_label_oob", fresh.Entity)
 		s.renderHTMLAppend(w, "tree_attrs_oob", fresh.Entity) // the add button's label names it
 	}
+}
+
+// treeNodeRenamedEvent is the trigger detail tree.js uses to re-sort a renamed
+// entity's tree node among its siblings.
+type treeNodeRenamedEvent struct {
+	EntityID string `json:"entityId"`
+}
+
+// setTreeNodeRenamedTrigger sets Hx-Trigger-After-Swap so tree.js re-sorts
+// after the OOB label swap has put the new name in place.
+func (s *Server) setTreeNodeRenamedTrigger(w http.ResponseWriter, entityID string) {
+	trigger, err := json.Marshal(map[string]treeNodeRenamedEvent{"tree-node-renamed": {EntityID: entityID}})
+	if err != nil {
+		s.cfg.Logger.Warn("marshal tree-node-renamed", "error", err)
+		return
+	}
+	w.Header().Set("Hx-Trigger-After-Swap", string(trigger))
 }
 
 // openTagForm opens the add-tag input on d with value and errMsg. Suggestions

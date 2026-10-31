@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -215,6 +216,37 @@ func TestHandleBorrow_ParentLabelLookupFailureIsLogged(t *testing.T) {
 
 	assert.Contains(t, body, `name="parent_id" value=""`)
 	assert.Contains(t, logger.errors, "borrow form parent label")
+}
+
+// Expected user mistakes are not logged as errors; unexpected failures are.
+func TestHandleBorrow_ErrorLogLevel(t *testing.T) {
+	tests := []struct {
+		name      string
+		borrowErr error
+		wantError bool
+	}{
+		{"blank lender", fmt.Errorf("borrow: %w", app.ErrLenderRequired), false},
+		{"invalid name", fmt.Errorf("borrow: %w", entitypath.ErrSegmentContainsSeparator), false},
+		{"unexpected", errTest, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := &recordingLogger{}
+			srv, err := web.New(web.Config{
+				App:    &fakeApp{borrowErr: tt.borrowErr},
+				Bind:   "127.0.0.1",
+				Output: io.Discard,
+				Logger: logger,
+			})
+			require.NoError(t, err)
+			ts := httptest.NewServer(srv.Handler())
+			defer ts.Close()
+
+			postBorrow(t, ts, url.Values{"display_name": {"Drill"}, "from": {"Alice"}})
+
+			assert.Equal(t, tt.wantError, slices.Contains(logger.errors, "borrow entity"))
+		})
+	}
 }
 
 // Review Focus #4: an unrelated error keeps the chosen parent and its label.

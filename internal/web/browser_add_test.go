@@ -38,6 +38,28 @@ func TestBrowserAddAtRoot(t *testing.T) {
 	})
 }
 
+func TestBrowserAddSortsTreeNode(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		s.createEntity("Attic", "")
+		s.createEntity("Garage", "")
+
+		s.visit("/")
+		s.click(s.button("Add root"))
+		s.submitAddForm("Basement")
+
+		s.openTree()
+		require.NoError(s.t, expect.Locator(s.treeLabels("#tree-root-list")).
+			ToHaveText([]string{"Attic", "Basement", "Garage"}))
+	})
+}
+
+// treeLabels is the labels of the tree items directly in the list selected
+// by listSel, in document order.
+func (s *session) treeLabels(listSel string) playwright.Locator {
+	return s.page.Locator(listSel + ` > [role="treeitem"] > .tree-item > [id^="tree-label-"]`)
+}
+
 // addDialog is the modal that hosts the add and borrow forms.
 func (s *session) addDialog() playwright.Locator {
 	return s.page.GetByRole(*playwright.AriaRoleDialog, playwright.PageGetByRoleOptions{Name: "Add item"})
