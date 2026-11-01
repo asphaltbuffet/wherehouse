@@ -62,26 +62,6 @@ func TestEntityResult_IsEligibleParent(t *testing.T) {
 	}
 }
 
-func TestEntityResult_CanMove(t *testing.T) {
-	tests := []struct {
-		name string
-		e    app.EntityResult
-		want bool
-	}{
-		{"ok", app.EntityResult{Status: inventory.EntityStatusOk}, true},
-		{"borrowed", app.EntityResult{Status: inventory.EntityStatusBorrowed}, true},
-		{"missing", app.EntityResult{Status: inventory.EntityStatusMissing}, false},
-		{"loaned", app.EntityResult{Status: inventory.EntityStatusLoaned}, false},
-		{"removed", app.EntityResult{Status: inventory.EntityStatusRemoved}, false},
-		{"locked ok", app.EntityResult{Status: inventory.EntityStatusOk, Locked: true}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.e.CanMove())
-		})
-	}
-}
-
 func TestFindMoveDestinations_ExcludesSelfDescendantsAndCurrentParent(t *testing.T) {
 	a := apptesting.OpenApp(t)
 	ctx := t.Context()

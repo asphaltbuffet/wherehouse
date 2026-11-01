@@ -79,9 +79,9 @@ func TestDetail_AttrButtons(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			fake := &fakeApp{
-				entities:       []app.EntityResult{tc.entity},
-				hasChildren:    map[string]bool{"abc": tc.hasChildren},
-				hasChildrenErr: tc.childErr,
+				entities:    []app.EntityResult{tc.entity},
+				hasChildren: map[string]bool{"abc": tc.hasChildren},
+				actionsErr:  tc.childErr,
 			}
 			ts := newTestServer(t, fake)
 			defer ts.Close()

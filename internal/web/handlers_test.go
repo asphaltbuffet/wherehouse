@@ -83,6 +83,10 @@ type fakeApp struct {
 	hasChildrenErr   error
 	hasChildrenCalls int
 
+	homedHere    map[string]int // entityID → displaced entities homed here; missing key ⇒ 0
+	actionsErr   error
+	actionsCalls int
+
 	children    map[string][]app.EntityResult // parentID → GetChildren result; nil map ⇒ legacy "_child" lookup
 	childrenErr error
 
@@ -336,6 +340,32 @@ func (f *fakeApp) MarkLoaned(_ context.Context, reqs []app.ChangeStatusRequest) 
 		}
 	}
 	return nil, nil
+}
+
+func (f *fakeApp) EntityActions(_ context.Context, entityID string) (app.ActionSet, error) {
+	f.actionsCalls++
+	if f.actionsErr != nil {
+		return nil, f.actionsErr
+	}
+	for _, e := range f.entities {
+		if e.EntityID != entityID || e.Status == inventory.EntityStatusRemoved {
+			continue
+		}
+		children := 0
+		if f.hasChildren[entityID] {
+			children = 1
+		}
+		return app.ActionsFor(app.EntityFacts{
+			Path:               e.FullPathDisplay,
+			Status:             e.Status,
+			Locked:             e.Locked,
+			Discrete:           e.Discrete,
+			Displaced:          e.IsDisplaced(),
+			LiveChildren:       children,
+			DisplacedHomedHere: f.homedHere[entityID],
+		}), nil
+	}
+	return nil, app.ErrNotFound
 }
 
 func (f *fakeApp) HasLiveChildren(_ context.Context, parentID string) (bool, error) {
