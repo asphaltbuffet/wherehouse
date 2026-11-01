@@ -47,3 +47,29 @@ func TestBrowserEscCancelsInlineForms(t *testing.T) {
 		require.NoError(s.t, expect.Locator(s.button("Return")).ToBeVisible())
 	})
 }
+
+// With the add modal open over the drawer, Esc closes only the modal; the
+// drawer stays open behind it.
+func TestBrowserEscClosesModalBeforeDrawer(t *testing.T) {
+	t.Parallel()
+	forDevices(t, devicesIn(narrow), sessionConfig{}, func(s *session) {
+		s.createEntity("Garage", "")
+
+		s.visit("/")
+		s.openTree()
+		s.click(s.treePanel().GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
+			Name: "Add child item under Garage",
+		}))
+		dialog := s.addDialog()
+		require.NoError(s.t, expect.Locator(dialog).ToBeVisible())
+
+		s.press(dialog.GetByLabel("Display Name"), "Escape")
+		require.NoError(s.t, expect.Locator(dialog).ToBeHidden())
+		require.NoError(s.t, expect.Locator(s.treePanel()).ToBeVisible())
+		require.NoError(s.t, expect.Locator(s.treeToggle()).ToHaveAttribute("aria-expanded", "true"))
+
+		// The next Esc reaches the drawer.
+		s.closeTree()
+		require.NoError(s.t, expect.Locator(s.treePanel()).ToBeHidden())
+	})
+}
