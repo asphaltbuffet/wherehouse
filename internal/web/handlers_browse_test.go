@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
+	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -481,4 +482,34 @@ func TestHandleParentOptions_PassesRelocation(t *testing.T) {
 			assert.Equal(t, tt.want, fake.lastRelocation)
 		})
 	}
+}
+
+// The picker served over a real app must omit a destination the write would
+// reject for a home cycle (#386).
+func TestHandleParentOptions_RealAppOmitsHomeCycleDestination(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	mk := func(name, parent string) string {
+		e, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: name, ParentID: parent, ActorID: "t"})
+		require.NoError(t, err)
+		return e.EntityID
+	}
+	garage := mk("Garage", "")
+	shelf := mk("Shelf", garage)
+	drill := mk("Drill", shelf)
+	deck := mk("Deck", "")
+	_, err := a.UseEntity(ctx, app.UseEntityRequest{EntityID: drill, NewParentID: deck, ActorID: "t"})
+	require.NoError(t, err)
+
+	ts := newTestServer(t, a)
+	defer ts.Close()
+	resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=d&moving=" + garage)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), `data-parent-id="`+deck+`"`)
+	assert.NotContains(t, string(body), `data-parent-id="`+drill+`"`,
+		"moving Garage into Drill puts Drill's home inside Drill")
 }

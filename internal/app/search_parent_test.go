@@ -195,3 +195,69 @@ func TestFindMoveDestinations_DisplacedEntity(t *testing.T) {
 	assert.Empty(t, names(app.RelocationUse, "deck"), "use never offers the current parent")
 	assert.Empty(t, names(app.RelocationUse, "garage"), "use never offers the home")
 }
+
+// newCycleFixture builds Garage:Shelf:Drill:Bit and uses Drill out to Deck, so
+// Drill's home (Shelf) sits inside Garage. Moving or using Garage into Drill
+// or Bit would put Drill's home inside Drill. Bench is a plain spare.
+func newCycleFixture(t *testing.T) *app.App {
+	t.Helper()
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	for _, c := range []struct{ name, parent string }{
+		{"Garage", ""},
+		{"Shelf", "Garage"},
+		{"Drill", "Garage:Shelf"},
+		{"Bit", "Garage:Shelf:Drill"},
+		{"Deck", ""},
+		{"Bench", ""},
+	} {
+		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: c.name, ParentID: apptesting.MustLookupID(t, a, c.parent), ActorID: "t",
+		})
+		require.NoError(t, err)
+	}
+	_, err := a.UseEntity(ctx, app.UseEntityRequest{
+		EntityID:    apptesting.MustLookupID(t, a, "Garage:Shelf:Drill"),
+		NewParentID: apptesting.MustLookupID(t, a, "Deck"),
+		ActorID:     "t",
+	})
+	require.NoError(t, err)
+	return a
+}
+
+// Every destination the picker offers must be accepted by the write (#386).
+// Each offered destination is tried on a fresh database so one success cannot
+// change the next case.
+func TestFindMoveDestinations_OffersOnlyAcceptedDestinations(t *testing.T) {
+	relocate := func(a *app.App, rel app.Relocation, id, dest string) error {
+		if rel == app.RelocationUse {
+			_, err := a.UseEntity(t.Context(), app.UseEntityRequest{EntityID: id, NewParentID: dest, ActorID: "t"})
+			return err
+		}
+		_, err := a.ReparentEntity(t.Context(),
+			app.ReparentEntityRequest{EntityID: id, NewParentID: dest, ActorID: "t"})
+		return err
+	}
+	for _, rel := range []app.Relocation{app.RelocationMove, app.RelocationUse} {
+		t.Run(string(rel), func(t *testing.T) {
+			a := newCycleFixture(t)
+			res, err := a.FindMoveDestinations(t.Context(), apptesting.MustLookupID(t, a, "Garage"), rel,
+				app.FindEntitiesRequest{Query: ""})
+			require.NoError(t, err)
+			offered := make([]string, len(res))
+			for i, r := range res {
+				offered[i] = r.Entity.FullPathDisplay
+			}
+			assert.ElementsMatch(t, []string{"Deck", "Bench"}, offered,
+				"Deck:Drill and Deck:Drill:Bit would put Drill's home inside Drill")
+
+			for _, path := range offered {
+				t.Run(path, func(t *testing.T) {
+					fresh := newCycleFixture(t)
+					require.NoError(t, relocate(fresh, rel,
+						apptesting.MustLookupID(t, fresh, "Garage"), apptesting.MustLookupID(t, fresh, path)))
+				})
+			}
+		})
+	}
+}
