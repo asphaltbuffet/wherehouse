@@ -1,0 +1,5 @@
+kind: Fixed
+body: Doctor no longer reports soft-removed entities as phantom projection rows; it now flags a removed entity whose row is missing or whose status is not removed
+time: 2026-11-01T13:18:20.049356449-05:00
+custom:
+    Issue: '#385'

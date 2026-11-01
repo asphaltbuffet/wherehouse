@@ -247,6 +247,67 @@ func TestCheckProjectionConsistency_StaleLastEventID(t *testing.T) {
 	assert.Contains(t, issues[0].Description, "stale")
 }
 
+func TestCheckProjectionConsistency_RemovedEntity_NoIssue(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	res, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box", ActorID: "alice",
+	})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{
+		EntityID: res.EntityID, ActorID: "alice",
+	}))
+
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, issues)
+}
+
+func TestCheckProjectionConsistency_RemovedEntity_MissingRow(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx := context.Background()
+
+	res, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box", ActorID: "alice",
+	})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{
+		EntityID: res.EntityID, ActorID: "alice",
+	}))
+
+	_, err = s.DB().ExecContext(ctx, `DELETE FROM entities_current WHERE entity_id = ?`, res.EntityID)
+	require.NoError(t, err)
+
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, app.DoctorKindProjection, issues[0].Kind)
+	assert.Contains(t, issues[0].Description, "missing")
+}
+
+func TestCheckProjectionConsistency_RemovedEntity_WrongStatus(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx := context.Background()
+
+	res, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+		DisplayName: "Box", ActorID: "alice",
+	})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{
+		EntityID: res.EntityID, ActorID: "alice",
+	}))
+
+	_, err = s.DB().ExecContext(ctx, `UPDATE entities_current SET status = 'ok' WHERE entity_id = ?`, res.EntityID)
+	require.NoError(t, err)
+
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, app.DoctorKindProjection, issues[0].Kind)
+	assert.Contains(t, issues[0].Description, "removed")
+}
+
 func TestTruncateAndReplay_ReturnsCountAndProjectionIntact(t *testing.T) {
 	a := openTestApp(t)
 	ctx := context.Background()
