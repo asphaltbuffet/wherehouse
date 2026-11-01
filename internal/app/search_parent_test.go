@@ -261,3 +261,49 @@ func TestFindMoveDestinations_OffersOnlyAcceptedDestinations(t *testing.T) {
 		})
 	}
 }
+
+func TestRootIsLegalDestination(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("root entity", func(t *testing.T) {
+		a := newCycleFixture(t)
+		for _, rel := range []app.Relocation{app.RelocationMove, app.RelocationUse} {
+			got, err := a.RootIsLegalDestination(ctx, apptesting.MustLookupID(t, a, "Garage"), rel)
+			require.NoError(t, err)
+			assert.False(t, got, rel)
+		}
+	})
+	t.Run("child", func(t *testing.T) {
+		a := newCycleFixture(t)
+		got, err := a.RootIsLegalDestination(ctx, apptesting.MustLookupID(t, a, "Garage:Shelf"), app.RelocationMove)
+		require.NoError(t, err)
+		assert.True(t, got)
+	})
+	t.Run("displaced entity with root home", func(t *testing.T) {
+		f := newHomeFixture(t)
+		deckChild, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Saw", ActorID: "t"})
+		require.NoError(t, err)
+		_, err = f.use(t, deckChild.EntityID, f.deck.EntityID)
+		require.NoError(t, err)
+		for _, rel := range []app.Relocation{app.RelocationMove, app.RelocationUse} {
+			got, rerr := f.a.RootIsLegalDestination(ctx, deckChild.EntityID, rel)
+			require.NoError(t, rerr)
+			assert.False(t, got, "root is its home: moving there is a return (%s)", rel)
+		}
+	})
+	t.Run("displaced entity at root with non-root home", func(t *testing.T) {
+		f := newHomeFixture(t)
+		_, err := f.use(t, f.drill.EntityID, "")
+		require.NoError(t, err)
+		got, err := f.a.RootIsLegalDestination(ctx, f.drill.EntityID, app.RelocationMove)
+		require.NoError(t, err)
+		assert.True(t, got, "move re-homes it at the root")
+		got, err = f.a.RootIsLegalDestination(ctx, f.drill.EntityID, app.RelocationUse)
+		require.NoError(t, err)
+		assert.False(t, got)
+	})
+	t.Run("unknown entity", func(t *testing.T) {
+		_, err := apptesting.OpenApp(t).RootIsLegalDestination(ctx, "nope", app.RelocationMove)
+		require.ErrorIs(t, err, app.ErrNotFound)
+	})
+}

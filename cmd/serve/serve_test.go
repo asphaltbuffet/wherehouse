@@ -84,6 +84,10 @@ func (f *fakeApp) UseEntity(_ context.Context, _ app.UseEntityRequest) (app.Relo
 	return app.RelocationResult{}, nil
 }
 
+func (f *fakeApp) RootIsLegalDestination(_ context.Context, _ string, _ app.Relocation) (bool, error) {
+	return false, nil
+}
+
 func (f *fakeApp) FindMoveDestinations(
 	_ context.Context, _ string, _ app.Relocation, _ app.FindEntitiesRequest,
 ) ([]app.FindResult, error) {

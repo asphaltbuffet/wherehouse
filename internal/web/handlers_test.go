@@ -91,6 +91,8 @@ type fakeApp struct {
 	childrenErr error
 
 	parentResults   []app.FindResult
+	rootLegal       bool  // answer of RootIsLegalDestination
+	rootLegalErr    error // error of RootIsLegalDestination
 	parentCalls     int
 	lastParentQuery string
 
@@ -184,6 +186,10 @@ func (f *fakeApp) relocate(entityID, newParentID string) (app.RelocationResult, 
 		return app.RelocationResult{Entity: f.entities[i], FromParentID: from}, nil
 	}
 	return app.RelocationResult{}, app.ErrNotFound
+}
+
+func (f *fakeApp) RootIsLegalDestination(_ context.Context, _ string, _ app.Relocation) (bool, error) {
+	return f.rootLegal, f.rootLegalErr
 }
 
 func (f *fakeApp) FindMoveDestinations(

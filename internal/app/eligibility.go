@@ -222,6 +222,7 @@ func Check(
 			return reject(ErrNoChange, 0)
 		}
 	case ActionAddChild:
+		// Removed entities never reach Check, so discrete is the only failing cause.
 		if !canAddChild(f.Status, f.Discrete) {
 			return reject(ErrDiscrete, 0)
 		}

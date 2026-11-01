@@ -180,16 +180,16 @@ func checkRehome(ctx context.Context, h hierarchy, moving *inventory.Entity, par
 		return nil
 	}
 	parent, err := h.get(ctx, parentID)
-	kind := ErrNotFound
+	kind, dest := ErrNotFound, parentID // a missing parent is named by ID
 	switch {
 	case err != nil && !errors.Is(err, ErrNotFound):
 		return err
 	case err == nil && canAddChild(parent.Status, parent.Discrete):
 		return nil
 	case err == nil:
-		kind = ineligibleKind(parent)
+		kind, dest = ineligibleKind(parent), parent.FullPathDisplay
 	}
-	return &DestinationRejection{Verb: verbMove, Kind: kind, Path: moving.FullPathDisplay, Dest: parentID, Rehome: true}
+	return &DestinationRejection{Verb: verbMove, Kind: kind, Path: moving.FullPathDisplay, Dest: dest, Rehome: true}
 }
 
 // isSelfOrDescendant reports whether candidateID is entityID or lies beneath it.

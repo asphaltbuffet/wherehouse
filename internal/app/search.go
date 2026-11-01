@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 // FindEntities searches for non-removed entities whose display name contains the query string.
@@ -64,6 +66,36 @@ func (a *App) FindMoveDestinations(
 	return a.matchEntities(ctx, live, req, func(r EntityResult) bool {
 		return checkRelocation(ctx, h, moving, r.EntityID, verb) == nil
 	})
+}
+
+// RootIsLegalDestination reports whether the root is a legal destination for
+// relocating entityID by relocation. It asks checkRelocation, so the answer is
+// the one the write guard gives (ADR 0041); a rejection is a "no", not an
+// error. The root needs no read beyond the entity's current parent, so a
+// transaction-bound hierarchy is cheaper than listing a snapshot.
+func (a *App) RootIsLegalDestination(ctx context.Context, entityID string, relocation Relocation) (bool, error) {
+	verb := verbMove
+	if relocation == RelocationUse {
+		verb = verbUse
+	}
+	legal := false
+	err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		moving, err := a.store.GetEntityTx(ctx, tx, entityID)
+		if err != nil {
+			return wrapEntityError(entityID, err)
+		}
+		cerr := checkRelocation(ctx, txHierarchy{a: a, tx: tx}, moving, "", verb)
+		var rejection *DestinationRejection
+		if errors.As(cerr, &rejection) {
+			return nil
+		}
+		legal = cerr == nil
+		return cerr
+	})
+	if err != nil {
+		return false, err
+	}
+	return legal, nil
 }
 
 func (a *App) findMatching(

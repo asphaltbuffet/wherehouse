@@ -33,6 +33,7 @@ type App interface {
 	FindMoveDestinations(
 		ctx context.Context, entityID string, relocation app.Relocation, req app.FindEntitiesRequest,
 	) ([]app.FindResult, error)
+	RootIsLegalDestination(ctx context.Context, entityID string, relocation app.Relocation) (bool, error)
 	RemoveEntity(ctx context.Context, req app.RemoveEntityRequest) error
 	TagEntity(ctx context.Context, req app.TagEntityRequest) error
 	AllTags(ctx context.Context) ([]string, error)
