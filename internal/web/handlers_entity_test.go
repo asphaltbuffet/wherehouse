@@ -1541,7 +1541,7 @@ func TestHandleMoveForm(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := newTestServer(t, &fakeApp{entities: tt.entities})
+			ts := newTestServer(t, &fakeApp{entities: tt.entities, rootLegal: tt.wantToRoot})
 			defer ts.Close()
 
 			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/entities/abc/actions/move", nil)
@@ -1664,6 +1664,8 @@ func TestHandleMove_InvalidDestinationReopensForm(t *testing.T) {
 	for _, moveErr := range []error{
 		fmt.Errorf("get entity %q: %w", "w", app.ErrNotFound),
 		fmt.Errorf("cannot move: %w", app.ErrInvalidDestination),
+		// A missing or removed destination matches both sentinels (ADR 0041).
+		fmt.Errorf("cannot move: destination not found: %w: %w", app.ErrNotFound, app.ErrInvalidDestination),
 	} {
 		t.Run(moveErr.Error(), func(t *testing.T) {
 			fake := &fakeApp{entities: movableDrill(), moveErr: moveErr}
@@ -2581,28 +2583,32 @@ func TestHandleRelocate_HomeCycleShowsHint(t *testing.T) {
 	})
 }
 
-func TestHandleMoveForm_DisplacedRootChoice(t *testing.T) {
-	get := func(t *testing.T, entities []app.EntityResult, verb string) string {
+// The root button follows the app's answer (ADR 0041); the web layer holds no
+// copy of the rule.
+func TestHandleMoveForm_RootChoiceFollowsApp(t *testing.T) {
+	get := func(t *testing.T, fa *fakeApp, verb string) string {
 		t.Helper()
-		ts := newTestServer(t, &fakeApp{entities: entities})
+		fa.entities = displacedDrill()
+		ts := newTestServer(t, fa)
 		defer ts.Close()
 		return getBody(t, ts, "/entities/drill00001/actions/"+verb)
 	}
 
-	t.Run("displaced with non-root home offers root in move mode", func(t *testing.T) {
-		body := get(t, displacedDrill(), "move")
+	t.Run("move offers root when the app says legal", func(t *testing.T) {
+		body := get(t, &fakeApp{rootLegal: true}, "move")
 		assert.Contains(t, body, `data-parent-value="root"`)
 		assert.Contains(t, body, `"verb": "move"`)
 	})
-	t.Run("displaced with root home hides root in move mode", func(t *testing.T) {
-		entities := displacedDrill()
-		entities[2].HomeID = ""
-		entities[2].HomePathDisplay = ""
-		body := get(t, entities, "move")
+	t.Run("move hides root when the app says illegal", func(t *testing.T) {
+		body := get(t, &fakeApp{}, "move")
 		assert.NotContains(t, body, `data-parent-value="root"`)
 	})
-	t.Run("use mode never offers root and asks for use destinations", func(t *testing.T) {
-		body := get(t, displacedDrill(), "use")
+	t.Run("move hides root when the app errors", func(t *testing.T) {
+		body := get(t, &fakeApp{rootLegal: true, rootLegalErr: errTest}, "move")
+		assert.NotContains(t, body, `data-parent-value="root"`)
+	})
+	t.Run("use mode never shows the root button and asks for use destinations", func(t *testing.T) {
+		body := get(t, &fakeApp{rootLegal: true}, "use")
 		assert.NotContains(t, body, `data-parent-value="root"`)
 		assert.Contains(t, body, `"verb": "use"`)
 	})

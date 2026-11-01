@@ -42,22 +42,45 @@ func TestFindParentCandidates_BorrowedIsEligible(t *testing.T) {
 	assert.Equal(t, inventory.EntityStatusBorrowed, results[0].Entity.Status)
 }
 
-func TestEntityResult_IsEligibleParent(t *testing.T) {
-	tests := []struct {
+func TestEntityResult_CanAddChild(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	mk := func(name string, discrete bool) string {
+		e, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: name, Discrete: discrete, ActorID: "t"})
+		require.NoError(t, err)
+		return e.EntityID
+	}
+	okID := mk("Shelf", false)
+	discreteID := mk("Box of Nails", true)
+	gone := mk("Old Crate", false)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: gone, ActorID: "t"}))
+	borrowed, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{DisplayName: "Drill Case", StatusContext: "Alice", ActorID: "t"},
+	})
+	require.NoError(t, err)
+	missingID := mk("Toolbag", false)
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityID: missingID, ActorID: "t"}})
+	require.NoError(t, err)
+	loanedID := mk("Cooler", false)
+	_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{{EntityID: loanedID, StatusContext: "Bob", ActorID: "t"}})
+	require.NoError(t, err)
+
+	for _, tt := range []struct {
 		name string
-		e    app.EntityResult
+		id   string
 		want bool
 	}{
-		{"ok", app.EntityResult{Status: inventory.EntityStatusOk}, true},
-		{"missing", app.EntityResult{Status: inventory.EntityStatusMissing}, true},
-		{"loaned", app.EntityResult{Status: inventory.EntityStatusLoaned}, true},
-		{"borrowed", app.EntityResult{Status: inventory.EntityStatusBorrowed}, true},
-		{"removed", app.EntityResult{Status: inventory.EntityStatusRemoved}, false},
-		{"discrete", app.EntityResult{Status: inventory.EntityStatusOk, Discrete: true}, false},
-	}
-	for _, tt := range tests {
+		{"ok", okID, true},
+		{"discrete", discreteID, false},
+		{"removed", gone, false},
+		{"borrowed", borrowed[0].EntityID, true},
+		{"missing", missingID, true},
+		{"loaned", loanedID, true},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.e.IsEligibleParent())
+			r, gerr := a.GetEntityByIDAnyStatus(ctx, tt.id)
+			require.NoError(t, gerr)
+			assert.Equal(t, tt.want, r.CanAddChild)
 		})
 	}
 }
@@ -179,4 +202,116 @@ func TestFindMoveDestinations_DisplacedEntity(t *testing.T) {
 	assert.Empty(t, names(app.RelocationMove, "garage"), "move never offers the home")
 	assert.Empty(t, names(app.RelocationUse, "deck"), "use never offers the current parent")
 	assert.Empty(t, names(app.RelocationUse, "garage"), "use never offers the home")
+}
+
+// newCycleFixture builds Garage:Shelf:Drill:Bit and uses Drill out to Deck, so
+// Drill's home (Shelf) sits inside Garage. Moving or using Garage into Drill
+// or Bit would put Drill's home inside Drill. Bench is a plain spare.
+func newCycleFixture(t *testing.T) *app.App {
+	t.Helper()
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	for _, c := range []struct{ name, parent string }{
+		{"Garage", ""},
+		{"Shelf", "Garage"},
+		{"Drill", "Garage:Shelf"},
+		{"Bit", "Garage:Shelf:Drill"},
+		{"Deck", ""},
+		{"Bench", ""},
+	} {
+		_, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: c.name, ParentID: apptesting.MustLookupID(t, a, c.parent), ActorID: "t",
+		})
+		require.NoError(t, err)
+	}
+	_, err := a.UseEntity(ctx, app.UseEntityRequest{
+		EntityID:    apptesting.MustLookupID(t, a, "Garage:Shelf:Drill"),
+		NewParentID: apptesting.MustLookupID(t, a, "Deck"),
+		ActorID:     "t",
+	})
+	require.NoError(t, err)
+	return a
+}
+
+// Every destination the picker offers must be accepted by the write (#386).
+// Each offered destination is tried on a fresh database so one success cannot
+// change the next case.
+func TestFindMoveDestinations_OffersOnlyAcceptedDestinations(t *testing.T) {
+	relocate := func(a *app.App, rel app.Relocation, id, dest string) error {
+		if rel == app.RelocationUse {
+			_, err := a.UseEntity(t.Context(), app.UseEntityRequest{EntityID: id, NewParentID: dest, ActorID: "t"})
+			return err
+		}
+		_, err := a.ReparentEntity(t.Context(),
+			app.ReparentEntityRequest{EntityID: id, NewParentID: dest, ActorID: "t"})
+		return err
+	}
+	for _, rel := range []app.Relocation{app.RelocationMove, app.RelocationUse} {
+		t.Run(string(rel), func(t *testing.T) {
+			a := newCycleFixture(t)
+			res, err := a.FindMoveDestinations(t.Context(), apptesting.MustLookupID(t, a, "Garage"), rel,
+				app.FindEntitiesRequest{Query: ""})
+			require.NoError(t, err)
+			offered := make([]string, len(res))
+			for i, r := range res {
+				offered[i] = r.Entity.FullPathDisplay
+			}
+			assert.ElementsMatch(t, []string{"Deck", "Bench"}, offered,
+				"Deck:Drill and Deck:Drill:Bit would put Drill's home inside Drill")
+
+			for _, path := range offered {
+				t.Run(path, func(t *testing.T) {
+					fresh := newCycleFixture(t)
+					require.NoError(t, relocate(fresh, rel,
+						apptesting.MustLookupID(t, fresh, "Garage"), apptesting.MustLookupID(t, fresh, path)))
+				})
+			}
+		})
+	}
+}
+
+func TestRootIsLegalDestination(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("root entity", func(t *testing.T) {
+		a := newCycleFixture(t)
+		for _, rel := range []app.Relocation{app.RelocationMove, app.RelocationUse} {
+			got, err := a.RootIsLegalDestination(ctx, apptesting.MustLookupID(t, a, "Garage"), rel)
+			require.NoError(t, err)
+			assert.False(t, got, rel)
+		}
+	})
+	t.Run("child", func(t *testing.T) {
+		a := newCycleFixture(t)
+		got, err := a.RootIsLegalDestination(ctx, apptesting.MustLookupID(t, a, "Garage:Shelf"), app.RelocationMove)
+		require.NoError(t, err)
+		assert.True(t, got)
+	})
+	t.Run("displaced entity with root home", func(t *testing.T) {
+		f := newHomeFixture(t)
+		deckChild, err := f.a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Saw", ActorID: "t"})
+		require.NoError(t, err)
+		_, err = f.use(t, deckChild.EntityID, f.deck.EntityID)
+		require.NoError(t, err)
+		for _, rel := range []app.Relocation{app.RelocationMove, app.RelocationUse} {
+			got, rerr := f.a.RootIsLegalDestination(ctx, deckChild.EntityID, rel)
+			require.NoError(t, rerr)
+			assert.False(t, got, "root is its home: moving there is a return (%s)", rel)
+		}
+	})
+	t.Run("displaced entity at root with non-root home", func(t *testing.T) {
+		f := newHomeFixture(t)
+		_, err := f.use(t, f.drill.EntityID, "")
+		require.NoError(t, err)
+		got, err := f.a.RootIsLegalDestination(ctx, f.drill.EntityID, app.RelocationMove)
+		require.NoError(t, err)
+		assert.True(t, got, "move re-homes it at the root")
+		got, err = f.a.RootIsLegalDestination(ctx, f.drill.EntityID, app.RelocationUse)
+		require.NoError(t, err)
+		assert.False(t, got)
+	})
+	t.Run("unknown entity", func(t *testing.T) {
+		_, err := apptesting.OpenApp(t).RootIsLegalDestination(ctx, "nope", app.RelocationMove)
+		require.ErrorIs(t, err, app.ErrNotFound)
+	})
 }

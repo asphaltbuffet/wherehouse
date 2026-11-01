@@ -163,15 +163,21 @@ func isRootEntity(e app.EntityResult) bool {
 	return p.Depth() == 1
 }
 
-// hidesRootChoice reports whether the move form omits "Move to root". Moving a
-// displaced entity to where it already is re-homes it, so for it the choice is
-// hidden only when the home is the root (going home is a return); otherwise it
-// is hidden when the entity already sits at the root (ADR 0039).
-func hidesRootChoice(e app.EntityResult, verb string) bool {
-	if verb == verbMove && e.IsDisplaced() {
-		return e.HomeID == ""
+// rootLegal reports whether "Move to root" is a legal destination for entityID
+// under verb, as the app decides it (ADR 0041). The move form offers the
+// choice only when it is; a failed lookup hides it, and the write guard
+// still decides what is accepted.
+func (s *Server) rootLegal(ctx context.Context, entityID, verb string) bool {
+	relocation := app.RelocationMove
+	if verb == verbUse {
+		relocation = app.RelocationUse
 	}
-	return isRootEntity(e)
+	ok, err := s.cfg.App.RootIsLegalDestination(ctx, entityID, relocation)
+	if err != nil {
+		s.cfg.Logger.Error("check root destination", "error", err, "entity_id", entityID)
+		return false
+	}
+	return ok
 }
 
 // relocationParam reads the ?verb= query parameter of a destination search;

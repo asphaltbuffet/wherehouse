@@ -186,8 +186,9 @@ func TestBulkAddEntities_DiscreteParent_HardError(t *testing.T) {
 
 	rows := []app.BulkAddRow{{Path: "Box:Nail"}}
 	_, err = a.BulkAddEntities(ctx, rows, app.BulkAddOptions{ActorID: "test", CreateParents: true})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "discrete")
+	require.ErrorIs(t, err, app.ErrDiscrete)
+	// The rejection names the entity once; bulk-load adds no second prefix.
+	assert.Equal(t, `cannot add "Nail": "Box" is discrete and cannot hold entities: invalid destination`, err.Error())
 }
 
 func TestBulkAddEntities_DiscreteDirectParent_HardError(t *testing.T) {

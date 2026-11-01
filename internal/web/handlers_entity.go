@@ -89,11 +89,11 @@ const loanLockedReason = "Locked entities cannot be loaned"
 
 // moveFormData is the view model for the inline move form.
 type moveFormData struct {
-	EntityID string
-	Verb     string // "move" or "use": form action and labels
-	AtRoot   bool   // hides the "move to root" choice: see hidesRootChoice
-	Note     string
-	Error    string
+	EntityID  string
+	Verb      string // "move" or "use": form action and labels
+	RootLegal bool   // offers "move to root": the app says root is a legal destination
+	Note      string
+	Error     string
 }
 
 // Tooltips on a disabled Move or Use button; each names the one action that
@@ -1201,7 +1201,9 @@ func (s *Server) handleMoveForm(w http.ResponseWriter, r *http.Request) {
 			return d.MoveBlockedReason, false
 		}
 		d.MoveForm = &moveFormData{
-			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbMove), Verb: verbMove,
+			EntityID:  d.Entity.EntityID,
+			RootLegal: s.rootLegal(r.Context(), d.Entity.EntityID, verbMove),
+			Verb:      verbMove,
 		}
 		return "", true
 	})
@@ -1219,7 +1221,9 @@ func (s *Server) handleUseForm(w http.ResponseWriter, r *http.Request) {
 			return d.UseBlockedReason, false
 		}
 		d.UseForm = &moveFormData{
-			EntityID: d.Entity.EntityID, AtRoot: hidesRootChoice(d.Entity, verbUse), Verb: verbUse,
+			EntityID:  d.Entity.EntityID,
+			RootLegal: s.rootLegal(r.Context(), d.Entity.EntityID, verbUse),
+			Verb:      verbUse,
 		}
 		return "", true
 	})
@@ -1295,10 +1299,10 @@ func (s *Server) handleRelocate(w http.ResponseWriter, r *http.Request, verb str
 	}
 
 	form := moveFormData{
-		EntityID: entityID,
-		AtRoot:   hidesRootChoice(data.Entity, verb),
-		Verb:     verb,
-		Note:     strings.TrimSpace(r.FormValue("note")),
+		EntityID:  entityID,
+		RootLegal: s.rootLegal(r.Context(), entityID, verb),
+		Verb:      verb,
+		Note:      strings.TrimSpace(r.FormValue("note")),
 	}
 	destination := strings.TrimSpace(r.FormValue("destination"))
 	if destination == "" {

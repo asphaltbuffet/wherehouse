@@ -15,6 +15,7 @@ type EntityResult struct {
 	CanonicalName   string
 	Locked          bool
 	Discrete        bool
+	CanAddChild     bool   // read from canAddChild; render decisions only (ADR 0041)
 	ParentID        string // empty for root entities
 	HomeID          string // empty when the home is the root
 	HomePathDisplay string // FullPathDisplay of the home; filled only when displaced and the home is not root
@@ -32,12 +33,6 @@ type EntityResult struct {
 type RelocationResult struct {
 	Entity       EntityResult
 	FromParentID string // empty when it left the root
-}
-
-// IsEligibleParent reports whether the entity may receive a new child:
-// any entity that is neither removed nor discrete (see CONTEXT.md "Eligible parent").
-func (r EntityResult) IsEligibleParent() bool {
-	return r.Status != inventory.EntityStatusRemoved && !r.Discrete
 }
 
 // IsDisplaced reports whether a non-removed entity is somewhere other than its
@@ -99,6 +94,7 @@ func entityToResult(e *inventory.Entity, tags []string) EntityResult {
 		CanonicalName:   e.CanonicalName,
 		Locked:          e.Locked,
 		Discrete:        e.Discrete,
+		CanAddChild:     canAddChild(e.Status, e.Discrete),
 		ParentID:        parentID,
 		HomeID:          homeID,
 		FullPathDisplay: e.FullPathDisplay,

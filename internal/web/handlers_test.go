@@ -91,6 +91,8 @@ type fakeApp struct {
 	childrenErr error
 
 	parentResults   []app.FindResult
+	rootLegal       bool  // answer of RootIsLegalDestination
+	rootLegalErr    error // error of RootIsLegalDestination
 	parentCalls     int
 	lastParentQuery string
 
@@ -186,6 +188,10 @@ func (f *fakeApp) relocate(entityID, newParentID string) (app.RelocationResult, 
 	return app.RelocationResult{}, app.ErrNotFound
 }
 
+func (f *fakeApp) RootIsLegalDestination(_ context.Context, _ string, _ app.Relocation) (bool, error) {
+	return f.rootLegal, f.rootLegalErr
+}
+
 func (f *fakeApp) FindMoveDestinations(
 	_ context.Context, entityID string, relocation app.Relocation, req app.FindEntitiesRequest,
 ) ([]app.FindResult, error) {
@@ -214,6 +220,7 @@ func (f *fakeApp) SetAttributes(_ context.Context, reqs []app.SetAttributesReque
 		}
 		if reqs[0].Discrete != nil {
 			f.entities[i].Discrete = *reqs[0].Discrete
+			f.entities[i].CanAddChild = !*reqs[0].Discrete
 		}
 		return []app.EntityResult{f.entities[i]}, nil
 	}

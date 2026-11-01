@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -18,7 +19,7 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 // FindParentCandidates searches like FindEntities but returns only eligible parents.
 // Filtering happens before the limit so ineligible matches cannot crowd out eligible ones.
 func (a *App) FindParentCandidates(ctx context.Context, req FindEntitiesRequest) ([]FindResult, error) {
-	return a.findMatching(ctx, req, EntityResult.IsEligibleParent)
+	return a.findMatching(ctx, req, func(r EntityResult) bool { return r.CanAddChild })
 }
 
 // Relocation names the action a destination search serves. For a displaced
@@ -32,12 +33,12 @@ const (
 	RelocationUse  Relocation = "use"
 )
 
-// FindMoveDestinations returns eligible parents matching req.Query that
-// entityID may be moved or used into: everything except the entity itself, its
-// descendants, and its current parent (ADR 0034). A displaced entity also
-// excludes its home (going home is a return), and for RelocationMove keeps its
-// current parent, which re-homes it in place (ADR 0039). Exclusions apply
-// before req.Limit so they never crowd out valid matches.
+// FindMoveDestinations returns entities matching req.Query that are legal
+// destinations for relocating entityID by relocation (CONTEXT.md "Legal
+// destination"). It asks checkRelocation — the rule the write guards use —
+// over one snapshot, so every destination offered is one the write accepts
+// (ADR 0041). Illegal destinations are hidden, and filtering happens before
+// req.Limit so they never crowd out legal ones.
 func (a *App) FindMoveDestinations(
 	ctx context.Context, entityID string, relocation Relocation, req FindEntitiesRequest,
 ) ([]FindResult, error) {
@@ -45,20 +46,16 @@ func (a *App) FindMoveDestinations(
 	if err != nil {
 		return nil, wrapEntityError(entityID, err)
 	}
-	// Include removed entities so the walk reaches live entities orphaned
-	// under a removed ancestor (#287); findMatching drops removed candidates.
+	// Include removed entities so walks reach live entities orphaned under a
+	// removed ancestor (#287); only live ones are candidates.
 	all, err := a.store.ListAllEntities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("find move destinations: %w", err)
 	}
-
-	excluded := subtreeIDs(all, moving.EntityID)
-	rehomable := moving.IsDisplaced() && relocation == RelocationMove
-	if moving.ParentID != nil && !rehomable {
-		excluded[*moving.ParentID] = true
-	}
-	if moving.IsDisplaced() && moving.HomeID != nil {
-		excluded[*moving.HomeID] = true
+	h := newSnapshotHierarchy(all) // before DeleteFunc, which reuses all's backing array
+	verb := verbMove
+	if relocation == RelocationUse {
+		verb = verbUse
 	}
 
 	// One listing serves both the walk and the candidates (#315).
@@ -66,31 +63,36 @@ func (a *App) FindMoveDestinations(
 		return e.Status == inventory.EntityStatusRemoved
 	})
 	return a.matchEntities(ctx, live, req, func(r EntityResult) bool {
-		return r.IsEligibleParent() && !excluded[r.EntityID]
+		// Any error hides: a looping tree fails the write guard too.
+		return checkRelocation(ctx, h, moving, r.EntityID, verb) == nil
 	})
 }
 
-// subtreeIDs returns rootID plus the IDs of every entity in all beneath it.
-func subtreeIDs(all []*inventory.Entity, rootID string) map[string]bool {
-	children := make(map[string][]string)
-	for _, e := range all {
-		if e.ParentID != nil {
-			children[*e.ParentID] = append(children[*e.ParentID], e.EntityID)
-		}
+// RootIsLegalDestination reports whether the root is a legal destination for
+// relocating entityID by relocation. It asks checkRelocation, so the answer is
+// the one the write guard gives (ADR 0041); a rejection is a "no", not an
+// error. The root needs no read beyond the entity's current parent, so a few
+// direct lookups are cheaper than listing a snapshot. It reads outside a
+// transaction: the write guard still decides when the relocation is submitted.
+func (a *App) RootIsLegalDestination(ctx context.Context, entityID string, relocation Relocation) (bool, error) {
+	verb := verbMove
+	if relocation == RelocationUse {
+		verb = verbUse
 	}
-	ids := map[string]bool{rootID: true}
-	queue := []string{rootID}
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
-		for _, c := range children[id] {
-			if !ids[c] {
-				ids[c] = true
-				queue = append(queue, c)
-			}
-		}
+	h := storeHierarchy{a: a}
+	moving, err := h.get(ctx, entityID)
+	if err != nil {
+		return false, err
 	}
-	return ids
+	cerr := checkRelocation(ctx, h, moving, "", verb)
+	var rejection *DestinationRejection
+	if errors.As(cerr, &rejection) {
+		return false, nil
+	}
+	if cerr != nil {
+		return false, cerr
+	}
+	return true, nil
 }
 
 func (a *App) findMatching(

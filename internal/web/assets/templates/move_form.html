@@ -7,7 +7,7 @@
   <input type="hidden" name="destination" value="" data-parent-input>
   <div class="parent-chosen">
     <span data-parent-label>(choose a destination)</span>
-    {{if and (not .AtRoot) (eq .Verb "move")}}
+    {{if and .RootLegal (eq .Verb "move")}}
     <button type="button" class="btn-link" data-action="clear-parent"
             data-parent-value="root">Move to root</button>
     {{end}}

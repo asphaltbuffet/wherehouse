@@ -22,7 +22,8 @@ import (
 
 func TestHandleBorrowForm_DefaultParent(t *testing.T) {
 	entities := []app.EntityResult{
-		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage",
+			CanAddChild: true, Status: inventory.EntityStatusOk},
 		{EntityID: "nails", DisplayName: "Box of Nails", FullPathDisplay: "Garage:Box of Nails",
 			ParentID: "g", HomeID: "g", Discrete: true, Status: inventory.EntityStatusOk},
 		{EntityID: "old", DisplayName: "Old Shelf", FullPathDisplay: "Garage:Old Shelf",
@@ -30,7 +31,7 @@ func TestHandleBorrowForm_DefaultParent(t *testing.T) {
 		{EntityID: "rootbox", DisplayName: "Crate", FullPathDisplay: "Crate",
 			Discrete: true, Status: inventory.EntityStatusOk},
 		{EntityID: "case", DisplayName: "Drill Case", FullPathDisplay: "Drill Case",
-			Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
+			CanAddChild: true, Status: inventory.EntityStatusBorrowed, StatusContext: "Alice"},
 	}
 	tests := []struct {
 		name      string
@@ -72,7 +73,8 @@ func TestHandleBorrowForm_DefaultParent(t *testing.T) {
 
 func TestBorrowActions(t *testing.T) {
 	fake := &fakeApp{entities: []app.EntityResult{
-		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+		{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage",
+			CanAddChild: true, Status: inventory.EntityStatusOk},
 		{EntityID: "n", DisplayName: "Nails", FullPathDisplay: "Nails", Discrete: true,
 			Status: inventory.EntityStatusOk},
 	}}
@@ -113,7 +115,8 @@ func postBorrow(t *testing.T, ts *httptest.Server, form url.Values) (*http.Respo
 func TestHandleBorrow_CreatesUnderParent(t *testing.T) {
 	fake := &fakeApp{
 		entities: []app.EntityResult{
-			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage",
+				CanAddChild: true, Status: inventory.EntityStatusOk},
 		},
 		borrowResults: []app.EntityResult{
 			{EntityID: "n", DisplayName: "Drill", FullPathDisplay: "Garage:Drill", ParentID: "g", HomeID: "g",
@@ -253,7 +256,8 @@ func TestHandleBorrow_ErrorLogLevel(t *testing.T) {
 func TestHandleBorrow_ErrorKeepsParentLabel(t *testing.T) {
 	fake := &fakeApp{
 		entities: []app.EntityResult{
-			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage", Status: inventory.EntityStatusOk},
+			{EntityID: "g", DisplayName: "Garage", FullPathDisplay: "Garage",
+				CanAddChild: true, Status: inventory.EntityStatusOk},
 		},
 		borrowErr: fmt.Errorf("borrow: %w", app.ErrLenderRequired),
 	}

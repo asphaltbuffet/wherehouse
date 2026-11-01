@@ -1,0 +1,5 @@
+kind: Fixed
+body: Web move/use picker no longer offers destinations that would put a displaced item's home inside it
+time: 2026-11-01T14:22:23.600376806-05:00
+custom:
+    Issue: '#386'
