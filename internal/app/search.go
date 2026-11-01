@@ -63,6 +63,7 @@ func (a *App) FindMoveDestinations(
 		return e.Status == inventory.EntityStatusRemoved
 	})
 	return a.matchEntities(ctx, live, req, func(r EntityResult) bool {
+		// Any error hides: a looping tree fails the write guard too.
 		return checkRelocation(ctx, h, moving, r.EntityID, verb) == nil
 	})
 }

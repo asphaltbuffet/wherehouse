@@ -156,7 +156,7 @@ func checkRelocation(ctx context.Context, h hierarchy, moving *inventory.Entity,
 	parentID, homeID := idOf(moving.ParentID), idOf(moving.HomeID)
 	if verb != verbReturn {
 		switch {
-		case verb == verbMove && moving.IsDisplaced() && destID == parentID:
+		case verb == verbMove && isRehome(moving, destID):
 			return checkRehome(ctx, h, moving, parentID)
 		case destID == homeID && (verb == verbUse || moving.IsDisplaced()):
 			return reject(ErrDestinationIsHome, "")
@@ -185,6 +185,12 @@ func checkRelocation(ctx context.Context, h hierarchy, moving *inventory.Entity,
 		return reject(ErrInsideItself, dest.FullPathDisplay)
 	}
 	return checkHomeCycle(ctx, h, moving, dest, verb)
+}
+
+// isRehome reports whether moving destID re-homes a displaced entity in place:
+// the destination is the parent it already has (CONTEXT.md "Move").
+func isRehome(moving *inventory.Entity, destID string) bool {
+	return moving.IsDisplaced() && destID == idOf(moving.ParentID)
 }
 
 // checkRehome accepts a displaced entity's current parent as its new home

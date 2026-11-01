@@ -79,7 +79,7 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (Re
 		if err = checkRelocation(ctx, txHierarchy{a: a, tx: tx}, entity, req.NewParentID, verbMove); err != nil {
 			return err
 		}
-		if entity.IsDisplaced() && req.NewParentID == idOf(entity.ParentID) {
+		if isRehome(entity, req.NewParentID) {
 			return a.rehomeTx(ctx, tx, entity, req.ActorID, note)
 		}
 		var newParentID *string
