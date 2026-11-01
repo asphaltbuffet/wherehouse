@@ -37,23 +37,23 @@ func (a *App) setAttributesInTx(ctx context.Context, tx store.Tx, req SetAttribu
 		return "", fmt.Errorf("set attributes %q: %w", req.EntityID, ErrNoAttributes)
 	}
 
-	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 	if err != nil {
-		return "", wrapEntityError(req.EntityID, err)
+		return "", err
 	}
 
 	// Validate every change before dispatching any, so each check sees the
 	// pre-call state. Locked is emitted before discrete.
 	var changes []attrChange
 	if req.Locked != nil {
-		c, cerr := lockedChange(entity, *req.Locked)
+		c, cerr := lockedChange(entity, facts, *req.Locked)
 		if cerr != nil {
 			return "", cerr
 		}
 		changes = append(changes, c)
 	}
 	if req.Discrete != nil {
-		c, cerr := a.discreteChange(ctx, tx, entity, *req.Discrete)
+		c, cerr := discreteChange(entity, facts, *req.Discrete)
 		if cerr != nil {
 			return "", cerr
 		}
@@ -74,55 +74,30 @@ func (a *App) setAttributesInTx(ctx context.Context, tx store.Tx, req SetAttribu
 	return entity.EntityID, nil
 }
 
-func lockedChange(e *inventory.Entity, locked bool) (attrChange, error) {
-	switch {
-	case locked && e.Locked:
-		return attrChange{}, fmt.Errorf("cannot lock %q: already locked (%w)", e.FullPathDisplay, ErrNoChange)
-	case !locked && !e.Locked:
-		return attrChange{}, fmt.Errorf("cannot unlock %q: not locked (%w)", e.FullPathDisplay, ErrNoChange)
-	case !locked:
+func lockedChange(e *inventory.Entity, f EntityFacts, locked bool) (attrChange, error) {
+	if !locked {
+		if err := f.Require(ActionUnlock); err != nil {
+			return attrChange{}, err
+		}
 		return newAttrChange(inventory.EntityUnlockedEvent, eventbus.EntityUnlockedPayload{EntityID: e.EntityID})
-	case e.Status != inventory.EntityStatusOk && e.Status != inventory.EntityStatusBorrowed:
-		return attrChange{}, fmt.Errorf(
-			"cannot lock %q: entity is %s (only ok or borrowed entities can be locked)",
-			e.FullPathDisplay, e.Status,
-		)
-	case e.IsDisplaced():
-		return attrChange{}, rejection([]error{ErrDisplaced},
-			"cannot lock %q: entity is displaced — return it first", e.FullPathDisplay)
-	default:
-		return newAttrChange(inventory.EntityLockedEvent, eventbus.EntityLockedPayload{EntityID: e.EntityID})
 	}
+	if err := f.Require(ActionLock); err != nil {
+		return attrChange{}, err
+	}
+	return newAttrChange(inventory.EntityLockedEvent, eventbus.EntityLockedPayload{EntityID: e.EntityID})
 }
 
-func (a *App) discreteChange(
-	ctx context.Context, tx store.Tx, e *inventory.Entity, discrete bool,
-) (attrChange, error) {
-	switch {
-	case discrete && e.Discrete:
-		return attrChange{}, fmt.Errorf(
-			"cannot mark %q discrete: already discrete (%w)", e.FullPathDisplay, ErrNoChange,
-		)
-	case !discrete && !e.Discrete:
-		return attrChange{}, fmt.Errorf(
-			"cannot clear discrete on %q: not discrete (%w)", e.FullPathDisplay, ErrNoChange,
-		)
-	case !discrete:
+func discreteChange(e *inventory.Entity, f EntityFacts, discrete bool) (attrChange, error) {
+	if !discrete {
+		if err := f.Require(ActionClearDiscrete); err != nil {
+			return attrChange{}, err
+		}
 		return newAttrChange(
 			inventory.EntityDiscreteClearedEvent,
 			eventbus.EntityDiscreteClearedPayload{EntityID: e.EntityID},
 		)
 	}
-
-	n, err := a.store.CountLiveChildrenTx(ctx, tx, e.EntityID)
-	if err != nil {
-		return attrChange{}, fmt.Errorf("mark %q discrete: %w", e.FullPathDisplay, err)
-	}
-	if n > 0 {
-		return attrChange{}, fmt.Errorf("cannot mark %q discrete (%d inside; move or remove them first): %w",
-			e.FullPathDisplay, n, ErrHasChildren)
-	}
-	if err = a.checkNotHomeTx(ctx, tx, e, "mark discrete"); err != nil {
+	if err := f.Require(ActionSetDiscrete); err != nil {
 		return attrChange{}, err
 	}
 	return newAttrChange(inventory.EntityDiscreteSetEvent, eventbus.EntityDiscreteSetPayload{EntityID: e.EntityID})

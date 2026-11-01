@@ -149,7 +149,7 @@ func TestSetAttributes_LockRequiresOkOrBorrowed(t *testing.T) {
 	_, err := a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityID: box.EntityID, ActorID: "alice"}})
 	require.NoError(t, err)
 	_, err = a.SetAttributes(ctx, []app.SetAttributesRequest{{EntityID: box.EntityID, Locked: new(true)}})
-	require.ErrorContains(t, err, "only ok or borrowed entities can be locked")
+	require.ErrorIs(t, err, app.ErrWrongStatus)
 
 	// loaned
 	_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{
@@ -157,7 +157,7 @@ func TestSetAttributes_LockRequiresOkOrBorrowed(t *testing.T) {
 	})
 	require.NoError(t, err)
 	_, err = a.SetAttributes(ctx, []app.SetAttributesRequest{{EntityID: box.EntityID, Locked: new(true)}})
-	require.ErrorContains(t, err, "only ok or borrowed entities can be locked")
+	require.ErrorIs(t, err, app.ErrWrongStatus)
 
 	// borrowed is allowed
 	borrowed, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
@@ -183,7 +183,6 @@ func TestSetAttributes_DiscreteRequiresNoLiveChildren(t *testing.T) {
 
 	_, err := a.SetAttributes(ctx, []app.SetAttributesRequest{{EntityID: garage.EntityID, Discrete: new(true)}})
 	require.ErrorIs(t, err, app.ErrHasChildren)
-	require.ErrorContains(t, err, `cannot mark "Garage" discrete (1 inside; move or remove them first)`)
 
 	// A removed child does not count.
 	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"}))
