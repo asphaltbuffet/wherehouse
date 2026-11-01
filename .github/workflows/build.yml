@@ -28,7 +28,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v5.2.2
+        uses: jdx/mise-action@v5.2.4
 
       - name: Generate code and mocks
         run: |
@@ -60,7 +60,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v5.2.2
+        uses: jdx/mise-action@v5.2.4
 
       - name: Download generated files
         uses: actions/download-artifact@v8
@@ -112,7 +112,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v5.2.2
+        uses: jdx/mise-action@v5.2.4
 
       - name: Download generated files
         uses: actions/download-artifact@v8
@@ -163,7 +163,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v5.2.2
+        uses: jdx/mise-action@v5.2.4
 
       - name: Download generated files
         uses: actions/download-artifact@v8
