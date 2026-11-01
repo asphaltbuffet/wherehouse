@@ -168,7 +168,7 @@ func (a *App) dispatchStatusTx(
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityStatusChangedEvent, actorID, raw, note); err != nil {
-		return fmt.Errorf("mark returned %q: %w", entity.EntityID, err)
+		return fmt.Errorf("set status %s %q: %w", status, entity.EntityID, err)
 	}
 	return nil
 }
