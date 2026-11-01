@@ -61,7 +61,11 @@ func (a *App) FindMoveDestinations(
 		excluded[*moving.HomeID] = true
 	}
 
-	return a.findMatching(ctx, req, func(r EntityResult) bool {
+	// One listing serves both the walk and the candidates (#315).
+	live := slices.DeleteFunc(all, func(e *inventory.Entity) bool {
+		return e.Status == inventory.EntityStatusRemoved
+	})
+	return a.matchEntities(ctx, live, req, func(r EntityResult) bool {
 		return r.IsEligibleParent() && !excluded[r.EntityID]
 	})
 }
@@ -96,7 +100,14 @@ func (a *App) findMatching(
 	if err != nil {
 		return nil, fmt.Errorf("find entities: %w", err)
 	}
+	return a.matchEntities(ctx, all, req, keep)
+}
 
+// matchEntities ranks the entries of all (live entities only) whose name
+// contains req.Query and that keep accepts.
+func (a *App) matchEntities(
+	ctx context.Context, all []*inventory.Entity, req FindEntitiesRequest, keep func(EntityResult) bool,
+) ([]FindResult, error) {
 	ids := make([]string, len(all))
 	for i, e := range all {
 		ids[i] = e.EntityID
