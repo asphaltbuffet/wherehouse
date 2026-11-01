@@ -138,6 +138,8 @@ const (
 	verbMove   = "move"
 	verbUse    = "use"
 	verbReturn = "return"
+	verbAdd    = "add"
+	verbBorrow = "borrow"
 )
 
 // checkNotAlreadyThere rejects newParentID when it is the current parent.

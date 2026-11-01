@@ -54,6 +54,10 @@ var ErrIsHome = errors.New("entity is home to displaced entities")
 // ErrInvalidDestination.
 var ErrHomeCycle = errors.New("home cycle")
 
+// ErrInsideItself is returned when a move or use names the entity itself or
+// one of its descendants as the destination.
+var ErrInsideItself = errors.New("inside itself")
+
 // ErrDisplaced is returned when an action is refused because the entity is
 // displaced, e.g. locking it: it must be returned first (ADR 0039).
 var ErrDisplaced = errors.New("entity is displaced")
