@@ -23,8 +23,8 @@ type detailData struct {
 	History           []app.HistoryResult
 	CanAddChild       bool
 	CanMarkLost       bool            // from App.EntityActions (ADR 0040)
-	CanMarkFound      bool            // missing; found has no locked guard (ADR 0024)
-	CanReturn         bool            // borrowed, loaned, or displaced ok
+	CanMarkFound      bool            // from App.EntityActions (ADR 0040)
+	CanReturn         bool            // from App.EntityActions (ADR 0040)
 	ReturnConfirm     string          // non-empty only for borrowed: the Return form's prompt (returning removes the entity)
 	MissingForm       *statusFormData // non-nil opens the Mark missing / Mark found note form
 	ReturnForm        *statusFormData // non-nil opens the Return note form
@@ -268,7 +268,9 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case setErr == nil:
-	case errors.Is(setErr, app.ErrNoChange):
+	case errors.Is(setErr, app.ErrNoChange),
+		errors.Is(setErr, app.ErrWrongStatus),
+		errors.Is(setErr, app.ErrLocked):
 		s.cfg.Logger.Info("attribute unchanged: panel was stale", "error", setErr, "entity_id", entityID)
 		fresh.Error = staleMessage
 	case errors.Is(setErr, app.ErrDisplaced):
@@ -426,6 +428,9 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 	}
 
 	actions, err := s.cfg.App.EntityActions(ctx, entityID)
+	if errors.Is(err, app.ErrNotFound) {
+		return detailData{}, nil // removed since GetEntityByID: same as gone
+	}
 	if err != nil {
 		// Render decisions only: offer everything and let the in-transaction
 		// guard reject the write (ADR 0035, ADR 0040).

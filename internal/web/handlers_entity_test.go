@@ -549,7 +549,7 @@ func TestHandleReturn_BorrowedRootShowsHome(t *testing.T) {
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: ""}, detachedTrigger(t, resp))
 	assert.Equal(t, 1, fake.actionsCalls,
-		"only the detail panel's discrete check queries; a root removal must not query a parent")
+		"only the detail panel's EntityActions call; a root removal must not query a parent")
 }
 
 // A stale Return on an entity already returned elsewhere reaches the app
@@ -3000,8 +3000,11 @@ func TestDetail_IsHomeBlocksRemoveAndDiscrete(t *testing.T) {
 	srv := newTestServer(t, fake)
 
 	body := getDetail(t, srv, "garage0001")
-	assert.Contains(t, body, `title="Home to entities that are away — return them first"`)
-	assert.Contains(t, body, `title="Home to entities that are away — return them first"`)
+	// Each button carries the tooltip on its own markup; the reason constants
+	// are equal, so a bare Contains could not tell the two apart.
+	title := regexp.QuoteMeta(`title="Home to entities that are away — return them first"`)
+	assert.Regexp(t, `data-action="remove"\s+disabled aria-disabled="true"\s+`+title+`\s*>\s*Remove\s*<`, body)
+	assert.Regexp(t, `disabled aria-disabled="true"\s+`+title+`>Mark discrete<`, body)
 }
 
 func TestDetail_LockedBorrowed(t *testing.T) {
@@ -3014,6 +3017,21 @@ func TestDetail_LockedBorrowed(t *testing.T) {
 	assert.Contains(t, body, ">Unlock<")
 	assert.NotContains(t, body, `data-action="lost"`)
 	assert.NotContains(t, body, `data-action="loan"`)
+}
+
+func TestDetail_ActionsNotFoundIsGone(t *testing.T) {
+	drill := app.EntityResult{EntityID: "drill00001", DisplayName: "Drill", FullPathDisplay: "Drill",
+		Status: inventory.EntityStatusOk}
+	fake := &fakeApp{entities: []app.EntityResult{drill},
+		actionsErr: fmt.Errorf("x: %w", app.ErrNotFound)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/drill00001")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func TestDetail_ActionsErrorDegradesToOffered(t *testing.T) {

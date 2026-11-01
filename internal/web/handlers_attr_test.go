@@ -53,7 +53,7 @@ func TestDetail_AttrButtons(t *testing.T) {
 		name        string
 		entity      app.EntityResult
 		hasChildren bool
-		childErr    error
+		actionsErr  error
 		want        []string // substrings that must appear
 	}{
 		{"unlocked ok", attrEntity(inventory.EntityStatusOk, false, false), false, nil,
@@ -71,7 +71,7 @@ func TestDetail_AttrButtons(t *testing.T) {
 		{"children cannot be discrete", attrEntity(inventory.EntityStatusOk, false, false), true, nil,
 			[]string{`title="Entities with children cannot be marked discrete"`}},
 		{
-			"child count error leaves discrete enabled",
+			"actions error leaves discrete enabled",
 			attrEntity(inventory.EntityStatusOk, false, false), false, errTest,
 			[]string{`name="discrete" value="true"`},
 		},
@@ -81,7 +81,7 @@ func TestDetail_AttrButtons(t *testing.T) {
 			fake := &fakeApp{
 				entities:    []app.EntityResult{tc.entity},
 				hasChildren: map[string]bool{"abc": tc.hasChildren},
-				actionsErr:  tc.childErr,
+				actionsErr:  tc.actionsErr,
 			}
 			ts := newTestServer(t, fake)
 			defer ts.Close()
@@ -163,6 +163,21 @@ func TestHandleAttr_StaleClickShowsCurrentState(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
 	assert.Contains(t, body, "Already changed elsewhere; showing current state.")
 	assert.Contains(t, body, ">Unlock<")
+}
+
+func TestHandleAttr_ConcurrentStatusChangeShowsStale(t *testing.T) {
+	fake := &fakeApp{
+		entities: []app.EntityResult{attrEntity(inventory.EntityStatusOk, false, false)},
+		attrErr:  fmt.Errorf("cannot lock: %w", app.ErrWrongStatus),
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, body := postAttr(t, ts, "abc", "locked=true")
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	assert.Contains(t, body, "Already changed elsewhere; showing current state.")
+	assert.NotContains(t, body, "attribute change failed")
 }
 
 func TestHandleAttr_OtherErrorShowsGenericMessage(t *testing.T) {

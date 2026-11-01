@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -198,4 +199,10 @@ func TestActionsFor_CoversEveryAction(t *testing.T) {
 		assert.Equal(t, app.Check(facts(inventory.EntityStatusLoaned), a), set.Rejection(a), a.String())
 	}
 	assert.Nil(t, app.ActionSet(nil).Rejection(app.ActionMove), "missing key means allowed")
+}
+
+func TestRejection_NilReceiverIsSafe(t *testing.T) {
+	var r *app.Rejection
+	assert.False(t, errors.Is(r, app.ErrLocked)) //nolint:testifylint // exercising errors.Is on a nil receiver
+	assert.NotPanics(t, func() { _ = r.Error() })
 }

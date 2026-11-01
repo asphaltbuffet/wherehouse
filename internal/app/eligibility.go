@@ -33,10 +33,20 @@ type Rejection struct { //nolint:errname // named by CONTEXT.md and ADR 0040
 }
 
 // Unwrap returns the sentinel Kind so [errors.Is] matches it.
-func (r *Rejection) Unwrap() error { return r.Kind }
+func (r *Rejection) Unwrap() error {
+	if r == nil {
+		return nil
+	}
+	return r.Kind
+}
+
+const nilRejectionText = "<nil rejection>"
 
 // Error renders the CLI sentence: cannot <action> "<path>": <reason>[ — <remedy>].
 func (r *Rejection) Error() string {
+	if r == nil {
+		return nilRejectionText
+	}
 	msg := fmt.Sprintf("cannot %s: %s", actionPhrase(r.Action, r.Path), r.reason())
 	switch r.Remedy { //nolint:exhaustive // only found and return are ever remedies
 	case ActionFound:
