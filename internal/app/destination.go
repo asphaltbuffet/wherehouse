@@ -31,6 +31,21 @@ func (h txHierarchy) get(ctx context.Context, id string) (*inventory.Entity, err
 	return e, nil
 }
 
+// storeHierarchy reads committed state outside any transaction, for read-only
+// answers that need only a few lookups. The store opens transactions with
+// the write lock, so a form render must not take one just to read.
+type storeHierarchy struct {
+	a *App
+}
+
+func (h storeHierarchy) get(ctx context.Context, id string) (*inventory.Entity, error) {
+	e, err := h.a.store.GetEntityAnyStatus(ctx, id)
+	if err != nil {
+		return nil, wrapEntityError(id, err)
+	}
+	return e, nil
+}
+
 // snapshotHierarchy reads one listing, for pickers that test many destinations.
 type snapshotHierarchy map[string]*inventory.Entity
 

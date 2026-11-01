@@ -208,6 +208,8 @@ func TestDestinationAdapters_Agree(t *testing.T) {
 					return nil
 				}))
 				assert.Equal(t, fromSnap, fromTx, "%s %s → %q", verb, moving.FullPathDisplay, dest)
+				fromStore := describeDestErr(checkRelocation(ctx, storeHierarchy{a: a}, moving, dest, verb))
+				assert.Equal(t, fromSnap, fromStore, "%s %s → %q", verb, moving.FullPathDisplay, dest)
 				seen[fromSnap] = true
 			}
 		}
