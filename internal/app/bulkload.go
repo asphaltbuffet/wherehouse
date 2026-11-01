@@ -273,6 +273,10 @@ func (a *App) createRowEntityInTx(
 		ParentID:    parentID,
 		ActorID:     actorID,
 	})
+	var rejection *DestinationRejection
+	if errors.As(err, &rejection) {
+		return EntityResult{}, rejection // already names the entity
+	}
 	if err != nil {
 		return EntityResult{}, fmt.Errorf("create %q: %w", row.Path, err)
 	}
