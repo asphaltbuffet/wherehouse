@@ -126,14 +126,14 @@ func (a *App) CheckProjectionConsistency(ctx context.Context) ([]DoctorIssue, er
 		return nil, fmt.Errorf("check projection consistency: %w", err)
 	}
 
-	expectedPresent, maxEventID := buildProjectionSets(events)
+	expectedRows, maxEventID := buildProjectionSets(events)
 
 	projRows, err := a.store.ListAllEntities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("check projection consistency: %w", err)
 	}
 
-	issues := checkProjectionRows(projRows, expectedPresent, maxEventID)
+	issues := checkProjectionRows(projRows, expectedRows, maxEventID)
 	issues = append(issues, checkHomeRows(projRows)...)
 	return issues, nil
 }
@@ -160,8 +160,8 @@ func (a *App) RunDoctorChecks(ctx context.Context) ([]DoctorIssue, error) {
 	}
 
 	issues := validateEventLog(events, a.bus.PayloadFactories())
-	expectedPresent, maxEventID := buildProjectionSets(events)
-	issues = append(issues, checkProjectionRows(projRows, expectedPresent, maxEventID)...)
+	expectedRows, maxEventID := buildProjectionSets(events)
+	issues = append(issues, checkProjectionRows(projRows, expectedRows, maxEventID)...)
 	issues = append(issues, checkHomeRows(projRows)...)
 	return issues, nil
 }
@@ -187,7 +187,7 @@ func buildProjectionSets(events []store.RawEvent) (map[string]bool, map[string]i
 		if parseErr != nil {
 			continue
 		}
-		switch et { //nolint:exhaustive // only created/borrowed/removed affect the expected-present set; all other event types are intentionally ignored
+		switch et { //nolint:exhaustive // only created/borrowed/removed affect the expected-rows set; all other event types are intentionally ignored
 		case inventory.EntityCreatedEvent, inventory.EntityBorrowedEvent:
 			created[id] = true
 		case inventory.EntityRemovedEvent:
@@ -195,18 +195,18 @@ func buildProjectionSets(events []store.RawEvent) (map[string]bool, map[string]i
 		}
 	}
 
-	expectedPresent := make(map[string]bool, len(created))
+	// A soft remove keeps the projection row (status removed), so every created
+	// entity is expected to have a row; the value records whether it was removed.
+	expectedRows := make(map[string]bool, len(created))
 	for id := range created {
-		if !removed[id] {
-			expectedPresent[id] = true
-		}
+		expectedRows[id] = removed[id]
 	}
-	return expectedPresent, maxEventID
+	return expectedRows, maxEventID
 }
 
 func checkProjectionRows(
 	projRows []*inventory.Entity,
-	expectedPresent map[string]bool,
+	expectedRows map[string]bool,
 	maxEventID map[string]int64,
 ) []DoctorIssue {
 	issues := make([]DoctorIssue, 0)
@@ -215,12 +215,24 @@ func checkProjectionRows(
 	for _, row := range projRows {
 		inProjection[row.EntityID] = true
 
-		if !expectedPresent[row.EntityID] {
+		wantRemoved, expected := expectedRows[row.EntityID]
+		if !expected {
 			issues = append(issues, DoctorIssue{
 				Kind:        DoctorKindProjection,
 				Description: fmt.Sprintf("phantom projection row for entity %s", row.EntityID),
 			})
 			continue
+		}
+
+		if wantRemoved && row.Status != inventory.EntityStatusRemoved {
+			issues = append(issues, DoctorIssue{
+				Kind: DoctorKindProjection,
+				Description: fmt.Sprintf(
+					"projection for entity %s has status %s, want removed",
+					row.EntityID,
+					row.Status,
+				),
+			})
 		}
 
 		if wantID, ok := maxEventID[row.EntityID]; ok && row.LastEventID != wantID {
@@ -236,7 +248,7 @@ func checkProjectionRows(
 		}
 	}
 
-	for id := range expectedPresent {
+	for id := range expectedRows {
 		if !inProjection[id] {
 			issues = append(issues, DoctorIssue{
 				Kind:        DoctorKindProjection,
