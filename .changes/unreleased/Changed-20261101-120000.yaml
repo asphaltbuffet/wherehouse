@@ -1,0 +1,5 @@
+kind: Changed
+body: CLI rejection messages for status, move, remove and attribute changes now follow one wording; the web detail view disables Remove and Mark discrete on an entity that is home to displaced entities.
+time: 2026-11-01T12:00:00.000000000-04:00
+custom:
+    Issue: ""
