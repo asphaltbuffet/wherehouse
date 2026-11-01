@@ -58,6 +58,12 @@ func TestEntityResult_CanAddChild(t *testing.T) {
 		{DisplayName: "Drill Case", StatusContext: "Alice", ActorID: "t"},
 	})
 	require.NoError(t, err)
+	missingID := mk("Toolbag", false)
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityID: missingID, ActorID: "t"}})
+	require.NoError(t, err)
+	loanedID := mk("Cooler", false)
+	_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{{EntityID: loanedID, StatusContext: "Bob", ActorID: "t"}})
+	require.NoError(t, err)
 
 	for _, tt := range []struct {
 		name string
@@ -68,6 +74,8 @@ func TestEntityResult_CanAddChild(t *testing.T) {
 		{"discrete", discreteID, false},
 		{"removed", gone, false},
 		{"borrowed", borrowed[0].EntityID, true},
+		{"missing", missingID, true},
+		{"loaned", loanedID, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			r, gerr := a.GetEntityByIDAnyStatus(ctx, tt.id)

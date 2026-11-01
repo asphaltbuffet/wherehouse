@@ -36,6 +36,8 @@ func destFixture() snapshotHierarchy {
 		{EntityID: "loft", FullPathDisplay: "Loft", Status: inventory.EntityStatusRemoved},
 		{EntityID: "trunk", FullPathDisplay: "Loft:Trunk", ParentID: new("loft"), HomeID: new("loft"), Status: ok},
 		{EntityID: "saw", FullPathDisplay: "Loft:Saw", ParentID: new("loft"), HomeID: new("garage"), Status: ok},
+		{EntityID: "kite", FullPathDisplay: "Kite", HomeID: new("garage"), Status: ok},
+		{EntityID: "nail", FullPathDisplay: "Box:Nail", ParentID: new("box"), HomeID: new("garage"), Status: ok},
 	})
 }
 
@@ -76,6 +78,10 @@ func TestCheckRelocation(t *testing.T) {
 		{"rehome-under-removed", "saw", "loft", verbMove, ErrNotFound,
 			`cannot move "Loft:Saw" here: its current location cannot be a home`},
 		{"return-home", "drill", "shelf", verbReturn, nil, ""},
+		{"into-self", "bit", "bit", verbMove, ErrInsideItself,
+			`cannot move "Deck:Drill:Bit" into itself or its own contents: invalid destination`},
+		{"rehome-at-root", "kite", "", verbMove, nil, ""},
+		{"rehome-under-discrete", "nail", "box", verbMove, ErrDiscrete, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,6 +150,8 @@ func describeDestErr(err error) string {
 	switch {
 	case err == nil:
 		return ""
+	case errors.As(err, &dr) && dr.Rehome:
+		return "rehome rejection: " + dr.Kind.Error()
 	case errors.As(err, &dr):
 		return "rejection: " + dr.Kind.Error()
 	default:
@@ -178,9 +186,13 @@ func TestDestinationAdapters_Agree(t *testing.T) {
 	mk("Box", "", true)
 	mk("Loft", "", false)
 	mk("Trunk", "Loft", false)
+	mk("Saw", "Garage", false)
 	_, err = a.UseEntity(ctx, UseEntityRequest{EntityID: ids["Drill"], NewParentID: ids["Deck"], ActorID: "t"})
 	require.NoError(t, err)
-	// Remove Loft leaving Trunk live beneath it (#287), bypassing app guards.
+	_, err = a.UseEntity(ctx, UseEntityRequest{EntityID: ids["Saw"], NewParentID: ids["Loft"], ActorID: "t"})
+	require.NoError(t, err)
+	// Remove Loft leaving Trunk and the displaced Saw live beneath it (#287),
+	// bypassing app guards; re-homing Saw in place is then rejected.
 	raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: ids["Loft"]})
 	require.NoError(t, err)
 	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityRemovedEvent, "t", raw, nil)
@@ -217,6 +229,7 @@ func TestDestinationAdapters_Agree(t *testing.T) {
 	for _, kind := range []error{ErrHomeCycle, ErrInsideItself, ErrDiscrete, ErrNotFound, ErrDestinationIsHome, ErrNoChange} {
 		assert.True(t, seen["rejection: "+kind.Error()], "fixture never exercised %v", kind)
 	}
+	assert.True(t, seen["rehome rejection: "+ErrNotFound.Error()], "fixture never exercised a rehome rejection")
 	assert.True(t, seen[""], "fixture never produced a legal destination")
 }
 

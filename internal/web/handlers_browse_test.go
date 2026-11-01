@@ -503,10 +503,12 @@ func TestHandleParentOptions_RealAppOmitsHomeCycleDestination(t *testing.T) {
 
 	ts := newTestServer(t, a)
 	defer ts.Close()
+	// "d" is a substring of both Deck and Drill, so only the rules decide which shows.
 	resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=d&moving=" + garage)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), `data-parent-id="`+deck+`"`)
