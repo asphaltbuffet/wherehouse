@@ -1,0 +1,5 @@
+kind: Fixed
+body: 'Web Move/Use: a moved item keeps its expanded branch in the tree, the destination picker shows a message instead of stale options when the item is removed meanwhile, and a concurrent move no longer resets the wrong parent''s chevron'
+time: 2026-10-31T22:33:21.981332501-04:00
+custom:
+    Issue: '#315'

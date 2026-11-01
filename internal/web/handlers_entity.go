@@ -834,7 +834,6 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	if wasDisplaced {
 		s.setTreeNodeMovedTrigger(w, r, data.Entity.ParentID, fresh.Entity)
 		s.renderDetailSection(w, r, fresh)
-		s.renderHTMLAppend(w, "tree_node_delete_oob", fresh.Entity)
 		return
 	}
 	s.renderStatusChanged(w, r, fresh)
@@ -1315,7 +1314,6 @@ func (s *Server) handleRelocate(w http.ResponseWriter, r *http.Request, verb str
 	// changed the parent since data was read (#315).
 	s.setTreeNodeMovedTrigger(w, r, moved.FromParentID, moved.Entity)
 	s.renderDetailSection(w, r, fresh)
-	s.renderHTMLAppend(w, "tree_node_delete_oob", moved.Entity)
 }
 
 // renderMoveFailure handles a failed ReparentEntity or UseEntity. It re-reads the entity

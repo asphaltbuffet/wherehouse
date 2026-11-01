@@ -1604,7 +1604,7 @@ func TestHandleMove_Success(t *testing.T) {
 	assert.Equal(t, "new bench", fake.lastMoveReq.Note)
 	assert.Contains(t, body, `id="entity-detail"`)
 	assert.Contains(t, body, `href="/entities/w">Workshop</a>`, "new parent appears in breadcrumbs")
-	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.NotContains(t, body, `hx-swap-oob="delete"`, "tree.js moves the node, keeping its tree state")
 	assert.JSONEq(t,
 		`{"tree-node-detached":{"entityId":"abc","parentId":"g","parentHasChildren":false},`+
 			`"tree-node-attached":{"entityId":"abc","parentId":"w"}}`,

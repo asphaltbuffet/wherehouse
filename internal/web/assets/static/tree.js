@@ -351,14 +351,23 @@
   // Insert a node that joined parentId's list (add, borrow, move) in sorted
   // position when that list is already loaded (root, or a parent expanded at
   // least once). A never-expanded parent only needs its chevron revealed;
-  // children load on expand.
+  // children load on expand. A moved node already in the tree is moved, not
+  // re-fetched, so it keeps its expanded branch and selection (#315); it is
+  // dropped when its new list is not loaded.
   function onTreeNodeAttached(e) {
+    var entityId = e.detail.entityId;
+    var existing = document.getElementById('tree-node-' + entityId);
     var parentId = e.detail.parentId;
     var listId = parentId ? 'tree-children-' + parentId : 'tree-root-list';
-    if (!document.getElementById(listId)) return;
+    var list = document.getElementById(listId);
+    if (!list) {
+      if (existing) existing.remove();
+      return;
+    }
     if (parentId) {
       var parentItem = document.querySelector('.tree-item[data-entity-id="' + parentId + '"]');
       if (parentItem && !parentItem.dataset.expanded) {
+        if (existing) existing.remove();
         var li = parentItem.closest('li');
         if (li && li.getAttribute('aria-expanded') === null) li.setAttribute('aria-expanded', 'false');
         var ch = parentItem.querySelector('.chevron');
@@ -366,7 +375,11 @@
         return;
       }
     }
-    var entityId = e.detail.entityId;
+    if (existing) {
+      list.appendChild(existing);
+      placeSorted(entityId);
+      return;
+    }
     htmx.ajax('GET', '/entities/' + entityId + '/tree-node', {
       target: '#' + listId,
       swap: 'beforeend',
