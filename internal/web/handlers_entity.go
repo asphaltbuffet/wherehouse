@@ -834,7 +834,6 @@ func (s *Server) handleReturn(w http.ResponseWriter, r *http.Request) {
 	if wasDisplaced {
 		s.setTreeNodeMovedTrigger(w, r, data.Entity.ParentID, fresh.Entity)
 		s.renderDetailSection(w, r, fresh)
-		s.renderHTMLAppend(w, "tree_node_delete_oob", fresh.Entity)
 		return
 	}
 	s.renderStatusChanged(w, r, fresh)
@@ -1220,7 +1219,7 @@ const (
 )
 
 // relocateFn performs the write behind a relocate form (move or use).
-type relocateFn func(ctx context.Context, entityID, newParentID, actorID, note string) (app.EntityResult, error)
+type relocateFn func(ctx context.Context, entityID, newParentID, actorID, note string) (app.RelocationResult, error)
 
 // openRelocateForm re-opens the form that matches f.Verb.
 func (d *detailData) openRelocateForm(f *moveFormData) {
@@ -1236,7 +1235,7 @@ func (d *detailData) openRelocateForm(f *moveFormData) {
 func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	s.handleRelocate(w, r, verbMove, func(
 		ctx context.Context, entityID, newParentID, actor, note string,
-	) (app.EntityResult, error) {
+	) (app.RelocationResult, error) {
 		return s.cfg.App.ReparentEntity(ctx, app.ReparentEntityRequest{
 			EntityID: entityID, NewParentID: newParentID, ActorID: actor, Note: note,
 		})
@@ -1248,7 +1247,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUse(w http.ResponseWriter, r *http.Request) {
 	s.handleRelocate(w, r, verbUse, func(
 		ctx context.Context, entityID, newParentID, actor, note string,
-	) (app.EntityResult, error) {
+	) (app.RelocationResult, error) {
 		return s.cfg.App.UseEntity(ctx, app.UseEntityRequest{
 			EntityID: entityID, NewParentID: newParentID, ActorID: actor, Note: note,
 		})
@@ -1311,9 +1310,10 @@ func (s *Server) handleRelocate(w http.ResponseWriter, r *http.Request, verb str
 		s.serverError(w, "build detail data", err)
 		return
 	}
-	s.setTreeNodeMovedTrigger(w, r, data.Entity.ParentID, moved)
+	// FromParentID, not data.Entity.ParentID: a concurrent move may have
+	// changed the parent since data was read (#315).
+	s.setTreeNodeMovedTrigger(w, r, moved.FromParentID, moved.Entity)
 	s.renderDetailSection(w, r, fresh)
-	s.renderHTMLAppend(w, "tree_node_delete_oob", moved)
 }
 
 // renderMoveFailure handles a failed ReparentEntity or UseEntity. It re-reads the entity

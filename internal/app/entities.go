@@ -60,17 +60,19 @@ func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (Entity
 // (use 'return'). Every guard reads through
 // the same transaction that writes the event, so a concurrent remove or a
 // crossing move cannot slip between check and write (ADR 0035).
-func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (EntityResult, error) {
+func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (RelocationResult, error) {
 	var note *string
 	if req.Note != "" {
 		note = &req.Note
 	}
 
+	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 		if err != nil {
 			return wrapEntityError(req.EntityID, err)
 		}
+		from = idOf(entity.ParentID)
 		if err = checkMovable(entity, verbMove); err != nil {
 			return err
 		}
@@ -96,11 +98,19 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (En
 		}
 		return a.reparentTx(ctx, tx, entity.EntityID, newParentID, req.ActorID, note)
 	}); err != nil {
-		return EntityResult{}, err
+		return RelocationResult{}, err
 	}
+	return a.relocationResult(ctx, req.EntityID, from)
+}
 
+// relocationResult reads entityID after a committed move or use that left from.
+func (a *App) relocationResult(ctx context.Context, entityID, from string) (RelocationResult, error) {
 	// AnyStatus: a concurrent remove may commit between our commit and this read.
-	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
+	e, err := a.GetEntityByIDAnyStatus(ctx, entityID)
+	if err != nil {
+		return RelocationResult{}, err
+	}
+	return RelocationResult{Entity: e, FromParentID: from}, nil
 }
 
 // reparentTx dispatches the reparent event for an already-validated move.

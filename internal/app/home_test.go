@@ -39,7 +39,24 @@ func newHomeFixture(t *testing.T) homeFixture {
 
 func (f homeFixture) use(t *testing.T, id, dest string) (app.EntityResult, error) {
 	t.Helper()
-	return f.a.UseEntity(t.Context(), app.UseEntityRequest{EntityID: id, NewParentID: dest, ActorID: "t"})
+	res, err := f.a.UseEntity(t.Context(), app.UseEntityRequest{EntityID: id, NewParentID: dest, ActorID: "t"})
+	return res.Entity, err
+}
+
+func TestRelocation_ReportsFromParent(t *testing.T) {
+	f := newHomeFixture(t)
+
+	used, err := f.a.UseEntity(t.Context(), app.UseEntityRequest{
+		EntityID: f.drill.EntityID, NewParentID: f.deck.EntityID, ActorID: "t",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, f.garage.EntityID, used.FromParentID)
+	assert.Equal(t, f.deck.EntityID, used.Entity.ParentID)
+
+	moved, err := f.a.ReparentEntity(t.Context(), app.ReparentEntityRequest{EntityID: f.drill.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+	assert.Equal(t, f.deck.EntityID, moved.FromParentID)
+	assert.Empty(t, moved.Entity.ParentID)
 }
 
 func TestUseEntity_DisplacesAndKeepsHome(t *testing.T) {
@@ -107,12 +124,12 @@ func TestReparent_RehomesInPlaceWhenDisplaced(t *testing.T) {
 	f := newHomeFixture(t)
 	_, err := f.use(t, f.drill.EntityID, f.deck.EntityID)
 	require.NoError(t, err)
-	got, err := f.a.ReparentEntity(t.Context(), app.ReparentEntityRequest{
+	moved, err := f.a.ReparentEntity(t.Context(), app.ReparentEntityRequest{
 		EntityID: f.drill.EntityID, NewParentID: f.deck.EntityID, ActorID: "t",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, f.deck.EntityID, got.HomeID)
-	assert.False(t, got.IsDisplaced())
+	assert.Equal(t, f.deck.EntityID, moved.Entity.HomeID)
+	assert.False(t, moved.Entity.IsDisplaced())
 
 	hist, err := f.a.GetHistory(t.Context(), app.GetHistoryRequest{EntityID: f.drill.EntityID})
 	require.NoError(t, err)
@@ -166,12 +183,12 @@ func TestReparent_ElsewhereClearsDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.use(t, f.drill.EntityID, f.deck.EntityID)
 	require.NoError(t, err)
-	got, err := f.a.ReparentEntity(t.Context(), app.ReparentEntityRequest{
+	moved, err := f.a.ReparentEntity(t.Context(), app.ReparentEntityRequest{
 		EntityID: f.drill.EntityID, NewParentID: kitchen.EntityID, ActorID: "t",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, kitchen.EntityID, got.HomeID)
-	assert.False(t, got.IsDisplaced())
+	assert.Equal(t, kitchen.EntityID, moved.Entity.HomeID)
+	assert.False(t, moved.Entity.IsDisplaced())
 }
 
 func TestUseEntity_DescendantsNotDisplaced(t *testing.T) {

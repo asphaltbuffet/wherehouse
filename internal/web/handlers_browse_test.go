@@ -331,6 +331,23 @@ func TestHandleParentOptions_MovingUsesMoveDestinations(t *testing.T) {
 	assert.Contains(t, string(body), `data-parent-id="w"`)
 }
 
+// A picker whose entity was removed while the form was open must replace its
+// stale options: htmx would not swap a 404, leaving them clickable (#315).
+func TestHandleParentOptions_MovingGoneReplacesOptions(t *testing.T) {
+	fake := &fakeApp{findErr: app.ErrNotFound}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/parent-options?q=work&moving=abc")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, string(body), "This item no longer exists")
+	assert.NotContains(t, string(body), `data-action="pick-parent"`)
+}
+
 func TestHandleParentOptions_WithoutMovingUsesParentCandidates(t *testing.T) {
 	fake := &fakeApp{}
 	ts := newTestServer(t, fake)

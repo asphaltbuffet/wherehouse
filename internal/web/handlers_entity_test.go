@@ -1604,11 +1604,31 @@ func TestHandleMove_Success(t *testing.T) {
 	assert.Equal(t, "new bench", fake.lastMoveReq.Note)
 	assert.Contains(t, body, `id="entity-detail"`)
 	assert.Contains(t, body, `href="/entities/w">Workshop</a>`, "new parent appears in breadcrumbs")
-	assert.Contains(t, body, `id="tree-node-abc" hx-swap-oob="delete"`)
+	assert.NotContains(t, body, `hx-swap-oob="delete"`, "tree.js moves the node, keeping its tree state")
 	assert.JSONEq(t,
 		`{"tree-node-detached":{"entityId":"abc","parentId":"g","parentHasChildren":false},`+
 			`"tree-node-attached":{"entityId":"abc","parentId":"w"}}`,
 		resp.Header.Get("Hx-Trigger-After-Swap"))
+}
+
+func TestHandleMove_ConcurrentMoveDetachesFromActualParent(t *testing.T) {
+	kitchen := app.EntityResult{
+		EntityID: "k", DisplayName: "Kitchen", FullPathDisplay: "Kitchen", Status: inventory.EntityStatusOk,
+	}
+	fake := &fakeApp{
+		entities:    append(movableDrill(), kitchen),
+		hasChildren: map[string]bool{},
+		// Another session moves the drill from Garage to Kitchen between
+		// the handler's read and this move's write.
+		onMove: func(f *fakeApp) { f.entities[2].ParentID = "k" },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postMove(t, ts, url.Values{"destination": {"w"}})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "k", detachedTrigger(t, resp).ParentID, "reset the parent the drill actually left")
 }
 
 func TestHandleMove_ToRoot(t *testing.T) {

@@ -135,6 +135,7 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 	q = strings.TrimSpace(q)
 
 	var results []app.FindResult
+	var gone bool
 	if q != "" {
 		req := app.FindEntitiesRequest{Query: q, Limit: parentOptionsLimit}
 		var err error
@@ -143,11 +144,11 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 		} else {
 			results, err = s.cfg.App.FindParentCandidates(r.Context(), req)
 		}
-		if errors.Is(err, app.ErrNotFound) {
-			http.Error(w, "entity not found", http.StatusNotFound)
-			return
-		}
-		if err != nil {
+		// The entity being moved vanished while its form was open. Answer
+		// 200 so htmx swaps the message over the stale options (it would not
+		// swap a 404).
+		gone = errors.Is(err, app.ErrNotFound)
+		if err != nil && !gone {
 			s.serverError(w, "find parent candidates", err)
 			return
 		}
@@ -156,7 +157,8 @@ func (s *Server) handleParentOptions(w http.ResponseWriter, r *http.Request) {
 	s.renderHTML(w, "parent_options", struct {
 		Query   string
 		Results []app.FindResult
-	}{Query: q, Results: results})
+		Gone    bool
+	}{Query: q, Results: results, Gone: gone})
 }
 
 // handleTreeNode returns a single tree_node fragment for inserting a new or moved entity.

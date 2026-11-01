@@ -27,8 +27,8 @@ type App interface {
 	GetEntityByIDAnyStatus(ctx context.Context, entityID string) (app.EntityResult, error)
 	BorrowEntities(ctx context.Context, reqs []app.BorrowEntityRequest) ([]app.EntityResult, error)
 	SetAttributes(ctx context.Context, reqs []app.SetAttributesRequest) ([]app.EntityResult, error)
-	ReparentEntity(ctx context.Context, req app.ReparentEntityRequest) (app.EntityResult, error)
-	UseEntity(ctx context.Context, req app.UseEntityRequest) (app.EntityResult, error)
+	ReparentEntity(ctx context.Context, req app.ReparentEntityRequest) (app.RelocationResult, error)
+	UseEntity(ctx context.Context, req app.UseEntityRequest) (app.RelocationResult, error)
 	FindMoveDestinations(
 		ctx context.Context, entityID string, relocation app.Relocation, req app.FindEntitiesRequest,
 	) ([]app.FindResult, error)

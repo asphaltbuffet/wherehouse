@@ -73,12 +73,12 @@ func (f *fakeApp) SetAttributes(_ context.Context, _ []app.SetAttributesRequest)
 	return nil, nil
 }
 
-func (f *fakeApp) ReparentEntity(_ context.Context, _ app.ReparentEntityRequest) (app.EntityResult, error) {
-	return app.EntityResult{}, nil
+func (f *fakeApp) ReparentEntity(_ context.Context, _ app.ReparentEntityRequest) (app.RelocationResult, error) {
+	return app.RelocationResult{}, nil
 }
 
-func (f *fakeApp) UseEntity(_ context.Context, _ app.UseEntityRequest) (app.EntityResult, error) {
-	return app.EntityResult{}, nil
+func (f *fakeApp) UseEntity(_ context.Context, _ app.UseEntityRequest) (app.RelocationResult, error) {
+	return app.RelocationResult{}, nil
 }
 
 func (f *fakeApp) FindMoveDestinations(

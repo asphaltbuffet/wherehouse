@@ -149,7 +149,7 @@ func (f *fakeApp) RemoveEntity(_ context.Context, req app.RemoveEntityRequest) e
 
 // ReparentEntity records the request and, on success, re-parents the entity in
 // f.entities so the handler's fresh re-read shows the new path.
-func (f *fakeApp) ReparentEntity(_ context.Context, req app.ReparentEntityRequest) (app.EntityResult, error) {
+func (f *fakeApp) ReparentEntity(_ context.Context, req app.ReparentEntityRequest) (app.RelocationResult, error) {
 	f.moveCalls++
 	f.lastMoveReq = req
 	f.lastActor = req.ActorID
@@ -157,22 +157,29 @@ func (f *fakeApp) ReparentEntity(_ context.Context, req app.ReparentEntityReques
 		f.onMove(f)
 	}
 	if f.moveErr != nil {
-		return app.EntityResult{}, f.moveErr
+		return app.RelocationResult{}, f.moveErr
 	}
+	return f.relocate(req.EntityID, req.NewParentID)
+}
+
+// relocate re-parents entityID in f.entities, reporting the parent it had at
+// write time (after any onMove writer), as the real transaction does.
+func (f *fakeApp) relocate(entityID, newParentID string) (app.RelocationResult, error) {
 	for i := range f.entities {
-		if f.entities[i].EntityID != req.EntityID {
+		if f.entities[i].EntityID != entityID {
 			continue
 		}
-		f.entities[i].ParentID = req.NewParentID
+		from := f.entities[i].ParentID
+		f.entities[i].ParentID = newParentID
 		f.entities[i].FullPathDisplay = f.entities[i].DisplayName
 		for _, p := range f.entities {
-			if p.EntityID == req.NewParentID {
+			if p.EntityID == newParentID {
 				f.entities[i].FullPathDisplay = p.FullPathDisplay + ":" + f.entities[i].DisplayName
 			}
 		}
-		return f.entities[i], nil
+		return app.RelocationResult{Entity: f.entities[i], FromParentID: from}, nil
 	}
-	return app.EntityResult{}, app.ErrNotFound
+	return app.RelocationResult{}, app.ErrNotFound
 }
 
 func (f *fakeApp) FindMoveDestinations(
@@ -390,30 +397,19 @@ func newActorHandler(t *testing.T, a web.App, header string) http.Handler {
 // ReparentEntity while keeping its home. A zero HomeID defaults to the current
 // parent so older fixtures that never set HomeID read as "at home" before a
 // use; a root-homed entity used in a test must set HomeID explicitly.
-func (f *fakeApp) UseEntity(_ context.Context, req app.UseEntityRequest) (app.EntityResult, error) {
+func (f *fakeApp) UseEntity(_ context.Context, req app.UseEntityRequest) (app.RelocationResult, error) {
 	f.useCalls++
 	f.lastUseReq = req
 	f.lastActor = req.ActorID
 	if f.useErr != nil {
-		return app.EntityResult{}, f.useErr
+		return app.RelocationResult{}, f.useErr
 	}
 	for i := range f.entities {
-		if f.entities[i].EntityID != req.EntityID {
-			continue
-		}
-		if f.entities[i].HomeID == "" {
+		if f.entities[i].EntityID == req.EntityID && f.entities[i].HomeID == "" {
 			f.entities[i].HomeID = f.entities[i].ParentID
 		}
-		f.entities[i].ParentID = req.NewParentID
-		f.entities[i].FullPathDisplay = f.entities[i].DisplayName
-		for _, p := range f.entities {
-			if p.EntityID == req.NewParentID {
-				f.entities[i].FullPathDisplay = p.FullPathDisplay + ":" + f.entities[i].DisplayName
-			}
-		}
-		return f.entities[i], nil
 	}
-	return app.EntityResult{}, app.ErrNotFound
+	return f.relocate(req.EntityID, req.NewParentID)
 }
 
 func (f *fakeApp) TagEntity(_ context.Context, req app.TagEntityRequest) error {

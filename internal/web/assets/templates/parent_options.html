@@ -1,5 +1,7 @@
 {{define "parent_options"}}
-{{if .Query}}
+{{if .Gone}}
+<li class="parent-options-empty" role="alert">This item no longer exists</li>
+{{else if .Query}}
 {{range .Results}}
 <li>
   <button type="button" class="btn-link parent-option"
