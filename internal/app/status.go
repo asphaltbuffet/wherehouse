@@ -96,42 +96,15 @@ func execBatch[T any](
 }
 
 func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 	if err != nil {
-		return "", wrapEntityError(req.EntityID, err)
+		return "", err
+	}
+	if err = facts.Require(ActionLost); err != nil {
+		return "", err
 	}
 
-	if entity.Locked {
-		return "", fmt.Errorf("cannot mark %q as missing: entity is locked", entity.FullPathDisplay)
-	}
-	if entity.Status != inventory.EntityStatusOk {
-		return "", fmt.Errorf(
-			"cannot mark %q as missing: entity is %s (only ok entities can be marked missing)",
-			entity.FullPathDisplay, entity.Status,
-		)
-	}
-
-	payload := eventbus.EntityStatusChangedPayload{
-		EntityID: entity.EntityID,
-		Status:   inventory.EntityStatusMissing.String(),
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("marshal payload: %w", err)
-	}
-
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
-	if _, err = a.bus.DispatchInTx(
-		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
-	); err != nil {
-		return "", fmt.Errorf("mark lost %q: %w", req.EntityID, err)
-	}
-
-	return entity.EntityID, nil
+	return a.setStatusInTx(ctx, tx, entity, inventory.EntityStatusMissing, req)
 }
 
 // MarkFound sets the status of all specified entities to ok in a single atomic transaction.
@@ -150,9 +123,12 @@ func (a *App) MarkReturned(ctx context.Context, reqs []ChangeStatusRequest) ([]E
 }
 
 func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 	if err != nil {
-		return "", wrapEntityError(req.EntityID, err)
+		return "", err
+	}
+	if err = facts.Require(ActionReturn); err != nil {
+		return "", err
 	}
 
 	var note *string
@@ -160,10 +136,10 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 		note = &req.Note
 	}
 
-	switch entity.Status { //nolint:exhaustive // removed is excluded by GetLiveEntityTx
+	switch entity.Status { //nolint:exhaustive // Require admitted only borrowed, loaned, or displaced ok
 	case inventory.EntityStatusBorrowed:
 		// Borrowed entities leave the inventory without a trip home (ADR 0039).
-		if err = a.returnBorrowedTx(ctx, tx, entity, req.ActorID, note); err != nil {
+		if err = a.dispatchStatusTx(ctx, tx, entity, inventory.EntityStatusRemoved, req.ActorID, note); err != nil {
 			return "", err
 		}
 		return entity.EntityID, nil
@@ -172,17 +148,6 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 			return "", err
 		}
 		note = nil // the note rides on the first event of the return only
-	case inventory.EntityStatusOk:
-		if !entity.IsDisplaced() {
-			return "", fmt.Errorf("cannot return %q: entity is ok and already at home", entity.FullPathDisplay)
-		}
-	case inventory.EntityStatusMissing:
-		return "", fmt.Errorf("cannot return %q: entity is missing — mark it found first", entity.FullPathDisplay)
-	default:
-		return "", fmt.Errorf(
-			"cannot return %q: entity is %s (only loaned, borrowed, or displaced entities can be returned)",
-			entity.FullPathDisplay, entity.Status,
-		)
 	}
 
 	if entity.IsDisplaced() {
@@ -191,24 +156,6 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 		}
 	}
 	return entity.EntityID, nil
-}
-
-// returnBorrowedTx removes a borrowed entity; it must hold no live children (ADR 0032).
-func (a *App) returnBorrowedTx(
-	ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string,
-) error {
-	n, err := a.store.CountLiveChildrenTx(ctx, tx, entity.EntityID)
-	if err != nil {
-		return fmt.Errorf("return %q: %w", entity.FullPathDisplay, err)
-	}
-	if n > 0 {
-		return fmt.Errorf("cannot return %q (%d inside; return or move them first): %w",
-			entity.FullPathDisplay, n, ErrHasChildren)
-	}
-	if err = a.checkNotHomeTx(ctx, tx, entity, "return"); err != nil {
-		return err
-	}
-	return a.dispatchStatusTx(ctx, tx, entity, inventory.EntityStatusRemoved, actorID, note)
 }
 
 // dispatchStatusTx writes an EntityStatusChangedEvent with no status context.
@@ -232,19 +179,12 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 		return "", fmt.Errorf("loan %q: %w", req.EntityID, ErrRecipientRequired)
 	}
 
-	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 	if err != nil {
-		return "", wrapEntityError(req.EntityID, err)
+		return "", err
 	}
-
-	if entity.Locked {
-		return "", fmt.Errorf("cannot loan %q: entity is locked", entity.FullPathDisplay)
-	}
-	if entity.Status != inventory.EntityStatusOk && entity.Status != inventory.EntityStatusMissing {
-		return "", fmt.Errorf(
-			"cannot loan %q: entity is %s (only ok or missing entities can be loaned)",
-			entity.FullPathDisplay, entity.Status,
-		)
+	if err = facts.Require(ActionLoan); err != nil {
+		return "", err
 	}
 
 	payload := eventbus.EntityStatusChangedPayload{
@@ -323,38 +263,28 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 }
 
 func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 	if err != nil {
-		return "", wrapEntityError(req.EntityID, err)
+		return "", err
+	}
+	if err = facts.Require(ActionFound); err != nil {
+		return "", err
 	}
 
-	if entity.Status != inventory.EntityStatusMissing {
-		return "", fmt.Errorf(
-			"cannot mark %q as found: entity is %s (only missing entities can be found; "+
-				"use 'return' for loaned or borrowed)",
-			entity.FullPathDisplay, entity.Status,
-		)
-	}
+	return a.setStatusInTx(ctx, tx, entity, inventory.EntityStatusOk, req)
+}
 
-	payload := eventbus.EntityStatusChangedPayload{
-		EntityID: entity.EntityID,
-		Status:   inventory.EntityStatusOk.String(),
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("marshal payload: %w", err)
-	}
-
+// setStatusInTx dispatches a plain status change for an already-admitted entity.
+func (a *App) setStatusInTx(
+	ctx context.Context, tx store.Tx, entity *inventory.Entity,
+	status inventory.EntityStatus, req ChangeStatusRequest,
+) (string, error) {
 	var note *string
 	if req.Note != "" {
 		note = &req.Note
 	}
-
-	if _, err = a.bus.DispatchInTx(
-		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
-	); err != nil {
-		return "", fmt.Errorf("mark found %q: %w", req.EntityID, err)
+	if err := a.dispatchStatusTx(ctx, tx, entity, status, req.ActorID, note); err != nil {
+		return "", err
 	}
-
 	return entity.EntityID, nil
 }
