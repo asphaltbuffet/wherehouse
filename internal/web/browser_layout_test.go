@@ -152,3 +152,37 @@ func (s *session) controlName(c playwright.Locator) string {
 	require.NoError(s.t, err)
 	return label
 }
+
+// sheetEdgeTolerance absorbs the add modal's 1px bottom border and subpixel
+// rounding when comparing sheet edges.
+const sheetEdgeTolerance = 2
+
+// On narrow layouts the add and borrow forms open as a full-screen sheet with
+// their actions pinned to the bottom edge.
+func TestBrowserAddSheetNarrow(t *testing.T) {
+	t.Parallel()
+	for _, open := range []string{"Add root", "Borrow"} {
+		t.Run(open, func(t *testing.T) {
+			t.Parallel()
+			forDevices(t, devicesIn(narrow), sessionConfig{}, func(s *session) {
+				s.visit("/")
+				s.click(s.button(open))
+				dialog := s.addDialog()
+				require.NoError(s.t, expect.Locator(dialog).ToBeVisible())
+
+				vp := s.page.ViewportSize()
+				sheet, err := dialog.BoundingBox()
+				require.NoError(s.t, err)
+				assert.InDelta(s.t, 0, sheet.X, sheetEdgeTolerance, "sheet left")
+				assert.InDelta(s.t, 0, sheet.Y, sheetEdgeTolerance, "sheet top")
+				assert.InDelta(s.t, vp.Width, sheet.Width, sheetEdgeTolerance, "sheet width")
+				assert.InDelta(s.t, vp.Height, sheet.Height, sheetEdgeTolerance, "sheet height")
+
+				actions, err := dialog.Locator(".modal-actions").BoundingBox()
+				require.NoError(s.t, err)
+				assert.InDelta(s.t, sheet.Y+sheet.Height, actions.Y+actions.Height, sheetEdgeTolerance,
+					"actions bottom")
+			})
+		})
+	}
+}
