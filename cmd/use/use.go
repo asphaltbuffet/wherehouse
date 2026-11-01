@@ -67,7 +67,7 @@ func runUse(cmd *cobra.Command, args []string, a *app.App) error {
 		return fmt.Errorf("failed to find destination %q: %w", destPath, err)
 	}
 
-	updated, err := a.UseEntity(ctx, app.UseEntityRequest{
+	relocated, err := a.UseEntity(ctx, app.UseEntityRequest{
 		EntityID:    src.EntityID,
 		NewParentID: dest.EntityID,
 		ActorID:     cli.GetActorUserID(ctx),
@@ -76,6 +76,7 @@ func runUse(cmd *cobra.Command, args []string, a *app.App) error {
 	if err != nil {
 		return fmt.Errorf("failed to use %q: %w", srcPath, err)
 	}
+	updated := relocated.Entity
 
 	cfg, ok := cli.GetConfig(ctx)
 	if !ok {

@@ -602,7 +602,7 @@ func TestReparentEntity_BorrowedMoves(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "Office:Drill", moved.FullPathDisplay)
+	assert.Equal(t, "Office:Drill", moved.Entity.FullPathDisplay)
 }
 
 func TestReparentEntity_InvalidDestinations(t *testing.T) {
@@ -662,8 +662,8 @@ func TestReparentEntity_ToRoot(t *testing.T) {
 	moved, err := a.ReparentEntity(ctx, app.ReparentEntityRequest{EntityID: toolbox.EntityID, ActorID: "alice"})
 
 	require.NoError(t, err)
-	assert.Equal(t, "Toolbox", moved.FullPathDisplay)
-	assert.Empty(t, moved.ParentID)
+	assert.Equal(t, "Toolbox", moved.Entity.FullPathDisplay)
+	assert.Empty(t, moved.Entity.ParentID)
 }
 
 // Names are not unique, so the cycle check must not use path prefixes.
@@ -695,7 +695,7 @@ func TestReparentEntity_SameNameSiblingIsNotDescendant(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "Shelf:Box:Tray:Box", moved.FullPathDisplay)
+	assert.Equal(t, "Shelf:Box:Tray:Box", moved.Entity.FullPathDisplay)
 }
 
 // A live entity under a removed ancestor (#287) is still a descendant.

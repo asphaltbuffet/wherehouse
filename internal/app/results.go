@@ -26,6 +26,14 @@ type EntityResult struct {
 	UpdatedAt       time.Time
 }
 
+// RelocationResult is the outcome of a move or use: the entity as read after
+// the write, and the parent it left as read inside the writing transaction, so
+// a concurrent move cannot make FromParentID stale.
+type RelocationResult struct {
+	Entity       EntityResult
+	FromParentID string // empty when it left the root
+}
+
 // IsEligibleParent reports whether the entity may receive a new child:
 // any entity that is neither removed nor discrete (see CONTEXT.md "Eligible parent").
 func (r EntityResult) IsEligibleParent() bool {

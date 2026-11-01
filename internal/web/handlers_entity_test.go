@@ -1611,6 +1611,26 @@ func TestHandleMove_Success(t *testing.T) {
 		resp.Header.Get("Hx-Trigger-After-Swap"))
 }
 
+func TestHandleMove_ConcurrentMoveDetachesFromActualParent(t *testing.T) {
+	kitchen := app.EntityResult{
+		EntityID: "k", DisplayName: "Kitchen", FullPathDisplay: "Kitchen", Status: inventory.EntityStatusOk,
+	}
+	fake := &fakeApp{
+		entities:    append(movableDrill(), kitchen),
+		hasChildren: map[string]bool{},
+		// Another session moves the drill from Garage to Kitchen between
+		// the handler's read and this move's write.
+		onMove: func(f *fakeApp) { f.entities[2].ParentID = "k" },
+	}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, _ := postMove(t, ts, url.Values{"destination": {"w"}})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "k", detachedTrigger(t, resp).ParentID, "reset the parent the drill actually left")
+}
+
 func TestHandleMove_ToRoot(t *testing.T) {
 	fake := &fakeApp{entities: movableDrill()}
 	ts := newTestServer(t, fake)

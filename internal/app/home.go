@@ -109,17 +109,19 @@ func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entit
 // UseEntity temporarily moves an entity: the parent changes and the home stays,
 // leaving it displaced (CONTEXT.md "Use"). Preconditions are move's plus
 // "destination is not home". All guards read through the write transaction (ADR 0035).
-func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (EntityResult, error) {
+func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationResult, error) {
 	var note *string
 	if req.Note != "" {
 		note = &req.Note
 	}
 
+	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 		if err != nil {
 			return wrapEntityError(req.EntityID, err)
 		}
+		from = idOf(entity.ParentID)
 		if err = checkMovable(entity, verbUse); err != nil {
 			return err
 		}
@@ -148,11 +150,9 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (EntityResult
 		}
 		return nil
 	}); err != nil {
-		return EntityResult{}, err
+		return RelocationResult{}, err
 	}
-
-	// AnyStatus: a concurrent remove may commit between our commit and this read.
-	return a.GetEntityByIDAnyStatus(ctx, req.EntityID)
+	return a.relocationResult(ctx, req.EntityID, from)
 }
 
 // returnHomeTx moves a displaced entity back to its home. The home is re-checked
