@@ -27,7 +27,7 @@
 
 {{define "tree_lock"}}{{if .Locked}}{{template "anchor"}}{{end}}{{end}}
 
-{{define "tree_add_btn"}}{{if not .Discrete}}<button class="add-btn"
+{{define "tree_add_btn"}}{{if .CanAddChild}}<button class="add-btn"
             type="button"
             data-parent-id="{{.EntityID}}"
             aria-label="Add child item under {{.DisplayName}}">+</button>{{end}}{{end}}

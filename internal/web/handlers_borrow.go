@@ -48,7 +48,7 @@ func (s *Server) defaultBorrowParent(ctx context.Context, entityID string) (app.
 		if err != nil {
 			return app.EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, err)
 		}
-		if e.IsEligibleParent() {
+		if e.CanAddChild {
 			return e, nil
 		}
 		entityID = e.ParentID

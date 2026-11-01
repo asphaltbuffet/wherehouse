@@ -214,6 +214,7 @@ func (f *fakeApp) SetAttributes(_ context.Context, reqs []app.SetAttributesReque
 		}
 		if reqs[0].Discrete != nil {
 			f.entities[i].Discrete = *reqs[0].Discrete
+			f.entities[i].CanAddChild = !*reqs[0].Discrete
 		}
 		return []app.EntityResult{f.entities[i]}, nil
 	}

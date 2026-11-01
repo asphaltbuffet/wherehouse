@@ -127,6 +127,13 @@ func pronoun(n int) string {
 	return "them"
 }
 
+// canAddChild is the add-child rule (CONTEXT.md "Eligible parent"): any entity
+// that is neither removed nor discrete. Check, the legal-destination rules and
+// entityToResult all read it, so the rule is written once (ADR 0041).
+func canAddChild(status inventory.EntityStatus, discrete bool) bool {
+	return status != inventory.EntityStatusRemoved && !discrete
+}
+
 // Check reports whether action a may apply to the entity described by f.
 // It is the only place the transition table (ADR 0024, ADR 0039) and the
 // locked, discrete, live-children and home rules are encoded. Status is
@@ -215,7 +222,7 @@ func Check(
 			return reject(ErrNoChange, 0)
 		}
 	case ActionAddChild:
-		if f.Discrete {
+		if !canAddChild(f.Status, f.Discrete) {
 			return reject(ErrDiscrete, 0)
 		}
 	case ActionTag:

@@ -18,7 +18,7 @@ func (a *App) FindEntities(ctx context.Context, req FindEntitiesRequest) ([]Find
 // FindParentCandidates searches like FindEntities but returns only eligible parents.
 // Filtering happens before the limit so ineligible matches cannot crowd out eligible ones.
 func (a *App) FindParentCandidates(ctx context.Context, req FindEntitiesRequest) ([]FindResult, error) {
-	return a.findMatching(ctx, req, EntityResult.IsEligibleParent)
+	return a.findMatching(ctx, req, func(r EntityResult) bool { return r.CanAddChild })
 }
 
 // Relocation names the action a destination search serves. For a displaced
@@ -66,7 +66,7 @@ func (a *App) FindMoveDestinations(
 		return e.Status == inventory.EntityStatusRemoved
 	})
 	return a.matchEntities(ctx, live, req, func(r EntityResult) bool {
-		return r.IsEligibleParent() && !excluded[r.EntityID]
+		return r.CanAddChild && !excluded[r.EntityID]
 	})
 }
 

@@ -42,22 +42,37 @@ func TestFindParentCandidates_BorrowedIsEligible(t *testing.T) {
 	assert.Equal(t, inventory.EntityStatusBorrowed, results[0].Entity.Status)
 }
 
-func TestEntityResult_IsEligibleParent(t *testing.T) {
-	tests := []struct {
+func TestEntityResult_CanAddChild(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	mk := func(name string, discrete bool) string {
+		e, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: name, Discrete: discrete, ActorID: "t"})
+		require.NoError(t, err)
+		return e.EntityID
+	}
+	okID := mk("Shelf", false)
+	discreteID := mk("Box of Nails", true)
+	gone := mk("Old Crate", false)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: gone, ActorID: "t"}))
+	borrowed, err := a.BorrowEntities(ctx, []app.BorrowEntityRequest{
+		{DisplayName: "Drill Case", StatusContext: "Alice", ActorID: "t"},
+	})
+	require.NoError(t, err)
+
+	for _, tt := range []struct {
 		name string
-		e    app.EntityResult
+		id   string
 		want bool
 	}{
-		{"ok", app.EntityResult{Status: inventory.EntityStatusOk}, true},
-		{"missing", app.EntityResult{Status: inventory.EntityStatusMissing}, true},
-		{"loaned", app.EntityResult{Status: inventory.EntityStatusLoaned}, true},
-		{"borrowed", app.EntityResult{Status: inventory.EntityStatusBorrowed}, true},
-		{"removed", app.EntityResult{Status: inventory.EntityStatusRemoved}, false},
-		{"discrete", app.EntityResult{Status: inventory.EntityStatusOk, Discrete: true}, false},
-	}
-	for _, tt := range tests {
+		{"ok", okID, true},
+		{"discrete", discreteID, false},
+		{"removed", gone, false},
+		{"borrowed", borrowed[0].EntityID, true},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.e.IsEligibleParent())
+			r, gerr := a.GetEntityByIDAnyStatus(ctx, tt.id)
+			require.NoError(t, gerr)
+			assert.Equal(t, tt.want, r.CanAddChild)
 		})
 	}
 }
