@@ -42,7 +42,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Set up mise
-        uses: jdx/mise-action@v5.2.2
+        uses: jdx/mise-action@v5.2.4
 
       - uses: crazy-max/ghaction-upx@v4
         with:
