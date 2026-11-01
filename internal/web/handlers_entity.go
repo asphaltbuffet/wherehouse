@@ -22,20 +22,20 @@ type detailData struct {
 	DateAdded         string
 	History           []app.HistoryResult
 	CanAddChild       bool
-	CanMarkLost       bool            // ok and not locked (ADR 0024)
-	CanMarkFound      bool            // missing; found has no locked guard (ADR 0024)
-	CanReturn         bool            // borrowed, loaned, or displaced ok
+	CanMarkLost       bool            // from App.EntityActions (ADR 0040)
+	CanMarkFound      bool            // from App.EntityActions (ADR 0040)
+	CanReturn         bool            // from App.EntityActions (ADR 0040)
 	ReturnConfirm     string          // non-empty only for borrowed: the Return form's prompt (returning removes the entity)
 	MissingForm       *statusFormData // non-nil opens the Mark missing / Mark found note form
 	ReturnForm        *statusFormData // non-nil opens the Return note form
-	CanLoan           bool            // ok/missing and not locked (ADR 0024)
+	CanLoan           bool            // from App.EntityActions (ADR 0040)
 	LoanBlockedReason string          // non-empty when Loan is shown disabled
 	LoanForm          *loanFormData   // non-nil re-opens the loan form (validation error)
-	CanMove           bool            // not locked; ok or borrowed (ADR 0034)
+	CanMove           bool            // from App.EntityActions (ADR 0040)
 	MoveBlockedReason string          // non-empty when Move is shown disabled
 	UseBlockedReason  string          // non-empty when Use is shown disabled
 	MoveForm          *moveFormData   // non-nil re-opens the move form (validation error)
-	CanUse            bool            // same as CanMove (use = move preconditions)
+	CanUse            bool            // from App.EntityActions (ADR 0040)
 	UseForm           *moveFormData   // non-nil re-opens the use form (validation error)
 	Displaced         bool            // parent differs from home (CONTEXT.md "Displaced")
 	LockAction        attrAction      // Lock / Unlock button
@@ -97,22 +97,21 @@ type moveFormData struct {
 }
 
 // Tooltips on a disabled Move or Use button; each names the one action that
-// unblocks it. participle is "moved" or "used".
-func relocateBlockedReason(e app.EntityResult, participle string) string {
+// unblocks it. participle is "moved" or "used". The text is the app's
+// rejection in UI copy (ADR 0040); "" means the button is enabled.
+func relocateBlockedReason(rej *app.Rejection, participle string) string {
 	switch {
-	case e.Locked:
+	case rej == nil:
+		return ""
+	case errors.Is(rej, app.ErrLocked):
 		return "Locked entities cannot be " + participle
-	case e.Status == inventory.EntityStatusMissing:
+	case rej.Remedy == app.ActionFound:
 		return "Missing entities cannot be " + participle + " — mark found first"
-	case e.Status == inventory.EntityStatusLoaned:
+	case rej.Remedy == app.ActionReturn:
 		return "Loaned entities cannot be " + participle + " — return it first"
 	}
-	return ""
+	return rej.Error()
 }
-
-func moveBlockedReason(e app.EntityResult) string { return relocateBlockedReason(e, "moved") }
-
-func useBlockedReason(e app.EntityResult) string { return relocateBlockedReason(e, "used") }
 
 // removeFormData is the view model for the inline remove form.
 type removeFormData struct {
@@ -151,6 +150,13 @@ func returnForm(d detailData, note string) *statusFormData {
 // removeHasChildrenReason is the tooltip on a disabled Remove button (#287).
 const removeHasChildrenReason = "Contains other entities — remove or move them first"
 
+// removeIsHomeReason and discreteIsHomeReason are the tooltips on a disabled
+// Remove or Mark discrete button when the entity is home to away entities.
+const (
+	removeIsHomeReason   = "Home to entities that are away — return them first"
+	discreteIsHomeReason = "Home to entities that are away — return them first"
+)
+
 // editNameFormData is the view model for the inline rename form.
 type editNameFormData struct {
 	EntityID    string
@@ -177,42 +183,38 @@ const (
 	discreteIsHomeMessage = "Can't mark discrete: it is home to entities that are away — return them first"
 )
 
-func lockAction(e app.EntityResult) attrAction {
+// lockAction builds the Lock/Unlock button. The label follows the entity's
+// state; whether Lock is blocked comes from the ActionSet (ADR 0040).
+func lockAction(e app.EntityResult, actions app.ActionSet) attrAction {
 	if e.Locked {
 		return attrAction{EntityID: e.EntityID, Label: "Unlock", Field: "locked", Value: "false"}
 	}
 	a := attrAction{EntityID: e.EntityID, Label: "Lock", Field: "locked", Value: "true"}
-	if e.Status != inventory.EntityStatusOk && e.Status != inventory.EntityStatusBorrowed {
+	if rej := actions.Rejection(app.ActionLock); rej != nil {
 		a.BlockedReason = lockBlockedReason
-	}
-	if e.IsDisplaced() {
-		a.BlockedReason = lockDisplacedReason
+		if errors.Is(rej, app.ErrDisplaced) {
+			a.BlockedReason = lockDisplacedReason
+		}
 	}
 	return a
 }
 
-// discreteAction builds the Mark/Clear discrete button. The caller sets
-// BlockedReason when the entity has live children.
-func discreteAction(e app.EntityResult) attrAction {
+// discreteAction builds the Mark/Clear discrete button; blocking comes from
+// the ActionSet (ADR 0040).
+func discreteAction(e app.EntityResult, actions app.ActionSet) attrAction {
 	if e.Discrete {
 		return attrAction{EntityID: e.EntityID, Label: "Clear discrete", Field: "discrete", Value: "false"}
 	}
-	return attrAction{EntityID: e.EntityID, Label: "Mark discrete", Field: "discrete", Value: "true"}
-}
-
-// hasLiveChildren reports whether e has non-removed children. A discrete
-// entity never does, so it skips the query. A failed count reports false: the
-// buttons stay enabled and the app-layer guards still reject the write.
-func (s *Server) hasLiveChildren(ctx context.Context, e app.EntityResult) bool {
-	if e.Discrete {
-		return false
+	a := attrAction{EntityID: e.EntityID, Label: "Mark discrete", Field: "discrete", Value: "true"}
+	rej := actions.Rejection(app.ActionSetDiscrete)
+	switch {
+	case rej == nil:
+	case errors.Is(rej, app.ErrHasChildren):
+		a.BlockedReason = discreteBlockedReason
+	case errors.Is(rej, app.ErrIsHome):
+		a.BlockedReason = discreteIsHomeReason
 	}
-	has, err := s.cfg.App.HasLiveChildren(ctx, e.EntityID)
-	if err != nil {
-		s.cfg.Logger.Warn("count live children", "error", err, "entity_id", e.EntityID)
-		return false
-	}
-	return has
+	return a
 }
 
 // parseAttrForm reads locked and/or discrete as explicit booleans. ok is false
@@ -266,7 +268,9 @@ func (s *Server) handleAttr(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case setErr == nil:
-	case errors.Is(setErr, app.ErrNoChange):
+	case errors.Is(setErr, app.ErrNoChange),
+		errors.Is(setErr, app.ErrWrongStatus),
+		errors.Is(setErr, app.ErrLocked):
 		s.cfg.Logger.Info("attribute unchanged: panel was stale", "error", setErr, "entity_id", entityID)
 		fresh.Error = staleMessage
 	case errors.Is(setErr, app.ErrDisplaced):
@@ -423,50 +427,67 @@ func (s *Server) buildDetailData(ctx context.Context, entityID string) (detailDa
 		}
 	}
 
-	// Loan applies only to ok/missing (ADR 0024);
-	// borrowed/loaned use Return.
-	editable := entity.Status == inventory.EntityStatusOk ||
-		entity.Status == inventory.EntityStatusMissing
+	actions, err := s.cfg.App.EntityActions(ctx, entityID)
+	if errors.Is(err, app.ErrNotFound) {
+		return detailData{}, nil // removed since GetEntityByID: same as gone
+	}
+	if err != nil {
+		// Render decisions only: offer everything and let the in-transaction
+		// guard reject the write (ADR 0035, ADR 0040).
+		s.cfg.Logger.Warn("entity actions", "error", err, "entity_id", entityID)
+		actions = app.ActionSet{}
+	}
+	allowed := func(a app.Action) bool { return actions.Rejection(a) == nil }
 
+	// Loan is hidden when the status forbids it and disabled when only the
+	// lock does (ADR 0024).
+	loanRej := actions.Rejection(app.ActionLoan)
 	loanBlockedReason := ""
-	if editable && entity.Locked {
+	if loanRej != nil && errors.Is(loanRej, app.ErrLocked) {
 		loanBlockedReason = loanLockedReason
 	}
 
-	// Borrowed entities leave the inventory only via Return (ADR 0022).
-	canRemove := entity.Status != inventory.EntityStatusBorrowed
-	discrete := discreteAction(entity)
+	// Remove is hidden for borrowed (wrong status, ADR 0022) and disabled
+	// while the entity holds children or is a home.
+	removeRej := actions.Rejection(app.ActionRemove)
+	canRemove := removeRej == nil || !errors.Is(removeRej, app.ErrWrongStatus)
 	removeBlockedReason := ""
-	if s.hasLiveChildren(ctx, entity) {
-		discrete.BlockedReason = discreteBlockedReason
-		if canRemove {
-			removeBlockedReason = removeHasChildrenReason
-		}
+	switch {
+	case removeRej == nil:
+	case errors.Is(removeRej, app.ErrHasChildren):
+		removeBlockedReason = removeHasChildrenReason
+	case errors.Is(removeRej, app.ErrIsHome):
+		removeBlockedReason = removeIsHomeReason
 	}
 
+	// Return stays offered when only children or a home block it: the
+	// failure path explains why inline (#306).
+	returnRej := actions.Rejection(app.ActionReturn)
+	canReturn := returnRej == nil ||
+		errors.Is(returnRej, app.ErrHasChildren) || errors.Is(returnRej, app.ErrIsHome)
+
+	moveRej := actions.Rejection(app.ActionMove)
 	return detailData{
-		Entity:       entity,
-		DateAdded:    dateAdded,
-		History:      history,
-		CanAddChild:  !entity.Discrete,
-		CanMarkLost:  entity.Status == inventory.EntityStatusOk && !entity.Locked,
-		CanMarkFound: entity.Status == inventory.EntityStatusMissing,
-		CanReturn: entity.Status == inventory.EntityStatusBorrowed ||
-			entity.Status == inventory.EntityStatusLoaned ||
-			(entity.Status == inventory.EntityStatusOk && entity.IsDisplaced()),
+		Entity:              entity,
+		DateAdded:           dateAdded,
+		History:             history,
+		CanAddChild:         allowed(app.ActionAddChild),
+		CanMarkLost:         allowed(app.ActionLost),
+		CanMarkFound:        allowed(app.ActionFound),
+		CanReturn:           canReturn,
 		ReturnConfirm:       returnConfirm(entity),
-		CanLoan:             !entity.Locked && editable,
+		CanLoan:             loanRej == nil,
 		LoanBlockedReason:   loanBlockedReason,
-		CanMove:             entity.CanMove(),
-		CanUse:              entity.CanMove(),
+		CanMove:             moveRej == nil,
+		CanUse:              allowed(app.ActionUse),
 		Displaced:           entity.IsDisplaced(),
-		MoveBlockedReason:   moveBlockedReason(entity),
-		UseBlockedReason:    useBlockedReason(entity),
-		LockAction:          lockAction(entity),
-		DiscreteAction:      discrete,
+		MoveBlockedReason:   relocateBlockedReason(moveRej, "moved"),
+		UseBlockedReason:    relocateBlockedReason(actions.Rejection(app.ActionUse), "used"),
+		LockAction:          lockAction(entity, actions),
+		DiscreteAction:      discreteAction(entity, actions),
 		CanRemove:           canRemove,
 		RemoveBlockedReason: removeBlockedReason,
-		CanTag:              true, // buildDetailData only sees live entities
+		CanTag:              allowed(app.ActionTag),
 		Breadcrumbs:         crumbs,
 		AncestorIDs:         ancestorIDs(crumbs),
 		ChildList:           childList{ParentID: entity.EntityID, Children: children},

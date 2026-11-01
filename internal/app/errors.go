@@ -58,6 +58,16 @@ var ErrHomeCycle = errors.New("home cycle")
 // displaced, e.g. locking it: it must be returned first (ADR 0039).
 var ErrDisplaced = errors.New("entity is displaced")
 
+// ErrLocked is returned when an action is blocked by the entity's locked flag.
+var ErrLocked = errors.New("entity is locked")
+
+// ErrWrongStatus is returned when the entity's status is not a legal source
+// for the action (ADR 0024, ADR 0039).
+var ErrWrongStatus = errors.New("entity status does not allow this action")
+
+// ErrDiscrete is returned when a child would be added to a discrete entity.
+var ErrDiscrete = errors.New("entity is discrete")
+
 // wrapEntityError translates a store.GetEntity error into an app-layer error.
 // store.ErrNotFound becomes app.ErrNotFound; all other errors (DB failures,
 // context cancellations, etc.) are propagated directly so callers can

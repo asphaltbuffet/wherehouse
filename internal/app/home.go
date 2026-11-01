@@ -117,12 +117,12 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationRe
 
 	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 		if err != nil {
-			return wrapEntityError(req.EntityID, err)
+			return err
 		}
 		from = idOf(entity.ParentID)
-		if err = checkMovable(entity, verbUse); err != nil {
+		if err = facts.Require(ActionUse); err != nil {
 			return err
 		}
 		if req.NewParentID == idOf(entity.HomeID) {
@@ -172,25 +172,6 @@ func (a *App) returnHomeTx(
 	}
 	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityReturnedHomeEvent, actorID, raw, note); err != nil {
 		return fmt.Errorf("return %q home: %w", entity.FullPathDisplay, err)
-	}
-	return nil
-}
-
-// checkNotHomeTx rejects action on e while any non-removed displaced entity
-// belongs in it (CONTEXT.md "Home"). action is the verb for the message
-// ("remove", "mark discrete").
-func (a *App) checkNotHomeTx(ctx context.Context, tx store.Tx, e *inventory.Entity, action string) error {
-	n, err := a.store.CountDisplacedWithHomeTx(ctx, tx, e.EntityID)
-	if err != nil {
-		return fmt.Errorf("%s %q: %w", action, e.FullPathDisplay, err)
-	}
-	switch {
-	case n == 1:
-		return fmt.Errorf("cannot %s %q: it is home to 1 displaced entity — return it first: %w",
-			action, e.FullPathDisplay, ErrIsHome)
-	case n > 1:
-		return fmt.Errorf("cannot %s %q: it is home to %d displaced entities — return them first: %w",
-			action, e.FullPathDisplay, n, ErrIsHome)
 	}
 	return nil
 }

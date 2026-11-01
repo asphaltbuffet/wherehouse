@@ -68,12 +68,12 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (Re
 
 	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 		if err != nil {
-			return wrapEntityError(req.EntityID, err)
+			return err
 		}
 		from = idOf(entity.ParentID)
-		if err = checkMovable(entity, verbMove); err != nil {
+		if err = facts.Require(ActionMove); err != nil {
 			return err
 		}
 		if entity.IsDisplaced() {
@@ -139,21 +139,6 @@ const (
 	verbUse    = "use"
 	verbReturn = "return"
 )
-
-// checkMovable rejects an entity that may not change location at all
-// (ADR 0034): locked, missing, or loaned. verb is the user's action.
-func checkMovable(entity *inventory.Entity, verb string) error {
-	if entity.Locked {
-		return fmt.Errorf("cannot %s %q: entity is locked", verb, entity.FullPathDisplay)
-	}
-	if entity.Status == inventory.EntityStatusMissing {
-		return fmt.Errorf("cannot %s %q: entity is missing — mark it found first", verb, entity.FullPathDisplay)
-	}
-	if entity.Status == inventory.EntityStatusLoaned {
-		return fmt.Errorf("cannot %s %q: entity is loaned — return it first", verb, entity.FullPathDisplay)
-	}
-	return nil
-}
 
 // checkNotAlreadyThere rejects newParentID when it is the current parent.
 func checkNotAlreadyThere(entity *inventory.Entity, newParentID, verb string) error {
@@ -248,24 +233,11 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 	}
 
 	return a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 		if err != nil {
-			return wrapEntityError(req.EntityID, err)
+			return err
 		}
-
-		if entity.Status == inventory.EntityStatusBorrowed {
-			return fmt.Errorf("cannot remove %q: entity is borrowed — use 'return' instead", entity.FullPathDisplay)
-		}
-
-		n, err := a.store.CountLiveChildrenTx(ctx, tx, entity.EntityID)
-		if err != nil {
-			return fmt.Errorf("remove %q: %w", entity.FullPathDisplay, err)
-		}
-		if n > 0 {
-			return fmt.Errorf("cannot remove %q (%d inside; remove or move them first): %w",
-				entity.FullPathDisplay, n, ErrHasChildren)
-		}
-		if err = a.checkNotHomeTx(ctx, tx, entity, "remove"); err != nil {
+		if err = facts.Require(ActionRemove); err != nil {
 			return err
 		}
 

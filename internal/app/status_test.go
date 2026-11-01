@@ -50,3 +50,28 @@ func TestMarkLost_LockedEntity_Forbidden(t *testing.T) {
 	}})
 	assert.ErrorContains(t, err, "locked")
 }
+
+func TestStatusGuards_ReturnTypedRejections(t *testing.T) {
+	ctx := context.Background()
+	a := apptesting.OpenApp(t)
+
+	shelf, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Shelf", Locked: true, ActorID: "t"})
+	require.NoError(t, err)
+	_, err = a.MarkLost(ctx, []app.ChangeStatusRequest{{EntityID: shelf.EntityID, ActorID: "t"}})
+	require.ErrorIs(t, err, app.ErrLocked)
+
+	_, err = a.MarkFound(ctx, []app.ChangeStatusRequest{{EntityID: shelf.EntityID, ActorID: "t"}})
+	require.ErrorIs(t, err, app.ErrWrongStatus)
+
+	_, err = a.MarkLoaned(ctx, []app.ChangeStatusRequest{{
+		EntityID: shelf.EntityID, StatusContext: "Bob", ActorID: "t",
+	}})
+	require.ErrorIs(t, err, app.ErrLocked)
+
+	_, err = a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: shelf.EntityID, ActorID: "t"}})
+	require.ErrorIs(t, err, app.ErrNoChange, "ok and at home: nothing to restore")
+
+	var rej *app.Rejection
+	require.ErrorAs(t, err, &rej)
+	assert.Equal(t, app.ActionReturn, rej.Action)
+}

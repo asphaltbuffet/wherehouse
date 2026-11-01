@@ -57,13 +57,6 @@ func (r EntityResult) HomeLabel() string {
 	return r.HomePathDisplay
 }
 
-// CanMove reports whether the entity may be moved: not locked, and ok or
-// borrowed (see CONTEXT.md "Move", ADR 0034).
-func (r EntityResult) CanMove() bool {
-	return !r.Locked &&
-		(r.Status == inventory.EntityStatusOk || r.Status == inventory.EntityStatusBorrowed)
-}
-
 // HistoryResult is the output representation of a single history event.
 type HistoryResult struct {
 	EventID      int64

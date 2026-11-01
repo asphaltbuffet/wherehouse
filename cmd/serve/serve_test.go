@@ -25,6 +25,9 @@ func (f *fakeApp) GetChildren(_ context.Context, _ string) ([]app.EntityResult, 
 	return nil, nil
 }
 func (f *fakeApp) HasLiveChildren(_ context.Context, _ string) (bool, error) { return false, nil }
+func (f *fakeApp) EntityActions(_ context.Context, _ string) (app.ActionSet, error) {
+	return app.ActionSet{}, nil
+}
 func (f *fakeApp) GetHistory(_ context.Context, _ app.GetHistoryRequest) ([]app.HistoryResult, error) {
 	return nil, nil
 }

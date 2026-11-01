@@ -764,7 +764,6 @@ func TestRemoveEntity_LiveChildrenRejected(t *testing.T) {
 
 	err = a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "alice"})
 	require.ErrorIs(t, err, app.ErrHasChildren)
-	assert.Contains(t, err.Error(), `cannot remove "Box" (1 inside; remove or move them first)`)
 
 	got, err := a.GetEntityByID(ctx, box.EntityID)
 	require.NoError(t, err)
@@ -874,4 +873,39 @@ func TestCreateEntity_UnknownParent_NotFound(t *testing.T) {
 	)
 
 	require.ErrorIs(t, err, app.ErrNotFound)
+}
+
+func TestRemoveEntity_TypedRejections(t *testing.T) {
+	ctx := context.Background()
+	a := apptesting.OpenApp(t)
+
+	box, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Box", ActorID: "t"})
+	require.NoError(t, err)
+	_, err = a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Nail", ParentID: box.EntityID, ActorID: "t"})
+	require.NoError(t, err)
+
+	err = a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: box.EntityID, ActorID: "t"})
+	require.ErrorIs(t, err, app.ErrHasChildren)
+	var rej *app.Rejection
+	require.ErrorAs(t, err, &rej)
+	assert.Equal(t, 1, rej.Count)
+}
+
+func TestReparentEntity_LockedIsTyped(t *testing.T) {
+	ctx := context.Background()
+	a := apptesting.OpenApp(t)
+
+	shelf, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Shelf", Locked: true, ActorID: "t"})
+	require.NoError(t, err)
+	garage, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "t"})
+	require.NoError(t, err)
+
+	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: shelf.EntityID, NewParentID: garage.EntityID, ActorID: "t",
+	})
+	require.ErrorIs(t, err, app.ErrLocked)
+	_, err = a.UseEntity(ctx, app.UseEntityRequest{
+		EntityID: shelf.EntityID, NewParentID: garage.EntityID, ActorID: "t",
+	})
+	require.ErrorIs(t, err, app.ErrLocked)
 }

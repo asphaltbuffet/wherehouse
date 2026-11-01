@@ -79,6 +79,11 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
+// Reader returns the pooled connection as a Tx for read-only callers that
+// need no transaction, such as render decisions (ADR 0040). Never write
+// through it, and never use it for a guard (ADR 0035).
+func (s *Store) Reader() Tx { return s.db }
+
 // ExecInTransaction runs fn inside a transaction, committing on success and rolling back on error.
 func (s *Store) ExecInTransaction(ctx context.Context, fn func(Tx) error) error {
 	tx, err := s.db.BeginTx(ctx, nil)

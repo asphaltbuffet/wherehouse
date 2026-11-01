@@ -62,6 +62,18 @@ Status changes may carry an optional `StatusContext` (free-text, e.g. borrower n
 
 Each status is reached by exactly one intent-driven command (`lost`, `found`, `loan`, `return`, `borrow`), and each command rejects illegal source statuses rather than performing a no-op transition. The full legal transition table is recorded in [ADR 0024](docs/adr/0024-status-transition-commands-enforce-source-preconditions.md).
 
+### Action
+
+A user intent applied to a single existing entity: `lost`, `found`, `loan`, `return`, `move`, `use`, `remove`, `lock`, `unlock`, `set-discrete`, `clear-discrete`, `add-child`, or `tag`. Whether an action may apply depends on the entity's status, `locked` and `discrete` attributes, displacement, live children, and whether it is the home of a displaced entity — never on which interface (CLI or web) asks. For `move` and `use`, the answer covers only whether the entity may be relocated at all; whether a particular destination is legal is a separate check. `borrow` and `add` are not actions: they create entities. _Avoid_: intent (in code), operation, capability.
+
+### Rejection
+
+The reason an action may not apply to an entity right now. A rejection has a kind (e.g. locked, wrong status, displaced, has live children, is a home, no change), the entity's status at the time, and an optional remedy. The same rejection answers both "should this button be offered?" and "why did this write fail?". The wording shown to a person belongs to each interface; the rejection itself carries no prose.
+
+### Remedy
+
+The action that would clear a rejection, when exactly one exists: `found` for a `missing` entity; `return` for a `loaned` or displaced one, and for removing a `borrowed` one. Derived from the transition table, so the two never disagree. Many rejections have no remedy (e.g. a `borrowed` entity cannot be loaned, and nothing changes that).
+
 ### Event
 
 An immutable, append-only record of something that happened. Events are the **source of truth**. The `event_id` (integer, autoincrement) defines replay order — timestamps are informational only.

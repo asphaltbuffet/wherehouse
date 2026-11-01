@@ -548,8 +548,8 @@ func TestHandleReturn_BorrowedRootShowsHome(t *testing.T) {
 	assert.Contains(t, string(body), `<section id="home-detail"`)
 	assert.Contains(t, string(body), `id="tree-node-abc" hx-swap-oob="delete"`)
 	assert.Equal(t, detachedEvent{EntityID: "abc", ParentID: ""}, detachedTrigger(t, resp))
-	assert.Equal(t, 1, fake.hasChildrenCalls,
-		"only the detail panel's discrete check queries; a root removal must not query a parent")
+	assert.Equal(t, 1, fake.actionsCalls,
+		"only the detail panel's EntityActions call; a root removal must not query a parent")
 }
 
 // A stale Return on an entity already returned elsewhere reaches the app
@@ -1804,7 +1804,7 @@ func TestEntityDetail_SingleChildCountQuery(t *testing.T) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
-	assert.Equal(t, 1, fake.hasChildrenCalls)
+	assert.Equal(t, 1, fake.actionsCalls)
 	assert.Contains(t, string(body), `title="Entities with children cannot be marked discrete"`)
 	assert.Contains(t, string(body), `title="Contains other entities — remove or move them first"`)
 }
@@ -1815,7 +1815,7 @@ func TestEntityDetail_ChildCountErrorKeepsRemoveEnabled(t *testing.T) {
 		entities: []app.EntityResult{
 			{EntityID: "abc", DisplayName: "Box", FullPathDisplay: "Box", Status: inventory.EntityStatusOk},
 		},
-		hasChildrenErr: errTest,
+		actionsErr: errTest,
 	})
 	defer ts.Close()
 
@@ -2991,4 +2991,59 @@ func TestHandleTag_EmptyMessageMatchesInput(t *testing.T) {
 			assert.Contains(t, body, alert(tt.want))
 		})
 	}
+}
+
+func TestDetail_IsHomeBlocksRemoveAndDiscrete(t *testing.T) {
+	garage := app.EntityResult{EntityID: "garage0001", DisplayName: "Garage", FullPathDisplay: "Garage",
+		Status: inventory.EntityStatusOk}
+	fake := &fakeApp{entities: []app.EntityResult{garage}, homedHere: map[string]int{"garage0001": 1}}
+	srv := newTestServer(t, fake)
+
+	body := getDetail(t, srv, "garage0001")
+	// Each button carries the tooltip on its own markup; the reason constants
+	// are equal, so a bare Contains could not tell the two apart.
+	title := regexp.QuoteMeta(`title="Home to entities that are away — return them first"`)
+	assert.Regexp(t, `data-action="remove"\s+disabled aria-disabled="true"\s+`+title+`\s*>\s*Remove\s*<`, body)
+	assert.Regexp(t, `disabled aria-disabled="true"\s+`+title+`>Mark discrete<`, body)
+}
+
+func TestDetail_LockedBorrowed(t *testing.T) {
+	case1 := app.EntityResult{EntityID: "case000001", DisplayName: "Case", FullPathDisplay: "Case",
+		Status: inventory.EntityStatusBorrowed, Locked: true}
+	srv := newTestServer(t, &fakeApp{entities: []app.EntityResult{case1}})
+
+	body := getDetail(t, srv, "case000001")
+	assert.Contains(t, body, `title="Locked entities cannot be moved"`)
+	assert.Contains(t, body, ">Unlock<")
+	assert.NotContains(t, body, `data-action="lost"`)
+	assert.NotContains(t, body, `data-action="loan"`)
+}
+
+func TestDetail_ActionsNotFoundIsGone(t *testing.T) {
+	drill := app.EntityResult{EntityID: "drill00001", DisplayName: "Drill", FullPathDisplay: "Drill",
+		Status: inventory.EntityStatusOk}
+	fake := &fakeApp{entities: []app.EntityResult{drill},
+		actionsErr: fmt.Errorf("x: %w", app.ErrNotFound)}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/entities/drill00001")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestDetail_ActionsErrorDegradesToOffered(t *testing.T) {
+	drill := app.EntityResult{EntityID: "drill00001", DisplayName: "Drill", FullPathDisplay: "Drill",
+		Status: inventory.EntityStatusOk}
+	fake := &fakeApp{entities: []app.EntityResult{drill}, actionsErr: errTest}
+	srv := newTestServer(t, fake)
+
+	body := getDetail(t, srv, "drill00001")
+	// Everything is offered; the template shows Mark found ahead of Mark missing.
+	assert.Contains(t, body, `data-action="found"`)
+	assert.Contains(t, body, `data-action="loan"`)
+	assert.Contains(t, body, `data-action="remove"`)
+	assert.Equal(t, 1, fake.actionsCalls)
 }
