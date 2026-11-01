@@ -24,6 +24,10 @@ A mutable boolean attribute on an entity. When `true`, the entity may not have c
 
 An entity that may receive a new child (via `add`, `borrow`, or `move`): any entity that is neither `removed` nor `discrete`. Status is otherwise irrelevant — a `borrowed`, `loaned`, or `missing` entity is still an eligible parent (e.g. borrowed bits placed inside a borrowed drill case). The root (no parent) is always eligible.
 
+### Legal destination
+
+A place an entity may be put by a given intent. For a new entity (`add`, `borrow`) it is any **eligible parent**. For `move` and `use` it is an eligible parent that is not the entity itself or one of its descendants, would not put any displaced entity's **home** inside that displaced entity, and satisfies the move/use rules about the current parent and the home. Whether a destination is legal never depends on which interface (CLI or web) asks. _Avoid_: placement, valid target.
+
 ### Move
 
 Permanently relocating an entity: changing its parent (recorded as `EntityReparentedEvent`) and setting its **home** to the new parent. Move changes location only — never status. Only an entity that is not `locked` and whose status is `ok` or `borrowed` may be moved; a `missing` entity must first be found, and a `loaned` entity must first be returned. The destination must be an eligible parent (including the root) and may not be the entity itself, any of its descendants, or its current parent (a move must change location). There is one exception: a displaced entity may be moved to its current parent, which makes that parent its new home. A displaced entity may not be moved to its home, because that is a **return**.
@@ -64,7 +68,7 @@ Each status is reached by exactly one intent-driven command (`lost`, `found`, `l
 
 ### Action
 
-A user intent applied to a single existing entity: `lost`, `found`, `loan`, `return`, `move`, `use`, `remove`, `lock`, `unlock`, `set-discrete`, `clear-discrete`, `add-child`, or `tag`. Whether an action may apply depends on the entity's status, `locked` and `discrete` attributes, displacement, live children, and whether it is the home of a displaced entity — never on which interface (CLI or web) asks. For `move` and `use`, the answer covers only whether the entity may be relocated at all; whether a particular destination is legal is a separate check. `borrow` and `add` are not actions: they create entities. _Avoid_: intent (in code), operation, capability.
+A user intent applied to a single existing entity: `lost`, `found`, `loan`, `return`, `move`, `use`, `remove`, `lock`, `unlock`, `set-discrete`, `clear-discrete`, `add-child`, or `tag`. Whether an action may apply depends on the entity's status, `locked` and `discrete` attributes, displacement, live children, and whether it is the home of a displaced entity — never on which interface (CLI or web) asks. For `move` and `use`, the answer covers only whether the entity may be relocated at all; whether a particular destination is a **legal destination** is a separate check. `borrow` and `add` are not actions: they create entities. _Avoid_: intent (in code), operation, capability.
 
 ### Rejection
 
