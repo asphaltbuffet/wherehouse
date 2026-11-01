@@ -29,8 +29,8 @@ schema = 3
     version = "v2.7.0"
     hash = "sha256-GO3az7WiGcwU0OvmocwdfR5ohGRL8NbjscIaMyhAdxE="
   [mod."github.com/deckarep/golang-set/v2"]
-    version = "v2.8.0"
-    hash = "sha256-9f8aAodhyBeB3xPQKZTlcy3jGpLsY8fDwT2a+Xel0xg="
+    version = "v2.9.0"
+    hash = "sha256-0ErLiPfY92EiBljrB3I9wlsLKMzU5ACQnuXwHlGvOvU="
   [mod."github.com/dustin/go-humanize"]
     version = "v1.1.0"
     hash = "sha256-Qa7BSAXtgH7CB5STBiXTTOCgivWUiA65u3KxDOSZCkQ="
@@ -44,8 +44,8 @@ schema = 3
     version = "v2.5.0"
     hash = "sha256-LbrCBANBprVI84M0CWrXc7rriJL5ac5VKbh58LBTw7U="
   [mod."github.com/goccy/go-json"]
-    version = "v0.11.2"
-    hash = "sha256-MMFJd0ePB1LuLce8Mgpo0WxhJqSQT5Mt/oQfzMneWZM="
+    version = "v0.12.0"
+    hash = "sha256-b7f9gGIPjtbuRf5rOj0xz6Q7xCkU7+JDloW8iYzAnvc="
   [mod."github.com/golang-migrate/migrate/v4"]
     version = "v4.20.1"
     hash = "sha256-lIHYmgSZxpY5j8BDoPM/ZA8EnQ5lxKhj1SdEBnU39l8="
@@ -125,11 +125,14 @@ schema = 3
     version = "v1.6.0"
     hash = "sha256-LspbjTniiq2xAICSXmgqP7carwlNaLqnCTQfw2pa80A="
   [mod."github.com/xo/terminfo"]
-    version = "v1.2.0"
-    hash = "sha256-cLY+3xdncFQA7wPfh21Pex3Q9LA7dhRe+IyH0x6bQfM="
+    version = "v1.3.0"
+    hash = "sha256-pBQq9ERdY99za4EYTc0y3oZ6hVVBZIF6UJOtUEDVMRQ="
+  [mod."go.mongodb.org/mongo-driver"]
+    version = "v1.17.10"
+    hash = "sha256-S8oGQGcvpsbfKvZG/+7vQp9yCS+bVK+/ROClXT0qbOg="
   [mod."go.yaml.in/yaml/v3"]
-    version = "v3.0.5"
-    hash = "sha256-ygho+GU5kE7vPMx+dZYyNfCaeMjNxj66XmrcVf3afFE="
+    version = "v3.0.6"
+    hash = "sha256-4XBaZyVp0pU1FzRY+M/juXISzENKJ+v189aVvU0mvqM="
   [mod."golang.org/x/sync"]
     version = "v0.24.0"
     hash = "sha256-gViyLpsZFBKTEUtK6Li3m6plz5J/VCAcpTLymQVRpj4="
@@ -152,5 +155,5 @@ schema = 3
     version = "v1.12.1"
     hash = "sha256-Y/kW9/A5uF+Y66kDbxrh4muFgE3CEee6YzSl2FMPcRg="
   [mod."modernc.org/sqlite"]
-    version = "v1.61.0"
-    hash = "sha256-hkdsithYwoAc5svUA878mPtOs2eIhtQnmGnSabXfTtc="
+    version = "v1.61.1"
+    hash = "sha256-cmbPRIFECMBD0ZIc8FdjCLXRYT1TAHffxW1kVBPMo68="
