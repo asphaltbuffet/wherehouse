@@ -76,24 +76,14 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (Re
 		if err = facts.Require(ActionMove); err != nil {
 			return err
 		}
-		if entity.IsDisplaced() {
-			switch req.NewParentID {
-			case idOf(entity.ParentID):
-				return a.rehomeTx(ctx, tx, entity, req.ActorID, note)
-			case idOf(entity.HomeID):
-				return fmt.Errorf("cannot move %q to its home — use 'return' instead: %w: %w",
-					entity.FullPathDisplay, ErrDestinationIsHome, ErrInvalidDestination)
-			}
-		}
-		if err = checkNotAlreadyThere(entity, req.NewParentID, verbMove); err != nil {
+		if err = checkRelocation(ctx, txHierarchy{a: a, tx: tx}, entity, req.NewParentID, verbMove); err != nil {
 			return err
 		}
-
+		if entity.IsDisplaced() && req.NewParentID == idOf(entity.ParentID) {
+			return a.rehomeTx(ctx, tx, entity, req.ActorID, note)
+		}
 		var newParentID *string
 		if req.NewParentID != "" {
-			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID, verbMove); err != nil {
-				return err
-			}
 			newParentID = &req.NewParentID
 		}
 		return a.reparentTx(ctx, tx, entity.EntityID, newParentID, req.ActorID, note)
@@ -142,86 +132,12 @@ const (
 	verbBorrow = "borrow"
 )
 
-// checkNotAlreadyThere rejects newParentID when it is the current parent.
-func checkNotAlreadyThere(entity *inventory.Entity, newParentID, verb string) error {
-	if newParentID == idOf(entity.ParentID) {
-		return fmt.Errorf("cannot %s %q: already there: %w", verb, entity.FullPathDisplay, ErrInvalidDestination)
-	}
-	return nil
-}
-
 // idOf dereferences an optional entity ID; nil (the root) is "".
 func idOf(id *string) string {
 	if id == nil {
 		return ""
 	}
 	return *id
-}
-
-// getParentTx loads parentID as the parent of a new or moved entity. Create,
-// borrow and reparent share this rule: the parent must be live (a removed one
-// reads as ErrNotFound) and not discrete.
-func (a *App) getParentTx(ctx context.Context, tx store.Tx, parentID string) (*inventory.Entity, error) {
-	parent, err := a.store.GetLiveEntityTx(ctx, tx, parentID)
-	if err != nil {
-		return nil, wrapEntityError(parentID, err)
-	}
-	if parent.Discrete {
-		return nil, fmt.Errorf("%q is discrete and cannot hold entities: %w",
-			parent.FullPathDisplay, ErrInvalidDestination)
-	}
-	return parent, nil
-}
-
-// checkMoveDestinationTx rejects a non-root destination that fails
-// getParentTx, or is the entity itself or one of its descendants.
-func (a *App) checkMoveDestinationTx(
-	ctx context.Context,
-	tx store.Tx,
-	entity *inventory.Entity,
-	parentID, verb string,
-) error {
-	parent, err := a.getParentTx(ctx, tx, parentID)
-	if err != nil {
-		return fmt.Errorf("cannot %s %q: %w", verb, entity.FullPathDisplay, err)
-	}
-	inside, err := a.isSelfOrDescendant(ctx, tx, entity.EntityID, parent.EntityID)
-	if err != nil {
-		return err
-	}
-	if inside {
-		return fmt.Errorf("cannot %s %q into itself or its own contents: %w",
-			verb, entity.FullPathDisplay, ErrInvalidDestination)
-	}
-	return a.checkHomeCycleTx(ctx, tx, entity, parent.EntityID, verb)
-}
-
-// isSelfOrDescendant reports whether candidateID is entityID or lies beneath it.
-// It walks the candidate's ancestors by ID — names are not unique, so path
-// prefixes cannot be trusted — and reads removed ancestors too, because a live
-// entity may sit under a removed one (#287). A projection already damaged by
-// the pre-ADR-0034 cycle bug is reported as an error instead of looping forever.
-// It reads through tx so the walk sees the same tree the move will commit to (#301).
-func (a *App) isSelfOrDescendant(ctx context.Context, tx store.Tx, entityID, candidateID string) (bool, error) {
-	seen := make(map[string]bool)
-	for id := candidateID; id != ""; {
-		if id == entityID {
-			return true, nil
-		}
-		if seen[id] {
-			return false, fmt.Errorf("ancestor chain of %q loops at %q", candidateID, id)
-		}
-		seen[id] = true
-		e, err := a.store.GetEntityTx(ctx, tx, id)
-		if err != nil {
-			return false, wrapEntityError(id, err)
-		}
-		id = ""
-		if e.ParentID != nil {
-			id = *e.ParentID
-		}
-	}
-	return false, nil
 }
 
 // RemoveEntity permanently marks an entity as removed. It refuses an entity
@@ -481,7 +397,7 @@ func (a *App) CreateEntities(ctx context.Context, reqs []CreateEntityRequest) ([
 func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntityRequest) (EntityResult, error) {
 	var parentID *string
 	if req.ParentID != "" {
-		parent, err := a.getParentTx(ctx, tx, req.ParentID)
+		parent, err := checkNewParent(ctx, txHierarchy{a: a, tx: tx}, verbAdd, req.DisplayName, req.ParentID)
 		if err != nil {
 			return EntityResult{}, err
 		}

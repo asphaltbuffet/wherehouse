@@ -82,19 +82,3 @@ func wrapEntityError(id string, err error) error {
 	}
 	return fmt.Errorf("get entity %q: %w", id, err)
 }
-
-// sentinelError is an error whose text is msg alone but which matches every
-// sentinel in errs under [errors.Is]. It lets one rejection satisfy several
-// sentinels without each sentinel's text being appended to the message.
-type sentinelError struct {
-	msg  string
-	errs []error
-}
-
-func (e *sentinelError) Error() string   { return e.msg }
-func (e *sentinelError) Unwrap() []error { return e.errs }
-
-// rejection builds a sentinelError with the formatted message.
-func rejection(errs []error, format string, args ...any) error {
-	return &sentinelError{msg: fmt.Sprintf(format, args...), errs: errs}
-}

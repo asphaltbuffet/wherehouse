@@ -227,7 +227,7 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 
 	var parentID *string
 	if req.ParentID != "" {
-		parent, err := a.getParentTx(ctx, tx, req.ParentID)
+		parent, err := checkNewParent(ctx, txHierarchy{a: a, tx: tx}, verbBorrow, req.DisplayName, req.ParentID)
 		if err != nil {
 			return "", err
 		}

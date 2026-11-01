@@ -1,12 +1,17 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 // destFixture is a snapshot covering every legal-destination rule:
@@ -130,3 +135,90 @@ func TestCheckNewParent(t *testing.T) {
 	_, err = checkNewParent(ctx, h, verbAdd, "Nails", "nope")
 	require.ErrorIs(t, err, ErrNotFound)
 }
+
+// describeDestErr reduces a checkRelocation result to something comparable
+// across adapters: "" when legal, the Kind's text for a rejection, otherwise
+// the error text.
+func describeDestErr(err error) string {
+	var dr *DestinationRejection
+	switch {
+	case err == nil:
+		return ""
+	case errors.As(err, &dr):
+		return "rejection: " + dr.Kind.Error()
+	default:
+		return "error: " + err.Error()
+	}
+}
+
+// TestDestinationAdapters_Agree builds a real database holding every rule's
+// trigger and asserts the snapshot adapter (picker) and the transaction
+// adapter (write guards) decide every (moving, destination, verb) triple the
+// same way (ADR 0041).
+func TestDestinationAdapters_Agree(t *testing.T) {
+	ctx := t.Context()
+	s, err := store.Open(store.Config{Path: filepath.Join(t.TempDir(), "test.db"), AutoMigrate: true})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	a := New(s)
+
+	ids := map[string]string{}
+	mk := func(name, parent string, discrete bool) {
+		e, cerr := a.CreateEntity(ctx, CreateEntityRequest{
+			DisplayName: name, ParentID: ids[parent], Discrete: discrete, ActorID: "t",
+		})
+		require.NoError(t, cerr)
+		ids[name] = e.EntityID
+	}
+	mk("Garage", "", false)
+	mk("Shelf", "Garage", false)
+	mk("Drill", "Shelf", false)
+	mk("Bit", "Drill", false)
+	mk("Deck", "", false)
+	mk("Box", "", true)
+	mk("Loft", "", false)
+	mk("Trunk", "Loft", false)
+	_, err = a.UseEntity(ctx, UseEntityRequest{EntityID: ids["Drill"], NewParentID: ids["Deck"], ActorID: "t"})
+	require.NoError(t, err)
+	// Remove Loft leaving Trunk live beneath it (#287), bypassing app guards.
+	raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: ids["Loft"]})
+	require.NoError(t, err)
+	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityRemovedEvent, "t", raw, nil)
+	require.NoError(t, err)
+
+	all, err := s.ListAllEntities(ctx)
+	require.NoError(t, err)
+	snap := newSnapshotHierarchy(all)
+	dests := []string{"", "missing-id"}
+	for _, e := range all {
+		dests = append(dests, e.EntityID)
+	}
+
+	seen := map[string]bool{}
+	for _, moving := range all {
+		if moving.Status == inventory.EntityStatusRemoved {
+			continue
+		}
+		for _, dest := range dests {
+			for _, verb := range []string{verbMove, verbUse, verbReturn} {
+				fromSnap := describeDestErr(checkRelocation(ctx, snap, moving, dest, verb))
+				var fromTx string
+				require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+					fromTx = describeDestErr(checkRelocation(ctx, txHierarchy{a: a, tx: tx}, moving, dest, verb))
+					return nil
+				}))
+				assert.Equal(t, fromSnap, fromTx, "%s %s → %q", verb, moving.FullPathDisplay, dest)
+				seen[fromSnap] = true
+			}
+		}
+	}
+	for _, kind := range []error{ErrHomeCycle, ErrInsideItself, ErrDiscrete, ErrNotFound, ErrDestinationIsHome, ErrNoChange} {
+		assert.True(t, seen["rejection: "+kind.Error()], "fixture never exercised %v", kind)
+	}
+	assert.True(t, seen[""], "fixture never produced a legal destination")
+}
+
+var (
+	_ hierarchy = txHierarchy{}
+	_ hierarchy = snapshotHierarchy{}
+)

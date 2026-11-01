@@ -1664,6 +1664,8 @@ func TestHandleMove_InvalidDestinationReopensForm(t *testing.T) {
 	for _, moveErr := range []error{
 		fmt.Errorf("get entity %q: %w", "w", app.ErrNotFound),
 		fmt.Errorf("cannot move: %w", app.ErrInvalidDestination),
+		// A missing or removed destination matches both sentinels (ADR 0041).
+		fmt.Errorf("cannot move: destination not found: %w: %w", app.ErrNotFound, app.ErrInvalidDestination),
 	} {
 		t.Run(moveErr.Error(), func(t *testing.T) {
 			fake := &fakeApp{entities: movableDrill(), moveErr: moveErr}

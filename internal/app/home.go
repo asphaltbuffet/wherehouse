@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -49,53 +48,8 @@ func (a *App) withHomePath(ctx context.Context, r EntityResult) (EntityResult, e
 	return r, nil
 }
 
-// checkHomeCycleTx rejects placing moving under destID ("" = root) when some
-// displaced ancestor-or-self of the destination has its home inside moving's
-// subtree: the move would put that entity's home inside the entity itself
-// (CONTEXT.md "Home"). It covers indirect cases, e.g. moving Garage (which
-// holds Shelf, the drill's home) into the drill.
-func (a *App) checkHomeCycleTx(
-	ctx context.Context, tx store.Tx, moving *inventory.Entity, destID, verb string,
-) error {
-	seen := make(map[string]bool)
-	for id := destID; id != ""; {
-		if seen[id] {
-			return fmt.Errorf("ancestor chain of %q loops at %q", destID, id)
-		}
-		seen[id] = true
-		e, err := a.store.GetEntityTx(ctx, tx, id)
-		if err != nil {
-			return wrapEntityError(id, err)
-		}
-		if e.IsDisplaced() && e.HomeID != nil {
-			inside, ierr := a.isSelfOrDescendant(ctx, tx, moving.EntityID, *e.HomeID)
-			if ierr != nil {
-				return ierr
-			}
-			if inside {
-				return rejection([]error{ErrHomeCycle, ErrInvalidDestination},
-					"cannot %s %q there: %q's home would end up inside it — return %q first: %s",
-					verb, moving.FullPathDisplay, e.FullPathDisplay, e.FullPathDisplay, ErrInvalidDestination)
-			}
-		}
-		id = idOf(e.ParentID)
-	}
-	return nil
-}
-
-// rehomeTx makes a displaced entity's current parent its home (CONTEXT.md
-// "Move": moving a displaced entity to where it already is).
+// rehomeTx makes a displaced entity's current parent its home (CONTEXT.md "Move"). checkRelocation has already accepted that parent.
 func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string) error {
-	if entity.ParentID != nil {
-		// The new home must satisfy the same rules as any destination.
-		if _, err := a.getParentTx(ctx, tx, *entity.ParentID); err != nil {
-			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalidDestination) {
-				return rejection([]error{ErrInvalidDestination},
-					"cannot %s %q here: its current location cannot be a home", verbMove, entity.FullPathDisplay)
-			}
-			return err
-		}
-	}
 	raw, err := json.Marshal(eventbus.EntityRehomedPayload{EntityID: entity.EntityID, HomeID: entity.ParentID})
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
@@ -125,19 +79,11 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationRe
 		if err = facts.Require(ActionUse); err != nil {
 			return err
 		}
-		if req.NewParentID == idOf(entity.HomeID) {
-			return fmt.Errorf("cannot use %q at its home — use 'return' instead: %w: %w",
-				entity.FullPathDisplay, ErrDestinationIsHome, ErrInvalidDestination)
-		}
-		if err = checkNotAlreadyThere(entity, req.NewParentID, verbUse); err != nil {
+		if err = checkRelocation(ctx, txHierarchy{a: a, tx: tx}, entity, req.NewParentID, verbUse); err != nil {
 			return err
 		}
-
 		var newParentID *string
 		if req.NewParentID != "" {
-			if err = a.checkMoveDestinationTx(ctx, tx, entity, req.NewParentID, verbUse); err != nil {
-				return err
-			}
 			newParentID = &req.NewParentID
 		}
 
@@ -161,10 +107,8 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationRe
 func (a *App) returnHomeTx(
 	ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string,
 ) error {
-	if entity.HomeID != nil {
-		if err := a.checkMoveDestinationTx(ctx, tx, entity, *entity.HomeID, verbReturn); err != nil {
-			return err
-		}
+	if err := checkRelocation(ctx, txHierarchy{a: a, tx: tx}, entity, idOf(entity.HomeID), verbReturn); err != nil {
+		return err
 	}
 	raw, err := json.Marshal(eventbus.EntityReturnedHomePayload{EntityID: entity.EntityID, ParentID: entity.HomeID})
 	if err != nil {
