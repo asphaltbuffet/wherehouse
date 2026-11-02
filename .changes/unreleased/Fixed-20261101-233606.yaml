@@ -1,5 +1,0 @@
-kind: Fixed
-body: doctor no longer reports a stale projection for descendants of a moved entity; each descendant now records its own path-changed event.
-time: 2026-11-01T23:36:06.225440598-05:00
-custom:
-    Issue: "358"
