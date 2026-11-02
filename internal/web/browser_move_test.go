@@ -8,6 +8,8 @@ import (
 	"github.com/mxschmitt/playwright-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/asphaltbuffet/wherehouse/internal/app"
 )
 
 func TestBrowserMove(t *testing.T) {
@@ -52,6 +54,50 @@ func TestBrowserMovePicksSameNamedLocationByID(t *testing.T) {
 		path := s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{Name: "Location path"})
 		require.NoError(s.t, expect.Locator(path).ToHaveText("Inventory › Shed › Drill"))
 		assert.Equal(s.t, shed.EntityID, s.stored(drill.EntityID).ParentID)
+	})
+}
+
+// A focused node moved into a shown list keeps focus; moved into a collapsed
+// one, focus goes to a neighbour in its old list (#304). Wide only: the
+// narrow drawer is closed while the detail pane is in use.
+func TestBrowserMoveFocusedTreeNode(t *testing.T) {
+	t.Parallel()
+	forDevices(t, devicesIn(wide), sessionConfig{}, func(s *session) {
+		garage := s.createEntity("Garage", "")
+		drill := s.createEntity("Drill", garage.EntityID)
+		hammer := s.createEntity("Hammer", garage.EntityID)
+		shed := s.createEntity("Shed", "")
+		s.createEntity("Rake", shed.EntityID)
+
+		// moveFocused opens e's move form, picks to, focuses e's tree row,
+		// then submits the form without moving focus off the row.
+		moveFocused := func(e, to app.EntityResult) {
+			s.t.Helper()
+			s.click(s.button("Move"))
+			s.fill(s.page.GetByLabel("Move to"), to.DisplayName)
+			s.pickParent(to)
+			require.NoError(s.t, s.treeRow(e.DisplayName).Focus())
+			_, err := s.page.Evaluate(`document.querySelector('form[data-action="move"]').requestSubmit()`)
+			require.NoError(s.t, err)
+			path := s.page.GetByRole(*playwright.AriaRoleNavigation,
+				playwright.PageGetByRoleOptions{Name: "Location path"})
+			require.NoError(s.t, expect.Locator(path).ToHaveText("Inventory › "+to.DisplayName+" › "+e.DisplayName))
+			s.settle()
+		}
+
+		s.visit("/entities/" + drill.EntityID)
+		s.expandTreeItem("Shed")
+		moveFocused(drill, shed)
+		require.NoError(s.t, expect.Locator(s.treeItem("Shed").GetByRole(*playwright.AriaRoleTreeitem,
+			playwright.LocatorGetByRoleOptions{Name: "Drill", Exact: new(true)})).ToBeVisible())
+		require.NoError(s.t, expect.Locator(s.treeRow("Drill")).ToBeFocused())
+
+		s.visit("/entities/" + hammer.EntityID)
+		s.expandTreeItem("Shed")
+		s.click(s.treeRow("Shed").Locator(".chevron")) // collapse: loaded but hidden
+		require.NoError(s.t, expect.Locator(s.treeItem("Shed")).ToHaveAttribute("aria-expanded", "false"))
+		moveFocused(hammer, shed)
+		require.NoError(s.t, expect.Locator(s.treeRow("Garage")).ToBeFocused())
 	})
 }
 
