@@ -175,6 +175,35 @@ func TestCheckProjectionConsistency_CleanState(t *testing.T) {
 	assert.Empty(t, issues)
 }
 
+// Regression for #358: live path propagation must stamp each descendant with
+// its own path_changed event id, not the triggering event's.
+func TestCheckProjectionConsistency_AfterReparentWithDescendants(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	create := func(name, parentID string) app.EntityResult {
+		t.Helper()
+		e, err := a.CreateEntity(ctx, app.CreateEntityRequest{
+			DisplayName: name, ParentID: parentID, ActorID: "alice",
+		})
+		require.NoError(t, err)
+		return e
+	}
+	root := create("A", "")
+	b := create("B", root.EntityID)
+	create("C", b.EntityID)
+	d := create("D", "")
+
+	_, err := a.ReparentEntity(ctx, app.ReparentEntityRequest{
+		EntityID: b.EntityID, NewParentID: d.EntityID, ActorID: "alice",
+	})
+	require.NoError(t, err)
+
+	issues, err := a.CheckProjectionConsistency(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, issues)
+}
+
 func TestCheckProjectionConsistency_PhantomRow(t *testing.T) {
 	a, s := openTestAppWithStore(t)
 	ctx := context.Background()
