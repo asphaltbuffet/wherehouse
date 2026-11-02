@@ -265,6 +265,21 @@ func TestHandleParentOptions_RendersCandidates(t *testing.T) {
 	assert.Contains(t, body, `data-parent-path="Garage:Toolbox"`)
 }
 
+// Same-path candidates are told apart by their IDs, shown in every row (#294).
+func TestHandleParentOptions_ShowsIDsForSamePathCandidates(t *testing.T) {
+	fake := &fakeApp{parentResults: []app.FindResult{
+		{Entity: app.EntityResult{EntityID: "a1B2c3D4e5", DisplayName: "Bin", FullPathDisplay: "Garage:Bin"}},
+		{Entity: app.EntityResult{EntityID: "Z9y8X7w6V5", DisplayName: "Bin", FullPathDisplay: "Garage:Bin"}},
+	}}
+	ts := newTestServer(t, fake)
+	defer ts.Close()
+
+	_, body := getParentOptions(t, ts, "bin")
+
+	assert.Contains(t, body, `Garage:Bin <span class="parent-option-id">a1B2c3D4e5</span>`)
+	assert.Contains(t, body, `Garage:Bin <span class="parent-option-id">Z9y8X7w6V5</span>`)
+}
+
 func TestHandleParentOptions_NoMatches(t *testing.T) {
 	ts := newTestServer(t, &fakeApp{})
 	defer ts.Close()

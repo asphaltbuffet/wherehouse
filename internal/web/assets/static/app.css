@@ -455,7 +455,7 @@ h1, h2, h3 {
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
-.tape-id { font-size: var(--font-size-xs); opacity: 0.75; }
+.tape-id, .parent-option-id { font-size: var(--font-size-xs); opacity: 0.75; }
 .tape-edit-form { display: flex; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .tape-edit-form input {
   flex: 1 1 10rem;
@@ -740,6 +740,8 @@ dialog#add-modal input[type="checkbox"],
 .parent-options:not(:empty) { border: 1px solid var(--color-border-strong); background: var(--color-surface); }
 .parent-options li { padding: 0.125rem var(--space-2); }
 .parent-options-empty { color: var(--color-text-faint); font-size: var(--font-size-sm); font-style: italic; }
+/* Same-named locations share a path; the ID tells them apart (#294). */
+.parent-option-id { font-style: italic; margin-inline-start: var(--space-1); }
 
 /* ── Narrow viewports (ADR 0037: one markup, CSS-only layout) ─────────── */
 .tree-toggle, .tree-backdrop { display: none; }
@@ -795,6 +797,7 @@ dialog#add-modal input[type="checkbox"],
     box-sizing: border-box;
   }
   .breadcrumbs a, .parent-options li > * { display: inline-flex; align-items: center; }
+  .parent-options li > * { flex-wrap: wrap; } /* the ID may drop to its own line */
   .tree-item .add-btn { min-width: 2.75rem; min-height: 2.75rem; opacity: 1; } /* no hover to reveal it */
   .tree-item .chevron:not(.chevron-hidden) {
     min-width: 2.75rem;

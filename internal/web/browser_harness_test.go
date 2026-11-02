@@ -376,6 +376,18 @@ func (s *session) button(name string) playwright.Locator {
 	})
 }
 
+// pickParent clicks e's row in the open parent picker. A row is named by its
+// path and ID, so same-named locations stay distinct (#294).
+func (s *session) pickParent(e app.EntityResult) {
+	options := s.page.GetByRole(*playwright.AriaRoleList, playwright.PageGetByRoleOptions{
+		Name: "Matching locations",
+	})
+	s.click(options.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
+		Name:  e.FullPathDisplay + " " + e.EntityID,
+		Exact: new(true),
+	}))
+}
+
 // childLink is the row for name in the shown entity's (or home's) contents.
 func (s *session) childLink(name string) playwright.Locator {
 	contents := s.page.GetByRole(*playwright.AriaRoleRegion, playwright.PageGetByRoleOptions{Name: "Contents"})

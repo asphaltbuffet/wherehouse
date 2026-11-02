@@ -22,13 +22,7 @@ func TestBrowserUseAndReturn(t *testing.T) {
 		s.visit("/entities/" + drill.EntityID)
 		s.click(s.button("Use"))
 		s.fill(s.page.GetByLabel("Use at"), "Deck")
-		options := s.page.GetByRole(*playwright.AriaRoleList, playwright.PageGetByRoleOptions{
-			Name: "Matching locations",
-		})
-		s.click(options.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
-			Name:  "Deck",
-			Exact: new(true),
-		}))
+		s.pickParent(deck)
 		s.click(s.button("Use"))
 
 		path := s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{Name: "Location path"})
@@ -64,13 +58,7 @@ func TestBrowserRehomeViaMove(t *testing.T) {
 		s.visit("/entities/" + drill.EntityID)
 		s.click(s.button("Move"))
 		s.fill(s.page.GetByLabel("Move to"), "Deck")
-		options := s.page.GetByRole(*playwright.AriaRoleList, playwright.PageGetByRoleOptions{
-			Name: "Matching locations",
-		})
-		s.click(options.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
-			Name:  "Deck",
-			Exact: new(true),
-		}))
+		s.pickParent(deck)
 		s.click(s.button("Move"))
 
 		require.NoError(s.t, expect.Locator(s.button("Return")).ToBeHidden())
