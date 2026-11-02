@@ -348,6 +348,22 @@
     li.parentElement.insertBefore(li, next || null);
   }
 
+  // focusNeighbour moves focus, when it is inside li, to the next sibling,
+  // else the previous sibling, else the parent row (#304). Call it before li
+  // leaves the DOM: afterwards focus has already fallen to <body>.
+  function focusNeighbour(li) {
+    if (!li.contains(document.activeElement)) return;
+    var parentLi = li.parentElement && li.parentElement.closest('[role="treeitem"]');
+    focusItem(li.nextElementSibling || li.previousElementSibling || parentLi);
+  }
+
+  // Before an OOB delete takes a tree node away (return, remove). The
+  // tree-node-detached trigger runs after the swap, too late to see focus.
+  function onOobBeforeSwap(e) {
+    var li = e.detail && e.detail.target;
+    if (li && li.id && li.id.indexOf('tree-node-') === 0) focusNeighbour(li);
+  }
+
   // Insert a node that joined parentId's list (add, borrow, move) in sorted
   // position when that list is already loaded (root, or a parent expanded at
   // least once). A never-expanded parent only needs its chevron revealed;
@@ -361,13 +377,19 @@
     var listId = parentId ? 'tree-children-' + parentId : 'tree-root-list';
     var list = document.getElementById(listId);
     if (!list) {
-      if (existing) existing.remove();
+      if (existing) {
+        focusNeighbour(existing);
+        existing.remove();
+      }
       return;
     }
     if (parentId) {
       var parentItem = document.querySelector('.tree-item[data-entity-id="' + parentId + '"]');
       if (parentItem && !parentItem.dataset.expanded) {
-        if (existing) existing.remove();
+        if (existing) {
+          focusNeighbour(existing);
+          existing.remove();
+        }
         var li = parentItem.closest('li');
         if (li && li.getAttribute('aria-expanded') === null) li.setAttribute('aria-expanded', 'false');
         var ch = parentItem.querySelector('.chevron');
@@ -452,6 +474,7 @@
     document.body.addEventListener('keydown', onParentSearchKeydown);
     document.body.addEventListener('keydown', onEscCancelKeydown);
     document.body.addEventListener('entity-created', onEntityCreated);
+    document.body.addEventListener('htmx:oobBeforeSwap', onOobBeforeSwap);
     document.body.addEventListener('tree-node-detached', onTreeNodeDetached);
     document.body.addEventListener('tree-node-attached', onTreeNodeAttached);
     document.body.addEventListener('tree-node-renamed', onTreeNodeRenamed);
