@@ -1,5 +1,0 @@
-kind: Fixed
-body: Web location picker shows each candidate's ID so same-named locations can be told apart in Borrow, Move and Use
-time: 2026-11-01T23:13:06.981745843-05:00
-custom:
-    Issue: "294"

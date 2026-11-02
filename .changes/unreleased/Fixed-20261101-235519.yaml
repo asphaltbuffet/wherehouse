@@ -1,5 +1,0 @@
-kind: Fixed
-body: 'Web tree: keyboard focus is no longer lost when the focused row is removed, returned, or moved; a moved row keeps focus when it stays visible, otherwise focus goes to the next row, the previous row, or the parent'
-time: 2026-11-01T23:55:19.11345892-05:00
-custom:
-    Issue: '#304'
