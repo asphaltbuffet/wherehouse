@@ -398,8 +398,16 @@
       }
     }
     if (existing) {
+      // Re-inserting a node blurs it, so restore focus afterwards; a hidden
+      // (collapsed) list cannot take focus, so leave it with a neighbour.
+      var focused = existing.contains(document.activeElement) ? document.activeElement : null;
+      if (focused && list.offsetParent === null) {
+        focusNeighbour(existing);
+        focused = null;
+      }
       list.appendChild(existing);
       placeSorted(entityId);
+      if (focused) focused.focus();
       return;
     }
     htmx.ajax('GET', '/entities/' + entityId + '/tree-node', {
