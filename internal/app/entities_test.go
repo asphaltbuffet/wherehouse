@@ -287,6 +287,28 @@ func TestListEntities(t *testing.T) {
 	assert.Len(t, results, 3)
 }
 
+func TestListAllEntities_IncludesRemoved(t *testing.T) {
+	a := openTestApp(t)
+	ctx := context.Background()
+
+	kept, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Garage", ActorID: "alice"})
+	require.NoError(t, err)
+	gone, err := a.CreateEntity(ctx, app.CreateEntityRequest{DisplayName: "Shed", ActorID: "alice"})
+	require.NoError(t, err)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{EntityID: gone.EntityID, ActorID: "alice"}))
+
+	live, err := a.ListEntities(ctx)
+	require.NoError(t, err)
+	require.Len(t, live, 1)
+	assert.Equal(t, kept.EntityID, live[0].EntityID)
+
+	all, err := a.ListAllEntities(ctx)
+	require.NoError(t, err)
+	require.Len(t, all, 2)
+	assert.Equal(t, gone.EntityID, all[1].EntityID)
+	assert.Equal(t, inventory.EntityStatusRemoved, all[1].Status)
+}
+
 func TestApp_GetChildren(t *testing.T) {
 	t.Run("two active children", func(t *testing.T) {
 		ctx := context.Background()

@@ -233,7 +233,22 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list entities: %w", err)
 	}
+	return a.toEntityResults(ctx, entities)
+}
 
+// ListAllEntities returns every entity, removed ones included, for listings
+// that select removed entities explicitly (`list --status removed`, #366).
+func (a *App) ListAllEntities(ctx context.Context) ([]EntityResult, error) {
+	entities, err := a.store.ListAllEntities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list all entities: %w", err)
+	}
+	return a.toEntityResults(ctx, entities)
+}
+
+// toEntityResults converts entities to results with tags, HasChildren and home
+// paths resolved within the given set.
+func (a *App) toEntityResults(ctx context.Context, entities []*inventory.Entity) ([]EntityResult, error) {
 	parentIDs := make(map[string]bool, len(entities))
 	ids := make([]string, len(entities))
 	for i, e := range entities {

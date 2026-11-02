@@ -309,3 +309,28 @@ func TestList_TextShowsHomeOnDisplacedRows(t *testing.T) {
 	assert.Contains(t, out, "home: Shed")
 	assert.NotContains(t, out, "home: Garage:Toolbox")
 }
+
+// TestList_StatusRemovedShowsRemoved: --status removed loads removed entities (#366),
+// while the default listing still hides them.
+func TestList_StatusRemovedShowsRemoved(t *testing.T) {
+	a := apptesting.OpenApp(t)
+	ctx := t.Context()
+	seedThree(t, a)
+	require.NoError(t, a.RemoveEntity(ctx, app.RemoveEntityRequest{
+		EntityID: apptesting.MustLookupID(t, a, "Garage:Toolbox:Wrench"),
+		ActorID:  "test",
+	}))
+
+	var paths []string
+	for _, it := range runListJSON(t, a, "--status", "removed") {
+		paths = append(paths, it.Path)
+	}
+	assert.Equal(t, []string{"Garage:Toolbox:Wrench"}, paths)
+
+	out := runCmd(t, a, "--status", "removed")
+	assert.Contains(t, out, "Wrench")
+	assert.Contains(t, out, "[REMOVED]")
+	assert.Contains(t, out, "Toolbox", "live ancestor shown as scaffolding")
+
+	assert.NotContains(t, runCmd(t, a), "Wrench", "default listing hides removed")
+}

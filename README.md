@@ -349,6 +349,9 @@ wherehouse list --under "Garage:Toolbox"
 # Filter by status
 wherehouse list --status missing
 
+# Removed entities are hidden unless asked for
+wherehouse list --status removed
+
 # Show entities away from their home, or those whose home is under a path
 wherehouse list --displaced
 wherehouse list --home-under "Garage:Shelf"

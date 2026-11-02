@@ -9,6 +9,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/cli"
 	"github.com/asphaltbuffet/wherehouse/internal/config"
 	"github.com/asphaltbuffet/wherehouse/internal/entitypath"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
 // NewDefaultListCmd returns the list command wired to the real database.
@@ -38,7 +39,7 @@ func buildListCmd() *cobra.Command {
 		Short: "List entities in the inventory",
 		Long: `List entities in the inventory.
 
-Use --under to restrict to children of a specific entity path, and --status to filter by lifecycle status. Use --displaced to show only entities away from their home, and --home-under to restrict those to entities whose home is under a path.
+Use --under to restrict to children of a specific entity path, and --status to filter by lifecycle status. Removed entities are hidden unless selected with --status removed. Use --displaced to show only entities away from their home, and --home-under to restrict those to entities whose home is under a path.
 
 Examples:
   wherehouse list                                    # All entities
@@ -84,7 +85,13 @@ func runList(cmd *cobra.Command, _ []string, a *app.App) error {
 		}
 	}
 
-	all, err := a.ListEntities(ctx)
+	// Removed entities are hidden from every listing unless asked for by status.
+	listFn := a.ListEntities
+	if statusFilter == inventory.EntityStatusRemoved.String() {
+		listFn = a.ListAllEntities
+	}
+
+	all, err := listFn(ctx)
 	if err != nil {
 		return fmt.Errorf("list failed: %w", err)
 	}
