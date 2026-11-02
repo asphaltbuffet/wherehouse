@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -303,7 +304,6 @@ func (b *Bus) propagatePathChangesTx(
 		d.FullPathDisplay = p.FullPathDisplay
 		d.FullPathCanonical = p.FullPathCanonical
 		d.Depth = p.Depth
-		d.LastEventID = triggeringEv.EventID
 		d.UpdatedAt = time.Now().UTC()
 
 		var payloadJSON []byte
@@ -315,7 +315,8 @@ func (b *Bus) propagatePathChangesTx(
 		const q = `
             INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
             VALUES (?, ?, ?, ?, NULL, ?)`
-		_, err = tx.ExecContext(ctx, q,
+		var result sql.Result
+		result, err = tx.ExecContext(ctx, q,
 			inventory.EntityPathChangedEvent,
 			triggeringEv.TimestampUTC,
 			triggeringEv.ActorUserID,
@@ -324,6 +325,12 @@ func (b *Bus) propagatePathChangesTx(
 		)
 		if err != nil {
 			return nil, fmt.Errorf("insert path_changed event for %s: %w", d.EntityID, err)
+		}
+
+		// Stamp the descendant's own path_changed event, as replay does.
+		d.LastEventID, err = result.LastInsertId()
+		if err != nil {
+			return nil, fmt.Errorf("get path_changed event ID for %s: %w", d.EntityID, err)
 		}
 
 		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
