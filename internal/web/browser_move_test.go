@@ -20,13 +20,7 @@ func TestBrowserMove(t *testing.T) {
 		s.visit("/entities/" + drill.EntityID)
 		s.click(s.button("Move"))
 		s.fill(s.page.GetByLabel("Move to"), "Shed")
-		options := s.page.GetByRole(*playwright.AriaRoleList, playwright.PageGetByRoleOptions{
-			Name: "Matching locations",
-		})
-		s.click(options.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
-			Name:  "Shed",
-			Exact: new(true),
-		}))
+		s.pickParent(shed)
 		s.click(s.button("Move"))
 
 		path := s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{Name: "Location path"})
@@ -36,6 +30,27 @@ func TestBrowserMove(t *testing.T) {
 		require.NoError(s.t, expect.Locator(s.treeItem("Shed").GetByRole(*playwright.AriaRoleTreeitem,
 			playwright.LocatorGetByRoleOptions{Name: "Drill", Exact: new(true)})).ToBeVisible())
 
+		assert.Equal(s.t, shed.EntityID, s.stored(drill.EntityID).ParentID)
+	})
+}
+
+// Two locations share a path; the picker row's ID decides which one is stored (#294).
+func TestBrowserMovePicksSameNamedLocationByID(t *testing.T) {
+	t.Parallel()
+	forEachDevice(t, func(s *session) {
+		garage := s.createEntity("Garage", "")
+		drill := s.createEntity("Drill", garage.EntityID)
+		s.createEntity("Shed", "")
+		shed := s.createEntity("Shed", "")
+
+		s.visit("/entities/" + drill.EntityID)
+		s.click(s.button("Move"))
+		s.fill(s.page.GetByLabel("Move to"), "Shed")
+		s.pickParent(shed)
+		s.click(s.button("Move"))
+
+		path := s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{Name: "Location path"})
+		require.NoError(s.t, expect.Locator(path).ToHaveText("Inventory › Shed › Drill"))
 		assert.Equal(s.t, shed.EntityID, s.stored(drill.EntityID).ParentID)
 	})
 }
@@ -58,13 +73,7 @@ func TestBrowserMoveKeepsTreeState(t *testing.T) {
 
 		s.click(s.button("Move"))
 		s.fill(s.page.GetByLabel("Move to"), "Shed")
-		options := s.page.GetByRole(*playwright.AriaRoleList, playwright.PageGetByRoleOptions{
-			Name: "Matching locations",
-		})
-		s.click(options.GetByRole(*playwright.AriaRoleButton, playwright.LocatorGetByRoleOptions{
-			Name:  "Shed",
-			Exact: new(true),
-		}))
+		s.pickParent(shed)
 		s.click(s.button("Move"))
 
 		path := s.page.GetByRole(*playwright.AriaRoleNavigation, playwright.PageGetByRoleOptions{Name: "Location path"})

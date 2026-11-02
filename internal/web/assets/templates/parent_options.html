@@ -7,7 +7,7 @@
   <button type="button" class="btn-link parent-option"
           data-action="pick-parent"
           data-parent-id="{{.Entity.EntityID}}"
-          data-parent-path="{{.Entity.FullPathDisplay}}">{{.Entity.FullPathDisplay}}</button>
+          data-parent-path="{{.Entity.FullPathDisplay}}">{{.Entity.FullPathDisplay}} <span class="parent-option-id">{{.Entity.EntityID}}</span></button>
 </li>
 {{else}}
 <li class="parent-options-empty">No matching locations</li>
