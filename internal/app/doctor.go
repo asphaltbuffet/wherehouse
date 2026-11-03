@@ -108,9 +108,23 @@ func validateSingleEvent(
 		return append(issues, DoctorIssue{
 			Kind:    DoctorKindEventLog,
 			EventID: &id,
-			Description: fmt.Sprintf("event %d entity_id %q does not match payload entity_id %q",
+			Description: fmt.Sprintf(
+				"event %d entity_id %q does not match payload entity_id %q "+
+					"(rebuild follows the payload; use --rebuild --force)",
 				id, *ev.EntityID, payload.Subject()),
 		})
+	}
+
+	if et == inventory.EntityStatusChangedEvent {
+		var p eventbus.EntityStatusChangedPayload
+		_ = json.Unmarshal(ev.Payload, &p) // already validated above
+		if p.Status == 0 {
+			return append(issues, DoctorIssue{
+				Kind:        DoctorKindEventLog,
+				EventID:     &id,
+				Description: fmt.Sprintf("entity.status_changed event %d missing status", id),
+			})
+		}
 	}
 
 	if et == inventory.EntityCreatedEvent {

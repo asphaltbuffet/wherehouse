@@ -113,16 +113,20 @@ func (b *Bus) Dispatch(
 // does, so a later TruncateAndReplay finds them (ADR 0009). The written
 // payloads are returned so import can validate the source stream's copies
 // against them (ADR 0005). It rejects an event whose entity_id disagrees with
-// its payload (ErrSubjectMismatch).
+// its payload (ErrSubjectMismatch) and fills a missing entity_id from the
+// payload.
 func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []EntityPathChangedPayload, error) {
 	if ev.EventType.IsDerived() {
 		return 0, nil, nil
 	}
-	if err := b.checkSubject(ev); err != nil {
+	subject, err := b.resolveSubject(ev)
+	if err != nil {
 		return 0, nil, err
 	}
+	resolved := *ev
+	resolved.EntityID = &subject
 	var payloads []EntityPathChangedPayload
-	id, err := b.writeEvent(ctx, ev, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	id, err := b.writeEvent(ctx, &resolved, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
 		var applyErr error
 		payloads, applyErr = b.applyAndPropagateTx(ctx, tx, ev)
 		return applyErr
@@ -130,22 +134,23 @@ func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []En
 	return id, payloads, err
 }
 
-// checkSubject rejects an event whose entity_id column disagrees with its
-// payload. Only import calls it; rebuild tolerates a mismatch (ADR 0042).
-func (b *Bus) checkSubject(ev *inventory.Event) error {
+// resolveSubject returns the entity an imported event is about: its payload's
+// entity_id, which a non-NULL entity_id column must equal. Only import calls
+// it; rebuild tolerates a mismatch (ADR 0042).
+func (b *Bus) resolveSubject(ev *inventory.Event) (string, error) {
 	p, err := b.DecodePayload(ev.EventType, ev.Payload)
 	if err != nil {
-		return err
+		return "", err
 	}
-	var column string
-	if ev.EntityID != nil {
-		column = *ev.EntityID
+	subject := p.Subject()
+	if subject == "" {
+		return "", fmt.Errorf("%s: %w", ev.EventType, ErrNoSubject)
 	}
-	if ev.EntityID == nil || column != p.Subject() {
-		return fmt.Errorf("%s: entity_id %q, payload entity_id %q: %w",
-			ev.EventType, column, p.Subject(), ErrSubjectMismatch)
+	if ev.EntityID != nil && *ev.EntityID != subject {
+		return "", fmt.Errorf("%s: entity_id %q, payload entity_id %q: %w",
+			ev.EventType, *ev.EntityID, subject, ErrSubjectMismatch)
 	}
-	return nil
+	return subject, nil
 }
 
 // writeEvent is the transaction-owning write path for ReplayEvent; Dispatch

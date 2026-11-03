@@ -335,28 +335,57 @@ func returnDrill(t *testing.T, s *store.Store, b *eventbus.Bus, parent *string) 
 		eventbus.EntityReturnedHomePayload{EntityID: "drill00001", ParentID: parent})
 }
 
-func TestReplayEvent_SubjectMismatch_Rejected(t *testing.T) {
-	other := "zz"
-	tests := map[string]*string{"different": &other, "missing": nil}
-	for name, column := range tests {
-		t.Run(name, func(t *testing.T) {
-			s := openTestStore(t)
-			b := eventbus.New(s)
-			ev := &inventory.Event{
-				EventType:    inventory.EntityCreatedEvent,
-				TimestampUTC: "2020-01-01T00:00:00Z",
-				ActorUserID:  "alice",
-				Payload:      mustMarshal(t, eventbus.EntityCreatedPayload{EntityID: "g1", DisplayName: "Garage"}),
-				EntityID:     column,
-			}
-			_, _, err := b.ReplayEvent(t.Context(), ev)
-			require.ErrorIs(t, err, eventbus.ErrSubjectMismatch)
+func replayCreated(t *testing.T, b *eventbus.Bus, payload string, column *string) (int64, error) {
+	t.Helper()
+	id, _, err := b.ReplayEvent(t.Context(), &inventory.Event{
+		EventType:    inventory.EntityCreatedEvent,
+		TimestampUTC: "2020-01-01T00:00:00Z",
+		ActorUserID:  "alice",
+		Payload:      json.RawMessage(payload),
+		EntityID:     column,
+	})
+	return id, err
+}
 
-			var n int
-			require.NoError(t, s.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM events`).Scan(&n))
-			assert.Zero(t, n, "rejected record is not written")
-		})
-	}
+func countEvents(t *testing.T, s *store.Store) int {
+	t.Helper()
+	var n int
+	require.NoError(t, s.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM events`).Scan(&n))
+	return n
+}
+
+func TestReplayEvent_SubjectMismatch_Rejected(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	other := "zz"
+
+	_, err := replayCreated(t, b, `{"entity_id":"g1","display_name":"Garage"}`, &other)
+	require.ErrorIs(t, err, eventbus.ErrSubjectMismatch)
+	assert.Zero(t, countEvents(t, s), "rejected record is not written")
+}
+
+// A NULL column carries no claim to disagree with; the payload supplies it,
+// exactly as live dispatch would.
+func TestReplayEvent_NullColumn_FilledFromPayload(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+
+	id, err := replayCreated(t, b, `{"entity_id":"g1","display_name":"Garage"}`, nil)
+	require.NoError(t, err)
+
+	stored, err := s.GetEventByID(t.Context(), id)
+	require.NoError(t, err)
+	require.NotNil(t, stored.EntityID)
+	assert.Equal(t, "g1", *stored.EntityID)
+}
+
+func TestReplayEvent_NoSubjectAnywhere_Rejected(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+
+	_, err := replayCreated(t, b, `{"display_name":"Garage"}`, nil)
+	require.ErrorIs(t, err, eventbus.ErrNoSubject)
+	assert.Zero(t, countEvents(t, s))
 }
 
 // Rebuild is the recovery tool; it must still run over a legacy mismatch (ADR 0042).

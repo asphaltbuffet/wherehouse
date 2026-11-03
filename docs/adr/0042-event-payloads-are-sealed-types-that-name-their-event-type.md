@@ -4,7 +4,7 @@ Every payload struct in `internal/eventbus` implements a sealed `Payload` interf
 
 `Dispatch` rejects **derived events** (`EventType.IsDerived()`, see CONTEXT.md). Only the bus writes them, during path propagation.
 
-The `entity_id` column and the payload's `Subject()` must agree, but each path checks this differently. Live dispatch cannot produce a mismatch, because the column comes from `Subject()`. Import (`ReplayEvent`) rejects any record whose column differs from its payload, because import is the only path that accepts untrusted input. Projection rebuild (`TruncateAndReplay`) tolerates a mismatch, because it is the recovery tool and must still work on logs written before this check existed. Doctor reports existing mismatches as event-log issues (ADR 0011 shape).
+The `entity_id` column and the payload's `Subject()` must agree, but each path checks this differently. Live dispatch cannot produce a mismatch, because the column comes from `Subject()`. Import (`ReplayEvent`) rejects any record whose column differs from its payload, because import is the only path that accepts untrusted input. A NULL column claims nothing, so import fills it from the payload, as live dispatch would; a record with no entity_id in either place is rejected. Projection rebuild (`TruncateAndReplay`) tolerates a mismatch, because it is the recovery tool and must still work on logs written before this check existed. Doctor reports existing mismatches as event-log issues (ADR 0011 shape) and says that `doctor --rebuild --force` rebuilds anyway.
 
 ## Considered Options
 
