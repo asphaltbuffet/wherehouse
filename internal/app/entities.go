@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -25,25 +24,14 @@ func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (Entity
 // RenameEntity renames an entity. The liveness check reads through the same
 // transaction that writes the event (ADR 0035).
 func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (EntityResult, error) {
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 		if err != nil {
 			return wrapEntityError(req.EntityID, err)
 		}
 
-		raw, err := json.Marshal(eventbus.EntityRenamedPayload{
-			EntityID:    entity.EntityID,
-			DisplayName: req.NewName,
-		})
-		if err != nil {
-			return fmt.Errorf("marshal payload: %w", err)
-		}
-		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityRenamedEvent, req.ActorID, raw, note); err != nil {
+		payload := eventbus.EntityRenamedPayload{EntityID: entity.EntityID, DisplayName: req.NewName}
+		if _, err = a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); err != nil {
 			return fmt.Errorf("rename entity: %w", err)
 		}
 		return nil
@@ -61,11 +49,6 @@ func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (Entity
 // the same transaction that writes the event, so a concurrent remove or a
 // crossing move cannot slip between check and write (ADR 0035).
 func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (RelocationResult, error) {
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
 	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
@@ -80,13 +63,13 @@ func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (Re
 			return err
 		}
 		if isRehome(entity, req.NewParentID) {
-			return a.rehomeTx(ctx, tx, entity, req.ActorID, note)
+			return a.rehomeTx(ctx, tx, entity, req.ActorID, req.Note)
 		}
 		var newParentID *string
 		if req.NewParentID != "" {
 			newParentID = &req.NewParentID
 		}
-		return a.reparentTx(ctx, tx, entity.EntityID, newParentID, req.ActorID, note)
+		return a.reparentTx(ctx, tx, entity.EntityID, newParentID, req.ActorID, req.Note)
 	}); err != nil {
 		return RelocationResult{}, err
 	}
@@ -110,13 +93,10 @@ func (a *App) reparentTx(
 	entityID string,
 	newParentID *string,
 	actorID string,
-	note *string,
+	note string,
 ) error {
-	raw, err := json.Marshal(eventbus.EntityReparentedPayload{EntityID: entityID, NewParentID: newParentID})
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityReparentedEvent, actorID, raw, note); err != nil {
+	payload := eventbus.EntityReparentedPayload{EntityID: entityID, NewParentID: newParentID}
+	if _, err := a.bus.Dispatch(ctx, tx, actorID, payload, note); err != nil {
 		return fmt.Errorf("reparent entity: %w", err)
 	}
 	return nil
@@ -145,11 +125,6 @@ func idOf(id *string) string {
 // under a removed parent, unreachable from the tree. It also refuses an entity
 // that is home to displaced entities (ErrIsHome): they must be returned first.
 func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
 	return a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
 		if err != nil {
@@ -159,11 +134,8 @@ func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 			return err
 		}
 
-		raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: entity.EntityID})
-		if err != nil {
-			return fmt.Errorf("marshal payload: %w", err)
-		}
-		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityRemovedEvent, req.ActorID, raw, note); err != nil {
+		payload := eventbus.EntityRemovedPayload{EntityID: entity.EntityID}
+		if _, err = a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); err != nil {
 			return fmt.Errorf("remove entity: %w", err)
 		}
 		return nil
@@ -432,17 +404,7 @@ func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntit
 		ParentID:    parentID,
 	}
 
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return EntityResult{}, fmt.Errorf("marshal payload: %w", err)
-	}
-
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
-	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityCreatedEvent, req.ActorID, raw, note); err != nil {
+	if _, err = a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); err != nil {
 		return EntityResult{}, fmt.Errorf("create entity %q: %w", req.DisplayName, err)
 	}
 

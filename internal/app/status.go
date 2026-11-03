@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -131,10 +130,7 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 		return "", err
 	}
 
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
+	note := req.Note
 
 	switch entity.Status { //nolint:exhaustive // Require admitted only borrowed, loaned, or displaced ok
 	case inventory.EntityStatusBorrowed:
@@ -147,7 +143,7 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 		if err = a.dispatchStatusTx(ctx, tx, entity, inventory.EntityStatusOk, req.ActorID, note); err != nil {
 			return "", err
 		}
-		note = nil // the note rides on the first event of the return only
+		note = "" // the note rides on the first event of the return only
 	}
 
 	if entity.IsDisplaced() {
@@ -161,13 +157,10 @@ func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusR
 // dispatchStatusTx writes an EntityStatusChangedEvent with no status context.
 func (a *App) dispatchStatusTx(
 	ctx context.Context, tx store.Tx, entity *inventory.Entity,
-	status inventory.EntityStatus, actorID string, note *string,
+	status inventory.EntityStatus, actorID, note string,
 ) error {
-	raw, err := json.Marshal(eventbus.EntityStatusChangedPayload{EntityID: entity.EntityID, Status: status.String()})
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityStatusChangedEvent, actorID, raw, note); err != nil {
+	payload := eventbus.EntityStatusChangedPayload{EntityID: entity.EntityID, Status: status}
+	if _, err := a.bus.Dispatch(ctx, tx, actorID, payload, note); err != nil {
 		return fmt.Errorf("set status %s %q: %w", status, entity.EntityID, err)
 	}
 	return nil
@@ -189,22 +182,10 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 
 	payload := eventbus.EntityStatusChangedPayload{
 		EntityID:      entity.EntityID,
-		Status:        inventory.EntityStatusLoaned.String(),
+		Status:        inventory.EntityStatusLoaned,
 		StatusContext: &recipient,
 	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("marshal payload: %w", err)
-	}
-
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
-	if _, err = a.bus.DispatchInTx(
-		ctx, tx, inventory.EntityStatusChangedEvent, req.ActorID, raw, note,
-	); err != nil {
+	if _, err = a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); err != nil {
 		return "", fmt.Errorf("mark loaned %q: %w", req.EntityID, err)
 	}
 
@@ -245,17 +226,7 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 		ParentID:      parentID,
 		StatusContext: &lender,
 	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("marshal payload: %w", err)
-	}
-
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
-	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityBorrowedEvent, req.ActorID, raw, note); err != nil {
+	if _, err = a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); err != nil {
 		return "", fmt.Errorf("borrow entity %q: %w", req.DisplayName, err)
 	}
 
@@ -279,11 +250,7 @@ func (a *App) setStatusInTx(
 	ctx context.Context, tx store.Tx, entity *inventory.Entity,
 	status inventory.EntityStatus, req ChangeStatusRequest,
 ) (string, error) {
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-	if err := a.dispatchStatusTx(ctx, tx, entity, status, req.ActorID, note); err != nil {
+	if err := a.dispatchStatusTx(ctx, tx, entity, status, req.ActorID, req.Note); err != nil {
 		return "", err
 	}
 	return entity.EntityID, nil

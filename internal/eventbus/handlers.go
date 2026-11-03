@@ -133,17 +133,12 @@ func (b *Bus) handleEntityStatusChanged(ctx context.Context, tx store.Tx, ev *in
 		return fmt.Errorf("handleEntityStatusChanged: unmarshal: %w", err)
 	}
 
-	status, err := inventory.ParseEntityStatus(p.Status)
-	if err != nil {
-		return fmt.Errorf("handleEntityStatusChanged: %w", err)
-	}
-
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityStatusChanged: get entity: %w", err)
 	}
 
-	entity.Status = status
+	entity.Status = p.Status
 	entity.StatusContext = p.StatusContext
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()

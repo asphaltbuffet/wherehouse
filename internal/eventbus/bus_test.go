@@ -25,15 +25,6 @@ func openTestStore(t *testing.T) *store.Store {
 	return s
 }
 
-func TestDispatch_UnknownEventType(t *testing.T) {
-	s := openTestStore(t)
-	b := eventbus.New(s)
-
-	payload := json.RawMessage(`{}`)
-	_, err := b.Dispatch(context.Background(), inventory.EventType(999), "alice", payload, nil)
-	assert.Error(t, err)
-}
-
 func mustMarshal(t *testing.T, v any) json.RawMessage {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -159,18 +150,12 @@ func TestPayloadFactories_CoversAllEventTypes(t *testing.T) {
 	}
 }
 
-func dispatch(t *testing.T, b *eventbus.Bus, et inventory.EventType, payload any) {
-	t.Helper()
-	_, err := b.Dispatch(t.Context(), et, "test", mustMarshal(t, payload), nil)
-	require.NoError(t, err)
-}
-
 func TestHome_FollowsCreateAndReparent(t *testing.T) {
 	ctx := t.Context()
 	s := openTestStore(t)
 	b := eventbus.New(s)
 	created := func(id, name string, parent *string) {
-		dispatch(t, b, inventory.EntityCreatedEvent,
+		dispatch(t, s, b,
 			eventbus.EntityCreatedPayload{EntityID: id, DisplayName: name, ParentID: parent})
 	}
 	garage := "garage0001"
@@ -184,7 +169,7 @@ func TestHome_FollowsCreateAndReparent(t *testing.T) {
 	assert.Equal(t, garage, *e.HomeID)
 
 	shed := "shed000001"
-	dispatch(t, b, inventory.EntityReparentedEvent,
+	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &shed})
 	e, err = s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
@@ -206,11 +191,11 @@ func newTestBus(t *testing.T) (*store.Store, *eventbus.Bus) {
 	return s, eventbus.New(s)
 }
 
-func seedDrillInGarage(t *testing.T, b *eventbus.Bus) {
+func seedDrillInGarage(t *testing.T, s *store.Store, b *eventbus.Bus) {
 	t.Helper()
 	create := func(id, name string, parent *string) {
 		t.Helper()
-		dispatch(t, b, inventory.EntityCreatedEvent,
+		dispatch(t, s, b,
 			eventbus.EntityCreatedPayload{EntityID: id, DisplayName: name, ParentID: parent})
 	}
 	garage, drill := "garage0001", "drill00001"
@@ -223,9 +208,9 @@ func seedDrillInGarage(t *testing.T, b *eventbus.Bus) {
 func TestUsed_KeepsHomeAndPropagatesPaths(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck := "deck000001"
-	useDrill(t, b, &deck)
+	useDrill(t, s, b, &deck)
 
 	drill, err := s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
@@ -243,18 +228,18 @@ func TestUsed_KeepsHomeAndPropagatesPaths(t *testing.T) {
 func TestReturnedHome_And_Rehomed(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck, garage := "deck000001", "garage0001"
-	useDrill(t, b, &deck)
-	returnDrill(t, b, &garage)
+	useDrill(t, s, b, &deck)
+	returnDrill(t, s, b, &garage)
 
 	drill, err := s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage:Drill", drill.FullPathDisplay)
 	assert.False(t, drill.IsDisplaced())
 
-	useDrill(t, b, &deck)
-	dispatch(t, b, inventory.EntityRehomedEvent, eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
+	useDrill(t, s, b, &deck)
+	dispatch(t, s, b, eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
 	drill, err = s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	require.NotNil(t, drill.HomeID)
@@ -265,17 +250,17 @@ func TestReturnedHome_And_Rehomed(t *testing.T) {
 func TestHomeEvents_ReplayEquivalence(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck, garage := "deck000001", "garage0001"
-	useDrill(t, b, &deck)
-	returnDrill(t, b, &garage)
-	useDrill(t, b, &deck)
-	dispatch(t, b, inventory.EntityRehomedEvent,
+	useDrill(t, s, b, &deck)
+	returnDrill(t, s, b, &garage)
+	useDrill(t, s, b, &deck)
+	dispatch(t, s, b,
 		eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
-	dispatch(t, b, inventory.EntityReparentedEvent,
+	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &garage})
-	useDrill(t, b, &deck)
-	dispatch(t, b, inventory.EntityReparentedEvent,
+	useDrill(t, s, b, &deck)
+	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "bit0000001", NewParentID: &garage})
 
 	before, err := s.ListAllEntities(ctx)
@@ -302,7 +287,7 @@ func TestHomeEvents_ReplayEquivalence(t *testing.T) {
 func TestCountDisplacedWithHomeTx(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck, garage := "deck000001", "garage0001"
 
 	count := func(homeID string) int {
@@ -318,29 +303,29 @@ func TestCountDisplacedWithHomeTx(t *testing.T) {
 
 	assert.Equal(t, 0, count(garage), "nothing is displaced yet")
 
-	useDrill(t, b, &deck)
+	useDrill(t, s, b, &deck)
 	assert.Equal(t, 1, count(garage), "the used drill is displaced from its garage home")
 	assert.Equal(t, 0, count(deck), "deck is not the drill's home")
 	assert.Equal(t, 0, count("drill00001"), "the bit travels with the drill and is not displaced")
 
-	returnDrill(t, b, &garage)
+	returnDrill(t, s, b, &garage)
 	assert.Equal(t, 0, count(garage), "a drill returned home is no longer displaced")
 
-	useDrill(t, b, &deck)
+	useDrill(t, s, b, &deck)
 	assert.Equal(t, 1, count(garage), "using it again displaces it again")
 
-	dispatch(t, b, inventory.EntityRemovedEvent, eventbus.EntityRemovedPayload{EntityID: "drill00001"})
+	dispatch(t, s, b, eventbus.EntityRemovedPayload{EntityID: "drill00001"})
 	assert.Equal(t, 0, count(garage), "a removed displaced entity is not counted")
 }
 
-func useDrill(t *testing.T, b *eventbus.Bus, parent *string) {
+func useDrill(t *testing.T, s *store.Store, b *eventbus.Bus, parent *string) {
 	t.Helper()
-	dispatch(t, b, inventory.EntityUsedEvent,
+	dispatch(t, s, b,
 		eventbus.EntityUsedPayload{EntityID: "drill00001", NewParentID: parent})
 }
 
-func returnDrill(t *testing.T, b *eventbus.Bus, parent *string) {
+func returnDrill(t *testing.T, s *store.Store, b *eventbus.Bus, parent *string) {
 	t.Helper()
-	dispatch(t, b, inventory.EntityReturnedHomeEvent,
+	dispatch(t, s, b,
 		eventbus.EntityReturnedHomePayload{EntityID: "drill00001", ParentID: parent})
 }

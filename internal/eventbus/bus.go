@@ -118,51 +118,37 @@ func (b *Bus) PayloadFactories() map[inventory.EventType]func() any {
 	return factories
 }
 
-// Dispatch persists an event and applies it to projections in a single transaction.
-// The timestamp is set to [time.Now].UTC() and entity_id is parsed from the payload.
+// Dispatch writes p as one event and applies it to projections inside tx,
+// which the caller owns (ADR 0035). The event type and entity_id come from p
+// (ADR 0042); an empty note is stored as NULL.
 func (b *Bus) Dispatch(
 	ctx context.Context,
-	eventType inventory.EventType,
+	tx store.Tx,
 	actorUserID string,
-	payload json.RawMessage,
-	note *string,
+	p Payload,
+	note string,
 ) (int64, error) {
-	return b.writeEvent(ctx, b.buildEvent(eventType, actorUserID, payload, note), b.applyEventTx)
-}
-
-func (b *Bus) buildEvent(
-	eventType inventory.EventType,
-	actorUserID string,
-	payload json.RawMessage,
-	note *string,
-) *inventory.Event {
-	var entityID *string
-	var m map[string]any
-	if json.Unmarshal(payload, &m) == nil {
-		if id, ok := m["entity_id"].(string); ok && id != "" {
-			entityID = &id
-		}
+	et := p.EventType()
+	subject := p.Subject()
+	if subject == "" {
+		return 0, fmt.Errorf("dispatch %s: %w", et, ErrNoSubject)
 	}
-	return &inventory.Event{
-		EventType:    eventType,
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return 0, fmt.Errorf("dispatch %s: marshal: %w", et, err)
+	}
+	var notePtr *string
+	if note != "" {
+		notePtr = &note
+	}
+	ev := &inventory.Event{
+		EventType:    et,
 		TimestampUTC: time.Now().UTC().Format(time.RFC3339),
 		ActorUserID:  actorUserID,
-		Payload:      payload,
-		Note:         note,
-		EntityID:     entityID,
+		Payload:      raw,
+		Note:         notePtr,
+		EntityID:     &subject,
 	}
-}
-
-// DispatchInTx writes and applies a single event within a caller-owned transaction.
-func (b *Bus) DispatchInTx(
-	ctx context.Context,
-	tx store.Tx,
-	eventType inventory.EventType,
-	actorUserID string,
-	payload json.RawMessage,
-	note *string,
-) (int64, error) {
-	ev := b.buildEvent(eventType, actorUserID, payload, note)
 	return b.writeEventInTx(ctx, tx, ev, b.applyEventTx)
 }
 
@@ -186,8 +172,8 @@ func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []En
 	return id, payloads, err
 }
 
-// writeEvent is the single canonical write path shared by Dispatch and
-// ReplayEvent. It inserts ev into the events table inside a transaction,
+// writeEvent is the transaction-owning write path for ReplayEvent; Dispatch
+// calls writeEventInTx inside the caller's transaction. It inserts ev into the events table inside a transaction,
 // then runs applyEventTx in that same transaction so projection updates are
 // atomic with the event row.
 //

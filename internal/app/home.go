@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -49,12 +48,9 @@ func (a *App) withHomePath(ctx context.Context, r EntityResult) (EntityResult, e
 }
 
 // rehomeTx makes a displaced entity's current parent its home (CONTEXT.md "Move"). checkRelocation has already accepted that parent.
-func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string) error {
-	raw, err := json.Marshal(eventbus.EntityRehomedPayload{EntityID: entity.EntityID, HomeID: entity.ParentID})
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityRehomedEvent, actorID, raw, note); err != nil {
+func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID, note string) error {
+	payload := eventbus.EntityRehomedPayload{EntityID: entity.EntityID, HomeID: entity.ParentID}
+	if _, err := a.bus.Dispatch(ctx, tx, actorID, payload, note); err != nil {
 		return fmt.Errorf("rehome entity: %w", err)
 	}
 	return nil
@@ -64,11 +60,6 @@ func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entit
 // leaving it displaced (CONTEXT.md "Use"). Preconditions are move's plus
 // "destination is not home". All guards read through the write transaction (ADR 0035).
 func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationResult, error) {
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
 	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
 		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
@@ -87,11 +78,8 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationRe
 			newParentID = &req.NewParentID
 		}
 
-		raw, err := json.Marshal(eventbus.EntityUsedPayload{EntityID: entity.EntityID, NewParentID: newParentID})
-		if err != nil {
-			return fmt.Errorf("marshal payload: %w", err)
-		}
-		if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityUsedEvent, req.ActorID, raw, note); err != nil {
+		payload := eventbus.EntityUsedPayload{EntityID: entity.EntityID, NewParentID: newParentID}
+		if _, err = a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); err != nil {
 			return fmt.Errorf("use entity: %w", err)
 		}
 		return nil
@@ -105,16 +93,13 @@ func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationRe
 // as a destination; the home invariants make that pass in practice, but a
 // failed check rolls back the whole return.
 func (a *App) returnHomeTx(
-	ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID string, note *string,
+	ctx context.Context, tx store.Tx, entity *inventory.Entity, actorID, note string,
 ) error {
 	if err := checkRelocation(ctx, txHierarchy{a: a, tx: tx}, entity, idOf(entity.HomeID), verbReturn); err != nil {
 		return err
 	}
-	raw, err := json.Marshal(eventbus.EntityReturnedHomePayload{EntityID: entity.EntityID, ParentID: entity.HomeID})
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-	if _, err = a.bus.DispatchInTx(ctx, tx, inventory.EntityReturnedHomeEvent, actorID, raw, note); err != nil {
+	payload := eventbus.EntityReturnedHomePayload{EntityID: entity.EntityID, ParentID: entity.HomeID}
+	if _, err := a.bus.Dispatch(ctx, tx, actorID, payload, note); err != nil {
 		return fmt.Errorf("return %q home: %w", entity.FullPathDisplay, err)
 	}
 	return nil

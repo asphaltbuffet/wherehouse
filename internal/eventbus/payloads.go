@@ -1,5 +1,16 @@
 package eventbus
 
+import "github.com/asphaltbuffet/wherehouse/internal/inventory"
+
+// Payload is an event payload that names its own EventType and the entity it
+// is about. It is sealed: only eventbus types implement it (ADR 0042).
+type Payload interface {
+	EventType() inventory.EventType
+	// Subject is the entity the event is about; it becomes the event's entity_id.
+	Subject() string
+	isPayload()
+}
+
 // EntityCreatedPayload is the JSON payload for an EntityCreatedEvent.
 type EntityCreatedPayload struct {
 	EntityID    string  `json:"entity_id"`
@@ -54,9 +65,9 @@ type EntityPathChangedPayload struct {
 
 // EntityStatusChangedPayload is the JSON payload for an EntityStatusChangedEvent.
 type EntityStatusChangedPayload struct {
-	EntityID      string  `json:"entity_id"`
-	Status        string  `json:"status"`
-	StatusContext *string `json:"status_context,omitempty"`
+	EntityID      string                 `json:"entity_id"`
+	Status        inventory.EntityStatus `json:"status"`
+	StatusContext *string                `json:"status_context,omitempty"`
 }
 
 // EntityRemovedPayload is the JSON payload for an EntityRemovedEvent.
@@ -103,3 +114,163 @@ type EntityBorrowedPayload struct {
 	ParentID      *string `json:"parent_id,omitempty"`
 	StatusContext *string `json:"status_context,omitempty"`
 }
+
+// EventType implements [Payload].
+func (EntityCreatedPayload) EventType() inventory.EventType {
+	return inventory.EntityCreatedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityCreatedPayload) Subject() string { return p.EntityID }
+
+func (EntityCreatedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityRenamedPayload) EventType() inventory.EventType {
+	return inventory.EntityRenamedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityRenamedPayload) Subject() string { return p.EntityID }
+
+func (EntityRenamedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityReparentedPayload) EventType() inventory.EventType {
+	return inventory.EntityReparentedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityReparentedPayload) Subject() string { return p.EntityID }
+
+func (EntityReparentedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityUsedPayload) EventType() inventory.EventType {
+	return inventory.EntityUsedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityUsedPayload) Subject() string { return p.EntityID }
+
+func (EntityUsedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityReturnedHomePayload) EventType() inventory.EventType {
+	return inventory.EntityReturnedHomeEvent
+}
+
+// Subject implements [Payload].
+func (p EntityReturnedHomePayload) Subject() string { return p.EntityID }
+
+func (EntityReturnedHomePayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityRehomedPayload) EventType() inventory.EventType {
+	return inventory.EntityRehomedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityRehomedPayload) Subject() string { return p.EntityID }
+
+func (EntityRehomedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityPathChangedPayload) EventType() inventory.EventType {
+	return inventory.EntityPathChangedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityPathChangedPayload) Subject() string { return p.EntityID }
+
+func (EntityPathChangedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityStatusChangedPayload) EventType() inventory.EventType {
+	return inventory.EntityStatusChangedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityStatusChangedPayload) Subject() string { return p.EntityID }
+
+func (EntityStatusChangedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityRemovedPayload) EventType() inventory.EventType {
+	return inventory.EntityRemovedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityRemovedPayload) Subject() string { return p.EntityID }
+
+func (EntityRemovedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityTagAddedPayload) EventType() inventory.EventType {
+	return inventory.EntityTagAddedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityTagAddedPayload) Subject() string { return p.EntityID }
+
+func (EntityTagAddedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityTagRemovedPayload) EventType() inventory.EventType {
+	return inventory.EntityTagRemovedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityTagRemovedPayload) Subject() string { return p.EntityID }
+
+func (EntityTagRemovedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityLockedPayload) EventType() inventory.EventType {
+	return inventory.EntityLockedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityLockedPayload) Subject() string { return p.EntityID }
+
+func (EntityLockedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityUnlockedPayload) EventType() inventory.EventType {
+	return inventory.EntityUnlockedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityUnlockedPayload) Subject() string { return p.EntityID }
+
+func (EntityUnlockedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityDiscreteSetPayload) EventType() inventory.EventType {
+	return inventory.EntityDiscreteSetEvent
+}
+
+// Subject implements [Payload].
+func (p EntityDiscreteSetPayload) Subject() string { return p.EntityID }
+
+func (EntityDiscreteSetPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityDiscreteClearedPayload) EventType() inventory.EventType {
+	return inventory.EntityDiscreteClearedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityDiscreteClearedPayload) Subject() string { return p.EntityID }
+
+func (EntityDiscreteClearedPayload) isPayload() {}
+
+// EventType implements [Payload].
+func (EntityBorrowedPayload) EventType() inventory.EventType {
+	return inventory.EntityBorrowedEvent
+}
+
+// Subject implements [Payload].
+func (p EntityBorrowedPayload) Subject() string { return p.EntityID }
+
+func (EntityBorrowedPayload) isPayload() {}

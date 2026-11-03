@@ -54,7 +54,7 @@ func assertOneStatusEvent(t *testing.T, a *app.App, entityID string, before int,
 	assert.Equal(t, inventory.EntityStatusChangedEvent, newest.EventType)
 	var p eventbus.EntityStatusChangedPayload
 	require.NoError(t, json.Unmarshal(newest.Payload, &p))
-	assert.Equal(t, want.String(), p.Status)
+	assert.Equal(t, want, p.Status)
 }
 
 // assertOneWinner checks exactly one call succeeded and no loser failed on
