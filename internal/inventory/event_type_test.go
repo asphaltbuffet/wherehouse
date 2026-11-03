@@ -65,3 +65,11 @@ func TestParseEventType_HomeEvents(t *testing.T) {
 		assert.Equal(t, want, got)
 	}
 }
+
+func TestEventType_IsDerived(t *testing.T) {
+	for et := inventory.EntityCreatedEvent; et <= inventory.EntityRehomedEvent; et++ {
+		t.Run(et.String(), func(t *testing.T) {
+			assert.Equal(t, et == inventory.EntityPathChangedEvent, et.IsDerived())
+		})
+	}
+}

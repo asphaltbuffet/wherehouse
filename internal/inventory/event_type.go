@@ -16,7 +16,7 @@ const (
 	EntityRenamedEvent // entity.renamed
 	// EntityReparentedEvent records that an entity was moved to a new parent.
 	EntityReparentedEvent // entity.reparented
-	// EntityPathChangedEvent records a derived path update propagated from an ancestor reparent.
+	// EntityPathChangedEvent records a derived path update that followed an ancestor's rename or relocation.
 	EntityPathChangedEvent // entity.path_changed
 	// EntityStatusChangedEvent records that an entity's status (and optional context) changed.
 	EntityStatusChangedEvent // entity.status_changed
@@ -78,6 +78,12 @@ func (t EventType) Relocates() bool {
 // so emits (live and import) or is followed by (log) EntityPathChangedEvents.
 func (t EventType) PropagatesPaths() bool {
 	return t.Relocates() || t == EntityRenamedEvent
+}
+
+// IsDerived reports whether only the system writes the event, as a consequence
+// of another event (CONTEXT.md "Derived event"). Bus.Dispatch rejects these.
+func (t EventType) IsDerived() bool {
+	return t == EntityPathChangedEvent
 }
 
 // ParseEventType converts a string to an EventType, returning an error for unknown values.

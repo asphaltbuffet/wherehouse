@@ -80,6 +80,9 @@ func (b *Bus) Dispatch(
 	note string,
 ) (int64, error) {
 	et := p.EventType()
+	if et.IsDerived() {
+		return 0, fmt.Errorf("dispatch %s: %w", et, ErrDerivedEvent)
+	}
 	subject := p.Subject()
 	if subject == "" {
 		return 0, fmt.Errorf("dispatch %s: %w", et, ErrNoSubject)
@@ -104,14 +107,14 @@ func (b *Bus) Dispatch(
 }
 
 // ReplayEvent inserts a fully-populated event using its original TimestampUTC
-// and EntityID (no payload reparse). EntityPathChangedEvent is skipped without
+// and EntityID (no payload reparse). A derived event is skipped without
 // error and returns 0. Path-propagating events regenerate their descendants'
 // EntityPathChangedEvents in the destination log, exactly as live dispatch
 // does, so a later TruncateAndReplay finds them (ADR 0009). The written
 // payloads are returned so import can validate the source stream's copies
 // against them (ADR 0005).
 func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []EntityPathChangedPayload, error) {
-	if ev.EventType == inventory.EntityPathChangedEvent {
+	if ev.EventType.IsDerived() {
 		return 0, nil, nil
 	}
 	var payloads []EntityPathChangedPayload
@@ -224,8 +227,8 @@ func (b *Bus) applyEventProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *i
 // TruncateAndReplay rebuilds entities_current from the full event log.
 // Events are loaded inside the write transaction, which BEGIN IMMEDIATE opens
 // holding the write lock, so no concurrent event can commit between the load
-// and the replay. EntityPathChangedEvent rows are applied directly via applyEventProjectionOnlyTx
-// (no new events are written). Returns the count of non-EntityPathChangedEvent
+// and the replay. Derived events are applied directly via applyEventProjectionOnlyTx
+// (no new events are written). Returns the count of non-derived
 // events applied; on any error the transaction rolls back and the projection is
 // left intact.
 func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
@@ -245,7 +248,7 @@ func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
 			if applyErr := b.applyEventProjectionOnlyTx(ctx, tx, ev); applyErr != nil {
 				return fmt.Errorf("replay event_id %d: %w", ev.EventID, applyErr)
 			}
-			if ev.EventType != inventory.EntityPathChangedEvent {
+			if !ev.EventType.IsDerived() {
 				count++
 			}
 		}

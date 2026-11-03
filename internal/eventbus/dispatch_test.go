@@ -71,3 +71,22 @@ func TestDispatch_EmptySubject_Rejected(t *testing.T) {
 	})
 	require.ErrorIs(t, err, eventbus.ErrNoSubject)
 }
+
+func TestDispatch_DerivedEvent_Rejected(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	dispatch(t, s, b, eventbus.EntityCreatedPayload{EntityID: "g1", DisplayName: "Garage"})
+
+	err := s.ExecInTransaction(t.Context(), func(tx store.Tx) error {
+		_, err := b.Dispatch(t.Context(), tx, "test", eventbus.EntityPathChangedPayload{
+			EntityID: "g1", FullPathDisplay: "Elsewhere", FullPathCanonical: "elsewhere", Depth: 1,
+		}, "")
+		return err
+	})
+	require.ErrorIs(t, err, eventbus.ErrDerivedEvent)
+
+	var n int
+	require.NoError(t, s.DB().QueryRowContext(t.Context(),
+		`SELECT COUNT(*) FROM events WHERE event_type = 'entity.path_changed'`).Scan(&n))
+	assert.Zero(t, n)
+}
