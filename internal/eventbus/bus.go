@@ -153,17 +153,13 @@ func (b *Bus) resolveSubject(ev *inventory.Event) (string, error) {
 	return subject, nil
 }
 
-// writeEvent is the transaction-owning write path for ReplayEvent; Dispatch
-// calls writeEventInTx inside the caller's transaction. It inserts ev into the events table inside a transaction,
-// then runs applyEventTx in that same transaction so projection updates are
-// atomic with the event row.
+// writeEvent is ReplayEvent's write path: it opens a transaction and runs
+// writeEventInTx in it, so the event row and its projection updates commit
+// together. Dispatch calls writeEventInTx directly inside the caller's
+// transaction.
 //
 // Callers populate ev's EventType, TimestampUTC, ActorUserID, Payload, Note,
 // and EntityID. EventID is assigned by SQLite and returned to the caller.
-//
-// If a future change needs to differ between Dispatch and ReplayEvent (e.g.
-// one path adds a validation step the other shouldn't), express it as a
-// parameter to writeEvent rather than re-splitting into two methods.
 func (b *Bus) writeEvent(
 	ctx context.Context,
 	ev *inventory.Event,

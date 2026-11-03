@@ -133,7 +133,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 // same type; a copy-pasted EventType() method would collide here.
 func TestDecodePayload_EveryEventType(t *testing.T) {
 	b := eventbus.New(openTestStore(t))
-	for et := inventory.EntityCreatedEvent; et <= inventory.EntityRehomedEvent; et++ {
+	for _, et := range allEventTypes() {
 		t.Run(et.String(), func(t *testing.T) {
 			p, err := b.DecodePayload(et, json.RawMessage(`{"entity_id":"x"}`))
 			require.NoError(t, err)
@@ -407,4 +407,16 @@ func TestTruncateAndReplay_ToleratesSubjectMismatch(t *testing.T) {
 	e, err := s.GetEntity(t.Context(), "g1")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage", e.DisplayName)
+}
+
+// allEventTypes returns every defined EventType: the iota run ends at the
+// first value with no name, so a type added later is covered automatically.
+func allEventTypes() []inventory.EventType {
+	var all []inventory.EventType
+	for et := inventory.EntityCreatedEvent; ; et++ {
+		if _, err := inventory.ParseEventType(et.String()); err != nil {
+			return all
+		}
+		all = append(all, et)
+	}
 }
