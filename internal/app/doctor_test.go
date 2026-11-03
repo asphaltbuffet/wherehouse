@@ -483,3 +483,23 @@ func TestValidateEventLog_UnknownStatus_MalformedPayload(t *testing.T) {
 	assert.Equal(t, app.DoctorKindEventLog, issues[0].Kind)
 	assert.Contains(t, issues[0].Description, "malformed payload")
 }
+
+func TestValidateEventLog_EntityIDMismatch(t *testing.T) {
+	a, s := openTestAppWithStore(t)
+	ctx := context.Background()
+
+	column := "e2"
+	_, err := s.DB().ExecContext(ctx,
+		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+		 VALUES (?, ?, ?, ?, NULL, ?)`,
+		"entity.renamed", "2026-01-01T00:00:00Z", "alice",
+		`{"entity_id":"e1","display_name":"Garage"}`, &column,
+	)
+	require.NoError(t, err)
+
+	issues, err := a.ValidateEventLog(ctx)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, app.DoctorKindEventLog, issues[0].Kind)
+	assert.Contains(t, issues[0].Description, "does not match payload entity_id")
+}

@@ -1,0 +1,5 @@
+kind: Fixed
+body: import rejects an event whose entity_id does not match its payload, and doctor reports such events already in the log
+time: 2026-11-02T23:38:18.756531506-05:00
+custom:
+    Issue: ""

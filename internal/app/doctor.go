@@ -87,7 +87,8 @@ func validateSingleEvent(
 		})
 	}
 
-	if _, decodeErr := decode(et, ev.Payload); decodeErr != nil {
+	payload, decodeErr := decode(et, ev.Payload)
+	if decodeErr != nil {
 		return append(issues, DoctorIssue{
 			Kind:        DoctorKindEventLog,
 			EventID:     &id,
@@ -100,6 +101,15 @@ func validateSingleEvent(
 			Kind:        DoctorKindEventLog,
 			EventID:     &id,
 			Description: fmt.Sprintf("event %d missing entity_id", id),
+		})
+	}
+
+	if *ev.EntityID != payload.Subject() {
+		return append(issues, DoctorIssue{
+			Kind:    DoctorKindEventLog,
+			EventID: &id,
+			Description: fmt.Sprintf("event %d entity_id %q does not match payload entity_id %q",
+				id, *ev.EntityID, payload.Subject()),
 		})
 	}
 

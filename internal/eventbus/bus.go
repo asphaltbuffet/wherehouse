@@ -112,10 +112,14 @@ func (b *Bus) Dispatch(
 // EntityPathChangedEvents in the destination log, exactly as live dispatch
 // does, so a later TruncateAndReplay finds them (ADR 0009). The written
 // payloads are returned so import can validate the source stream's copies
-// against them (ADR 0005).
+// against them (ADR 0005). It rejects an event whose entity_id disagrees with
+// its payload (ErrSubjectMismatch).
 func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []EntityPathChangedPayload, error) {
 	if ev.EventType.IsDerived() {
 		return 0, nil, nil
+	}
+	if err := b.checkSubject(ev); err != nil {
+		return 0, nil, err
 	}
 	var payloads []EntityPathChangedPayload
 	id, err := b.writeEvent(ctx, ev, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
@@ -124,6 +128,24 @@ func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []En
 		return applyErr
 	})
 	return id, payloads, err
+}
+
+// checkSubject rejects an event whose entity_id column disagrees with its
+// payload. Only import calls it; rebuild tolerates a mismatch (ADR 0042).
+func (b *Bus) checkSubject(ev *inventory.Event) error {
+	p, err := b.DecodePayload(ev.EventType, ev.Payload)
+	if err != nil {
+		return err
+	}
+	var column string
+	if ev.EntityID != nil {
+		column = *ev.EntityID
+	}
+	if ev.EntityID == nil || column != p.Subject() {
+		return fmt.Errorf("%s: entity_id %q, payload entity_id %q: %w",
+			ev.EventType, column, p.Subject(), ErrSubjectMismatch)
+	}
+	return nil
 }
 
 // writeEvent is the transaction-owning write path for ReplayEvent; Dispatch

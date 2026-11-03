@@ -10,6 +10,7 @@ import (
 
 	"github.com/asphaltbuffet/wherehouse/internal/app"
 	"github.com/asphaltbuffet/wherehouse/internal/apptesting"
+	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
@@ -486,4 +487,28 @@ func TestImport_RebuildKeepsDescendantPaths(t *testing.T) {
 			assert.Len(t, rebuilt, len(srcEvents), "rebuild must not write events")
 		})
 	}
+}
+
+func TestImportEvents_EntityIDMismatch_Fails(t *testing.T) {
+	a := openTestApp(t)
+	rec := createdRecord(1, "e1", "Garage")
+	other := "e2"
+	rec.EntityID = &other
+
+	_, err := a.ImportEvents(t.Context(), []app.ExportResult{rec}, app.ImportOptions{})
+	require.ErrorIs(t, err, eventbus.ErrSubjectMismatch)
+}
+
+func TestImportEvents_EntityIDMismatch_ContinueCountsFailed(t *testing.T) {
+	a := openTestApp(t)
+	bad := createdRecord(1, "e1", "Garage")
+	other := "e2"
+	bad.EntityID = &other
+
+	result, err := a.ImportEvents(t.Context(),
+		[]app.ExportResult{bad, createdRecord(2, "e3", "Shed")},
+		app.ImportOptions{Continue: true})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Failed)
+	assert.Equal(t, 1, result.Replayed)
 }

@@ -37,6 +37,7 @@ func TestReplayEvent_ReturnsNewDBAssignedID(t *testing.T) {
 	b := eventbus.New(s)
 	ctx := context.Background()
 
+	r1ID := "r1"
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
 		EntityID: "r1", DisplayName: "Replay Room", Locked: true,
 	})
@@ -45,6 +46,7 @@ func TestReplayEvent_ReturnsNewDBAssignedID(t *testing.T) {
 		TimestampUTC: "2020-01-01T00:00:00Z",
 		ActorUserID:  "alice",
 		Payload:      payload,
+		EntityID:     &r1ID,
 	}
 
 	id, _, err := b.ReplayEvent(ctx, ev)
@@ -58,6 +60,7 @@ func TestReplayEvent_PreservesOriginalTimestamp(t *testing.T) {
 	ctx := context.Background()
 
 	const originalTS = "2020-06-15T12:00:00Z"
+	r2ID := "r2"
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
 		EntityID: "r2", DisplayName: "Time Capsule", Locked: true,
 	})
@@ -66,6 +69,7 @@ func TestReplayEvent_PreservesOriginalTimestamp(t *testing.T) {
 		TimestampUTC: originalTS,
 		ActorUserID:  "alice",
 		Payload:      payload,
+		EntityID:     &r2ID,
 	}
 
 	id, _, err := b.ReplayEvent(ctx, ev)
@@ -105,6 +109,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 	b := eventbus.New(s)
 	ctx := context.Background()
 
+	r3ID := "r3"
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
 		EntityID: "r3", DisplayName: "Projected Room", Locked: true,
 	})
@@ -113,6 +118,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 		TimestampUTC: "2022-09-10T08:00:00Z",
 		ActorUserID:  "bob",
 		Payload:      payload,
+		EntityID:     &r3ID,
 	}
 
 	_, _, err := b.ReplayEvent(ctx, ev)
@@ -327,4 +333,49 @@ func returnDrill(t *testing.T, s *store.Store, b *eventbus.Bus, parent *string) 
 	t.Helper()
 	dispatch(t, s, b,
 		eventbus.EntityReturnedHomePayload{EntityID: "drill00001", ParentID: parent})
+}
+
+func TestReplayEvent_SubjectMismatch_Rejected(t *testing.T) {
+	other := "zz"
+	tests := map[string]*string{"different": &other, "missing": nil}
+	for name, column := range tests {
+		t.Run(name, func(t *testing.T) {
+			s := openTestStore(t)
+			b := eventbus.New(s)
+			ev := &inventory.Event{
+				EventType:    inventory.EntityCreatedEvent,
+				TimestampUTC: "2020-01-01T00:00:00Z",
+				ActorUserID:  "alice",
+				Payload:      mustMarshal(t, eventbus.EntityCreatedPayload{EntityID: "g1", DisplayName: "Garage"}),
+				EntityID:     column,
+			}
+			_, _, err := b.ReplayEvent(t.Context(), ev)
+			require.ErrorIs(t, err, eventbus.ErrSubjectMismatch)
+
+			var n int
+			require.NoError(t, s.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM events`).Scan(&n))
+			assert.Zero(t, n, "rejected record is not written")
+		})
+	}
+}
+
+// Rebuild is the recovery tool; it must still run over a legacy mismatch (ADR 0042).
+func TestTruncateAndReplay_ToleratesSubjectMismatch(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	column := "zz"
+	_, err := s.DB().ExecContext(t.Context(),
+		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+		 VALUES (?, ?, ?, ?, NULL, ?)`,
+		"entity.created", "2020-01-01T00:00:00Z", "alice",
+		`{"entity_id":"g1","display_name":"Garage"}`, &column,
+	)
+	require.NoError(t, err)
+
+	count, err := b.TruncateAndReplay(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+	e, err := s.GetEntity(t.Context(), "g1")
+	require.NoError(t, err)
+	assert.Equal(t, "Garage", e.DisplayName)
 }
