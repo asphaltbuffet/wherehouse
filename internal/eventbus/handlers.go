@@ -12,12 +12,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
-func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityCreatedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityCreated: unmarshal: %w", err)
-	}
-
+func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityCreatedPayload) error {
 	locked := p.Locked
 	discrete := p.Discrete
 	// Legacy migration: old events carry entity_type instead of locked/discrete flags.
@@ -64,13 +59,8 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 // returned whenever the display name changed: descendants' display paths follow
 // it even when the canonical name does not (e.g. "Garage" → "garage").
 func (b *Bus) renameEntityTx(
-	ctx context.Context, tx store.Tx, ev *inventory.Event,
+	ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityRenamedPayload,
 ) (*inventory.Entity, []*inventory.Entity, error) {
-	var p EntityRenamedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return nil, nil, fmt.Errorf("handleEntityRenamed: unmarshal: %w", err)
-	}
-
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("handleEntityRenamed: get entity: %w", err)
@@ -107,12 +97,12 @@ func (b *Bus) renameEntityTx(
 	return entity, descendants, nil
 }
 
-func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityPathChangedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityPathChanged: unmarshal: %w", err)
-	}
-
+func (b *Bus) handleEntityPathChanged(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+	p EntityPathChangedPayload,
+) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityPathChanged: get entity: %w", err)
@@ -127,12 +117,12 @@ func (b *Bus) handleEntityPathChanged(ctx context.Context, tx store.Tx, ev *inve
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityStatusChanged(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityStatusChangedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityStatusChanged: unmarshal: %w", err)
-	}
-
+func (b *Bus) handleEntityStatusChanged(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+	p EntityStatusChangedPayload,
+) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityStatusChanged: get entity: %w", err)
@@ -146,12 +136,7 @@ func (b *Bus) handleEntityStatusChanged(ctx context.Context, tx store.Tx, ev *in
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityRemovedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityRemoved: unmarshal: %w", err)
-	}
-
+func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityRemovedPayload) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityRemoved: get entity: %w", err)
@@ -164,12 +149,12 @@ func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventor
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityBorrowed(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityBorrowedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityBorrowed: unmarshal: %w", err)
-	}
-
+func (b *Bus) handleEntityBorrowed(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+	p EntityBorrowedPayload,
+) error {
 	canonicalName := inventory.CanonicalizeString(p.DisplayName)
 	fullPathDisplay, fullPathCanonical, depth, err := b.store.ComputeEntityPathTx(
 		ctx, tx, p.DisplayName, canonicalName, p.ParentID,
@@ -196,27 +181,25 @@ func (b *Bus) handleEntityBorrowed(ctx context.Context, tx store.Tx, ev *invento
 	return b.store.InsertEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityTagAdded(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityTagAddedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityTagAdded: unmarshal: %w", err)
-	}
+func (b *Bus) handleEntityTagAdded(
+	ctx context.Context,
+	tx store.Tx,
+	_ *inventory.Event,
+	p EntityTagAddedPayload,
+) error {
 	return b.store.InsertTagTx(ctx, tx, p.EntityID, p.Tag)
 }
 
-func (b *Bus) handleEntityTagRemoved(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityTagRemovedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityTagRemoved: unmarshal: %w", err)
-	}
+func (b *Bus) handleEntityTagRemoved(
+	ctx context.Context,
+	tx store.Tx,
+	_ *inventory.Event,
+	p EntityTagRemovedPayload,
+) error {
 	return b.store.DeleteTagTx(ctx, tx, p.EntityID, p.Tag)
 }
 
-func (b *Bus) handleEntityLocked(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityLockedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityLocked: unmarshal: %w", err)
-	}
+func (b *Bus) handleEntityLocked(ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityLockedPayload) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityLocked: get entity: %w", err)
@@ -227,11 +210,12 @@ func (b *Bus) handleEntityLocked(ctx context.Context, tx store.Tx, ev *inventory
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityUnlocked(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityUnlockedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityUnlocked: unmarshal: %w", err)
-	}
+func (b *Bus) handleEntityUnlocked(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+	p EntityUnlockedPayload,
+) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityUnlocked: get entity: %w", err)
@@ -242,11 +226,12 @@ func (b *Bus) handleEntityUnlocked(ctx context.Context, tx store.Tx, ev *invento
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityDiscreteSet(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityDiscreteSetPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityDiscreteSet: unmarshal: %w", err)
-	}
+func (b *Bus) handleEntityDiscreteSet(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+	p EntityDiscreteSetPayload,
+) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityDiscreteSet: get entity: %w", err)
@@ -257,11 +242,12 @@ func (b *Bus) handleEntityDiscreteSet(ctx context.Context, tx store.Tx, ev *inve
 	return b.store.UpdateEntityTx(ctx, tx, entity)
 }
 
-func (b *Bus) handleEntityDiscreteCleared(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityDiscreteClearedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityDiscreteCleared: unmarshal: %w", err)
-	}
+func (b *Bus) handleEntityDiscreteCleared(
+	ctx context.Context,
+	tx store.Tx,
+	ev *inventory.Event,
+	p EntityDiscreteClearedPayload,
+) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityDiscreteCleared: get entity: %w", err)

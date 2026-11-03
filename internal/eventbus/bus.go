@@ -19,9 +19,9 @@ type pathChangeFn func(context.Context, store.Tx, *inventory.Event) (*inventory.
 
 // eventRegistration sets exactly one of applyFn or pathChangeFn.
 type eventRegistration struct {
-	payloadFactory func() any
-	applyFn        eventHandlerFn
-	pathChangeFn   pathChangeFn // set for events where PropagatesPaths() is true
+	decode       func(json.RawMessage) (Payload, error)
+	applyFn      eventHandlerFn
+	pathChangeFn pathChangeFn // set for events where PropagatesPaths() is true
 }
 
 // Bus is the single entry point for persisting events and updating projections.
@@ -41,81 +41,32 @@ func New(s *store.Store) *Bus {
 }
 
 func (b *Bus) registerAll() {
-	b.registry[inventory.EntityCreatedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityCreatedPayload{} },
-		applyFn:        b.handleEntityCreated,
-	}
-	b.registry[inventory.EntityRenamedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityRenamedPayload{} },
-		pathChangeFn:   b.renameEntityTx,
-	}
-	b.registry[inventory.EntityReparentedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityReparentedPayload{} },
-		pathChangeFn:   b.relocateEntityTx,
-	}
-	b.registry[inventory.EntityPathChangedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityPathChangedPayload{} },
-		applyFn:        b.handleEntityPathChanged,
-	}
-	b.registry[inventory.EntityStatusChangedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityStatusChangedPayload{} },
-		applyFn:        b.handleEntityStatusChanged,
-	}
-	b.registry[inventory.EntityRemovedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityRemovedPayload{} },
-		applyFn:        b.handleEntityRemoved,
-	}
-	b.registry[inventory.EntityTagAddedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityTagAddedPayload{} },
-		applyFn:        b.handleEntityTagAdded,
-	}
-	b.registry[inventory.EntityTagRemovedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityTagRemovedPayload{} },
-		applyFn:        b.handleEntityTagRemoved,
-	}
-	b.registry[inventory.EntityLockedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityLockedPayload{} },
-		applyFn:        b.handleEntityLocked,
-	}
-	b.registry[inventory.EntityUnlockedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityUnlockedPayload{} },
-		applyFn:        b.handleEntityUnlocked,
-	}
-	b.registry[inventory.EntityDiscreteSetEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityDiscreteSetPayload{} },
-		applyFn:        b.handleEntityDiscreteSet,
-	}
-	b.registry[inventory.EntityDiscreteClearedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityDiscreteClearedPayload{} },
-		applyFn:        b.handleEntityDiscreteCleared,
-	}
-	b.registry[inventory.EntityBorrowedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityBorrowedPayload{} },
-		applyFn:        b.handleEntityBorrowed,
-	}
-	b.registry[inventory.EntityUsedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityUsedPayload{} },
-		pathChangeFn:   b.relocateEntityTx,
-	}
-	b.registry[inventory.EntityReturnedHomeEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityReturnedHomePayload{} },
-		pathChangeFn:   b.relocateEntityTx,
-	}
-	b.registry[inventory.EntityRehomedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityRehomedPayload{} },
-		applyFn:        b.handleEntityRehomed,
-	}
+	register(b, b.handleEntityCreated)
+	registerPathChange(b, b.renameEntityTx)
+	registerRelocation[EntityReparentedPayload](b)
+	register(b, b.handleEntityPathChanged)
+	register(b, b.handleEntityStatusChanged)
+	register(b, b.handleEntityRemoved)
+	register(b, b.handleEntityTagAdded)
+	register(b, b.handleEntityTagRemoved)
+	register(b, b.handleEntityLocked)
+	register(b, b.handleEntityUnlocked)
+	register(b, b.handleEntityDiscreteSet)
+	register(b, b.handleEntityDiscreteCleared)
+	register(b, b.handleEntityBorrowed)
+	registerRelocation[EntityUsedPayload](b)
+	registerRelocation[EntityReturnedHomePayload](b)
+	register(b, b.handleEntityRehomed)
 }
 
-// PayloadFactories returns the live registry map of payload factory functions,
-// keyed by EventType. Used by doctor validation to unmarshal payloads without
-// maintaining a duplicate map.
-func (b *Bus) PayloadFactories() map[inventory.EventType]func() any {
-	factories := make(map[inventory.EventType]func() any, len(b.registry))
-	for et, reg := range b.registry {
-		factories[et] = reg.payloadFactory
+// DecodePayload decodes raw as the payload registered for et. Doctor validates
+// stored events with it, against the same types the handlers read.
+func (b *Bus) DecodePayload(et inventory.EventType, raw json.RawMessage) (Payload, error) {
+	reg, ok := b.registry[et]
+	if !ok {
+		return nil, fmt.Errorf("unknown event type: %s", et)
 	}
-	return factories
+	return reg.decode(raw)
 }
 
 // Dispatch writes p as one event and applies it to projections inside tx,

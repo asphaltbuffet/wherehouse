@@ -123,31 +123,30 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 	assert.Equal(t, "Projected Room", entity.DisplayName)
 }
 
-func TestPayloadFactories_CoversAllEventTypes(t *testing.T) {
-	s := openTestStore(t)
-	b := eventbus.New(s)
-
-	factories := b.PayloadFactories()
-
-	allTypes := []inventory.EventType{
-		inventory.EntityCreatedEvent,
-		inventory.EntityRenamedEvent,
-		inventory.EntityReparentedEvent,
-		inventory.EntityPathChangedEvent,
-		inventory.EntityStatusChangedEvent,
-		inventory.EntityRemovedEvent,
-		inventory.EntityUsedEvent,
-		inventory.EntityReturnedHomeEvent,
-		inventory.EntityRehomedEvent,
+// Every EventType decodes through the registry to a payload that names that
+// same type; a copy-pasted EventType() method would collide here.
+func TestDecodePayload_EveryEventType(t *testing.T) {
+	b := eventbus.New(openTestStore(t))
+	for et := inventory.EntityCreatedEvent; et <= inventory.EntityRehomedEvent; et++ {
+		t.Run(et.String(), func(t *testing.T) {
+			p, err := b.DecodePayload(et, json.RawMessage(`{"entity_id":"x"}`))
+			require.NoError(t, err)
+			assert.Equal(t, et, p.EventType())
+			assert.Equal(t, "x", p.Subject())
+		})
 	}
+}
 
-	for _, et := range allTypes {
-		factory, ok := factories[et]
-		require.True(t, ok, "PayloadFactories missing entry for %s", et)
-		require.NotNil(t, factory, "factory for %s is nil", et)
-		instance := factory()
-		assert.NotNil(t, instance, "factory() for %s returned nil", et)
-	}
+func TestDecodePayload_UnknownType(t *testing.T) {
+	b := eventbus.New(openTestStore(t))
+	_, err := b.DecodePayload(inventory.EventType(999), json.RawMessage(`{}`))
+	assert.Error(t, err)
+}
+
+func TestDecodePayload_Malformed(t *testing.T) {
+	b := eventbus.New(openTestStore(t))
+	_, err := b.DecodePayload(inventory.EntityRemovedEvent, json.RawMessage(`not-json`))
+	assert.ErrorContains(t, err, "entity.removed")
 }
 
 func TestHome_FollowsCreateAndReparent(t *testing.T) {
