@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 
 	"github.com/spf13/afero"
@@ -136,12 +138,15 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 	noConfig, _ := cmd.Flags().GetBool("no-config")
 
 	cfg, err := loadConfig(configPath, noConfig)
-	if err != nil {
-		if !allowsInvalidConfig(cmd) {
-			return err
-		}
+	switch {
+	case err == nil:
+	case errors.Is(err, fs.ErrNotExist) && hasAnnotation(cmd, configpkg.AllowMissingConfigAnnotation):
+		cfg = config.GetDefaults()
+	case allowsInvalidConfig(cmd):
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: invalid configuration, using defaults: %v\n", err)
 		cfg = config.GetDefaults()
+	default:
+		return err
 	}
 
 	bindFlagsToConfig(cmd, cfg)
@@ -181,8 +186,13 @@ func loadConfig(configPath string, noConfig bool) (*config.Config, error) {
 // allowsInvalidConfig reports whether cmd or an ancestor opted in to running
 // with defaults when the configuration is invalid.
 func allowsInvalidConfig(cmd *cobra.Command) bool {
+	return hasAnnotation(cmd, configpkg.AllowInvalidConfigAnnotation)
+}
+
+// hasAnnotation reports whether cmd or an ancestor carries the annotation key.
+func hasAnnotation(cmd *cobra.Command, key string) bool {
 	for c := cmd; c != nil; c = c.Parent() {
-		if _, ok := c.Annotations[configpkg.AllowInvalidConfigAnnotation]; ok {
+		if _, ok := c.Annotations[key]; ok {
 			return true
 		}
 	}

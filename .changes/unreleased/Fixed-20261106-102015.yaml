@@ -1,0 +1,5 @@
+kind: Fixed
+body: config init --config <new path> no longer warns that the file it is about to create does not exist
+time: 2026-11-06T10:20:15.529099144-05:00
+custom:
+    Issue: '#258'
