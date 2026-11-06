@@ -73,15 +73,6 @@ func TestConfigCheck_EffectiveConfigInvalidFromEnv(t *testing.T) {
 	assert.Contains(t, stdout, `file_path "-" (stderr)`)
 }
 
-func TestConfigCheck_LegacyLogPathIsInformational(t *testing.T) {
-	t.Setenv(internalconfig.LegacyLogPathEnv, "/tmp/legacy.log")
-
-	_, stderr, err := runCheckWithEnv(t)
-
-	require.NoError(t, err, "legacy env var must not fail the check")
-	assert.Contains(t, stderr, "WHEREHOUSE_LOG_PATH is no longer supported; use WHEREHOUSE_LOGGING_FILE_PATH")
-}
-
 func TestConfigCheck_ValidFileInvalidEffectiveFromEnv(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("WHEREHOUSE_LOGGING_FILE_PATH", "-")

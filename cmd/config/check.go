@@ -98,10 +98,6 @@ func runCheck(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	if config.LegacyLogPathSet() {
-		out.Warning(config.LegacyLogPathEnv + " is no longer supported; use WHEREHOUSE_LOGGING_FILE_PATH")
-	}
-
 	if hasErrors {
 		return errors.New("configuration validation failed")
 	}

@@ -83,15 +83,6 @@ func DefaultDatabasePath() string {
 	}
 }
 
-// LegacyDBPathEnv is the removed database path environment variable. It is
-// no longer read; LegacyDBPathSet lets callers warn users who still set it.
-const LegacyDBPathEnv = "WHEREHOUSE_DB_PATH"
-
-// LegacyDBPathSet reports whether the removed WHEREHOUSE_DB_PATH is set.
-func LegacyDBPathSet() bool {
-	return os.Getenv(LegacyDBPathEnv) != ""
-}
-
 // GetDatabasePath returns the resolved database path:
 //  1. cfg.Database.Path (config file, WHEREHOUSE_DATABASE_PATH, or --db), expanded
 //  2. Platform-specific default (via DefaultDatabasePath)

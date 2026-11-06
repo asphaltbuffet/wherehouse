@@ -64,15 +64,6 @@ func DefaultLogPath() string {
 	}
 }
 
-// LegacyLogPathEnv is the removed log path environment variable. It is no
-// longer read; LegacyLogPathSet lets callers warn users who still set it.
-const LegacyLogPathEnv = "WHEREHOUSE_LOG_PATH"
-
-// LegacyLogPathSet reports whether the removed WHEREHOUSE_LOG_PATH is set.
-func LegacyLogPathSet() bool {
-	return os.Getenv(LegacyLogPathEnv) != ""
-}
-
 // GetLogPath returns the resolved log file path:
 //  1. logging.StderrPath ("-"), returned verbatim to select stderr
 //  2. cfg.Logging.FilePath (also set by WHEREHOUSE_LOGGING_FILE_PATH), expanded
