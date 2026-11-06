@@ -156,6 +156,23 @@ func TestClearAllData_RemovesEventsAndEntities(t *testing.T) {
 	assert.ErrorIs(t, err, store.ErrNotFound, "entities_current should be empty after ClearAllData")
 }
 
+func TestClearAllData_RemovesTaggedEntities(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	entityID := seedTagEntity(t, s)
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		return s.InsertTagTx(ctx, tx, entityID, "tool")
+	}))
+
+	require.NoError(t, s.ClearAllData(ctx))
+
+	tags, err := s.GetDistinctTags(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, tags)
+	_, err = s.GetEntityAnyStatus(ctx, entityID)
+	assert.ErrorIs(t, err, store.ErrNotFound)
+}
+
 func TestClearAllData_PreservesSchemaMetadata(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

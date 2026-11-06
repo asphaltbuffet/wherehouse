@@ -293,6 +293,11 @@ func TestImportEvents_ReplaceTrue_ClearsExistingEventsBeforeReplay(t *testing.T)
 	first, err := a.ImportEvents(ctx, []app.ExportResult{createdRecord(1, "old", "OldPlace")}, app.ImportOptions{})
 	require.NoError(t, err)
 	require.Equal(t, 1, first.Replayed)
+	require.NoError(t, a.TagEntity(ctx, app.TagEntityRequest{
+		EntityID: "old",
+		ActorID:  "alice",
+		Add:      []string{"stale"},
+	}))
 
 	second, err := a.ImportEvents(
 		ctx,
@@ -305,6 +310,15 @@ func TestImportEvents_ReplaceTrue_ClearsExistingEventsBeforeReplay(t *testing.T)
 	has, err := a.HasEvents(ctx)
 	require.NoError(t, err)
 	assert.True(t, has, "second import should leave its own event in place")
+
+	entities, err := a.ListAllEntities(ctx)
+	require.NoError(t, err)
+	require.Len(t, entities, 1, "replace must drop entities from the first import")
+	assert.Equal(t, "new", entities[0].EntityID)
+
+	tags, err := a.AllTags(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, tags, "replace must drop tags from the first import")
 }
 
 func TestImportEvents_ReplaceTrue_MalformedRecordLeavesDBUntouched(t *testing.T) {
