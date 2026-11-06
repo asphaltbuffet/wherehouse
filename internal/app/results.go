@@ -106,10 +106,10 @@ func entityToResult(e *inventory.Entity, tags []string) EntityResult {
 }
 
 // entityWithTags fetches tags for a single entity and returns the full EntityResult.
-// Use this for point-lookup operations. For list operations use store.GetTagsByEntities
+// Use this for point-lookup operations. For list operations use Reader.GetTagsByEntities
 // with entityToResult directly to avoid N+1 queries (see ADR 0015).
 func (a *App) entityWithTags(ctx context.Context, e *inventory.Entity) (EntityResult, error) {
-	tags, err := a.store.GetTagsByEntity(ctx, e.EntityID)
+	tags, err := a.store.Reader().GetTagsByEntity(ctx, e.EntityID)
 	if err != nil {
 		return EntityResult{}, fmt.Errorf("get tags for %q: %w", e.EntityID, err)
 	}

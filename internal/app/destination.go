@@ -24,7 +24,7 @@ type txHierarchy struct {
 }
 
 func (h txHierarchy) get(ctx context.Context, id string) (*inventory.Entity, error) {
-	e, err := h.a.store.GetEntityTx(ctx, h.tx, id)
+	e, err := h.tx.GetEntityAnyStatus(ctx, id)
 	if err != nil {
 		return nil, wrapEntityError(id, err)
 	}
@@ -39,7 +39,7 @@ type storeHierarchy struct {
 }
 
 func (h storeHierarchy) get(ctx context.Context, id string) (*inventory.Entity, error) {
-	e, err := h.a.store.GetEntityAnyStatus(ctx, id)
+	e, err := h.a.store.Reader().GetEntityAnyStatus(ctx, id)
 	if err != nil {
 		return nil, wrapEntityError(id, err)
 	}

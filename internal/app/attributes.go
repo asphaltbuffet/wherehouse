@@ -30,7 +30,7 @@ func (a *App) setAttributesInTx(ctx context.Context, tx store.Tx, req SetAttribu
 		return "", fmt.Errorf("set attributes %q: %w", req.EntityID, ErrNoAttributes)
 	}
 
-	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 	if err != nil {
 		return "", err
 	}

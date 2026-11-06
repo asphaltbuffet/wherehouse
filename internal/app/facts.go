@@ -8,21 +8,21 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
-// loadFactsTx reads a live entity and the relational facts Check needs, all
+// loadFacts reads a live entity and the relational facts Check needs, all
 // through q. Guards pass their write transaction (ADR 0035); EntityActions
 // passes the store's Reader.
-func (a *App) loadFactsTx(
-	ctx context.Context, q store.Tx, entityID string,
+func (a *App) loadFacts(
+	ctx context.Context, q store.Reader, entityID string,
 ) (*inventory.Entity, EntityFacts, error) {
-	e, err := a.store.GetLiveEntityTx(ctx, q, entityID)
+	e, err := q.GetLiveEntity(ctx, entityID)
 	if err != nil {
 		return nil, EntityFacts{}, wrapEntityError(entityID, err)
 	}
-	children, err := a.store.CountLiveChildrenTx(ctx, q, e.EntityID)
+	children, err := q.CountLiveChildren(ctx, e.EntityID)
 	if err != nil {
 		return nil, EntityFacts{}, fmt.Errorf("load facts %q: %w", e.FullPathDisplay, err)
 	}
-	homed, err := a.store.CountDisplacedWithHomeTx(ctx, q, e.EntityID)
+	homed, err := q.CountLiveDisplacedWithHome(ctx, e.EntityID)
 	if err != nil {
 		return nil, EntityFacts{}, fmt.Errorf("load facts %q: %w", e.FullPathDisplay, err)
 	}
@@ -41,7 +41,7 @@ func (a *App) loadFactsTx(
 // allows. It is for render decisions only: the in-transaction guard still
 // decides every write (ADR 0035, ADR 0040).
 func (a *App) EntityActions(ctx context.Context, entityID string) (ActionSet, error) {
-	_, facts, err := a.loadFactsTx(ctx, a.store.Reader(), entityID)
+	_, facts, err := a.loadFacts(ctx, a.store.Reader(), entityID)
 	if err != nil {
 		return nil, err
 	}

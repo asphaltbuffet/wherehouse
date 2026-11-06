@@ -18,7 +18,7 @@ func TestEntityLifecycle_CreateAndRename(t *testing.T) {
 
 	createPlace(t, s, b, "p1", "Garage", nil)
 
-	entity, err := s.GetEntity(ctx, "p1")
+	entity, err := s.Reader().GetLiveEntity(ctx, "p1")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage", entity.DisplayName)
 	assert.Equal(t, "garage", entity.CanonicalName)
@@ -26,7 +26,7 @@ func TestEntityLifecycle_CreateAndRename(t *testing.T) {
 
 	dispatch(t, s, b, eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Workshop"})
 
-	renamed, err := s.GetEntity(ctx, "p1")
+	renamed, err := s.Reader().GetLiveEntity(ctx, "p1")
 	require.NoError(t, err)
 	assert.Equal(t, "Workshop", renamed.DisplayName)
 	assert.Equal(t, "workshop", renamed.CanonicalName)
@@ -45,11 +45,11 @@ func TestEntityLifecycle_PathPropagation(t *testing.T) {
 
 	dispatch(t, s, b, eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Workshop"})
 
-	toolbox, err := s.GetEntity(ctx, "p2")
+	toolbox, err := s.Reader().GetLiveEntity(ctx, "p2")
 	require.NoError(t, err)
 	assert.Equal(t, "Workshop:Toolbox", toolbox.FullPathDisplay)
 
-	socketSet, err := s.GetEntity(ctx, "p3")
+	socketSet, err := s.Reader().GetLiveEntity(ctx, "p3")
 	require.NoError(t, err)
 	assert.Equal(t, "Workshop:Toolbox:Socket Set", socketSet.FullPathDisplay)
 }
@@ -68,13 +68,13 @@ func TestEntityLifecycle_DisplayOnlyRenamePropagates(t *testing.T) {
 
 			dispatch(t, s, b, eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: newName})
 
-			toolbox, err := s.GetEntity(ctx, "p2")
+			toolbox, err := s.Reader().GetLiveEntity(ctx, "p2")
 			require.NoError(t, err)
 			assert.Equal(t, newName+":Toolbox", toolbox.FullPathDisplay)
 
 			_, err = b.TruncateAndReplay(ctx)
 			require.NoError(t, err)
-			rebuilt, err := s.GetEntity(ctx, "p2")
+			rebuilt, err := s.Reader().GetLiveEntity(ctx, "p2")
 			require.NoError(t, err)
 			assert.Equal(t, newName+":Toolbox", rebuilt.FullPathDisplay, "after rebuild")
 		})
@@ -103,13 +103,13 @@ func TestEntityLifecycle_Reparent(t *testing.T) {
 		NewParentID: &p3ID,
 	})
 
-	toolbox, err := s.GetEntity(ctx, "p2")
+	toolbox, err := s.Reader().GetLiveEntity(ctx, "p2")
 	require.NoError(t, err)
 	assert.Equal(t, "Workshop:Toolbox", toolbox.FullPathDisplay)
 	assert.Equal(t, "workshop:toolbox", toolbox.FullPathCanonical)
 	assert.Equal(t, 1, toolbox.Depth)
 
-	wrench, err := s.GetEntity(ctx, "l1")
+	wrench, err := s.Reader().GetLiveEntity(ctx, "l1")
 	require.NoError(t, err)
 	assert.Equal(t, "Workshop:Toolbox:Wrench", wrench.FullPathDisplay)
 	assert.Equal(t, "workshop:toolbox:wrench", wrench.FullPathCanonical)
@@ -132,7 +132,7 @@ func TestEntityLifecycle_StatusChange(t *testing.T) {
 		StatusContext: &note,
 	})
 
-	entity, err := s.GetEntity(ctx, "l1")
+	entity, err := s.Reader().GetLiveEntity(ctx, "l1")
 	require.NoError(t, err)
 	assert.Equal(t, inventory.EntityStatusMissing, entity.Status)
 	require.NotNil(t, entity.StatusContext)
@@ -147,7 +147,7 @@ func TestEntityCreated_LegacyEntityType_Place_SetsLocked(t *testing.T) {
 	p := eventbus.EntityCreatedPayload{EntityID: "p1", DisplayName: "Garage", LegacyEntityType: "place"}
 	dispatch(t, s, b, p)
 
-	entity, err := s.GetEntity(ctx, "p1")
+	entity, err := s.Reader().GetLiveEntity(ctx, "p1")
 	require.NoError(t, err)
 	assert.True(t, entity.Locked, "legacy place entity_type should set locked=true")
 	assert.False(t, entity.Discrete)
@@ -161,7 +161,7 @@ func TestEntityCreated_LegacyEntityType_Leaf_SetsDiscrete(t *testing.T) {
 	p := eventbus.EntityCreatedPayload{EntityID: "l1", DisplayName: "Wrench", LegacyEntityType: "leaf"}
 	dispatch(t, s, b, p)
 
-	entity, err := s.GetEntity(ctx, "l1")
+	entity, err := s.Reader().GetLiveEntity(ctx, "l1")
 	require.NoError(t, err)
 	assert.True(t, entity.Discrete, "legacy leaf entity_type should set discrete=true")
 	assert.False(t, entity.Locked)
@@ -185,7 +185,7 @@ func TestTruncateAndReplay_RebuildsProjection(t *testing.T) {
 	dispatch(t, s, b, eventbus.EntityReparentedPayload{EntityID: "p2", NewParentID: &p3ID})
 
 	// Count events in log before rebuild (includes EntityPathChangedEvents).
-	allEventsBefore, err := s.GetAllEvents(ctx)
+	allEventsBefore, err := s.Reader().GetAllEvents(ctx)
 	require.NoError(t, err)
 
 	n, err := b.TruncateAndReplay(ctx)
@@ -201,18 +201,18 @@ func TestTruncateAndReplay_RebuildsProjection(t *testing.T) {
 	assert.Equal(t, nonPathChanged, n)
 
 	// Projection is correct after rebuild.
-	toolbox, err := s.GetEntity(ctx, "p2")
+	toolbox, err := s.Reader().GetLiveEntity(ctx, "p2")
 	require.NoError(t, err)
 	assert.Equal(t, "Workshop:Toolbox", toolbox.FullPathDisplay)
 	assert.Equal(t, 1, toolbox.Depth)
 
-	wrench, err := s.GetEntity(ctx, "l1")
+	wrench, err := s.Reader().GetLiveEntity(ctx, "l1")
 	require.NoError(t, err)
 	assert.Equal(t, "Workshop:Toolbox:Wrench", wrench.FullPathDisplay)
 	assert.Equal(t, 2, wrench.Depth)
 
 	// Event log must not grow — rebuild is projection-only.
-	allEventsAfter, err := s.GetAllEvents(ctx)
+	allEventsAfter, err := s.Reader().GetAllEvents(ctx)
 	require.NoError(t, err)
 	assert.Len(t, allEventsAfter, len(allEventsBefore), "TruncateAndReplay must not write new events")
 }

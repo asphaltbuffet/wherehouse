@@ -75,7 +75,7 @@ func TestReplayEvent_PreservesOriginalTimestamp(t *testing.T) {
 	id, _, err := b.ReplayEvent(ctx, ev)
 	require.NoError(t, err)
 
-	stored, err := s.GetEventByID(ctx, id)
+	stored, err := s.Reader().GetEventByID(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, originalTS, stored.TimestampUTC)
 }
@@ -100,7 +100,7 @@ func TestReplayEvent_PathChangedEvent_IsNoOp(t *testing.T) {
 	assert.Zero(t, id, "path-changed replay should return 0 (no row inserted)")
 
 	// Confirm nothing was written
-	_, err = s.GetEventByID(ctx, 1)
+	_, err = s.Reader().GetEventByID(ctx, 1)
 	assert.ErrorIs(t, err, store.ErrNotFound)
 }
 
@@ -124,7 +124,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 	_, _, err := b.ReplayEvent(ctx, ev)
 	require.NoError(t, err)
 
-	entity, err := s.GetEntity(ctx, "r3")
+	entity, err := s.Reader().GetLiveEntity(ctx, "r3")
 	require.NoError(t, err)
 	assert.Equal(t, "Projected Room", entity.DisplayName)
 }
@@ -168,7 +168,7 @@ func TestHome_FollowsCreateAndReparent(t *testing.T) {
 	created("shed000001", "Shed", nil)
 	created("drill00001", "Drill", &garage)
 
-	e, err := s.GetEntity(ctx, "drill00001")
+	e, err := s.Reader().GetLiveEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	require.NotNil(t, e.HomeID)
 	assert.Equal(t, garage, *e.HomeID)
@@ -176,7 +176,7 @@ func TestHome_FollowsCreateAndReparent(t *testing.T) {
 	shed := "shed000001"
 	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &shed})
-	e, err = s.GetEntity(ctx, "drill00001")
+	e, err = s.Reader().GetLiveEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	require.NotNil(t, e.HomeID)
 	assert.Equal(t, shed, *e.HomeID)
@@ -184,7 +184,7 @@ func TestHome_FollowsCreateAndReparent(t *testing.T) {
 
 	_, err = b.TruncateAndReplay(ctx)
 	require.NoError(t, err)
-	e, err = s.GetEntity(ctx, "drill00001")
+	e, err = s.Reader().GetLiveEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	require.NotNil(t, e.HomeID)
 	assert.Equal(t, shed, *e.HomeID, "replay must reproduce home")
@@ -217,14 +217,14 @@ func TestUsed_KeepsHomeAndPropagatesPaths(t *testing.T) {
 	deck := "deck000001"
 	useDrill(t, s, b, &deck)
 
-	drill, err := s.GetEntity(ctx, "drill00001")
+	drill, err := s.Reader().GetLiveEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	assert.Equal(t, "Deck:Drill", drill.FullPathDisplay)
 	require.NotNil(t, drill.HomeID)
 	assert.Equal(t, "garage0001", *drill.HomeID)
 	assert.True(t, drill.IsDisplaced())
 
-	bit, err := s.GetEntity(ctx, "bit0000001")
+	bit, err := s.Reader().GetLiveEntity(ctx, "bit0000001")
 	require.NoError(t, err)
 	assert.Equal(t, "Deck:Drill:Bit", bit.FullPathDisplay)
 	assert.False(t, bit.IsDisplaced(), "descendants travel with the container")
@@ -238,14 +238,14 @@ func TestReturnedHome_And_Rehomed(t *testing.T) {
 	useDrill(t, s, b, &deck)
 	returnDrill(t, s, b, &garage)
 
-	drill, err := s.GetEntity(ctx, "drill00001")
+	drill, err := s.Reader().GetLiveEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage:Drill", drill.FullPathDisplay)
 	assert.False(t, drill.IsDisplaced())
 
 	useDrill(t, s, b, &deck)
 	dispatch(t, s, b, eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
-	drill, err = s.GetEntity(ctx, "drill00001")
+	drill, err = s.Reader().GetLiveEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	require.NotNil(t, drill.HomeID)
 	assert.Equal(t, deck, *drill.HomeID)
@@ -268,17 +268,17 @@ func TestHomeEvents_ReplayEquivalence(t *testing.T) {
 	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "bit0000001", NewParentID: &garage})
 
-	before, err := s.ListAllEntities(ctx)
+	before, err := s.Reader().ListEntitiesAnyStatus(ctx)
 	require.NoError(t, err)
-	eventsBefore, err := s.GetAllEvents(ctx)
+	eventsBefore, err := s.Reader().GetAllEvents(ctx)
 	require.NoError(t, err)
 
 	_, err = b.TruncateAndReplay(ctx)
 	require.NoError(t, err)
 
-	after, err := s.ListAllEntities(ctx)
+	after, err := s.Reader().ListEntitiesAnyStatus(ctx)
 	require.NoError(t, err)
-	eventsAfter, err := s.GetAllEvents(ctx)
+	eventsAfter, err := s.Reader().GetAllEvents(ctx)
 	require.NoError(t, err)
 	assert.Len(t, eventsAfter, len(eventsBefore), "replay must not write events")
 	require.Len(t, after, len(before))
@@ -289,7 +289,7 @@ func TestHomeEvents_ReplayEquivalence(t *testing.T) {
 	}
 }
 
-func TestCountDisplacedWithHomeTx(t *testing.T) {
+func TestCountLiveDisplacedWithHome(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
 	seedDrillInGarage(t, s, b)
@@ -300,7 +300,7 @@ func TestCountDisplacedWithHomeTx(t *testing.T) {
 		var n int
 		require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
 			var err error
-			n, err = s.CountDisplacedWithHomeTx(ctx, tx, homeID)
+			n, err = tx.CountLiveDisplacedWithHome(ctx, homeID)
 			return err
 		}))
 		return n
@@ -373,7 +373,7 @@ func TestReplayEvent_NullColumn_FilledFromPayload(t *testing.T) {
 	id, err := replayCreated(t, b, `{"entity_id":"g1","display_name":"Garage"}`, nil)
 	require.NoError(t, err)
 
-	stored, err := s.GetEventByID(t.Context(), id)
+	stored, err := s.Reader().GetEventByID(t.Context(), id)
 	require.NoError(t, err)
 	require.NotNil(t, stored.EntityID)
 	assert.Equal(t, "g1", *stored.EntityID)
@@ -404,7 +404,7 @@ func TestTruncateAndReplay_ToleratesSubjectMismatch(t *testing.T) {
 	count, err := b.TruncateAndReplay(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
-	e, err := s.GetEntity(t.Context(), "g1")
+	e, err := s.Reader().GetLiveEntity(t.Context(), "g1")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage", e.DisplayName)
 }

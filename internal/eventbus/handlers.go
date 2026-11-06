@@ -24,9 +24,8 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 	}
 
 	canonicalName := inventory.CanonicalizeString(p.DisplayName)
-	fullPathDisplay, fullPathCanonical, depth, err := b.store.ComputeEntityPathTx(
+	fullPathDisplay, fullPathCanonical, depth, err := tx.ComputeEntityPath(
 		ctx,
-		tx,
 		p.DisplayName,
 		canonicalName,
 		p.ParentID,
@@ -51,7 +50,7 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 		UpdatedAt:         time.Now().UTC(),
 	}
 
-	return b.store.InsertEntityTx(ctx, tx, entity)
+	return tx.InsertEntity(ctx, entity)
 }
 
 // renameEntityTx is the pathChangeFn for EntityRenamedEvent. Descendants are
@@ -60,7 +59,7 @@ func (b *Bus) handleEntityCreated(ctx context.Context, tx store.Tx, ev *inventor
 func (b *Bus) renameEntityTx(
 	ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityRenamedPayload,
 ) (*inventory.Entity, []*inventory.Entity, error) {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("handleEntityRenamed: get entity: %w", err)
 	}
@@ -69,15 +68,15 @@ func (b *Bus) renameEntityTx(
 
 	// Fetch descendants before updating the parent so the path-prefix query still
 	// matches the old canonical path stored in the DB.
-	descendants, err := b.store.GetDescendantsTx(ctx, tx, p.EntityID)
+	descendants, err := tx.GetDescendantsAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("handleEntityRenamed: get descendants: %w", err)
 	}
 
 	entity.DisplayName = p.DisplayName
 	entity.CanonicalName = inventory.CanonicalizeString(p.DisplayName)
-	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
-		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
+	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = tx.ComputeEntityPath(
+		ctx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("handleEntityRenamed: recompute path: %w", err)
@@ -86,7 +85,7 @@ func (b *Bus) renameEntityTx(
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 
-	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
+	if err = tx.UpdateEntity(ctx, entity); err != nil {
 		return nil, nil, fmt.Errorf("handleEntityRenamed: %w", err)
 	}
 
@@ -102,7 +101,7 @@ func (b *Bus) handleEntityPathChanged(
 	ev *inventory.Event,
 	p EntityPathChangedPayload,
 ) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityPathChanged: get entity: %w", err)
 	}
@@ -113,7 +112,7 @@ func (b *Bus) handleEntityPathChanged(
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 
-	return b.store.UpdateEntityTx(ctx, tx, entity)
+	return tx.UpdateEntity(ctx, entity)
 }
 
 func (b *Bus) handleEntityStatusChanged(
@@ -122,7 +121,7 @@ func (b *Bus) handleEntityStatusChanged(
 	ev *inventory.Event,
 	p EntityStatusChangedPayload,
 ) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityStatusChanged: get entity: %w", err)
 	}
@@ -132,11 +131,11 @@ func (b *Bus) handleEntityStatusChanged(
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 
-	return b.store.UpdateEntityTx(ctx, tx, entity)
+	return tx.UpdateEntity(ctx, entity)
 }
 
 func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityRemovedPayload) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityRemoved: get entity: %w", err)
 	}
@@ -145,7 +144,7 @@ func (b *Bus) handleEntityRemoved(ctx context.Context, tx store.Tx, ev *inventor
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
 
-	return b.store.UpdateEntityTx(ctx, tx, entity)
+	return tx.UpdateEntity(ctx, entity)
 }
 
 func (b *Bus) handleEntityBorrowed(
@@ -155,8 +154,8 @@ func (b *Bus) handleEntityBorrowed(
 	p EntityBorrowedPayload,
 ) error {
 	canonicalName := inventory.CanonicalizeString(p.DisplayName)
-	fullPathDisplay, fullPathCanonical, depth, err := b.store.ComputeEntityPathTx(
-		ctx, tx, p.DisplayName, canonicalName, p.ParentID,
+	fullPathDisplay, fullPathCanonical, depth, err := tx.ComputeEntityPath(
+		ctx, p.DisplayName, canonicalName, p.ParentID,
 	)
 	if err != nil {
 		return fmt.Errorf("handleEntityBorrowed: %w", err)
@@ -177,7 +176,7 @@ func (b *Bus) handleEntityBorrowed(
 		UpdatedAt:         time.Now().UTC(),
 	}
 
-	return b.store.InsertEntityTx(ctx, tx, entity)
+	return tx.InsertEntity(ctx, entity)
 }
 
 func (b *Bus) handleEntityTagAdded(
@@ -186,7 +185,7 @@ func (b *Bus) handleEntityTagAdded(
 	_ *inventory.Event,
 	p EntityTagAddedPayload,
 ) error {
-	return b.store.InsertTagTx(ctx, tx, p.EntityID, p.Tag)
+	return tx.InsertTag(ctx, p.EntityID, p.Tag)
 }
 
 func (b *Bus) handleEntityTagRemoved(
@@ -195,18 +194,18 @@ func (b *Bus) handleEntityTagRemoved(
 	_ *inventory.Event,
 	p EntityTagRemovedPayload,
 ) error {
-	return b.store.DeleteTagTx(ctx, tx, p.EntityID, p.Tag)
+	return tx.DeleteTag(ctx, p.EntityID, p.Tag)
 }
 
 func (b *Bus) handleEntityLocked(ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityLockedPayload) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityLocked: get entity: %w", err)
 	}
 	entity.Locked = true
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
-	return b.store.UpdateEntityTx(ctx, tx, entity)
+	return tx.UpdateEntity(ctx, entity)
 }
 
 func (b *Bus) handleEntityUnlocked(
@@ -215,14 +214,14 @@ func (b *Bus) handleEntityUnlocked(
 	ev *inventory.Event,
 	p EntityUnlockedPayload,
 ) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityUnlocked: get entity: %w", err)
 	}
 	entity.Locked = false
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
-	return b.store.UpdateEntityTx(ctx, tx, entity)
+	return tx.UpdateEntity(ctx, entity)
 }
 
 func (b *Bus) handleEntityDiscreteSet(
@@ -231,14 +230,14 @@ func (b *Bus) handleEntityDiscreteSet(
 	ev *inventory.Event,
 	p EntityDiscreteSetPayload,
 ) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityDiscreteSet: get entity: %w", err)
 	}
 	entity.Discrete = true
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
-	return b.store.UpdateEntityTx(ctx, tx, entity)
+	return tx.UpdateEntity(ctx, entity)
 }
 
 func (b *Bus) handleEntityDiscreteCleared(
@@ -247,14 +246,14 @@ func (b *Bus) handleEntityDiscreteCleared(
 	ev *inventory.Event,
 	p EntityDiscreteClearedPayload,
 ) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityDiscreteCleared: get entity: %w", err)
 	}
 	entity.Discrete = false
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
-	return b.store.UpdateEntityTx(ctx, tx, entity)
+	return tx.UpdateEntity(ctx, entity)
 }
 
 // propagatePathChangesTx emits entity.path_changed derived events for all descendants
@@ -293,7 +292,7 @@ func (b *Bus) propagatePathChangesTx(
 		}
 
 		// Stamp the descendant's own path_changed event, as replay does.
-		d.LastEventID, err = b.store.AppendEvent(ctx, tx, &inventory.Event{
+		d.LastEventID, err = tx.AppendEvent(ctx, &inventory.Event{
 			EventType:    inventory.EntityPathChangedEvent,
 			TimestampUTC: triggeringEv.TimestampUTC,
 			ActorUserID:  triggeringEv.ActorUserID,
@@ -304,7 +303,7 @@ func (b *Bus) propagatePathChangesTx(
 			return nil, fmt.Errorf("insert path_changed event for %s: %w", d.EntityID, err)
 		}
 
-		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {
+		if err = tx.UpdateEntity(ctx, d); err != nil {
 			return nil, fmt.Errorf("update descendant %s: %w", d.EntityID, err)
 		}
 	}

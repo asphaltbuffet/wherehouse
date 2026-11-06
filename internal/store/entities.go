@@ -12,8 +12,8 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-// InsertEntityTx inserts a new entity projection row inside an existing transaction.
-func (s *Store) InsertEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) error {
+// InsertEntity inserts a new entity projection row.
+func (t Tx) InsertEntity(ctx context.Context, e *inventory.Entity) error {
 	const query = `
 		INSERT INTO entities_current (
 			entity_id, display_name, canonical_name, locked, discrete,
@@ -21,7 +21,7 @@ func (s *Store) InsertEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 			depth, status, status_context, last_event_id, updated_at, home_id
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := tx.ExecContext(ctx, query,
+	_, err := t.q.ExecContext(ctx, query,
 		e.EntityID, e.DisplayName, e.CanonicalName, e.Locked, e.Discrete,
 		e.ParentID, e.FullPathDisplay, e.FullPathCanonical,
 		e.Depth, e.Status, e.StatusContext, e.LastEventID,
@@ -33,8 +33,8 @@ func (s *Store) InsertEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 	return nil
 }
 
-// UpdateEntityTx updates an existing entity projection row inside an existing transaction.
-func (s *Store) UpdateEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) error {
+// UpdateEntity updates an existing entity projection row.
+func (t Tx) UpdateEntity(ctx context.Context, e *inventory.Entity) error {
 	const query = `
 		UPDATE entities_current SET
 			display_name = ?, canonical_name = ?, locked = ?, discrete = ?,
@@ -43,7 +43,7 @@ func (s *Store) UpdateEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 			last_event_id = ?, updated_at = ?, home_id = ?
 		WHERE entity_id = ?`
 
-	_, err := tx.ExecContext(ctx, query,
+	_, err := t.q.ExecContext(ctx, query,
 		e.DisplayName, e.CanonicalName, e.Locked, e.Discrete,
 		e.ParentID, e.FullPathDisplay, e.FullPathCanonical,
 		e.Depth, e.Status, e.StatusContext,
@@ -56,15 +56,15 @@ func (s *Store) UpdateEntityTx(ctx context.Context, tx Tx, e *inventory.Entity) 
 	return nil
 }
 
-// GetEntity retrieves a single non-removed entity by ID.
-func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Entity, error) {
+// GetLiveEntity retrieves a single non-removed entity by ID.
+func (r Reader) GetLiveEntity(ctx context.Context, entityID string) (*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE entity_id = ? AND status != 'removed'`
 
-	row := s.db.QueryRowContext(ctx, query, entityID)
+	row := r.q.QueryRowContext(ctx, query, entityID)
 	e, err := scanEntity(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -76,14 +76,14 @@ func (s *Store) GetEntity(ctx context.Context, entityID string) (*inventory.Enti
 }
 
 // GetEntityAnyStatus retrieves a single entity by ID regardless of status, including removed entities.
-func (s *Store) GetEntityAnyStatus(ctx context.Context, entityID string) (*inventory.Entity, error) {
+func (r Reader) GetEntityAnyStatus(ctx context.Context, entityID string) (*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
 		       depth, status, status_context, last_event_id, updated_at, home_id
 		FROM entities_current WHERE entity_id = ?`
 
-	row := s.db.QueryRowContext(ctx, query, entityID)
+	row := r.q.QueryRowContext(ctx, query, entityID)
 	e, err := scanEntity(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -94,11 +94,9 @@ func (s *Store) GetEntityAnyStatus(ctx context.Context, entityID string) (*inven
 	return e, nil
 }
 
-// GetEntitiesByCanonicalName retrieves all entities with a given canonical name,
-// ordered by full_path_canonical ASC, entity_id ASC.
-// GetEntitiesByCanonicalName retrieves all non-removed entities with a given canonical name,
-// ordered by full_path_canonical ASC, entity_id ASC.
-func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string) ([]*inventory.Entity, error) {
+// GetLiveEntitiesByCanonicalName retrieves all live (non-removed) entities with a
+// given canonical name, ordered by full_path_canonical ASC, entity_id ASC.
+func (r Reader) GetLiveEntitiesByCanonicalName(ctx context.Context, canonical string) ([]*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
@@ -106,7 +104,7 @@ func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string
 		FROM entities_current WHERE canonical_name = ? AND status != 'removed'
 		ORDER BY full_path_canonical ASC, entity_id ASC`
 
-	rows, err := s.db.QueryContext(ctx, query, canonical)
+	rows, err := r.q.QueryContext(ctx, query, canonical)
 	if err != nil {
 		return nil, fmt.Errorf("query by canonical name %q: %w", canonical, err)
 	}
@@ -116,7 +114,7 @@ func (s *Store) GetEntitiesByCanonicalName(ctx context.Context, canonical string
 
 // GetEntitiesByCanonicalNameAnyStatus retrieves all entities with a given canonical name,
 // including removed entities, ordered by last_event_id DESC.
-func (s *Store) GetEntitiesByCanonicalNameAnyStatus(
+func (r Reader) GetEntitiesByCanonicalNameAnyStatus(
 	ctx context.Context, canonical string,
 ) ([]*inventory.Entity, error) {
 	const query = `
@@ -126,7 +124,7 @@ func (s *Store) GetEntitiesByCanonicalNameAnyStatus(
 		FROM entities_current WHERE canonical_name = ?
 		ORDER BY full_path_canonical ASC, last_event_id DESC`
 
-	rows, err := s.db.QueryContext(ctx, query, canonical)
+	rows, err := r.q.QueryContext(ctx, query, canonical)
 	if err != nil {
 		return nil, fmt.Errorf("query by canonical name %q: %w", canonical, err)
 	}
@@ -134,34 +132,15 @@ func (s *Store) GetEntitiesByCanonicalNameAnyStatus(
 	return scanEntities(rows)
 }
 
-// GetEntitiesByCanonicalNameTx queries entities_current by canonical name within an existing transaction.
-func (s *Store) GetEntitiesByCanonicalNameTx(
-	ctx context.Context, tx Tx, canonical string,
-) ([]*inventory.Entity, error) {
-	const query = `
-		SELECT entity_id, display_name, canonical_name, locked, discrete,
-		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at, home_id
-		FROM entities_current WHERE canonical_name = ? AND status != 'removed'
-		ORDER BY full_path_canonical ASC, entity_id ASC`
-
-	rows, err := tx.QueryContext(ctx, query, canonical)
-	if err != nil {
-		return nil, fmt.Errorf("query by canonical name %q: %w", canonical, err)
-	}
-	defer rows.Close()
-	return scanEntities(rows)
-}
-
-// ChildRow is the result of GetChildren: the entity plus whether it has non-removed children of its own.
+// ChildRow is the result of GetLiveChildren: the entity plus whether it has non-removed children of its own.
 type ChildRow struct {
 	Entity      *inventory.Entity
 	HasChildren bool
 }
 
-// GetChildren retrieves direct non-removed children of a parent entity, each annotated
+// GetLiveChildren retrieves direct non-removed children of a parent entity, each annotated
 // with whether it has non-removed children of its own. Ordered by display_name ASC, entity_id ASC.
-func (s *Store) GetChildren(ctx context.Context, parentID string) ([]ChildRow, error) {
+func (r Reader) GetLiveChildren(ctx context.Context, parentID string) ([]ChildRow, error) {
 	const query = `
 		SELECT ec.entity_id, ec.display_name, ec.canonical_name, ec.locked, ec.discrete,
 		       ec.parent_id, ec.full_path_display, ec.full_path_canonical,
@@ -174,7 +153,7 @@ func (s *Store) GetChildren(ctx context.Context, parentID string) ([]ChildRow, e
 		WHERE ec.parent_id = ? AND ec.status != 'removed'
 		ORDER BY ec.display_name ASC, ec.entity_id ASC`
 
-	rows, err := s.db.QueryContext(ctx, query, parentID)
+	rows, err := r.q.QueryContext(ctx, query, parentID)
 	if err != nil {
 		return nil, fmt.Errorf("get children of %s: %w", parentID, err)
 	}
@@ -185,52 +164,17 @@ func (s *Store) GetChildren(ctx context.Context, parentID string) ([]ChildRow, e
 const countLiveChildrenQuery = `SELECT COUNT(*) FROM entities_current WHERE parent_id = ? AND status != 'removed'`
 
 // CountLiveChildren returns the number of non-removed direct children of parentID.
-func (s *Store) CountLiveChildren(ctx context.Context, parentID string) (int, error) {
+func (r Reader) CountLiveChildren(ctx context.Context, parentID string) (int, error) {
 	var n int
-	if err := s.db.QueryRowContext(ctx, countLiveChildrenQuery, parentID).Scan(&n); err != nil {
+	if err := r.q.QueryRowContext(ctx, countLiveChildrenQuery, parentID).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count children of %s: %w", parentID, err)
 	}
 	return n, nil
 }
 
-// CountLiveChildrenTx returns the number of non-removed direct children of parentID,
-// reading inside tx so that earlier writes in the same batch are visible.
-func (s *Store) CountLiveChildrenTx(ctx context.Context, tx Tx, parentID string) (int, error) {
-	var n int
-	if err := tx.QueryRowContext(ctx, countLiveChildrenQuery, parentID).Scan(&n); err != nil {
-		return 0, fmt.Errorf("count children of %s: %w", parentID, err)
-	}
-	return n, nil
-}
-
-// GetDescendants retrieves all descendants using path prefix matching,
-// ordered by depth ASC, display_name ASC, entity_id ASC.
-// GetDescendants retrieves all non-removed descendants using path prefix matching,
-// ordered by depth ASC, display_name ASC, entity_id ASC.
-func (s *Store) GetDescendants(ctx context.Context, entityID string) ([]*inventory.Entity, error) {
-	parent, err := s.GetEntity(ctx, entityID)
-	if err != nil {
-		return nil, err
-	}
-
-	const query = `
-		SELECT entity_id, display_name, canonical_name, locked, discrete,
-		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at, home_id
-		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\' AND status != 'removed'
-		ORDER BY depth ASC, display_name ASC, entity_id ASC`
-
-	rows, err := s.db.QueryContext(ctx, query, escapeLIKE(parent.FullPathCanonical)+":%")
-	if err != nil {
-		return nil, fmt.Errorf("get descendants of %s: %w", entityID, err)
-	}
-	defer rows.Close()
-	return scanEntities(rows)
-}
-
-// ListEntities retrieves all entities ordered by full_path_display ASC, entity_id ASC.
-// ListEntities retrieves all non-removed entities ordered by full_path_display ASC, entity_id ASC.
-func (s *Store) ListEntities(ctx context.Context) ([]*inventory.Entity, error) {
+// ListLiveEntities retrieves all live (non-removed) entities ordered by
+// full_path_display ASC, entity_id ASC.
+func (r Reader) ListLiveEntities(ctx context.Context) ([]*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
@@ -239,7 +183,7 @@ func (s *Store) ListEntities(ctx context.Context) ([]*inventory.Entity, error) {
 		WHERE status != 'removed'
 		ORDER BY full_path_display ASC, entity_id ASC`
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := r.q.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("list entities: %w", err)
 	}
@@ -247,8 +191,8 @@ func (s *Store) ListEntities(ctx context.Context) ([]*inventory.Entity, error) {
 	return scanEntities(rows)
 }
 
-// ListAllEntities returns all entities in the projection, including removed ones.
-func (s *Store) ListAllEntities(ctx context.Context) ([]*inventory.Entity, error) {
+// ListEntitiesAnyStatus returns all entities in the projection, including removed ones.
+func (r Reader) ListEntitiesAnyStatus(ctx context.Context) ([]*inventory.Entity, error) {
 	const query = `
 		SELECT entity_id, display_name, canonical_name, locked, discrete,
 		       parent_id, full_path_display, full_path_canonical,
@@ -256,7 +200,7 @@ func (s *Store) ListAllEntities(ctx context.Context) ([]*inventory.Entity, error
 		FROM entities_current
 		ORDER BY full_path_display ASC, entity_id ASC`
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := r.q.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("list all entities: %w", err)
 	}
@@ -264,13 +208,10 @@ func (s *Store) ListAllEntities(ctx context.Context) ([]*inventory.Entity, error
 	return scanEntities(rows)
 }
 
-// ComputeEntityPathTx computes full_path_display, full_path_canonical, and depth
-// for a new entity given its parent. Runs inside an existing transaction.
-// ComputeEntityPathTx computes full_path_display, full_path_canonical, and depth
-// for a new entity given its parent. Runs inside an existing transaction.
-func (s *Store) ComputeEntityPathTx(
+// ComputeEntityPath computes full_path_display, full_path_canonical, and depth
+// for a new entity given its parent.
+func (r Reader) ComputeEntityPath(
 	ctx context.Context,
-	tx Tx,
 	displayName, canonicalName string,
 	parentID *string,
 ) (string, string, int, error) {
@@ -284,7 +225,7 @@ func (s *Store) ComputeEntityPathTx(
 
 	var parentDisplay, parentCanonical string
 	var parentDepth int
-	scanErr := tx.QueryRowContext(ctx, query, *parentID).
+	scanErr := r.q.QueryRowContext(ctx, query, *parentID).
 		Scan(&parentDisplay, &parentCanonical, &parentDepth)
 	if scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
@@ -353,52 +294,14 @@ func scanChildRows(rows *sql.Rows) ([]ChildRow, error) {
 	return children, rows.Err()
 }
 
-// GetEntityTx retrieves a single entity by ID inside an existing transaction.
-func (s *Store) GetEntityTx(ctx context.Context, tx Tx, entityID string) (*inventory.Entity, error) {
-	const query = `
-		SELECT entity_id, display_name, canonical_name, locked, discrete,
-		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at, home_id
-		FROM entities_current WHERE entity_id = ?`
-
-	row := tx.QueryRowContext(ctx, query, entityID)
-	e, err := scanEntity(row.Scan)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get entity tx %s: %w", entityID, err)
-	}
-	return e, nil
-}
-
-// GetLiveEntityTx is GetEntity inside an existing transaction: removed entities
-// return ErrNotFound. Guards must read through tx so they see earlier writes in
-// the same batch.
-func (s *Store) GetLiveEntityTx(ctx context.Context, tx Tx, entityID string) (*inventory.Entity, error) {
-	const query = `
-		SELECT entity_id, display_name, canonical_name, locked, discrete,
-		       parent_id, full_path_display, full_path_canonical,
-		       depth, status, status_context, last_event_id, updated_at, home_id
-		FROM entities_current WHERE entity_id = ? AND status != 'removed'`
-
-	row := tx.QueryRowContext(ctx, query, entityID)
-	e, err := scanEntity(row.Scan)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get live entity tx %s: %w", entityID, err)
-	}
-	return e, nil
-}
-
-// GetDescendantsTx retrieves all descendants of a given entity inside an existing transaction,
-// using path prefix matching. Ordered by depth ASC, display_name ASC, entity_id ASC.
-func (s *Store) GetDescendantsTx(ctx context.Context, tx Tx, entityID string) ([]*inventory.Entity, error) {
+// GetDescendantsAnyStatus retrieves all descendants of a given entity, including
+// removed ones, using path prefix matching. Ordered by depth ASC, display_name
+// ASC, entity_id ASC. Path propagation relies on removed descendants being
+// included so their stored paths keep following their ancestors.
+func (r Reader) GetDescendantsAnyStatus(ctx context.Context, entityID string) ([]*inventory.Entity, error) {
 	const pathQuery = `SELECT full_path_canonical FROM entities_current WHERE entity_id = ?`
 	var prefix string
-	if err := tx.QueryRowContext(ctx, pathQuery, entityID).Scan(&prefix); err != nil {
+	if err := r.q.QueryRowContext(ctx, pathQuery, entityID).Scan(&prefix); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -412,7 +315,7 @@ func (s *Store) GetDescendantsTx(ctx context.Context, tx Tx, entityID string) ([
 		FROM entities_current WHERE full_path_canonical LIKE ? ESCAPE '\'
 		ORDER BY depth ASC, display_name ASC, entity_id ASC`
 
-	rows, err := tx.QueryContext(ctx, query, escapeLIKE(prefix)+":%")
+	rows, err := r.q.QueryContext(ctx, query, escapeLIKE(prefix)+":%")
 	if err != nil {
 		return nil, fmt.Errorf("get descendants of %s: %w", entityID, err)
 	}
@@ -420,9 +323,9 @@ func (s *Store) GetDescendantsTx(ctx context.Context, tx Tx, entityID string) ([
 	return scanEntities(rows)
 }
 
-// TruncateEntitiesTx deletes all rows from entities_current within the supplied transaction.
-func (s *Store) TruncateEntitiesTx(ctx context.Context, tx Tx) error {
-	if _, err := tx.ExecContext(ctx, `DELETE FROM entities_current`); err != nil {
+// TruncateEntities deletes all rows from entities_current.
+func (t Tx) TruncateEntities(ctx context.Context) error {
+	if _, err := t.q.ExecContext(ctx, `DELETE FROM entities_current`); err != nil {
 		return fmt.Errorf("truncate entities_current: %w", err)
 	}
 	return nil
@@ -435,15 +338,15 @@ func escapeLIKE(s string) string {
 	return s
 }
 
-// CountDisplacedWithHomeTx counts non-removed entities whose home is homeID but
+// CountLiveDisplacedWithHome counts non-removed entities whose home is homeID but
 // which currently sit elsewhere (CONTEXT.md "Home": such a home may not be
 // removed or made discrete). IS NOT treats NULL parent (root) correctly.
-func (s *Store) CountDisplacedWithHomeTx(ctx context.Context, tx Tx, homeID string) (int, error) {
+func (r Reader) CountLiveDisplacedWithHome(ctx context.Context, homeID string) (int, error) {
 	const q = `
 		SELECT COUNT(*) FROM entities_current
 		WHERE home_id = ? AND status != 'removed' AND parent_id IS NOT home_id`
 	var n int
-	if err := tx.QueryRowContext(ctx, q, homeID).Scan(&n); err != nil {
+	if err := r.q.QueryRowContext(ctx, q, homeID).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count displaced with home %s: %w", homeID, err)
 	}
 	return n, nil

@@ -19,7 +19,7 @@ func appendEvent(t *testing.T, s *store.Store, ev *inventory.Event) int64 {
 	var id int64
 	require.NoError(t, s.ExecInTransaction(t.Context(), func(tx store.Tx) error {
 		var err error
-		id, err = s.AppendEvent(t.Context(), tx, ev)
+		id, err = tx.AppendEvent(t.Context(), ev)
 		return err
 	}))
 	return id
@@ -45,7 +45,7 @@ func TestAppendEvent_StoresFieldsVerbatim(t *testing.T) {
 
 	id := appendEvent(t, s, ev)
 
-	got, err := s.GetEventByID(t.Context(), id)
+	got, err := s.Reader().GetEventByID(t.Context(), id)
 	require.NoError(t, err)
 	assert.Equal(t, id, got.EventID)
 	assert.Equal(t, inventory.EntityCreatedEvent, got.EventType)
@@ -64,7 +64,7 @@ func TestAppendEvent_NilNoteIsNull(t *testing.T) {
 
 	id := appendEvent(t, s, garageEvent())
 
-	got, err := s.GetEventByID(t.Context(), id)
+	got, err := s.Reader().GetEventByID(t.Context(), id)
 	require.NoError(t, err)
 	assert.Nil(t, got.Note)
 }
@@ -83,14 +83,14 @@ func TestAppendEvent_RolledBackWithTransaction(t *testing.T) {
 	errAbort := errors.New("abort")
 
 	err := s.ExecInTransaction(t.Context(), func(tx store.Tx) error {
-		if _, appendErr := s.AppendEvent(t.Context(), tx, garageEvent()); appendErr != nil {
+		if _, appendErr := tx.AppendEvent(t.Context(), garageEvent()); appendErr != nil {
 			return appendErr
 		}
 		return errAbort
 	})
 	require.ErrorIs(t, err, errAbort)
 
-	has, err := s.HasEvents(t.Context())
+	has, err := s.Reader().HasEvents(t.Context())
 	require.NoError(t, err)
 	assert.False(t, has, "AppendEvent must join the caller's transaction")
 }
@@ -101,7 +101,7 @@ func TestGetEventByID(t *testing.T) {
 
 	eventID := appendEvent(t, s, garageEvent())
 
-	ev, err := s.GetEventByID(ctx, eventID)
+	ev, err := s.Reader().GetEventByID(ctx, eventID)
 	require.NoError(t, err)
 	assert.Equal(t, inventory.EntityCreatedEvent, ev.EventType)
 	assert.Equal(t, "alice", ev.ActorUserID)
@@ -113,7 +113,7 @@ func TestGetEventsByEntity(t *testing.T) {
 
 	appendEvent(t, s, garageEvent())
 
-	events, err := s.GetEventsByEntity(ctx, "abc")
+	events, err := s.Reader().GetEventsByEntity(ctx, "abc")
 	require.NoError(t, err)
 	assert.Len(t, events, 1)
 }
@@ -122,7 +122,7 @@ func TestHasEvents_EmptyDatabase(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	has, err := s.HasEvents(ctx)
+	has, err := s.Reader().HasEvents(ctx)
 	require.NoError(t, err)
 	assert.False(t, has)
 }
@@ -133,7 +133,7 @@ func TestHasEvents_AfterInsert(t *testing.T) {
 
 	appendEvent(t, s, garageEvent())
 
-	has, err := s.HasEvents(ctx)
+	has, err := s.Reader().HasEvents(ctx)
 	require.NoError(t, err)
 	assert.True(t, has)
 }
@@ -145,14 +145,14 @@ func TestClearAllData_RemovesEventsAndEntities(t *testing.T) {
 	// Seed an event and an entity projection
 	appendEvent(t, s, garageEvent())
 
-	err := s.ClearAllData(ctx)
+	err := s.ExecInTransaction(ctx, func(tx store.Tx) error { return tx.ClearAllData(ctx) })
 	require.NoError(t, err)
 
-	has, err := s.HasEvents(ctx)
+	has, err := s.Reader().HasEvents(ctx)
 	require.NoError(t, err)
 	assert.False(t, has, "events table should be empty after ClearAllData")
 
-	_, err = s.GetEntity(ctx, "abc")
+	_, err = s.Reader().GetLiveEntity(ctx, "abc")
 	assert.ErrorIs(t, err, store.ErrNotFound, "entities_current should be empty after ClearAllData")
 }
 
@@ -161,15 +161,15 @@ func TestClearAllData_RemovesTaggedEntities(t *testing.T) {
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertTagTx(ctx, tx, entityID, "tool")
+		return tx.InsertTag(ctx, entityID, "tool")
 	}))
 
-	require.NoError(t, s.ClearAllData(ctx))
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error { return tx.ClearAllData(ctx) }))
 
-	tags, err := s.GetDistinctTags(ctx)
+	tags, err := s.Reader().GetDistinctTags(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, tags)
-	_, err = s.GetEntityAnyStatus(ctx, entityID)
+	_, err = s.Reader().GetEntityAnyStatus(ctx, entityID)
 	assert.ErrorIs(t, err, store.ErrNotFound)
 }
 
@@ -177,31 +177,26 @@ func TestClearAllData_PreservesSchemaMetadata(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	err := s.ClearAllData(ctx)
+	err := s.ExecInTransaction(ctx, func(tx store.Tx) error { return tx.ClearAllData(ctx) })
 	require.NoError(t, err)
 
 	// schema_metadata is seeded by the migration with "created_at" and "app_version"
-	val, err := s.GetMetadata(ctx, "app_version")
+	val, err := s.Reader().GetMetadata(ctx, "app_version")
 	require.NoError(t, err)
 	assert.NotEmpty(t, val, "schema_metadata should survive ClearAllData")
 }
 
-func TestGetAllEventsTx_SeesUncommittedRows(t *testing.T) {
+func TestGetAllEvents_OnTxSeesUncommittedRows(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	entityID := "abc"
 	appendEvent(t, s, garageEvent())
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		_, execErr := tx.ExecContext(ctx,
-			`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
-			 VALUES (?, ?, ?, ?, NULL, ?)`,
-			"entity.renamed", "2026-01-01T00:00:00Z", "alice", `{}`, &entityID,
-		)
-		require.NoError(t, execErr)
+		_, appendErr := tx.AppendEvent(ctx, garageEvent())
+		require.NoError(t, appendErr)
 
-		events, getErr := s.GetAllEventsTx(ctx, tx)
+		events, getErr := tx.GetAllEvents(ctx)
 		require.NoError(t, getErr)
 		require.Len(t, events, 2)
 		assert.Less(t, events[0].EventID, events[1].EventID)
@@ -225,7 +220,7 @@ func TestGetAllEventsRaw(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	events, err := s.GetAllEventsRaw(ctx)
+	events, err := s.Reader().GetAllEventsRaw(ctx)
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 

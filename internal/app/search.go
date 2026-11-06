@@ -42,13 +42,13 @@ const (
 func (a *App) FindMoveDestinations(
 	ctx context.Context, entityID string, relocation Relocation, req FindEntitiesRequest,
 ) ([]FindResult, error) {
-	moving, err := a.store.GetEntity(ctx, entityID)
+	moving, err := a.store.Reader().GetLiveEntity(ctx, entityID)
 	if err != nil {
 		return nil, wrapEntityError(entityID, err)
 	}
 	// Include removed entities so walks reach live entities orphaned under a
 	// removed ancestor (#287); only live ones are candidates.
-	all, err := a.store.ListAllEntities(ctx)
+	all, err := a.store.Reader().ListEntitiesAnyStatus(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("find move destinations: %w", err)
 	}
@@ -98,7 +98,7 @@ func (a *App) RootIsLegalDestination(ctx context.Context, entityID string, reloc
 func (a *App) findMatching(
 	ctx context.Context, req FindEntitiesRequest, keep func(EntityResult) bool,
 ) ([]FindResult, error) {
-	all, err := a.store.ListEntities(ctx)
+	all, err := a.store.Reader().ListLiveEntities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("find entities: %w", err)
 	}
@@ -115,7 +115,7 @@ func (a *App) matchEntities(
 		ids[i] = e.EntityID
 	}
 
-	tagsByID, err := a.store.GetTagsByEntities(ctx, ids)
+	tagsByID, err := a.store.Reader().GetTagsByEntities(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("find entities tags: %w", err)
 	}

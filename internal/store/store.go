@@ -11,13 +11,29 @@ import (
 // DefaultBusyTimeout is the SQLite busy timeout in milliseconds.
 const DefaultBusyTimeout = 5000
 
-// Tx is the interface passed to functions running inside ExecInTransaction.
-// It exposes only the query methods needed by store operations.
-type Tx interface {
+// dbtx is the query surface shared by [sql.DB] and [sql.Tx].
+type dbtx interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
+
+// Reader runs read-only queries, either on the connection pool (Store.Reader)
+// or inside a transaction (Tx embeds it). It has no write methods (ADR 0043).
+type Reader struct{ q dbtx }
+
+// reader lets Tx embed Reader under an unexported field name, so no package
+// outside store can construct a Tx.
+type reader = Reader
+
+// Tx is a write transaction from ExecInTransaction. It can read (Reader's
+// methods are promoted) and is the only way to write. Guards run on the Tx so
+// they see earlier writes in the same transaction (ADR 0035).
+type Tx struct{ reader }
+
+// Reader returns t's read side, for helpers that only read and are also
+// called with Store.Reader.
+func (t Tx) Reader() Reader { return t.reader }
 
 // Config holds connection parameters for opening a Store.
 type Config struct {
@@ -79,10 +95,10 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
-// Reader returns the pooled connection as a Tx for read-only callers that
-// need no transaction, such as render decisions (ADR 0040). Never write
-// through it, and never use it for a guard (ADR 0035).
-func (s *Store) Reader() Tx { return s.db }
+// Reader returns a Reader over the connection pool for callers that need no
+// transaction, such as render decisions (ADR 0040). It cannot write, and a
+// guard must never use it (ADR 0035).
+func (s *Store) Reader() Reader { return Reader{q: s.db} }
 
 // ExecInTransaction runs fn inside a transaction, committing on success and rolling back on error.
 func (s *Store) ExecInTransaction(ctx context.Context, fn func(Tx) error) error {
@@ -92,7 +108,7 @@ func (s *Store) ExecInTransaction(ctx context.Context, fn func(Tx) error) error 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if fnErr := fn(tx); fnErr != nil {
+	if fnErr := fn(Tx{Reader{q: tx}}); fnErr != nil {
 		return fnErr
 	}
 

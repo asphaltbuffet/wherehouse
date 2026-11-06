@@ -197,7 +197,7 @@ func TestDestinationAdapters_Agree(t *testing.T) {
 		return dErr
 	}))
 
-	all, err := s.ListAllEntities(ctx)
+	all, err := s.Reader().ListEntitiesAnyStatus(ctx)
 	require.NoError(t, err)
 	snap := newSnapshotHierarchy(all)
 	dests := []string{"", "missing-id"}

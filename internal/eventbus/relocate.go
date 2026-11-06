@@ -55,26 +55,26 @@ func registerRelocation[P relocator](b *Bus) {
 func (b *Bus) relocateEntityTx(
 	ctx context.Context, tx store.Tx, ev *inventory.Event, rel relocation,
 ) (*inventory.Entity, []*inventory.Entity, error) {
-	descendants, err := b.store.GetDescendantsTx(ctx, tx, rel.entityID)
+	descendants, err := tx.GetDescendantsAnyStatus(ctx, rel.entityID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: get descendants: %w", ev.EventType, err)
 	}
-	entity, err := b.store.GetEntityTx(ctx, tx, rel.entityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, rel.entityID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: get entity: %w", ev.EventType, err)
 	}
 
 	entity.ParentID = rel.newParentID
 	rel.homeRule(entity)
-	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = b.store.ComputeEntityPathTx(
-		ctx, tx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
+	entity.FullPathDisplay, entity.FullPathCanonical, entity.Depth, err = tx.ComputeEntityPath(
+		ctx, entity.DisplayName, entity.CanonicalName, entity.ParentID,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: recompute path: %w", ev.EventType, err)
 	}
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
-	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
+	if err = tx.UpdateEntity(ctx, entity); err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", ev.EventType, err)
 	}
 	return entity, descendants, nil
@@ -83,14 +83,14 @@ func (b *Bus) relocateEntityTx(
 // handleEntityRehomed sets home to the payload's home_id. The parent does not
 // change, so there is nothing to propagate.
 func (b *Bus) handleEntityRehomed(ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityRehomedPayload) error {
-	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityRehomed: get entity: %w", err)
 	}
 	entity.HomeID = p.HomeID
 	entity.LastEventID = ev.EventID
 	entity.UpdatedAt = time.Now().UTC()
-	if err = b.store.UpdateEntityTx(ctx, tx, entity); err != nil {
+	if err = tx.UpdateEntity(ctx, entity); err != nil {
 		return fmt.Errorf("handleEntityRehomed: %w", err)
 	}
 	return nil

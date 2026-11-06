@@ -14,7 +14,7 @@ func (a *App) GetHistory(ctx context.Context, req GetHistoryRequest) ([]HistoryR
 		return nil, errors.New("GetHistory: EntityID must be set")
 	}
 
-	events, err := a.store.GetEventsByEntity(ctx, req.EntityID)
+	events, err := a.store.Reader().GetEventsByEntity(ctx, req.EntityID)
 	if err != nil {
 		return nil, fmt.Errorf("get history for %s: %w", req.EntityID, err)
 	}

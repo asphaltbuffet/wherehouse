@@ -8,6 +8,7 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/logging"
+	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
 // ImportOptions controls the behaviour of ImportEvents.
@@ -42,23 +43,23 @@ type importStore interface {
 
 // ImportEvents replays a slice of ExportResult records into the database.
 func (a *App) ImportEvents(ctx context.Context, events []ExportResult, opts ImportOptions) (ImportResult, error) {
-	return importEvents(ctx, a.bus, a.store, events, opts)
+	return importEvents(ctx, a.bus, a, events, opts)
 }
 
 // HasEvents reports whether the database contains any events.
 func (a *App) HasEvents(ctx context.Context) (bool, error) {
-	return a.store.HasEvents(ctx)
+	return a.store.Reader().HasEvents(ctx)
 }
 
 // ClearAllData removes all events and entity projections from the database.
 func (a *App) ClearAllData(ctx context.Context) error {
-	return a.store.ClearAllData(ctx)
+	return a.store.ExecInTransaction(ctx, func(tx store.Tx) error { return tx.ClearAllData(ctx) })
 }
 
 func importEvents(
 	ctx context.Context,
 	bus importBus,
-	store importStore,
+	st importStore,
 	events []ExportResult,
 	opts ImportOptions,
 ) (ImportResult, error) {
@@ -99,12 +100,12 @@ func importEvents(
 	}
 
 	if opts.Replace {
-		if err := store.ClearAllData(ctx); err != nil {
+		if err := st.ClearAllData(ctx); err != nil {
 			return ImportResult{}, fmt.Errorf("import: clear data: %w", err)
 		}
 	}
 
-	r := &importRunner{bus: bus, store: store, log: logging.GetLogger(), opts: opts}
+	r := &importRunner{bus: bus, store: st, log: logging.GetLogger(), opts: opts}
 	for _, rec := range events {
 		if err := r.processRecord(ctx, rec); err != nil {
 			return r.result, err

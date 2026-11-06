@@ -10,16 +10,16 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-// AppendEvent inserts ev into the events table inside tx and returns its
+// AppendEvent inserts ev into the events table and returns its
 // event_id. It is the only writer to events: the bus calls it for dispatched,
 // replayed and derived events. Fields are stored as given (the caller sets
 // TimestampUTC); ev.EventID is ignored. It does not apply projections — that
 // is eventbus's responsibility.
-func (s *Store) AppendEvent(ctx context.Context, tx Tx, ev *inventory.Event) (int64, error) {
+func (t Tx) AppendEvent(ctx context.Context, ev *inventory.Event) (int64, error) {
 	const query = `
 		INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		VALUES (?, ?, ?, ?, ?, ?)`
-	result, err := tx.ExecContext(ctx, query,
+	result, err := t.q.ExecContext(ctx, query,
 		ev.EventType, ev.TimestampUTC, ev.ActorUserID, string(ev.Payload), ev.Note, ev.EntityID)
 	if err != nil {
 		return 0, fmt.Errorf("insert event: %w", err)
@@ -32,11 +32,11 @@ func (s *Store) AppendEvent(ctx context.Context, tx Tx, ev *inventory.Event) (in
 }
 
 // GetEventByID retrieves a single event by its ID.
-func (s *Store) GetEventByID(ctx context.Context, eventID int64) (*inventory.Event, error) {
+func (r Reader) GetEventByID(ctx context.Context, eventID int64) (*inventory.Event, error) {
 	const query = `
 		SELECT event_id, event_type, timestamp_utc, actor_user_id, payload, note, entity_id
 		FROM events WHERE event_id = ?`
-	row := s.db.QueryRowContext(ctx, query, eventID)
+	row := r.q.QueryRowContext(ctx, query, eventID)
 	ev, err := scanEvent(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -48,11 +48,11 @@ func (s *Store) GetEventByID(ctx context.Context, eventID int64) (*inventory.Eve
 }
 
 // GetEventsByEntity retrieves all events for a given entity ID, ordered by event_id ASC.
-func (s *Store) GetEventsByEntity(ctx context.Context, entityID string) ([]*inventory.Event, error) {
+func (r Reader) GetEventsByEntity(ctx context.Context, entityID string) ([]*inventory.Event, error) {
 	const query = `
 		SELECT event_id, event_type, timestamp_utc, actor_user_id, payload, note, entity_id
 		FROM events WHERE entity_id = ? ORDER BY event_id ASC`
-	rows, err := s.db.QueryContext(ctx, query, entityID)
+	rows, err := r.q.QueryContext(ctx, query, entityID)
 	if err != nil {
 		return nil, fmt.Errorf("query events for entity %s: %w", entityID, err)
 	}
@@ -64,15 +64,10 @@ const allEventsQuery = `
 	SELECT event_id, event_type, timestamp_utc, actor_user_id, payload, note, entity_id
 	FROM events ORDER BY event_id ASC`
 
-// GetAllEvents retrieves all events ordered by event_id ASC.
-func (s *Store) GetAllEvents(ctx context.Context) ([]*inventory.Event, error) {
-	return s.GetAllEventsTx(ctx, s.db)
-}
-
-// GetAllEventsTx retrieves all events ordered by event_id ASC through tx, so a
-// caller holding the write lock sees exactly the log it is about to act on.
-func (s *Store) GetAllEventsTx(ctx context.Context, tx Tx) ([]*inventory.Event, error) {
-	rows, err := tx.QueryContext(ctx, allEventsQuery)
+// GetAllEvents retrieves all events ordered by event_id ASC. Called on a Tx,
+// a caller holding the write lock sees exactly the log it is about to act on.
+func (r Reader) GetAllEvents(ctx context.Context) ([]*inventory.Event, error) {
+	rows, err := r.q.QueryContext(ctx, allEventsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("query all events: %w", err)
 	}
@@ -81,10 +76,10 @@ func (s *Store) GetAllEventsTx(ctx context.Context, tx Tx) ([]*inventory.Event, 
 }
 
 // HasEvents reports whether the events table contains at least one row.
-func (s *Store) HasEvents(ctx context.Context) (bool, error) {
+func (r Reader) HasEvents(ctx context.Context) (bool, error) {
 	var exists bool
 	const query = `SELECT EXISTS(SELECT 1 FROM events LIMIT 1)`
-	if err := s.db.QueryRowContext(ctx, query).Scan(&exists); err != nil {
+	if err := r.q.QueryRowContext(ctx, query).Scan(&exists); err != nil {
 		return false, fmt.Errorf("has events: %w", err)
 	}
 	return exists, nil
@@ -95,20 +90,18 @@ func (s *Store) HasEvents(ctx context.Context) (bool, error) {
 //
 // INVARIANT: every projection table (see CONTEXT.md "Projection") is cleared
 // here. A new projection table must be added to this method.
-func (s *Store) ClearAllData(ctx context.Context) error {
-	return s.ExecInTransaction(ctx, func(tx Tx) error {
-		// entity_tags references entities_current, so it is cleared first.
-		if _, err := tx.ExecContext(ctx, `DELETE FROM entity_tags`); err != nil {
-			return fmt.Errorf("clear tags: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM entities_current`); err != nil {
-			return fmt.Errorf("clear entities: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM events`); err != nil {
-			return fmt.Errorf("clear events: %w", err)
-		}
-		return nil
-	})
+func (t Tx) ClearAllData(ctx context.Context) error {
+	// entity_tags references entities_current, so it is cleared first.
+	if _, err := t.q.ExecContext(ctx, `DELETE FROM entity_tags`); err != nil {
+		return fmt.Errorf("clear tags: %w", err)
+	}
+	if _, err := t.q.ExecContext(ctx, `DELETE FROM entities_current`); err != nil {
+		return fmt.Errorf("clear entities: %w", err)
+	}
+	if _, err := t.q.ExecContext(ctx, `DELETE FROM events`); err != nil {
+		return fmt.Errorf("clear events: %w", err)
+	}
+	return nil
 }
 
 // RawEvent is an unvalidated event row — EventType is a plain string so callers
@@ -121,11 +114,11 @@ type RawEvent struct {
 }
 
 // GetAllEventsRaw returns all events ordered by event_id ASC with EventType as a raw string.
-func (s *Store) GetAllEventsRaw(ctx context.Context) ([]RawEvent, error) {
+func (r Reader) GetAllEventsRaw(ctx context.Context) ([]RawEvent, error) {
 	const query = `
 		SELECT event_id, event_type, payload, entity_id
 		FROM events ORDER BY event_id ASC`
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := r.q.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query all events raw: %w", err)
 	}

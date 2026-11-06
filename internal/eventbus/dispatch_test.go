@@ -107,9 +107,9 @@ func TestDispatch_PathChangedRowsCopyTriggeringEvent(t *testing.T) {
 		return err
 	}))
 
-	rename, err := s.GetEventByID(t.Context(), renameID)
+	rename, err := s.Reader().GetEventByID(t.Context(), renameID)
 	require.NoError(t, err)
-	events, err := s.GetEventsByEntity(t.Context(), "c1")
+	events, err := s.Reader().GetEventsByEntity(t.Context(), "c1")
 	require.NoError(t, err)
 	derived := events[len(events)-1]
 
@@ -121,8 +121,47 @@ func TestDispatch_PathChangedRowsCopyTriggeringEvent(t *testing.T) {
 	require.NotNil(t, derived.EntityID)
 	assert.Equal(t, "c1", *derived.EntityID)
 
-	child, err := s.GetEntity(t.Context(), "c1")
+	child, err := s.Reader().GetLiveEntity(t.Context(), "c1")
 	require.NoError(t, err)
 	assert.Equal(t, derived.EventID, child.LastEventID)
 	assert.Equal(t, "Shed:Toolbox", child.FullPathDisplay)
+}
+
+func TestDispatch_RenameUpdatesRemovedDescendantPath(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	p1ID := "p1"
+	createPlace(t, s, b, "p1", "Garage", nil)
+	createLeaf(t, s, b, "c1", "Wrench", &p1ID)
+	dispatch(t, s, b, eventbus.EntityRemovedPayload{EntityID: "c1"})
+
+	dispatch(t, s, b, eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Shed"})
+
+	child, err := s.Reader().GetEntityAnyStatus(t.Context(), "c1")
+	require.NoError(t, err)
+	assert.Equal(t, "Shed:Wrench", child.FullPathDisplay,
+		"removed descendants keep following their ancestor's path")
+	events, err := s.Reader().GetEventsByEntity(t.Context(), "c1")
+	require.NoError(t, err)
+	assert.Equal(t, inventory.EntityPathChangedEvent, events[len(events)-1].EventType)
+}
+
+func TestDispatch_ReparentUpdatesRemovedDescendantPath(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	p1ID, p2ID := "p1", "p2"
+	createPlace(t, s, b, "p1", "Garage", nil)
+	createPlace(t, s, b, "p2", "Shed", nil)
+	createLeaf(t, s, b, "c1", "Wrench", &p1ID)
+	dispatch(t, s, b, eventbus.EntityRemovedPayload{EntityID: "c1"})
+
+	dispatch(t, s, b, eventbus.EntityReparentedPayload{EntityID: "p1", NewParentID: &p2ID})
+
+	child, err := s.Reader().GetEntityAnyStatus(t.Context(), "c1")
+	require.NoError(t, err)
+	assert.Equal(t, "Shed:Garage:Wrench", child.FullPathDisplay,
+		"removed descendants keep following their ancestor's path")
+	events, err := s.Reader().GetEventsByEntity(t.Context(), "c1")
+	require.NoError(t, err)
+	assert.Equal(t, inventory.EntityPathChangedEvent, events[len(events)-1].EventType)
 }

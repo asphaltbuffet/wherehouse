@@ -183,7 +183,7 @@ func (b *Bus) writeEventInTx(
 	ev *inventory.Event,
 	applyFn func(context.Context, store.Tx, *inventory.Event) error,
 ) (int64, error) {
-	id, err := b.store.AppendEvent(ctx, tx, ev)
+	id, err := tx.AppendEvent(ctx, ev)
 	if err != nil {
 		return 0, err
 	}
@@ -248,14 +248,14 @@ func (b *Bus) applyEventProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *i
 func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
 	var count int
 	err := b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		events, loadErr := b.store.GetAllEventsTx(ctx, tx)
+		events, loadErr := tx.GetAllEvents(ctx)
 		if loadErr != nil {
 			return fmt.Errorf("TruncateAndReplay: load events: %w", loadErr)
 		}
-		if truncErr := b.store.TruncateTagsTx(ctx, tx); truncErr != nil {
+		if truncErr := tx.TruncateTags(ctx); truncErr != nil {
 			return fmt.Errorf("truncate tags: %w", truncErr)
 		}
-		if truncErr := b.store.TruncateEntitiesTx(ctx, tx); truncErr != nil {
+		if truncErr := tx.TruncateEntities(ctx); truncErr != nil {
 			return fmt.Errorf("truncate entities: %w", truncErr)
 		}
 		for _, ev := range events {

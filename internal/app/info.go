@@ -19,7 +19,7 @@ func (a *App) GetInfo(ctx context.Context) (InfoResult, error) {
 		return InfoResult{}, fmt.Errorf("get info: %w", err)
 	}
 
-	counts, err := a.store.CountEntitiesByStatus(ctx)
+	counts, err := a.store.Reader().CountEntitiesByStatus(ctx)
 	if err != nil {
 		return InfoResult{}, fmt.Errorf("get info counts: %w", err)
 	}
@@ -33,7 +33,7 @@ func (a *App) GetInfo(ctx context.Context) (InfoResult, error) {
 
 // GetWherehouseName returns the database display name, or "(unnamed)".
 func (a *App) GetWherehouseName(ctx context.Context) (string, error) {
-	name, err := a.store.GetMetadata(ctx, displayNameKey)
+	name, err := a.store.Reader().GetMetadata(ctx, displayNameKey)
 	if errors.Is(err, store.ErrNotFound) {
 		name = ""
 	} else if err != nil {
@@ -57,7 +57,10 @@ func (a *App) SetWherehouseName(ctx context.Context, name string) error {
 	if len(name) > maxNameLength {
 		return errors.New("name cannot exceed 255 characters")
 	}
-	if err := a.store.SetMetadata(ctx, displayNameKey, name); err != nil {
+	err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		return tx.SetMetadata(ctx, displayNameKey, name)
+	})
+	if err != nil {
 		return fmt.Errorf("set wherehouse name: %w", err)
 	}
 	return nil
@@ -65,7 +68,10 @@ func (a *App) SetWherehouseName(ctx context.Context, name string) error {
 
 // ClearWherehouseName removes the display name, reverting to "(unnamed)".
 func (a *App) ClearWherehouseName(ctx context.Context) error {
-	if err := a.store.DeleteMetadata(ctx, displayNameKey); err != nil {
+	err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
+		return tx.DeleteMetadata(ctx, displayNameKey)
+	})
+	if err != nil {
 		return fmt.Errorf("clear wherehouse name: %w", err)
 	}
 	return nil

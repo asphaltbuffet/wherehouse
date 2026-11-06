@@ -44,7 +44,7 @@ func (a *App) rejectDuplicateIDs(ctx context.Context, ids []string) error {
 			continue
 		}
 		name := id
-		if e, err := a.store.GetEntityAnyStatus(ctx, id); err == nil {
+		if e, err := a.store.Reader().GetEntityAnyStatus(ctx, id); err == nil {
 			name = e.FullPathDisplay
 		}
 		return fmt.Errorf("%q: %w", name, ErrDuplicateEntity)
@@ -95,7 +95,7 @@ func execBatch[T any](
 }
 
 func (a *App) markLostInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 	if err != nil {
 		return "", err
 	}
@@ -122,7 +122,7 @@ func (a *App) MarkReturned(ctx context.Context, reqs []ChangeStatusRequest) ([]E
 }
 
 func (a *App) markReturnInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 	if err != nil {
 		return "", err
 	}
@@ -172,7 +172,7 @@ func (a *App) markLoanInTx(ctx context.Context, tx store.Tx, req ChangeStatusReq
 		return "", fmt.Errorf("loan %q: %w", req.EntityID, ErrRecipientRequired)
 	}
 
-	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 	if err != nil {
 		return "", err
 	}
@@ -234,7 +234,7 @@ func (a *App) borrowEntityInTx(ctx context.Context, tx store.Tx, req BorrowEntit
 }
 
 func (a *App) markFoundInTx(ctx context.Context, tx store.Tx, req ChangeStatusRequest) (string, error) {
-	entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+	entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 	if err != nil {
 		return "", err
 	}
