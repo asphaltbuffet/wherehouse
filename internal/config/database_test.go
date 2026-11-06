@@ -150,38 +150,6 @@ func TestConfig_GetDatabasePath(t *testing.T) {
 	}
 }
 
-// TestGetDatabasePath_LegacyEnvIgnored verifies the removed WHEREHOUSE_DB_PATH
-// no longer influences the database path.
-func TestGetDatabasePath_LegacyEnvIgnored(t *testing.T) {
-	t.Setenv(LegacyDBPathEnv, "/env/path/db.db")
-
-	t.Run("config path used", func(t *testing.T) {
-		cfg := &Config{Database: DatabaseConfig{Path: "/config/path/db.db"}}
-
-		path, err := cfg.GetDatabasePath()
-
-		require.NoError(t, err)
-		assert.Equal(t, "/config/path/db.db", path)
-	})
-
-	t.Run("default used when config empty", func(t *testing.T) {
-		cfg := &Config{}
-
-		path, err := cfg.GetDatabasePath()
-
-		require.NoError(t, err)
-		assert.Equal(t, DefaultDatabasePath(), path)
-	})
-}
-
-func TestLegacyDBPathSet(t *testing.T) {
-	t.Setenv(LegacyDBPathEnv, "")
-	assert.False(t, LegacyDBPathSet())
-
-	t.Setenv(LegacyDBPathEnv, "/x.db")
-	assert.True(t, LegacyDBPathSet())
-}
-
 func TestConfig_GetDatabasePath_ExpandPath(t *testing.T) {
 	home := "/home/fake-user"
 	t.Setenv("HOME", home)

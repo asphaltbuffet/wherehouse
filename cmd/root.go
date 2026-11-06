@@ -144,22 +144,6 @@ func initConfig(cmd *cobra.Command, _ []string) error {
 		cfg = config.GetDefaults()
 	}
 
-	if config.LegacyLogPathSet() {
-		fmt.Fprintf(
-			cmd.ErrOrStderr(),
-			"warning: %s is no longer supported; use WHEREHOUSE_LOGGING_FILE_PATH\n",
-			config.LegacyLogPathEnv,
-		)
-	}
-
-	if config.LegacyDBPathSet() {
-		fmt.Fprintf(
-			cmd.ErrOrStderr(),
-			"warning: %s is no longer supported; use WHEREHOUSE_DATABASE_PATH\n",
-			config.LegacyDBPathEnv,
-		)
-	}
-
 	bindFlagsToConfig(cmd, cfg)
 
 	globalConfig = cfg

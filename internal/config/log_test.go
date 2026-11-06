@@ -42,34 +42,6 @@ func TestDefaultLogPath_NeitherSet(t *testing.T) {
 	assert.True(t, filepath.IsAbs(result) || result == filepath.Join(".", "wherehouse.log"))
 }
 
-// TestGetLogPath_ConfigTakesPrecedence verifies that explicit config FilePath takes precedence.
-func TestGetLogPath_ConfigTakesPrecedence(t *testing.T) {
-	cfg := &Config{
-		Logging: LoggingConfig{
-			FilePath: "/explicit/path.log",
-		},
-	}
-	t.Setenv(LegacyLogPathEnv, "/env/path.log")
-
-	result, err := cfg.GetLogPath()
-
-	require.NoError(t, err)
-	assert.Equal(t, "/explicit/path.log", result)
-}
-
-// TestGetLogPath_LegacyEnvIgnored verifies the removed WHEREHOUSE_LOG_PATH
-// no longer influences the log path.
-func TestGetLogPath_LegacyEnvIgnored(t *testing.T) {
-	cfg := &Config{}
-	t.Setenv(LegacyLogPathEnv, "/env/path.log")
-	t.Setenv("XDG_STATE_HOME", "/xdg/state")
-
-	result, err := cfg.GetLogPath()
-
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join("/xdg/state", "wherehouse", "wherehouse.log"), result)
-}
-
 func TestGetLogPath_StderrSentinelNotExpanded(t *testing.T) {
 	cfg := &Config{Logging: LoggingConfig{FilePath: "-"}}
 
@@ -77,14 +49,6 @@ func TestGetLogPath_StderrSentinelNotExpanded(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "-", result)
-}
-
-func TestLegacyLogPathSet(t *testing.T) {
-	t.Setenv(LegacyLogPathEnv, "")
-	assert.False(t, LegacyLogPathSet())
-
-	t.Setenv(LegacyLogPathEnv, "/x.log")
-	assert.True(t, LegacyLogPathSet())
 }
 
 // TestGetLogPath_DefaultFallback verifies that DefaultLogPath is used when config is empty.

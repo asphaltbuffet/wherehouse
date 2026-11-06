@@ -1,0 +1,5 @@
+kind: Removed
+body: Startup warnings for the removed `WHEREHOUSE_LOG_PATH` and `WHEREHOUSE_DB_PATH` environment variables, and the matching `config check` notice. Both variables are now silently ignored; use `WHEREHOUSE_LOGGING_FILE_PATH` and `WHEREHOUSE_DATABASE_PATH`.
+time: 2026-11-05T23:23:32.591594733-05:00
+custom:
+    Issue: "#273"
