@@ -6,43 +6,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 )
 
-// AppendRawEvent inserts a pre-constructed event into the events table.
-// Does NOT apply projections — that is eventbus's responsibility.
-func (s *Store) AppendRawEvent(
-	ctx context.Context,
-	eventType inventory.EventType,
-	actorUserID string,
-	payload json.RawMessage,
-	note *string,
-	entityID *string,
-) (int64, error) {
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-
-	var eventID int64
-	err := s.ExecInTransaction(ctx, func(tx Tx) error {
-		const query = `
-			INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
-			VALUES (?, ?, ?, ?, ?, ?)`
-		result, err := tx.ExecContext(ctx, query, eventType, timestamp, actorUserID, string(payload), note, entityID)
-		if err != nil {
-			return fmt.Errorf("insert event: %w", err)
-		}
-		id, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("get event ID: %w", err)
-		}
-		eventID = id
-		return nil
-	})
+// AppendEvent inserts ev into the events table inside tx and returns its
+// event_id. It is the only writer to events: the bus calls it for dispatched,
+// replayed and derived events. Fields are stored as given (the caller sets
+// TimestampUTC); ev.EventID is ignored. It does not apply projections — that
+// is eventbus's responsibility.
+func (s *Store) AppendEvent(ctx context.Context, tx Tx, ev *inventory.Event) (int64, error) {
+	const query = `
+		INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+		VALUES (?, ?, ?, ?, ?, ?)`
+	result, err := tx.ExecContext(ctx, query,
+		ev.EventType, ev.TimestampUTC, ev.ActorUserID, string(ev.Payload), ev.Note, ev.EntityID)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("insert event: %w", err)
 	}
-	return eventID, nil
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("get event ID: %w", err)
+	}
+	return id, nil
 }
 
 // GetEventByID retrieves a single event by its ID.

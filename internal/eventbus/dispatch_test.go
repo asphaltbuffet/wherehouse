@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
+	"github.com/asphaltbuffet/wherehouse/internal/inventory"
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
@@ -89,4 +90,39 @@ func TestDispatch_DerivedEvent_Rejected(t *testing.T) {
 	require.NoError(t, s.DB().QueryRowContext(t.Context(),
 		`SELECT COUNT(*) FROM events WHERE event_type = 'entity.path_changed'`).Scan(&n))
 	assert.Zero(t, n)
+}
+
+func TestDispatch_PathChangedRowsCopyTriggeringEvent(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	p1ID := "p1"
+	createPlace(t, s, b, "p1", "Garage", nil)
+	createPlace(t, s, b, "c1", "Toolbox", &p1ID)
+
+	var renameID int64
+	require.NoError(t, s.ExecInTransaction(t.Context(), func(tx store.Tx) error {
+		var err error
+		renameID, err = b.Dispatch(t.Context(), tx, "bob",
+			eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Shed"}, "renamed")
+		return err
+	}))
+
+	rename, err := s.GetEventByID(t.Context(), renameID)
+	require.NoError(t, err)
+	events, err := s.GetEventsByEntity(t.Context(), "c1")
+	require.NoError(t, err)
+	derived := events[len(events)-1]
+
+	assert.Equal(t, inventory.EntityPathChangedEvent, derived.EventType)
+	assert.Greater(t, derived.EventID, renameID)
+	assert.Equal(t, rename.TimestampUTC, derived.TimestampUTC)
+	assert.Equal(t, "bob", derived.ActorUserID)
+	assert.Nil(t, derived.Note, "derived rows never carry the triggering note")
+	require.NotNil(t, derived.EntityID)
+	assert.Equal(t, "c1", *derived.EntityID)
+
+	child, err := s.GetEntity(t.Context(), "c1")
+	require.NoError(t, err)
+	assert.Equal(t, derived.EventID, child.LastEventID)
+	assert.Equal(t, "Shed:Toolbox", child.FullPathDisplay)
 }

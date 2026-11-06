@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,26 +13,93 @@ import (
 	"github.com/asphaltbuffet/wherehouse/internal/store"
 )
 
-func TestAppendRawEvent(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
+// appendEvent writes ev in its own transaction and returns its ID.
+func appendEvent(t *testing.T, s *store.Store, ev *inventory.Event) int64 {
+	t.Helper()
+	var id int64
+	require.NoError(t, s.ExecInTransaction(t.Context(), func(tx store.Tx) error {
+		var err error
+		id, err = s.AppendEvent(t.Context(), tx, ev)
+		return err
+	}))
+	return id
+}
 
-	payload := json.RawMessage(`{"entity_id":"abc","display_name":"Garage","entity_type":"place"}`)
+// garageEvent returns an EntityCreatedEvent for entity "abc".
+func garageEvent() *inventory.Event {
 	entityID := "abc"
+	return &inventory.Event{
+		EventType:    inventory.EntityCreatedEvent,
+		TimestampUTC: "2020-01-02T03:04:05Z",
+		ActorUserID:  "alice",
+		Payload:      json.RawMessage(`{"entity_id":"abc","display_name":"Garage"}`),
+		EntityID:     &entityID,
+	}
+}
 
-	eventID, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
+func TestAppendEvent_StoresFieldsVerbatim(t *testing.T) {
+	s := openTestStore(t)
+	note := "first"
+	ev := garageEvent()
+	ev.Note = &note
+
+	id := appendEvent(t, s, ev)
+
+	got, err := s.GetEventByID(t.Context(), id)
 	require.NoError(t, err)
-	assert.Positive(t, eventID)
+	assert.Equal(t, id, got.EventID)
+	assert.Equal(t, inventory.EntityCreatedEvent, got.EventType)
+	assert.Equal(t, "2020-01-02T03:04:05Z", got.TimestampUTC, "timestamp is the caller's, not re-stamped")
+	assert.Equal(t, "alice", got.ActorUserID)
+	assert.JSONEq(t, string(ev.Payload), string(got.Payload))
+	require.NotNil(t, got.Note)
+	assert.Equal(t, "first", *got.Note)
+	require.NotNil(t, got.EntityID)
+	assert.Equal(t, "abc", *got.EntityID)
+	assert.Zero(t, ev.EventID, "AppendEvent must not mutate its input")
+}
+
+func TestAppendEvent_NilNoteIsNull(t *testing.T) {
+	s := openTestStore(t)
+
+	id := appendEvent(t, s, garageEvent())
+
+	got, err := s.GetEventByID(t.Context(), id)
+	require.NoError(t, err)
+	assert.Nil(t, got.Note)
+}
+
+func TestAppendEvent_IDsIncrease(t *testing.T) {
+	s := openTestStore(t)
+
+	first := appendEvent(t, s, garageEvent())
+	second := appendEvent(t, s, garageEvent())
+
+	assert.Greater(t, second, first)
+}
+
+func TestAppendEvent_RolledBackWithTransaction(t *testing.T) {
+	s := openTestStore(t)
+	errAbort := errors.New("abort")
+
+	err := s.ExecInTransaction(t.Context(), func(tx store.Tx) error {
+		if _, appendErr := s.AppendEvent(t.Context(), tx, garageEvent()); appendErr != nil {
+			return appendErr
+		}
+		return errAbort
+	})
+	require.ErrorIs(t, err, errAbort)
+
+	has, err := s.HasEvents(t.Context())
+	require.NoError(t, err)
+	assert.False(t, has, "AppendEvent must join the caller's transaction")
 }
 
 func TestGetEventByID(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	payload := json.RawMessage(`{"entity_id":"abc","display_name":"Garage","entity_type":"place"}`)
-	entityID := "abc"
-	eventID, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
-	require.NoError(t, err)
+	eventID := appendEvent(t, s, garageEvent())
 
 	ev, err := s.GetEventByID(ctx, eventID)
 	require.NoError(t, err)
@@ -43,12 +111,9 @@ func TestGetEventsByEntity(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	payload := json.RawMessage(`{"entity_id":"abc","display_name":"Garage","entity_type":"place"}`)
-	entityID := "abc"
-	_, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
-	require.NoError(t, err)
+	appendEvent(t, s, garageEvent())
 
-	events, err := s.GetEventsByEntity(ctx, entityID)
+	events, err := s.GetEventsByEntity(ctx, "abc")
 	require.NoError(t, err)
 	assert.Len(t, events, 1)
 }
@@ -66,10 +131,7 @@ func TestHasEvents_AfterInsert(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	payload := json.RawMessage(`{"entity_id":"x1","display_name":"Box","entity_type":"place"}`)
-	entityID := "x1"
-	_, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
-	require.NoError(t, err)
+	appendEvent(t, s, garageEvent())
 
 	has, err := s.HasEvents(ctx)
 	require.NoError(t, err)
@@ -81,19 +143,16 @@ func TestClearAllData_RemovesEventsAndEntities(t *testing.T) {
 	ctx := context.Background()
 
 	// Seed an event and an entity projection
-	payload := json.RawMessage(`{"entity_id":"c1","display_name":"Shelf","entity_type":"place"}`)
-	entityID := "c1"
-	_, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
-	require.NoError(t, err)
+	appendEvent(t, s, garageEvent())
 
-	err = s.ClearAllData(ctx)
+	err := s.ClearAllData(ctx)
 	require.NoError(t, err)
 
 	has, err := s.HasEvents(ctx)
 	require.NoError(t, err)
 	assert.False(t, has, "events table should be empty after ClearAllData")
 
-	_, err = s.GetEntity(ctx, "c1")
+	_, err = s.GetEntity(ctx, "abc")
 	assert.ErrorIs(t, err, store.ErrNotFound, "entities_current should be empty after ClearAllData")
 }
 
@@ -114,12 +173,10 @@ func TestGetAllEventsTx_SeesUncommittedRows(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	entityID := "e1"
-	payload := json.RawMessage(`{"entity_id":"e1","display_name":"Garage","entity_type":"place"}`)
-	_, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
-	require.NoError(t, err)
+	entityID := "abc"
+	appendEvent(t, s, garageEvent())
 
-	err = s.ExecInTransaction(ctx, func(tx store.Tx) error {
+	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
 		_, execErr := tx.ExecContext(ctx,
 			`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 			 VALUES (?, ?, ?, ?, NULL, ?)`,
@@ -140,14 +197,11 @@ func TestGetAllEventsRaw(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	entityID := "e1"
-	payload := json.RawMessage(`{"entity_id":"e1","display_name":"Garage","entity_type":"place"}`)
+	entityID := "abc"
+	appendEvent(t, s, garageEvent())
 
-	_, err := s.AppendRawEvent(ctx, inventory.EntityCreatedEvent, "alice", payload, nil, &entityID)
-	require.NoError(t, err)
-
-	// Insert an event with an unknown type directly — AppendRawEvent enforces typed EventType.
-	_, err = s.DB().ExecContext(ctx,
+	// Insert an event with an unknown type directly — AppendEvent enforces typed EventType.
+	_, err := s.DB().ExecContext(ctx,
 		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
 		 VALUES (?, ?, ?, ?, NULL, ?)`,
 		"entity.unknown_future", "2026-01-01T00:00:00Z", "alice", `{}`, &entityID,
@@ -161,5 +215,5 @@ func TestGetAllEventsRaw(t *testing.T) {
 	assert.Equal(t, "entity.created", events[0].EventType)
 	assert.Equal(t, "entity.unknown_future", events[1].EventType)
 	assert.NotNil(t, events[0].EntityID)
-	assert.Equal(t, "e1", *events[0].EntityID)
+	assert.Equal(t, "abc", *events[0].EntityID)
 }

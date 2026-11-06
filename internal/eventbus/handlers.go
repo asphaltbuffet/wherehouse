@@ -2,7 +2,6 @@ package eventbus
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -293,25 +292,16 @@ func (b *Bus) propagatePathChangesTx(
 			return nil, fmt.Errorf("marshal path_changed payload for %s: %w", d.EntityID, err)
 		}
 
-		const q = `
-            INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
-            VALUES (?, ?, ?, ?, NULL, ?)`
-		var result sql.Result
-		result, err = tx.ExecContext(ctx, q,
-			inventory.EntityPathChangedEvent,
-			triggeringEv.TimestampUTC,
-			triggeringEv.ActorUserID,
-			string(payloadJSON),
-			d.EntityID,
-		)
+		// Stamp the descendant's own path_changed event, as replay does.
+		d.LastEventID, err = b.store.AppendEvent(ctx, tx, &inventory.Event{
+			EventType:    inventory.EntityPathChangedEvent,
+			TimestampUTC: triggeringEv.TimestampUTC,
+			ActorUserID:  triggeringEv.ActorUserID,
+			Payload:      payloadJSON,
+			EntityID:     &d.EntityID,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("insert path_changed event for %s: %w", d.EntityID, err)
-		}
-
-		// Stamp the descendant's own path_changed event, as replay does.
-		d.LastEventID, err = result.LastInsertId()
-		if err != nil {
-			return nil, fmt.Errorf("get path_changed event ID for %s: %w", d.EntityID, err)
 		}
 
 		if err = b.store.UpdateEntityTx(ctx, tx, d); err != nil {

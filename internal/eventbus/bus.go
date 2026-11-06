@@ -183,18 +183,9 @@ func (b *Bus) writeEventInTx(
 	ev *inventory.Event,
 	applyFn func(context.Context, store.Tx, *inventory.Event) error,
 ) (int64, error) {
-	const q = `
-            INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
-            VALUES (?, ?, ?, ?, ?, ?)`
-	result, err := tx.ExecContext(ctx, q,
-		ev.EventType, ev.TimestampUTC, ev.ActorUserID,
-		string(ev.Payload), ev.Note, ev.EntityID)
+	id, err := b.store.AppendEvent(ctx, tx, ev)
 	if err != nil {
-		return 0, fmt.Errorf("insert event: %w", err)
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("get event ID: %w", err)
+		return 0, err
 	}
 	inserted := *ev
 	inserted.EventID = id
