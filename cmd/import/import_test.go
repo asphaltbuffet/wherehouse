@@ -26,13 +26,17 @@ func makeNDJSON(events []app.ExportResult) string {
 }
 
 func oneCreatedEvent() []app.ExportResult {
+	entityID := "garage0001"
 	return []app.ExportResult{
 		{
 			EventID:      1,
 			EventType:    "entity.created",
 			TimestampUTC: "2020-01-01T00:00:00Z",
 			ActorUserID:  "alice",
-			Payload:      json.RawMessage(`{"display_name":"Garage","entity_type":"place","parent_path":""}`),
+			EntityID:     &entityID,
+			Payload: json.RawMessage(
+				`{"entity_id":"garage0001","display_name":"Garage","entity_type":"place","parent_path":""}`,
+			),
 		},
 	}
 }

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -193,10 +192,10 @@ func TestDestinationAdapters_Agree(t *testing.T) {
 	require.NoError(t, err)
 	// Remove Loft leaving Trunk and the displaced Saw live beneath it (#287),
 	// bypassing app guards; re-homing Saw in place is then rejected.
-	raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: ids["Loft"]})
-	require.NoError(t, err)
-	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityRemovedEvent, "t", raw, nil)
-	require.NoError(t, err)
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		_, dErr := eventbus.New(s).Dispatch(ctx, tx, "t", eventbus.EntityRemovedPayload{EntityID: ids["Loft"]}, "")
+		return dErr
+	}))
 
 	all, err := s.ListAllEntities(ctx)
 	require.NoError(t, err)

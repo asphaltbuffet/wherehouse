@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -26,12 +25,6 @@ func (a *App) SetAttributes(ctx context.Context, reqs []SetAttributesRequest) ([
 	return execBatch(ctx, a, "SetAttributes", reqs, a.setAttributesInTx)
 }
 
-// attrChange is one validated attribute event, ready to dispatch.
-type attrChange struct {
-	eventType inventory.EventType
-	payload   []byte
-}
-
 func (a *App) setAttributesInTx(ctx context.Context, tx store.Tx, req SetAttributesRequest) (string, error) {
 	if req.Locked == nil && req.Discrete == nil {
 		return "", fmt.Errorf("set attributes %q: %w", req.EntityID, ErrNoAttributes)
@@ -44,7 +37,7 @@ func (a *App) setAttributesInTx(ctx context.Context, tx store.Tx, req SetAttribu
 
 	// Validate every change before dispatching any, so each check sees the
 	// pre-call state. Locked is emitted before discrete.
-	var changes []attrChange
+	var changes []eventbus.Payload
 	if req.Locked != nil {
 		c, cerr := lockedChange(entity, facts, *req.Locked)
 		if cerr != nil {
@@ -60,13 +53,8 @@ func (a *App) setAttributesInTx(ctx context.Context, tx store.Tx, req SetAttribu
 		changes = append(changes, c)
 	}
 
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
 	for _, c := range changes {
-		if _, err = a.bus.DispatchInTx(ctx, tx, c.eventType, req.ActorID, c.payload, note); err != nil {
+		if _, err = a.bus.Dispatch(ctx, tx, req.ActorID, c, req.Note); err != nil {
 			return "", fmt.Errorf("set attributes %q: %w", entity.FullPathDisplay, err)
 		}
 	}
@@ -74,40 +62,30 @@ func (a *App) setAttributesInTx(ctx context.Context, tx store.Tx, req SetAttribu
 	return entity.EntityID, nil
 }
 
-func lockedChange(e *inventory.Entity, f EntityFacts, locked bool) (attrChange, error) {
+// lockedChange returns the validated lock or unlock event for e.
+func lockedChange(e *inventory.Entity, f EntityFacts, locked bool) (eventbus.Payload, error) {
 	if !locked {
 		if err := f.Require(ActionUnlock); err != nil {
-			return attrChange{}, err
+			return nil, err
 		}
-		return newAttrChange(inventory.EntityUnlockedEvent, eventbus.EntityUnlockedPayload{EntityID: e.EntityID})
+		return eventbus.EntityUnlockedPayload{EntityID: e.EntityID}, nil
 	}
 	if err := f.Require(ActionLock); err != nil {
-		return attrChange{}, err
+		return nil, err
 	}
-	return newAttrChange(inventory.EntityLockedEvent, eventbus.EntityLockedPayload{EntityID: e.EntityID})
+	return eventbus.EntityLockedPayload{EntityID: e.EntityID}, nil
 }
 
-func discreteChange(e *inventory.Entity, f EntityFacts, discrete bool) (attrChange, error) {
+// discreteChange returns the validated discrete set or clear event for e.
+func discreteChange(e *inventory.Entity, f EntityFacts, discrete bool) (eventbus.Payload, error) {
 	if !discrete {
 		if err := f.Require(ActionClearDiscrete); err != nil {
-			return attrChange{}, err
+			return nil, err
 		}
-		return newAttrChange(
-			inventory.EntityDiscreteClearedEvent,
-			eventbus.EntityDiscreteClearedPayload{EntityID: e.EntityID},
-		)
+		return eventbus.EntityDiscreteClearedPayload{EntityID: e.EntityID}, nil
 	}
 	if err := f.Require(ActionSetDiscrete); err != nil {
-		return attrChange{}, err
+		return nil, err
 	}
-	return newAttrChange(inventory.EntityDiscreteSetEvent, eventbus.EntityDiscreteSetPayload{EntityID: e.EntityID})
-}
-
-// newAttrChange marshals payload (one of the four {entity_id} attribute payloads).
-func newAttrChange(t inventory.EventType, payload any) (attrChange, error) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return attrChange{}, fmt.Errorf("marshal %s payload: %w", t, err)
-	}
-	return attrChange{eventType: t, payload: raw}, nil
+	return eventbus.EntityDiscreteSetPayload{EntityID: e.EntityID}, nil
 }

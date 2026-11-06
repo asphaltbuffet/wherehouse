@@ -82,6 +82,10 @@ The action that would clear a rejection, when exactly one exists: `found` for a 
 
 An immutable, append-only record of something that happened. Events are the **source of truth**. The `event_id` (integer, autoincrement) defines replay order — timestamps are informational only.
 
+### Derived event
+
+An event the system writes as a consequence of another event, never as a direct user action. `EntityPathChangedEvent` is the only one: each descendant whose path follows a renamed or relocated ancestor gets one. Derived events are recorded in the log like any other event, but only the system writes them, and import regenerates them instead of copying them from the source stream (see [ADR 0005](docs/adr/0005-import-skips-derived-path-changed-events.md)). _Avoid_: synthetic event, side-effect event.
+
 ### Note
 
 Optional free-text annotation on an `Event`. Canonically human-typed and used infrequently — for example, a one-line reason on a corrective rename. **Not** intended to hold log output, attachments, file contents, or other large blobs. Import enforces a per-record size ceiling (16 MiB) so that garbage files (e.g. binary blobs masquerading as NDJSON) fail loudly at the parser rather than at the storage layer.
@@ -95,7 +99,7 @@ The event types currently implemented:
 | `EntityCreatedEvent` | A new entity was added |
 | `EntityRenamedEvent` | An entity's display name changed |
 | `EntityReparentedEvent` | An entity was moved to a new parent |
-| `EntityPathChangedEvent` | Derived path update (propagated from ancestor reparent) |
+| `EntityPathChangedEvent` | A descendant's path followed an ancestor's rename or relocation (a **derived event**) |
 | `EntityStatusChangedEvent` | Status (and optional context) changed |
 | `EntityRemovedEvent` | Entity was soft-deleted |
 | `EntityTagAddedEvent` | A tag was applied to an entity |

@@ -136,9 +136,9 @@ A command's `--json` shape is an **app-owned** type with JSON tags in `internal/
 ### Adding a New Event Type
 1. Add to `EventType` iota + line-comment string + `eventTypeByName` map in `internal/inventory/event_type.go`
 2. Run `go generate ./...` to regenerate `eventtype_string.go`
-3. Add a case to `applyEventTx` in `internal/eventbus/bus.go`
-4. Add a payload struct to `internal/eventbus/payloads.go`
-5. If the event changes an entity's parent, return true from `EventType.Relocates()` and route it through the relocation core in `internal/eventbus/relocate.go`. Doctor reads payload types from the bus registry, so it needs no edit.
+3. Add a payload struct to `internal/eventbus/payloads.go` with `EventType()`, `Subject()` and `isPayload()` methods (ADR 0042)
+4. Write its handler taking the typed payload, and add one `register`/`registerPathChange` line in `registerAll` (`internal/eventbus/bus.go`)
+5. If the event changes an entity's parent, return true from `EventType.Relocates()`, give the payload a `relocation()` method, and register it with `registerRelocation` (`internal/eventbus/relocate.go`). If only the bus may write it, return true from `EventType.IsDerived()`. Doctor decodes through the bus registry, so it needs no edit.
 
 ### Styles
 All styles live as private fields on the `Styles` struct in `internal/styles/styles.go`. Access via public accessor methods on the `appStyles` singleton. Never inline `lipgloss.NewStyle()` in rendering functions. Use Wong palette with `lipgloss.AdaptiveColor{Light, Dark}` for colorblind safety.

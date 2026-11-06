@@ -25,15 +25,6 @@ func openTestStore(t *testing.T) *store.Store {
 	return s
 }
 
-func TestDispatch_UnknownEventType(t *testing.T) {
-	s := openTestStore(t)
-	b := eventbus.New(s)
-
-	payload := json.RawMessage(`{}`)
-	_, err := b.Dispatch(context.Background(), inventory.EventType(999), "alice", payload, nil)
-	assert.Error(t, err)
-}
-
 func mustMarshal(t *testing.T, v any) json.RawMessage {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -46,6 +37,7 @@ func TestReplayEvent_ReturnsNewDBAssignedID(t *testing.T) {
 	b := eventbus.New(s)
 	ctx := context.Background()
 
+	r1ID := "r1"
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
 		EntityID: "r1", DisplayName: "Replay Room", Locked: true,
 	})
@@ -54,6 +46,7 @@ func TestReplayEvent_ReturnsNewDBAssignedID(t *testing.T) {
 		TimestampUTC: "2020-01-01T00:00:00Z",
 		ActorUserID:  "alice",
 		Payload:      payload,
+		EntityID:     &r1ID,
 	}
 
 	id, _, err := b.ReplayEvent(ctx, ev)
@@ -67,6 +60,7 @@ func TestReplayEvent_PreservesOriginalTimestamp(t *testing.T) {
 	ctx := context.Background()
 
 	const originalTS = "2020-06-15T12:00:00Z"
+	r2ID := "r2"
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
 		EntityID: "r2", DisplayName: "Time Capsule", Locked: true,
 	})
@@ -75,6 +69,7 @@ func TestReplayEvent_PreservesOriginalTimestamp(t *testing.T) {
 		TimestampUTC: originalTS,
 		ActorUserID:  "alice",
 		Payload:      payload,
+		EntityID:     &r2ID,
 	}
 
 	id, _, err := b.ReplayEvent(ctx, ev)
@@ -114,6 +109,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 	b := eventbus.New(s)
 	ctx := context.Background()
 
+	r3ID := "r3"
 	payload := mustMarshal(t, eventbus.EntityCreatedPayload{
 		EntityID: "r3", DisplayName: "Projected Room", Locked: true,
 	})
@@ -122,6 +118,7 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 		TimestampUTC: "2022-09-10T08:00:00Z",
 		ActorUserID:  "bob",
 		Payload:      payload,
+		EntityID:     &r3ID,
 	}
 
 	_, _, err := b.ReplayEvent(ctx, ev)
@@ -132,37 +129,30 @@ func TestReplayEvent_NonPathChangedEvent_AppliesProjection(t *testing.T) {
 	assert.Equal(t, "Projected Room", entity.DisplayName)
 }
 
-func TestPayloadFactories_CoversAllEventTypes(t *testing.T) {
-	s := openTestStore(t)
-	b := eventbus.New(s)
-
-	factories := b.PayloadFactories()
-
-	allTypes := []inventory.EventType{
-		inventory.EntityCreatedEvent,
-		inventory.EntityRenamedEvent,
-		inventory.EntityReparentedEvent,
-		inventory.EntityPathChangedEvent,
-		inventory.EntityStatusChangedEvent,
-		inventory.EntityRemovedEvent,
-		inventory.EntityUsedEvent,
-		inventory.EntityReturnedHomeEvent,
-		inventory.EntityRehomedEvent,
-	}
-
-	for _, et := range allTypes {
-		factory, ok := factories[et]
-		require.True(t, ok, "PayloadFactories missing entry for %s", et)
-		require.NotNil(t, factory, "factory for %s is nil", et)
-		instance := factory()
-		assert.NotNil(t, instance, "factory() for %s returned nil", et)
+// Every EventType decodes through the registry to a payload that names that
+// same type; a copy-pasted EventType() method would collide here.
+func TestDecodePayload_EveryEventType(t *testing.T) {
+	b := eventbus.New(openTestStore(t))
+	for _, et := range allEventTypes() {
+		t.Run(et.String(), func(t *testing.T) {
+			p, err := b.DecodePayload(et, json.RawMessage(`{"entity_id":"x"}`))
+			require.NoError(t, err)
+			assert.Equal(t, et, p.EventType())
+			assert.Equal(t, "x", p.Subject())
+		})
 	}
 }
 
-func dispatch(t *testing.T, b *eventbus.Bus, et inventory.EventType, payload any) {
-	t.Helper()
-	_, err := b.Dispatch(t.Context(), et, "test", mustMarshal(t, payload), nil)
-	require.NoError(t, err)
+func TestDecodePayload_UnknownType(t *testing.T) {
+	b := eventbus.New(openTestStore(t))
+	_, err := b.DecodePayload(inventory.EventType(999), json.RawMessage(`{}`))
+	assert.Error(t, err)
+}
+
+func TestDecodePayload_Malformed(t *testing.T) {
+	b := eventbus.New(openTestStore(t))
+	_, err := b.DecodePayload(inventory.EntityRemovedEvent, json.RawMessage(`not-json`))
+	assert.ErrorContains(t, err, "entity.removed")
 }
 
 func TestHome_FollowsCreateAndReparent(t *testing.T) {
@@ -170,7 +160,7 @@ func TestHome_FollowsCreateAndReparent(t *testing.T) {
 	s := openTestStore(t)
 	b := eventbus.New(s)
 	created := func(id, name string, parent *string) {
-		dispatch(t, b, inventory.EntityCreatedEvent,
+		dispatch(t, s, b,
 			eventbus.EntityCreatedPayload{EntityID: id, DisplayName: name, ParentID: parent})
 	}
 	garage := "garage0001"
@@ -184,7 +174,7 @@ func TestHome_FollowsCreateAndReparent(t *testing.T) {
 	assert.Equal(t, garage, *e.HomeID)
 
 	shed := "shed000001"
-	dispatch(t, b, inventory.EntityReparentedEvent,
+	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &shed})
 	e, err = s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
@@ -206,11 +196,11 @@ func newTestBus(t *testing.T) (*store.Store, *eventbus.Bus) {
 	return s, eventbus.New(s)
 }
 
-func seedDrillInGarage(t *testing.T, b *eventbus.Bus) {
+func seedDrillInGarage(t *testing.T, s *store.Store, b *eventbus.Bus) {
 	t.Helper()
 	create := func(id, name string, parent *string) {
 		t.Helper()
-		dispatch(t, b, inventory.EntityCreatedEvent,
+		dispatch(t, s, b,
 			eventbus.EntityCreatedPayload{EntityID: id, DisplayName: name, ParentID: parent})
 	}
 	garage, drill := "garage0001", "drill00001"
@@ -223,9 +213,9 @@ func seedDrillInGarage(t *testing.T, b *eventbus.Bus) {
 func TestUsed_KeepsHomeAndPropagatesPaths(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck := "deck000001"
-	useDrill(t, b, &deck)
+	useDrill(t, s, b, &deck)
 
 	drill, err := s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
@@ -243,18 +233,18 @@ func TestUsed_KeepsHomeAndPropagatesPaths(t *testing.T) {
 func TestReturnedHome_And_Rehomed(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck, garage := "deck000001", "garage0001"
-	useDrill(t, b, &deck)
-	returnDrill(t, b, &garage)
+	useDrill(t, s, b, &deck)
+	returnDrill(t, s, b, &garage)
 
 	drill, err := s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage:Drill", drill.FullPathDisplay)
 	assert.False(t, drill.IsDisplaced())
 
-	useDrill(t, b, &deck)
-	dispatch(t, b, inventory.EntityRehomedEvent, eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
+	useDrill(t, s, b, &deck)
+	dispatch(t, s, b, eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
 	drill, err = s.GetEntity(ctx, "drill00001")
 	require.NoError(t, err)
 	require.NotNil(t, drill.HomeID)
@@ -265,17 +255,17 @@ func TestReturnedHome_And_Rehomed(t *testing.T) {
 func TestHomeEvents_ReplayEquivalence(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck, garage := "deck000001", "garage0001"
-	useDrill(t, b, &deck)
-	returnDrill(t, b, &garage)
-	useDrill(t, b, &deck)
-	dispatch(t, b, inventory.EntityRehomedEvent,
+	useDrill(t, s, b, &deck)
+	returnDrill(t, s, b, &garage)
+	useDrill(t, s, b, &deck)
+	dispatch(t, s, b,
 		eventbus.EntityRehomedPayload{EntityID: "drill00001", HomeID: &deck})
-	dispatch(t, b, inventory.EntityReparentedEvent,
+	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "drill00001", NewParentID: &garage})
-	useDrill(t, b, &deck)
-	dispatch(t, b, inventory.EntityReparentedEvent,
+	useDrill(t, s, b, &deck)
+	dispatch(t, s, b,
 		eventbus.EntityReparentedPayload{EntityID: "bit0000001", NewParentID: &garage})
 
 	before, err := s.ListAllEntities(ctx)
@@ -302,7 +292,7 @@ func TestHomeEvents_ReplayEquivalence(t *testing.T) {
 func TestCountDisplacedWithHomeTx(t *testing.T) {
 	ctx := t.Context()
 	s, b := newTestBus(t)
-	seedDrillInGarage(t, b)
+	seedDrillInGarage(t, s, b)
 	deck, garage := "deck000001", "garage0001"
 
 	count := func(homeID string) int {
@@ -318,29 +308,115 @@ func TestCountDisplacedWithHomeTx(t *testing.T) {
 
 	assert.Equal(t, 0, count(garage), "nothing is displaced yet")
 
-	useDrill(t, b, &deck)
+	useDrill(t, s, b, &deck)
 	assert.Equal(t, 1, count(garage), "the used drill is displaced from its garage home")
 	assert.Equal(t, 0, count(deck), "deck is not the drill's home")
 	assert.Equal(t, 0, count("drill00001"), "the bit travels with the drill and is not displaced")
 
-	returnDrill(t, b, &garage)
+	returnDrill(t, s, b, &garage)
 	assert.Equal(t, 0, count(garage), "a drill returned home is no longer displaced")
 
-	useDrill(t, b, &deck)
+	useDrill(t, s, b, &deck)
 	assert.Equal(t, 1, count(garage), "using it again displaces it again")
 
-	dispatch(t, b, inventory.EntityRemovedEvent, eventbus.EntityRemovedPayload{EntityID: "drill00001"})
+	dispatch(t, s, b, eventbus.EntityRemovedPayload{EntityID: "drill00001"})
 	assert.Equal(t, 0, count(garage), "a removed displaced entity is not counted")
 }
 
-func useDrill(t *testing.T, b *eventbus.Bus, parent *string) {
+func useDrill(t *testing.T, s *store.Store, b *eventbus.Bus, parent *string) {
 	t.Helper()
-	dispatch(t, b, inventory.EntityUsedEvent,
+	dispatch(t, s, b,
 		eventbus.EntityUsedPayload{EntityID: "drill00001", NewParentID: parent})
 }
 
-func returnDrill(t *testing.T, b *eventbus.Bus, parent *string) {
+func returnDrill(t *testing.T, s *store.Store, b *eventbus.Bus, parent *string) {
 	t.Helper()
-	dispatch(t, b, inventory.EntityReturnedHomeEvent,
+	dispatch(t, s, b,
 		eventbus.EntityReturnedHomePayload{EntityID: "drill00001", ParentID: parent})
+}
+
+func replayCreated(t *testing.T, b *eventbus.Bus, payload string, column *string) (int64, error) {
+	t.Helper()
+	id, _, err := b.ReplayEvent(t.Context(), &inventory.Event{
+		EventType:    inventory.EntityCreatedEvent,
+		TimestampUTC: "2020-01-01T00:00:00Z",
+		ActorUserID:  "alice",
+		Payload:      json.RawMessage(payload),
+		EntityID:     column,
+	})
+	return id, err
+}
+
+func countEvents(t *testing.T, s *store.Store) int {
+	t.Helper()
+	var n int
+	require.NoError(t, s.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM events`).Scan(&n))
+	return n
+}
+
+func TestReplayEvent_SubjectMismatch_Rejected(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	other := "zz"
+
+	_, err := replayCreated(t, b, `{"entity_id":"g1","display_name":"Garage"}`, &other)
+	require.ErrorIs(t, err, eventbus.ErrSubjectMismatch)
+	assert.Zero(t, countEvents(t, s), "rejected record is not written")
+}
+
+// A NULL column carries no claim to disagree with; the payload supplies it,
+// exactly as live dispatch would.
+func TestReplayEvent_NullColumn_FilledFromPayload(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+
+	id, err := replayCreated(t, b, `{"entity_id":"g1","display_name":"Garage"}`, nil)
+	require.NoError(t, err)
+
+	stored, err := s.GetEventByID(t.Context(), id)
+	require.NoError(t, err)
+	require.NotNil(t, stored.EntityID)
+	assert.Equal(t, "g1", *stored.EntityID)
+}
+
+func TestReplayEvent_NoSubjectAnywhere_Rejected(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+
+	_, err := replayCreated(t, b, `{"display_name":"Garage"}`, nil)
+	require.ErrorIs(t, err, eventbus.ErrNoSubject)
+	assert.Zero(t, countEvents(t, s))
+}
+
+// Rebuild is the recovery tool; it must still run over a legacy mismatch (ADR 0042).
+func TestTruncateAndReplay_ToleratesSubjectMismatch(t *testing.T) {
+	s := openTestStore(t)
+	b := eventbus.New(s)
+	column := "zz"
+	_, err := s.DB().ExecContext(t.Context(),
+		`INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
+		 VALUES (?, ?, ?, ?, NULL, ?)`,
+		"entity.created", "2020-01-01T00:00:00Z", "alice",
+		`{"entity_id":"g1","display_name":"Garage"}`, &column,
+	)
+	require.NoError(t, err)
+
+	count, err := b.TruncateAndReplay(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+	e, err := s.GetEntity(t.Context(), "g1")
+	require.NoError(t, err)
+	assert.Equal(t, "Garage", e.DisplayName)
+}
+
+// allEventTypes returns every defined EventType: the iota run ends at the
+// first value with no name, so a type added later is covered automatically.
+func allEventTypes() []inventory.EventType {
+	var all []inventory.EventType
+	for et := inventory.EntityCreatedEvent; ; et++ {
+		if _, err := inventory.ParseEventType(et.String()); err != nil {
+			return all
+		}
+		all = append(all, et)
+	}
 }

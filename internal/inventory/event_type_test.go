@@ -65,3 +65,23 @@ func TestParseEventType_HomeEvents(t *testing.T) {
 		assert.Equal(t, want, got)
 	}
 }
+
+func TestEventType_IsDerived(t *testing.T) {
+	for _, et := range allEventTypes() {
+		t.Run(et.String(), func(t *testing.T) {
+			assert.Equal(t, et == inventory.EntityPathChangedEvent, et.IsDerived())
+		})
+	}
+}
+
+// allEventTypes returns every defined EventType: the iota run ends at the
+// first value with no name, so a type added later is covered automatically.
+func allEventTypes() []inventory.EventType {
+	var all []inventory.EventType
+	for et := inventory.EntityCreatedEvent; ; et++ {
+		if _, err := inventory.ParseEventType(et.String()); err != nil {
+			return all
+		}
+		all = append(all, et)
+	}
+}

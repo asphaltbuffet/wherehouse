@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/asphaltbuffet/wherehouse/internal/eventbus"
@@ -23,23 +22,18 @@ func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 		return setsErr
 	}
 
-	var note *string
-	if req.Note != "" {
-		note = &req.Note
-	}
-
 	// One transaction for the whole call, checked against the live entity
 	// inside it (ADR 0035): either every tag change commits or none does.
 	// Each change is still its own event, so replay is unaffected.
 	return a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return a.applyTagChangesTx(ctx, tx, req, note, addSet, removeSet)
+		return a.applyTagChangesTx(ctx, tx, req, addSet, removeSet)
 	})
 }
 
 // applyTagChangesTx records one event per tag in removeSet and addSet that
 // changes the live entity req.EntityID; no-ops are pruned first.
 func (a *App) applyTagChangesTx(
-	ctx context.Context, tx store.Tx, req TagEntityRequest, note *string, addSet, removeSet map[string]bool,
+	ctx context.Context, tx store.Tx, req TagEntityRequest, addSet, removeSet map[string]bool,
 ) error {
 	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
 	if err != nil {
@@ -50,25 +44,15 @@ func (a *App) applyTagChangesTx(
 	}
 
 	for tag := range removeSet {
-		raw, marshalErr := json.Marshal(eventbus.EntityTagRemovedPayload{EntityID: entity.EntityID, Tag: tag})
-		if marshalErr != nil {
-			return fmt.Errorf("marshal tag_removed payload: %w", marshalErr)
-		}
-		if _, dispErr := a.bus.DispatchInTx(
-			ctx, tx, inventory.EntityTagRemovedEvent, req.ActorID, raw, note,
-		); dispErr != nil {
+		payload := eventbus.EntityTagRemovedPayload{EntityID: entity.EntityID, Tag: tag}
+		if _, dispErr := a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); dispErr != nil {
 			return fmt.Errorf("remove tag %q: %w", tag, dispErr)
 		}
 	}
 
 	for tag := range addSet {
-		raw, marshalErr := json.Marshal(eventbus.EntityTagAddedPayload{EntityID: entity.EntityID, Tag: tag})
-		if marshalErr != nil {
-			return fmt.Errorf("marshal tag_added payload: %w", marshalErr)
-		}
-		if _, dispErr := a.bus.DispatchInTx(
-			ctx, tx, inventory.EntityTagAddedEvent, req.ActorID, raw, note,
-		); dispErr != nil {
+		payload := eventbus.EntityTagAddedPayload{EntityID: entity.EntityID, Tag: tag}
+		if _, dispErr := a.bus.Dispatch(ctx, tx, req.ActorID, payload, req.Note); dispErr != nil {
 			return fmt.Errorf("add tag %q: %w", tag, dispErr)
 		}
 	}

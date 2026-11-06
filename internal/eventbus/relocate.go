@@ -2,7 +2,6 @@ package eventbus
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -22,30 +21,31 @@ func homeFollowsParent(e *inventory.Entity) { e.HomeID = e.ParentID }
 
 func homeUnchanged(*inventory.Entity) {}
 
-// decodeRelocation reads the payload of any event for which Relocates() is true.
-func decodeRelocation(ev *inventory.Event) (relocation, error) {
-	switch ev.EventType { //nolint:exhaustive // only relocating events are decoded here
-	case inventory.EntityReparentedEvent:
-		var p EntityReparentedPayload
-		if err := json.Unmarshal(ev.Payload, &p); err != nil {
-			return relocation{}, fmt.Errorf("decode %s: %w", ev.EventType, err)
-		}
-		return relocation{entityID: p.EntityID, newParentID: p.NewParentID, homeRule: homeFollowsParent}, nil
-	case inventory.EntityUsedEvent:
-		var p EntityUsedPayload
-		if err := json.Unmarshal(ev.Payload, &p); err != nil {
-			return relocation{}, fmt.Errorf("decode %s: %w", ev.EventType, err)
-		}
-		return relocation{entityID: p.EntityID, newParentID: p.NewParentID, homeRule: homeUnchanged}, nil
-	case inventory.EntityReturnedHomeEvent:
-		var p EntityReturnedHomePayload
-		if err := json.Unmarshal(ev.Payload, &p); err != nil {
-			return relocation{}, fmt.Errorf("decode %s: %w", ev.EventType, err)
-		}
-		return relocation{entityID: p.EntityID, newParentID: p.ParentID, homeRule: homeUnchanged}, nil
-	default:
-		return relocation{}, fmt.Errorf("decode relocation: %s does not relocate", ev.EventType)
-	}
+// relocator is a payload for an event where Relocates() is true.
+type relocator interface {
+	Payload
+	relocation() relocation
+}
+
+func (p EntityReparentedPayload) relocation() relocation {
+	return relocation{entityID: p.EntityID, newParentID: p.NewParentID, homeRule: homeFollowsParent}
+}
+
+func (p EntityUsedPayload) relocation() relocation {
+	return relocation{entityID: p.EntityID, newParentID: p.NewParentID, homeRule: homeUnchanged}
+}
+
+func (p EntityReturnedHomePayload) relocation() relocation {
+	return relocation{entityID: p.EntityID, newParentID: p.ParentID, homeRule: homeUnchanged}
+}
+
+// registerRelocation routes a relocating event through relocateEntityTx.
+func registerRelocation[P relocator](b *Bus) {
+	registerPathChange(b, func(
+		ctx context.Context, tx store.Tx, ev *inventory.Event, p P,
+	) (*inventory.Entity, []*inventory.Entity, error) {
+		return b.relocateEntityTx(ctx, tx, ev, p.relocation())
+	})
 }
 
 // relocateEntityTx is the pathChangeFn for every relocating event. It updates
@@ -53,12 +53,8 @@ func decodeRelocation(ev *inventory.Event) (relocation, error) {
 // descendants as they were before the move. Descendants are read first so the
 // path-prefix query still matches the old path.
 func (b *Bus) relocateEntityTx(
-	ctx context.Context, tx store.Tx, ev *inventory.Event,
+	ctx context.Context, tx store.Tx, ev *inventory.Event, rel relocation,
 ) (*inventory.Entity, []*inventory.Entity, error) {
-	rel, err := decodeRelocation(ev)
-	if err != nil {
-		return nil, nil, err
-	}
 	descendants, err := b.store.GetDescendantsTx(ctx, tx, rel.entityID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: get descendants: %w", ev.EventType, err)
@@ -86,11 +82,7 @@ func (b *Bus) relocateEntityTx(
 
 // handleEntityRehomed sets home to the payload's home_id. The parent does not
 // change, so there is nothing to propagate.
-func (b *Bus) handleEntityRehomed(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
-	var p EntityRehomedPayload
-	if err := json.Unmarshal(ev.Payload, &p); err != nil {
-		return fmt.Errorf("handleEntityRehomed: unmarshal: %w", err)
-	}
+func (b *Bus) handleEntityRehomed(ctx context.Context, tx store.Tx, ev *inventory.Event, p EntityRehomedPayload) error {
 	entity, err := b.store.GetEntityTx(ctx, tx, p.EntityID)
 	if err != nil {
 		return fmt.Errorf("handleEntityRehomed: get entity: %w", err)

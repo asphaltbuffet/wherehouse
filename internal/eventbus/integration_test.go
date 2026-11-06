@@ -2,7 +2,6 @@ package eventbus_test
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,7 @@ func TestEntityLifecycle_CreateAndRename(t *testing.T) {
 	b := eventbus.New(s)
 	ctx := context.Background()
 
-	createPlace(t, b, "p1", "Garage", nil)
+	createPlace(t, s, b, "p1", "Garage", nil)
 
 	entity, err := s.GetEntity(ctx, "p1")
 	require.NoError(t, err)
@@ -25,10 +24,7 @@ func TestEntityLifecycle_CreateAndRename(t *testing.T) {
 	assert.Equal(t, "garage", entity.CanonicalName)
 	assert.Equal(t, "Garage", entity.FullPathDisplay)
 
-	renamePayload, err := json.Marshal(eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Workshop"})
-	require.NoError(t, err)
-	_, err = b.Dispatch(ctx, inventory.EntityRenamedEvent, "alice", renamePayload, nil)
-	require.NoError(t, err)
+	dispatch(t, s, b, eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Workshop"})
 
 	renamed, err := s.GetEntity(ctx, "p1")
 	require.NoError(t, err)
@@ -41,16 +37,13 @@ func TestEntityLifecycle_PathPropagation(t *testing.T) {
 	b := eventbus.New(s)
 	ctx := context.Background()
 
-	createPlace(t, b, "p1", "Garage", nil)
+	createPlace(t, s, b, "p1", "Garage", nil)
 	p1ID := "p1"
-	createPlace(t, b, "p2", "Toolbox", &p1ID)
+	createPlace(t, s, b, "p2", "Toolbox", &p1ID)
 	p2ID := "p2"
-	createPlace(t, b, "p3", "Socket Set", &p2ID)
+	createPlace(t, s, b, "p3", "Socket Set", &p2ID)
 
-	renamePayload, err := json.Marshal(eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Workshop"})
-	require.NoError(t, err)
-	_, err = b.Dispatch(ctx, inventory.EntityRenamedEvent, "alice", renamePayload, nil)
-	require.NoError(t, err)
+	dispatch(t, s, b, eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: "Workshop"})
 
 	toolbox, err := s.GetEntity(ctx, "p2")
 	require.NoError(t, err)
@@ -69,14 +62,11 @@ func TestEntityLifecycle_DisplayOnlyRenamePropagates(t *testing.T) {
 			b := eventbus.New(s)
 			ctx := t.Context()
 
-			createPlace(t, b, "p1", "Garage", nil)
+			createPlace(t, s, b, "p1", "Garage", nil)
 			p1ID := "p1"
-			createPlace(t, b, "p2", "Toolbox", &p1ID)
+			createPlace(t, s, b, "p2", "Toolbox", &p1ID)
 
-			renamePayload, err := json.Marshal(eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: newName})
-			require.NoError(t, err)
-			_, err = b.Dispatch(ctx, inventory.EntityRenamedEvent, "alice", renamePayload, nil)
-			require.NoError(t, err)
+			dispatch(t, s, b, eventbus.EntityRenamedPayload{EntityID: "p1", DisplayName: newName})
 
 			toolbox, err := s.GetEntity(ctx, "p2")
 			require.NoError(t, err)
@@ -97,24 +87,21 @@ func TestEntityLifecycle_Reparent(t *testing.T) {
 	ctx := context.Background()
 
 	// Garage > Toolbox > Wrench
-	createPlace(t, b, "p1", "Garage", nil)
+	createPlace(t, s, b, "p1", "Garage", nil)
 	p1ID := "p1"
-	createPlace(t, b, "p2", "Toolbox", &p1ID)
+	createPlace(t, s, b, "p2", "Toolbox", &p1ID)
 	p2ID := "p2"
-	createLeaf(t, b, "l1", "Wrench", &p2ID)
+	createLeaf(t, s, b, "l1", "Wrench", &p2ID)
 
 	// Create a second top-level place to reparent into.
-	createPlace(t, b, "p3", "Workshop", nil)
+	createPlace(t, s, b, "p3", "Workshop", nil)
 
 	// Reparent Toolbox from Garage to Workshop.
 	p3ID := "p3"
-	reparentPayload, err := json.Marshal(eventbus.EntityReparentedPayload{
+	dispatch(t, s, b, eventbus.EntityReparentedPayload{
 		EntityID:    "p2",
 		NewParentID: &p3ID,
 	})
-	require.NoError(t, err)
-	_, err = b.Dispatch(ctx, inventory.EntityReparentedEvent, "alice", reparentPayload, nil)
-	require.NoError(t, err)
 
 	toolbox, err := s.GetEntity(ctx, "p2")
 	require.NoError(t, err)
@@ -134,19 +121,16 @@ func TestEntityLifecycle_StatusChange(t *testing.T) {
 	b := eventbus.New(s)
 	ctx := context.Background()
 
-	createPlace(t, b, "p1", "Garage", nil)
+	createPlace(t, s, b, "p1", "Garage", nil)
 	p1ID := "p1"
-	createLeaf(t, b, "l1", "Wrench", &p1ID)
+	createLeaf(t, s, b, "l1", "Wrench", &p1ID)
 
 	note := "left at job site"
-	statusPayload, err := json.Marshal(eventbus.EntityStatusChangedPayload{
+	dispatch(t, s, b, eventbus.EntityStatusChangedPayload{
 		EntityID:      "l1",
-		Status:        "missing",
+		Status:        inventory.EntityStatusMissing,
 		StatusContext: &note,
 	})
-	require.NoError(t, err)
-	_, err = b.Dispatch(ctx, inventory.EntityStatusChangedEvent, "alice", statusPayload, nil)
-	require.NoError(t, err)
 
 	entity, err := s.GetEntity(ctx, "l1")
 	require.NoError(t, err)
@@ -161,10 +145,7 @@ func TestEntityCreated_LegacyEntityType_Place_SetsLocked(t *testing.T) {
 	ctx := context.Background()
 
 	p := eventbus.EntityCreatedPayload{EntityID: "p1", DisplayName: "Garage", LegacyEntityType: "place"}
-	raw, err := json.Marshal(p)
-	require.NoError(t, err)
-	_, err = b.Dispatch(ctx, inventory.EntityCreatedEvent, "test", raw, nil)
-	require.NoError(t, err)
+	dispatch(t, s, b, p)
 
 	entity, err := s.GetEntity(ctx, "p1")
 	require.NoError(t, err)
@@ -178,10 +159,7 @@ func TestEntityCreated_LegacyEntityType_Leaf_SetsDiscrete(t *testing.T) {
 	ctx := context.Background()
 
 	p := eventbus.EntityCreatedPayload{EntityID: "l1", DisplayName: "Wrench", LegacyEntityType: "leaf"}
-	raw, err := json.Marshal(p)
-	require.NoError(t, err)
-	_, err = b.Dispatch(ctx, inventory.EntityCreatedEvent, "test", raw, nil)
-	require.NoError(t, err)
+	dispatch(t, s, b, p)
 
 	entity, err := s.GetEntity(ctx, "l1")
 	require.NoError(t, err)
@@ -196,18 +174,15 @@ func TestTruncateAndReplay_RebuildsProjection(t *testing.T) {
 
 	// Garage > Toolbox > Wrench — includes a reparent so EntityPathChangedEvents
 	// are written to the event log, testing the projection-only replay path.
-	createPlace(t, b, "p1", "Garage", nil)
+	createPlace(t, s, b, "p1", "Garage", nil)
 	p1ID := "p1"
-	createPlace(t, b, "p2", "Toolbox", &p1ID)
+	createPlace(t, s, b, "p2", "Toolbox", &p1ID)
 	p2ID := "p2"
-	createLeaf(t, b, "l1", "Wrench", &p2ID)
-	createPlace(t, b, "p3", "Workshop", nil)
+	createLeaf(t, s, b, "l1", "Wrench", &p2ID)
+	createPlace(t, s, b, "p3", "Workshop", nil)
 
 	p3ID := "p3"
-	reparentPayload, err := json.Marshal(eventbus.EntityReparentedPayload{EntityID: "p2", NewParentID: &p3ID})
-	require.NoError(t, err)
-	_, err = b.Dispatch(ctx, inventory.EntityReparentedEvent, "alice", reparentPayload, nil)
-	require.NoError(t, err)
+	dispatch(t, s, b, eventbus.EntityReparentedPayload{EntityID: "p2", NewParentID: &p3ID})
 
 	// Count events in log before rebuild (includes EntityPathChangedEvents).
 	allEventsBefore, err := s.GetAllEvents(ctx)

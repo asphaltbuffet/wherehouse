@@ -26,10 +26,13 @@ func (a *App) ValidateEventLog(ctx context.Context) ([]DoctorIssue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("validate event log: %w", err)
 	}
-	return validateEventLog(events, a.bus.PayloadFactories()), nil
+	return validateEventLog(events, a.bus.DecodePayload), nil
 }
 
-func validateEventLog(events []store.RawEvent, factories map[inventory.EventType]func() any) []DoctorIssue {
+// payloadDecoder decodes a stored payload by event type (eventbus.Bus.DecodePayload).
+type payloadDecoder func(inventory.EventType, json.RawMessage) (eventbus.Payload, error)
+
+func validateEventLog(events []store.RawEvent, decode payloadDecoder) []DoctorIssue {
 	createdIDs := make(map[string]bool)
 	removedIDs := make(map[string]int64) // entity ID → first remove event_id
 
@@ -50,7 +53,7 @@ func validateEventLog(events []store.RawEvent, factories map[inventory.EventType
 			}
 		}
 
-		issues = append(issues, validateSingleEvent(ev, et, parseErr, factories)...)
+		issues = append(issues, validateSingleEvent(ev, et, parseErr, decode)...)
 	}
 
 	for entityID, removeEventID := range removedIDs {
@@ -71,7 +74,7 @@ func validateSingleEvent(
 	ev store.RawEvent,
 	et inventory.EventType,
 	parseErr error,
-	factories map[inventory.EventType]func() any,
+	decode payloadDecoder,
 ) []DoctorIssue {
 	id := ev.EventID
 	var issues []DoctorIssue
@@ -84,15 +87,13 @@ func validateSingleEvent(
 		})
 	}
 
-	if proto, ok := factories[et]; ok {
-		target := proto()
-		if unmarshalErr := json.Unmarshal(ev.Payload, target); unmarshalErr != nil {
-			return append(issues, DoctorIssue{
-				Kind:        DoctorKindEventLog,
-				EventID:     &id,
-				Description: fmt.Sprintf("malformed payload for %s: %v", ev.EventType, unmarshalErr),
-			})
-		}
+	payload, decodeErr := decode(et, ev.Payload)
+	if decodeErr != nil {
+		return append(issues, DoctorIssue{
+			Kind:        DoctorKindEventLog,
+			EventID:     &id,
+			Description: fmt.Sprintf("malformed payload for %s: %v", ev.EventType, decodeErr),
+		})
 	}
 
 	if ev.EntityID == nil || *ev.EntityID == "" {
@@ -101,6 +102,29 @@ func validateSingleEvent(
 			EventID:     &id,
 			Description: fmt.Sprintf("event %d missing entity_id", id),
 		})
+	}
+
+	if *ev.EntityID != payload.Subject() {
+		return append(issues, DoctorIssue{
+			Kind:    DoctorKindEventLog,
+			EventID: &id,
+			Description: fmt.Sprintf(
+				"event %d entity_id %q does not match payload entity_id %q "+
+					"(rebuild follows the payload; use --rebuild --force)",
+				id, *ev.EntityID, payload.Subject()),
+		})
+	}
+
+	if et == inventory.EntityStatusChangedEvent {
+		var p eventbus.EntityStatusChangedPayload
+		_ = json.Unmarshal(ev.Payload, &p) // already validated above
+		if p.Status == 0 {
+			return append(issues, DoctorIssue{
+				Kind:        DoctorKindEventLog,
+				EventID:     &id,
+				Description: fmt.Sprintf("entity.status_changed event %d missing status", id),
+			})
+		}
 	}
 
 	if et == inventory.EntityCreatedEvent {
@@ -159,7 +183,7 @@ func (a *App) RunDoctorChecks(ctx context.Context) ([]DoctorIssue, error) {
 		return nil, fmt.Errorf("doctor checks: %w", err)
 	}
 
-	issues := validateEventLog(events, a.bus.PayloadFactories())
+	issues := validateEventLog(events, a.bus.DecodePayload)
 	expectedRows, maxEventID := buildProjectionSets(events)
 	issues = append(issues, checkProjectionRows(projRows, expectedRows, maxEventID)...)
 	issues = append(issues, checkHomeRows(projRows)...)

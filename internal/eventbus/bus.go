@@ -19,9 +19,9 @@ type pathChangeFn func(context.Context, store.Tx, *inventory.Event) (*inventory.
 
 // eventRegistration sets exactly one of applyFn or pathChangeFn.
 type eventRegistration struct {
-	payloadFactory func() any
-	applyFn        eventHandlerFn
-	pathChangeFn   pathChangeFn // set for events where PropagatesPaths() is true
+	decode       func(json.RawMessage) (Payload, error)
+	applyFn      eventHandlerFn
+	pathChangeFn pathChangeFn // set for events where PropagatesPaths() is true
 }
 
 // Bus is the single entry point for persisting events and updating projections.
@@ -41,144 +41,92 @@ func New(s *store.Store) *Bus {
 }
 
 func (b *Bus) registerAll() {
-	b.registry[inventory.EntityCreatedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityCreatedPayload{} },
-		applyFn:        b.handleEntityCreated,
-	}
-	b.registry[inventory.EntityRenamedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityRenamedPayload{} },
-		pathChangeFn:   b.renameEntityTx,
-	}
-	b.registry[inventory.EntityReparentedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityReparentedPayload{} },
-		pathChangeFn:   b.relocateEntityTx,
-	}
-	b.registry[inventory.EntityPathChangedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityPathChangedPayload{} },
-		applyFn:        b.handleEntityPathChanged,
-	}
-	b.registry[inventory.EntityStatusChangedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityStatusChangedPayload{} },
-		applyFn:        b.handleEntityStatusChanged,
-	}
-	b.registry[inventory.EntityRemovedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityRemovedPayload{} },
-		applyFn:        b.handleEntityRemoved,
-	}
-	b.registry[inventory.EntityTagAddedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityTagAddedPayload{} },
-		applyFn:        b.handleEntityTagAdded,
-	}
-	b.registry[inventory.EntityTagRemovedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityTagRemovedPayload{} },
-		applyFn:        b.handleEntityTagRemoved,
-	}
-	b.registry[inventory.EntityLockedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityLockedPayload{} },
-		applyFn:        b.handleEntityLocked,
-	}
-	b.registry[inventory.EntityUnlockedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityUnlockedPayload{} },
-		applyFn:        b.handleEntityUnlocked,
-	}
-	b.registry[inventory.EntityDiscreteSetEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityDiscreteSetPayload{} },
-		applyFn:        b.handleEntityDiscreteSet,
-	}
-	b.registry[inventory.EntityDiscreteClearedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityDiscreteClearedPayload{} },
-		applyFn:        b.handleEntityDiscreteCleared,
-	}
-	b.registry[inventory.EntityBorrowedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityBorrowedPayload{} },
-		applyFn:        b.handleEntityBorrowed,
-	}
-	b.registry[inventory.EntityUsedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityUsedPayload{} },
-		pathChangeFn:   b.relocateEntityTx,
-	}
-	b.registry[inventory.EntityReturnedHomeEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityReturnedHomePayload{} },
-		pathChangeFn:   b.relocateEntityTx,
-	}
-	b.registry[inventory.EntityRehomedEvent] = eventRegistration{
-		payloadFactory: func() any { return &EntityRehomedPayload{} },
-		applyFn:        b.handleEntityRehomed,
-	}
+	register(b, b.handleEntityCreated)
+	registerPathChange(b, b.renameEntityTx)
+	registerRelocation[EntityReparentedPayload](b)
+	register(b, b.handleEntityPathChanged)
+	register(b, b.handleEntityStatusChanged)
+	register(b, b.handleEntityRemoved)
+	register(b, b.handleEntityTagAdded)
+	register(b, b.handleEntityTagRemoved)
+	register(b, b.handleEntityLocked)
+	register(b, b.handleEntityUnlocked)
+	register(b, b.handleEntityDiscreteSet)
+	register(b, b.handleEntityDiscreteCleared)
+	register(b, b.handleEntityBorrowed)
+	registerRelocation[EntityUsedPayload](b)
+	registerRelocation[EntityReturnedHomePayload](b)
+	register(b, b.handleEntityRehomed)
 }
 
-// PayloadFactories returns the live registry map of payload factory functions,
-// keyed by EventType. Used by doctor validation to unmarshal payloads without
-// maintaining a duplicate map.
-func (b *Bus) PayloadFactories() map[inventory.EventType]func() any {
-	factories := make(map[inventory.EventType]func() any, len(b.registry))
-	for et, reg := range b.registry {
-		factories[et] = reg.payloadFactory
+// DecodePayload decodes raw as the payload registered for et. Doctor validates
+// stored events with it, against the same types the handlers read.
+func (b *Bus) DecodePayload(et inventory.EventType, raw json.RawMessage) (Payload, error) {
+	reg, ok := b.registry[et]
+	if !ok {
+		return nil, fmt.Errorf("unknown event type: %s", et)
 	}
-	return factories
+	return reg.decode(raw)
 }
 
-// Dispatch persists an event and applies it to projections in a single transaction.
-// The timestamp is set to [time.Now].UTC() and entity_id is parsed from the payload.
+// Dispatch writes p as one event and applies it to projections inside tx,
+// which the caller owns (ADR 0035). The event type and entity_id come from p
+// (ADR 0042); an empty note is stored as NULL.
 func (b *Bus) Dispatch(
 	ctx context.Context,
-	eventType inventory.EventType,
+	tx store.Tx,
 	actorUserID string,
-	payload json.RawMessage,
-	note *string,
+	p Payload,
+	note string,
 ) (int64, error) {
-	return b.writeEvent(ctx, b.buildEvent(eventType, actorUserID, payload, note), b.applyEventTx)
-}
-
-func (b *Bus) buildEvent(
-	eventType inventory.EventType,
-	actorUserID string,
-	payload json.RawMessage,
-	note *string,
-) *inventory.Event {
-	var entityID *string
-	var m map[string]any
-	if json.Unmarshal(payload, &m) == nil {
-		if id, ok := m["entity_id"].(string); ok && id != "" {
-			entityID = &id
-		}
+	et := p.EventType()
+	if et.IsDerived() {
+		return 0, fmt.Errorf("dispatch %s: %w", et, ErrDerivedEvent)
 	}
-	return &inventory.Event{
-		EventType:    eventType,
+	subject := p.Subject()
+	if subject == "" {
+		return 0, fmt.Errorf("dispatch %s: %w", et, ErrNoSubject)
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return 0, fmt.Errorf("dispatch %s: marshal: %w", et, err)
+	}
+	var notePtr *string
+	if note != "" {
+		notePtr = &note
+	}
+	ev := &inventory.Event{
+		EventType:    et,
 		TimestampUTC: time.Now().UTC().Format(time.RFC3339),
 		ActorUserID:  actorUserID,
-		Payload:      payload,
-		Note:         note,
-		EntityID:     entityID,
+		Payload:      raw,
+		Note:         notePtr,
+		EntityID:     &subject,
 	}
-}
-
-// DispatchInTx writes and applies a single event within a caller-owned transaction.
-func (b *Bus) DispatchInTx(
-	ctx context.Context,
-	tx store.Tx,
-	eventType inventory.EventType,
-	actorUserID string,
-	payload json.RawMessage,
-	note *string,
-) (int64, error) {
-	ev := b.buildEvent(eventType, actorUserID, payload, note)
 	return b.writeEventInTx(ctx, tx, ev, b.applyEventTx)
 }
 
 // ReplayEvent inserts a fully-populated event using its original TimestampUTC
-// and EntityID (no payload reparse). EntityPathChangedEvent is skipped without
+// and EntityID (no payload reparse). A derived event is skipped without
 // error and returns 0. Path-propagating events regenerate their descendants'
 // EntityPathChangedEvents in the destination log, exactly as live dispatch
 // does, so a later TruncateAndReplay finds them (ADR 0009). The written
 // payloads are returned so import can validate the source stream's copies
-// against them (ADR 0005).
+// against them (ADR 0005). It rejects an event whose entity_id disagrees with
+// its payload (ErrSubjectMismatch) and fills a missing entity_id from the
+// payload.
 func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []EntityPathChangedPayload, error) {
-	if ev.EventType == inventory.EntityPathChangedEvent {
+	if ev.EventType.IsDerived() {
 		return 0, nil, nil
 	}
+	subject, err := b.resolveSubject(ev)
+	if err != nil {
+		return 0, nil, err
+	}
+	resolved := *ev
+	resolved.EntityID = &subject
 	var payloads []EntityPathChangedPayload
-	id, err := b.writeEvent(ctx, ev, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
+	id, err := b.writeEvent(ctx, &resolved, func(ctx context.Context, tx store.Tx, ev *inventory.Event) error {
 		var applyErr error
 		payloads, applyErr = b.applyAndPropagateTx(ctx, tx, ev)
 		return applyErr
@@ -186,17 +134,32 @@ func (b *Bus) ReplayEvent(ctx context.Context, ev *inventory.Event) (int64, []En
 	return id, payloads, err
 }
 
-// writeEvent is the single canonical write path shared by Dispatch and
-// ReplayEvent. It inserts ev into the events table inside a transaction,
-// then runs applyEventTx in that same transaction so projection updates are
-// atomic with the event row.
+// resolveSubject returns the entity an imported event is about: its payload's
+// entity_id, which a non-NULL entity_id column must equal. Only import calls
+// it; rebuild tolerates a mismatch (ADR 0042).
+func (b *Bus) resolveSubject(ev *inventory.Event) (string, error) {
+	p, err := b.DecodePayload(ev.EventType, ev.Payload)
+	if err != nil {
+		return "", err
+	}
+	subject := p.Subject()
+	if subject == "" {
+		return "", fmt.Errorf("%s: %w", ev.EventType, ErrNoSubject)
+	}
+	if ev.EntityID != nil && *ev.EntityID != subject {
+		return "", fmt.Errorf("%s: entity_id %q, payload entity_id %q: %w",
+			ev.EventType, *ev.EntityID, subject, ErrSubjectMismatch)
+	}
+	return subject, nil
+}
+
+// writeEvent is ReplayEvent's write path: it opens a transaction and runs
+// writeEventInTx in it, so the event row and its projection updates commit
+// together. Dispatch calls writeEventInTx directly inside the caller's
+// transaction.
 //
 // Callers populate ev's EventType, TimestampUTC, ActorUserID, Payload, Note,
 // and EntityID. EventID is assigned by SQLite and returned to the caller.
-//
-// If a future change needs to differ between Dispatch and ReplayEvent (e.g.
-// one path adds a validation step the other shouldn't), express it as a
-// parameter to writeEvent rather than re-splitting into two methods.
 func (b *Bus) writeEvent(
 	ctx context.Context,
 	ev *inventory.Event,
@@ -287,8 +250,8 @@ func (b *Bus) applyEventProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *i
 // TruncateAndReplay rebuilds entities_current from the full event log.
 // Events are loaded inside the write transaction, which BEGIN IMMEDIATE opens
 // holding the write lock, so no concurrent event can commit between the load
-// and the replay. EntityPathChangedEvent rows are applied directly via applyEventProjectionOnlyTx
-// (no new events are written). Returns the count of non-EntityPathChangedEvent
+// and the replay. Derived events are applied directly via applyEventProjectionOnlyTx
+// (no new events are written). Returns the count of non-derived
 // events applied; on any error the transaction rolls back and the projection is
 // left intact.
 func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
@@ -308,7 +271,7 @@ func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
 			if applyErr := b.applyEventProjectionOnlyTx(ctx, tx, ev); applyErr != nil {
 				return fmt.Errorf("replay event_id %d: %w", ev.EventID, applyErr)
 			}
-			if ev.EventType != inventory.EntityPathChangedEvent {
+			if !ev.EventType.IsDerived() {
 				count++
 			}
 		}

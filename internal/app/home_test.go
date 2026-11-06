@@ -1,7 +1,6 @@
 package app_test
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -348,10 +347,11 @@ func TestReturn_LoanedAndDisplacedIsAtomicWhenHomeInvalid(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make the home an invalid destination by bypassing app guards.
-	raw, err := json.Marshal(eventbus.EntityDiscreteSetPayload{EntityID: garage.EntityID})
-	require.NoError(t, err)
-	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityDiscreteSetEvent, "t", raw, nil)
-	require.NoError(t, err)
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		_, dErr := eventbus.New(s).
+			Dispatch(ctx, tx, "t", eventbus.EntityDiscreteSetPayload{EntityID: garage.EntityID}, "")
+		return dErr
+	}))
 
 	before, err := a.GetHistory(ctx, app.GetHistoryRequest{EntityID: drill.EntityID})
 	require.NoError(t, err)
@@ -541,10 +541,10 @@ func TestReturn_HomeGoneMissingCopyNamesReturn(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove the home by bypassing app guards.
-	raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: garage.EntityID})
-	require.NoError(t, err)
-	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityRemovedEvent, "t", raw, nil)
-	require.NoError(t, err)
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		_, dErr := eventbus.New(s).Dispatch(ctx, tx, "t", eventbus.EntityRemovedPayload{EntityID: garage.EntityID}, "")
+		return dErr
+	}))
 
 	_, err = a.MarkReturned(ctx, []app.ChangeStatusRequest{{EntityID: drill.EntityID, ActorID: "t"}})
 	require.Error(t, err)
@@ -615,10 +615,11 @@ func TestReparent_RehomeRejectedWhenCurrentParentCannotBeHome(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make the current parent discrete by bypassing app guards.
-	raw, err := json.Marshal(eventbus.EntityDiscreteSetPayload{EntityID: deck.EntityID})
-	require.NoError(t, err)
-	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityDiscreteSetEvent, "t", raw, nil)
-	require.NoError(t, err)
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		_, dErr := eventbus.New(s).
+			Dispatch(ctx, tx, "t", eventbus.EntityDiscreteSetPayload{EntityID: deck.EntityID}, "")
+		return dErr
+	}))
 
 	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
 		EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t",
@@ -648,10 +649,10 @@ func TestReparent_RehomeRejectedWhenCurrentParentRemoved(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove the current parent by bypassing app guards.
-	raw, err := json.Marshal(eventbus.EntityRemovedPayload{EntityID: deck.EntityID})
-	require.NoError(t, err)
-	_, err = eventbus.New(s).Dispatch(ctx, inventory.EntityRemovedEvent, "t", raw, nil)
-	require.NoError(t, err)
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		_, dErr := eventbus.New(s).Dispatch(ctx, tx, "t", eventbus.EntityRemovedPayload{EntityID: deck.EntityID}, "")
+		return dErr
+	}))
 
 	_, err = a.ReparentEntity(ctx, app.ReparentEntityRequest{
 		EntityID: drill.EntityID, NewParentID: deck.EntityID, ActorID: "t",

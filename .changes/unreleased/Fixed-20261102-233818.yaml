@@ -1,0 +1,5 @@
+kind: Fixed
+body: import rejects an event whose entity_id does not match its payload and fills a missing entity_id from the payload; doctor reports such mismatches, and status changes with an unknown or missing status
+time: 2026-11-02T23:38:18.756531506-05:00
+custom:
+    Issue: ""

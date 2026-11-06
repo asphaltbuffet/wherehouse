@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -285,11 +284,7 @@ func (a *App) createRowEntityInTx(
 	for _, tag := range row.Tags {
 		canonical := inventory.CanonicalizeString(tag)
 		payload := eventbus.EntityTagAddedPayload{EntityID: result.EntityID, Tag: canonical}
-		raw, marshalErr := json.Marshal(payload)
-		if marshalErr != nil {
-			return EntityResult{}, fmt.Errorf("marshal tag payload: %w", marshalErr)
-		}
-		_, dispErr := a.bus.DispatchInTx(ctx, tx, inventory.EntityTagAddedEvent, actorID, raw, nil)
+		_, dispErr := a.bus.Dispatch(ctx, tx, actorID, payload, "")
 		if dispErr != nil {
 			return EntityResult{}, fmt.Errorf("add tag %q to %q: %w", tag, row.Path, dispErr)
 		}
