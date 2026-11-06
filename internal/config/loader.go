@@ -83,8 +83,9 @@ func loadConfig(fs afero.Fs, filepath string) (*Config, error) {
 }
 
 // envBoundKeys lists every config key that can be overridden by a
-// WHEREHOUSE_* environment variable. user.os_username_map is omitted: a
-// single env string cannot decode into a map and would fail loading.
+// WHEREHOUSE_* environment variable. TestEnvBoundKeys_MatchConfigFields
+// fails if it drifts from Config's mapstructure tags; deliberate omissions
+// (user.os_username_map) are listed with reasons in envExcluded.
 var envBoundKeys = []string{
 	"database.path",
 	"logging.file_path",
