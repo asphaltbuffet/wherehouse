@@ -137,20 +137,19 @@ func TestOpenDatabase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := tt.setup(t)
 
-			s, a, err := OpenDatabase(ctx)
+			a, err := OpenDatabase(ctx)
 
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
 					require.ErrorContains(t, err, tt.errMsg)
 				}
-				assert.Nil(t, s)
 				assert.Nil(t, a)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, s)
+				require.NotNil(t, a)
 				assert.IsType(t, &app.App{}, a)
-				t.Cleanup(func() { _ = s.Close() })
+				t.Cleanup(func() { _ = a.Close() })
 			}
 		})
 	}
@@ -168,11 +167,11 @@ func TestOpenDatabase_AutoMigration(t *testing.T) {
 	ctx := context.WithValue(context.Background(), config.ConfigKey, cfg)
 
 	// OpenDatabase creates and migrates the file if absent.
-	s, a, err := OpenDatabase(ctx)
+	a, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, s)
+	require.NotNil(t, a)
 	assert.IsType(t, &app.App{}, a)
-	t.Cleanup(func() { _ = s.Close() })
+	t.Cleanup(func() { _ = a.Close() })
 
 	// Verify database file was created.
 	_, err = os.Stat(dbPath)
@@ -194,11 +193,11 @@ func TestOpenDatabase_ContextPropagation(t *testing.T) {
 	ctx := context.WithValue(context.Background(), customKey, "value")
 	ctx = context.WithValue(ctx, config.ConfigKey, cfg)
 
-	s, a, err := OpenDatabase(ctx)
+	a, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, s)
+	require.NotNil(t, a)
 	assert.IsType(t, &app.App{}, a)
-	t.Cleanup(func() { _ = s.Close() })
+	t.Cleanup(func() { _ = a.Close() })
 
 	assert.Equal(t, "value", ctx.Value(customKey))
 }
@@ -214,19 +213,19 @@ func TestOpenDatabase_MultipleCallsSeparate(t *testing.T) {
 	}
 	ctx := context.WithValue(context.Background(), config.ConfigKey, cfg)
 
-	s1, a1, err := OpenDatabase(ctx)
+	a1, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, s1)
+	require.NotNil(t, a1)
 	assert.IsType(t, &app.App{}, a1)
-	t.Cleanup(func() { _ = s1.Close() })
+	t.Cleanup(func() { _ = a1.Close() })
 
-	s2, a2, err := OpenDatabase(ctx)
+	a2, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, s2)
+	require.NotNil(t, a2)
 	assert.IsType(t, &app.App{}, a2)
-	t.Cleanup(func() { _ = s2.Close() })
+	t.Cleanup(func() { _ = a2.Close() })
 
-	assert.NotSame(t, s1, s2)
+	assert.NotSame(t, a1, a2)
 }
 
 func TestOpenDatabase_ExistingDatabase(t *testing.T) {
@@ -251,11 +250,11 @@ func TestOpenDatabase_ExistingDatabase(t *testing.T) {
 	_ = s1.Close()
 
 	// Open existing database via OpenDatabase.
-	s2, a, err := OpenDatabase(ctx)
+	a, err := OpenDatabase(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, s2)
+	require.NotNil(t, a)
 	assert.IsType(t, &app.App{}, a)
-	t.Cleanup(func() { _ = s2.Close() })
+	t.Cleanup(func() { _ = a.Close() })
 
 	info, err := os.Stat(dbPath)
 	require.NoError(t, err)

@@ -20,6 +20,7 @@ func OpenApp(t *testing.T) *app.App {
 		AutoMigrate: true,
 	})
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
-	return app.New(s)
+	a := app.New(s)
+	t.Cleanup(func() { _ = a.Close() })
+	return a
 }

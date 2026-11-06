@@ -28,11 +28,11 @@ Examples:
   wherehouse add --file items.csv --create-parents`,
 		Args: validateAddArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			s, a, err := cli.OpenDatabase(cmd.Context())
+			a, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("failed to open database: %w", err)
 			}
-			defer s.Close()
+			defer a.Close()
 			return runAdd(cmd, args, a)
 		},
 	}

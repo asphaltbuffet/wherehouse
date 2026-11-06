@@ -19,3 +19,8 @@ func New(s *store.Store) *App {
 		bus:   eventbus.New(s),
 	}
 }
+
+// Close releases the database connection.
+func (a *App) Close() error {
+	return a.store.Close()
+}
