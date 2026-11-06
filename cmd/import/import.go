@@ -20,11 +20,11 @@ import (
 func NewDefaultImportCmd() *cobra.Command {
 	cmd := buildImportCmd()
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		s, a, err := cli.OpenDatabase(cmd.Context())
+		a, err := cli.OpenDatabase(cmd.Context())
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
-		defer s.Close()
+		defer a.Close()
 		return runImport(cmd, a)
 	}
 	return cmd

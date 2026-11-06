@@ -1,0 +1,5 @@
+kind: Fixed
+body: import --replace no longer fails with a foreign key error when the database has tagged entities
+time: 2026-11-05T12:00:00.000000000-05:00
+custom:
+    Issue: "#398"

@@ -19,7 +19,7 @@ type ExportResult struct {
 
 // GetAllEvents returns all events ordered by event_id ASC.
 func (a *App) GetAllEvents(ctx context.Context) ([]ExportResult, error) {
-	events, err := a.store.GetAllEvents(ctx)
+	events, err := a.store.Reader().GetAllEvents(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get all events: %w", err)
 	}

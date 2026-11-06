@@ -44,7 +44,7 @@ func TestEntityCreated_LegacyPlacePayload_GetsLocked(t *testing.T) {
 	// LegacyEntityType marshals as the old entity_type field.
 	dispatch(t, s, b, eventbus.EntityCreatedPayload{EntityID: "p1", DisplayName: "Garage", LegacyEntityType: "place"})
 
-	e, err := s.GetEntity(context.Background(), "p1")
+	e, err := s.Reader().GetLiveEntity(context.Background(), "p1")
 	require.NoError(t, err)
 	assert.True(t, e.Locked, "legacy place entity should be replayed as locked=true")
 	assert.False(t, e.Discrete)
@@ -58,7 +58,7 @@ func TestEntityCreated_LegacyLeafPayload_GetsDiscrete(t *testing.T) {
 	// LegacyEntityType marshals as the old entity_type field.
 	dispatch(t, s, b, eventbus.EntityCreatedPayload{EntityID: "l1", DisplayName: "Wrench", LegacyEntityType: "leaf"})
 
-	e, err := s.GetEntity(context.Background(), "l1")
+	e, err := s.Reader().GetLiveEntity(context.Background(), "l1")
 	require.NoError(t, err)
 	assert.False(t, e.Locked)
 	assert.True(t, e.Discrete)
@@ -77,7 +77,7 @@ func TestEntityCreated_LegacyContainerPayload_IsUnlockedNonDiscrete(t *testing.T
 		eventbus.EntityCreatedPayload{EntityID: "c1", DisplayName: "Toolbox", LegacyEntityType: "container"},
 	)
 
-	e, err := s.GetEntity(context.Background(), "c1")
+	e, err := s.Reader().GetLiveEntity(context.Background(), "c1")
 	require.NoError(t, err)
 	assert.False(t, e.Locked)
 	assert.False(t, e.Discrete)
@@ -89,7 +89,7 @@ func TestEntityCreated_NewPayload_LockedAndDiscrete(t *testing.T) {
 
 	createEntity(t, s, b, "e1", "Box of Nails", nil, false, true)
 
-	e, err := s.GetEntity(context.Background(), "e1")
+	e, err := s.Reader().GetLiveEntity(context.Background(), "e1")
 	require.NoError(t, err)
 	assert.False(t, e.Locked)
 	assert.True(t, e.Discrete)
@@ -105,7 +105,7 @@ func TestEntityCreated_NestedUnderEntity_OK(t *testing.T) {
 	p1ID := "p1"
 	createEntity(t, s, b, "c1", "Toolbox", &p1ID, false, false)
 
-	e, err := s.GetEntity(context.Background(), "c1")
+	e, err := s.Reader().GetLiveEntity(context.Background(), "c1")
 	require.NoError(t, err)
 	assert.Equal(t, "p1", *e.ParentID)
 }

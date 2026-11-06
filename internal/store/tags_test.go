@@ -26,72 +26,72 @@ func seedTagEntity(t *testing.T, s *store.Store) string {
 		UpdatedAt:         time.Now(),
 	}
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertEntityTx(ctx, tx, e)
+		return tx.InsertEntity(ctx, e)
 	})
 	require.NoError(t, err)
 	return e.EntityID
 }
 
-func TestInsertTagTx(t *testing.T) {
+func TestInsertTag(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertTagTx(ctx, tx, entityID, "tool")
+		return tx.InsertTag(ctx, entityID, "tool")
 	})
 	require.NoError(t, err)
 
-	tags, err := s.GetTagsByEntity(ctx, entityID)
+	tags, err := s.Reader().GetTagsByEntity(ctx, entityID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tool"}, tags)
 }
 
-func TestInsertTagTx_Duplicate(t *testing.T) {
+func TestInsertTag_Duplicate(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 
 	insert := func() error {
 		return s.ExecInTransaction(ctx, func(tx store.Tx) error {
-			return s.InsertTagTx(ctx, tx, entityID, "tool")
+			return tx.InsertTag(ctx, entityID, "tool")
 		})
 	}
 	require.NoError(t, insert())
 	require.NoError(t, insert(), "duplicate insert must be a no-op")
 
-	tags, err := s.GetTagsByEntity(ctx, entityID)
+	tags, err := s.Reader().GetTagsByEntity(ctx, entityID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tool"}, tags)
 }
 
-func TestDeleteTagTx(t *testing.T) {
+func TestDeleteTag(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertTagTx(ctx, tx, entityID, "tool")
+		return tx.InsertTag(ctx, entityID, "tool")
 	})
 	require.NoError(t, err)
 
 	err = s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.DeleteTagTx(ctx, tx, entityID, "tool")
+		return tx.DeleteTag(ctx, entityID, "tool")
 	})
 	require.NoError(t, err)
 
-	tags, err := s.GetTagsByEntity(ctx, entityID)
+	tags, err := s.Reader().GetTagsByEntity(ctx, entityID)
 	require.NoError(t, err)
 	assert.Empty(t, tags)
 }
 
-func TestDeleteTagTx_Missing(t *testing.T) {
+func TestDeleteTag_Missing(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.DeleteTagTx(ctx, tx, entityID, "nonexistent")
+		return tx.DeleteTag(ctx, entityID, "nonexistent")
 	})
 	require.NoError(t, err, "deleting a missing tag must be a no-op")
 }
@@ -103,12 +103,12 @@ func TestGetTagsByEntity_Sorted(t *testing.T) {
 
 	for _, tag := range []string{"tool", "hand_tool", "screwdriver"} {
 		err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-			return s.InsertTagTx(ctx, tx, entityID, tag)
+			return tx.InsertTag(ctx, entityID, tag)
 		})
 		require.NoError(t, err)
 	}
 
-	tags, err := s.GetTagsByEntity(ctx, entityID)
+	tags, err := s.Reader().GetTagsByEntity(ctx, entityID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hand_tool", "screwdriver", "tool"}, tags)
 }
@@ -119,42 +119,42 @@ func TestGetTagsByEntity_RetainedAfterRemoval(t *testing.T) {
 	entityID := seedTagEntity(t, s)
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertTagTx(ctx, tx, entityID, "tool")
+		return tx.InsertTag(ctx, entityID, "tool")
 	})
 	require.NoError(t, err)
 
 	// Soft-delete the entity by updating its status to removed.
 	err = s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		e, getErr := s.GetEntityTx(ctx, tx, entityID)
+		e, getErr := tx.GetEntityAnyStatus(ctx, entityID)
 		if getErr != nil {
 			return getErr
 		}
 		e.Status = inventory.EntityStatusRemoved
-		return s.UpdateEntityTx(ctx, tx, e)
+		return tx.UpdateEntity(ctx, e)
 	})
 	require.NoError(t, err)
 
-	tags, err := s.GetTagsByEntity(ctx, entityID)
+	tags, err := s.Reader().GetTagsByEntity(ctx, entityID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tool"}, tags, "tags must be retained after entity removal")
 }
 
-func TestTruncateTagsTx(t *testing.T) {
+func TestTruncateTags(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertTagTx(ctx, tx, entityID, "tool")
+		return tx.InsertTag(ctx, entityID, "tool")
 	})
 	require.NoError(t, err)
 
 	err = s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.TruncateTagsTx(ctx, tx)
+		return tx.TruncateTags(ctx)
 	})
 	require.NoError(t, err)
 
-	tags, err := s.GetTagsByEntity(ctx, entityID)
+	tags, err := s.Reader().GetTagsByEntity(ctx, entityID)
 	require.NoError(t, err)
 	assert.Empty(t, tags)
 }
@@ -164,7 +164,7 @@ func TestGetDistinctTags(t *testing.T) {
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 
-	tags, err := s.GetDistinctTags(ctx)
+	tags, err := s.Reader().GetDistinctTags(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, []string{}, tags, "empty table yields an empty, non-nil slice")
 
@@ -174,13 +174,13 @@ func TestGetDistinctTags(t *testing.T) {
 		Status: inventory.EntityStatusRemoved, LastEventID: 2, UpdatedAt: time.Now(),
 	}
 	err = s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		if insErr := s.InsertEntityTx(ctx, tx, other); insErr != nil {
+		if insErr := tx.InsertEntity(ctx, other); insErr != nil {
 			return insErr
 		}
 		for _, row := range [][2]string{
 			{entityID, "tool"}, {entityID, "garage"}, {other.EntityID, "tool"}, {other.EntityID, "retired"},
 		} {
-			if insErr := s.InsertTagTx(ctx, tx, row[0], row[1]); insErr != nil {
+			if insErr := tx.InsertTag(ctx, row[0], row[1]); insErr != nil {
 				return insErr
 			}
 		}
@@ -188,25 +188,25 @@ func TestGetDistinctTags(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tags, err = s.GetDistinctTags(ctx)
+	tags, err = s.Reader().GetDistinctTags(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"garage", "retired", "tool"}, tags,
 		"distinct, sorted, and includes tags on removed entities")
 }
 
-func TestHasTagTx(t *testing.T) {
+func TestHasTag(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	entityID := seedTagEntity(t, s)
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		if insErr := s.InsertTagTx(ctx, tx, entityID, "tool"); insErr != nil {
+		if insErr := tx.InsertTag(ctx, entityID, "tool"); insErr != nil {
 			return insErr
 		}
-		has, hasErr := s.HasTagTx(ctx, tx, entityID, "tool")
+		has, hasErr := tx.HasTag(ctx, entityID, "tool")
 		require.NoError(t, hasErr)
 		assert.True(t, has)
-		has, hasErr = s.HasTagTx(ctx, tx, entityID, "")
+		has, hasErr = tx.HasTag(ctx, entityID, "")
 		require.NoError(t, hasErr)
 		assert.False(t, has)
 		return nil

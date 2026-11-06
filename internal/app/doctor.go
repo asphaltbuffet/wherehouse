@@ -22,7 +22,7 @@ type DoctorIssue struct {
 // ValidateEventLog reads all events and returns a DoctorIssue for each structural problem found.
 // Returns an empty (non-nil) slice when the log is clean. Never mutates state.
 func (a *App) ValidateEventLog(ctx context.Context) ([]DoctorIssue, error) {
-	events, err := a.store.GetAllEventsRaw(ctx)
+	events, err := a.store.Reader().GetAllEventsRaw(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("validate event log: %w", err)
 	}
@@ -145,14 +145,14 @@ func validateSingleEvent(
 // CheckProjectionConsistency performs a logical diff between the event log and the
 // entities_current projection without mutating any state.
 func (a *App) CheckProjectionConsistency(ctx context.Context) ([]DoctorIssue, error) {
-	events, err := a.store.GetAllEventsRaw(ctx)
+	events, err := a.store.Reader().GetAllEventsRaw(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("check projection consistency: %w", err)
 	}
 
 	expectedRows, maxEventID := buildProjectionSets(events)
 
-	projRows, err := a.store.ListAllEntities(ctx)
+	projRows, err := a.store.Reader().ListEntitiesAnyStatus(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("check projection consistency: %w", err)
 	}
@@ -171,12 +171,12 @@ func (a *App) RunDoctorChecks(ctx context.Context) ([]DoctorIssue, error) {
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		var err error
-		events, err = a.store.GetAllEventsRaw(egCtx)
+		events, err = a.store.Reader().GetAllEventsRaw(egCtx)
 		return err
 	})
 	eg.Go(func() error {
 		var err error
-		projRows, err = a.store.ListAllEntities(egCtx)
+		projRows, err = a.store.Reader().ListEntitiesAnyStatus(egCtx)
 		return err
 	})
 	if err := eg.Wait(); err != nil {

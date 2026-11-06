@@ -14,11 +14,11 @@ import (
 func NewDefaultRemoveCmd() *cobra.Command {
 	cmd := buildRemoveCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		s, a, err := cli.OpenDatabase(cmd.Context())
+		a, err := cli.OpenDatabase(cmd.Context())
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
-		defer s.Close()
+		defer a.Close()
 		return runRemove(cmd, args, a)
 	}
 	return cmd

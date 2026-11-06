@@ -25,7 +25,7 @@ func (a *App) CreateEntity(ctx context.Context, req CreateEntityRequest) (Entity
 // transaction that writes the event (ADR 0035).
 func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (EntityResult, error) {
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+		entity, err := tx.GetLiveEntity(ctx, req.EntityID)
 		if err != nil {
 			return wrapEntityError(req.EntityID, err)
 		}
@@ -51,7 +51,7 @@ func (a *App) RenameEntity(ctx context.Context, req RenameEntityRequest) (Entity
 func (a *App) ReparentEntity(ctx context.Context, req ReparentEntityRequest) (RelocationResult, error) {
 	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+		entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func idOf(id *string) string {
 // that is home to displaced entities (ErrIsHome): they must be returned first.
 func (a *App) RemoveEntity(ctx context.Context, req RemoveEntityRequest) error {
 	return a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+		entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func (a *App) LookupEntityStatus(ctx context.Context, path string) ([]EntityResu
 		return nil, err
 	}
 
-	candidates, err := a.store.GetEntitiesByCanonicalNameAnyStatus(ctx, canonicalLeaf)
+	candidates, err := a.store.Reader().GetEntitiesByCanonicalNameAnyStatus(ctx, canonicalLeaf)
 	if err != nil {
 		return nil, fmt.Errorf("lookup %q: %w", canonicalLeaf, err)
 	}
@@ -177,7 +177,7 @@ func (a *App) LookupEntityStatus(ctx context.Context, path string) ([]EntityResu
 // Returns ErrNotFound if the entity does not exist; the returned
 // EntityResult has HasChildren=false (callers needing it should use ListEntities).
 func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult, error) {
-	entity, err := a.store.GetEntity(ctx, entityID)
+	entity, err := a.store.Reader().GetLiveEntity(ctx, entityID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, ErrNotFound)
@@ -189,7 +189,7 @@ func (a *App) GetEntityByID(ctx context.Context, entityID string) (EntityResult,
 
 // GetEntityByIDAnyStatus retrieves an entity by ID regardless of status, including removed entities.
 func (a *App) GetEntityByIDAnyStatus(ctx context.Context, entityID string) (EntityResult, error) {
-	entity, err := a.store.GetEntityAnyStatus(ctx, entityID)
+	entity, err := a.store.Reader().GetEntityAnyStatus(ctx, entityID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return EntityResult{}, fmt.Errorf("get entity %q: %w", entityID, ErrNotFound)
@@ -201,7 +201,7 @@ func (a *App) GetEntityByIDAnyStatus(ctx context.Context, entityID string) (Enti
 
 // ListEntities returns all non-removed entities.
 func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
-	entities, err := a.store.ListEntities(ctx)
+	entities, err := a.store.Reader().ListLiveEntities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list entities: %w", err)
 	}
@@ -211,7 +211,7 @@ func (a *App) ListEntities(ctx context.Context) ([]EntityResult, error) {
 // ListAllEntities returns every entity, removed ones included, for listings
 // that select removed entities explicitly (`list --status removed`, #366).
 func (a *App) ListAllEntities(ctx context.Context) ([]EntityResult, error) {
-	entities, err := a.store.ListAllEntities(ctx)
+	entities, err := a.store.Reader().ListEntitiesAnyStatus(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list all entities: %w", err)
 	}
@@ -230,7 +230,7 @@ func (a *App) toEntityResults(ctx context.Context, entities []*inventory.Entity)
 		}
 	}
 
-	tagsByID, err := a.store.GetTagsByEntities(ctx, ids)
+	tagsByID, err := a.store.Reader().GetTagsByEntities(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("list entities tags: %w", err)
 	}
@@ -246,7 +246,7 @@ func (a *App) toEntityResults(ctx context.Context, entities []*inventory.Entity)
 
 // GetChildren returns direct children of parentID, excluding removed entities.
 func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult, error) {
-	rows, err := a.store.GetChildren(ctx, parentID)
+	rows, err := a.store.Reader().GetLiveChildren(ctx, parentID)
 	if err != nil {
 		return nil, fmt.Errorf("get children of %s: %w", parentID, err)
 	}
@@ -256,7 +256,7 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 		ids[i] = row.Entity.EntityID
 	}
 
-	tagsByID, err := a.store.GetTagsByEntities(ctx, ids)
+	tagsByID, err := a.store.Reader().GetTagsByEntities(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("get children tags: %w", err)
 	}
@@ -274,7 +274,7 @@ func (a *App) GetChildren(ctx context.Context, parentID string) ([]EntityResult,
 
 // HasLiveChildren reports whether parentID has any non-removed direct children.
 func (a *App) HasLiveChildren(ctx context.Context, parentID string) (bool, error) {
-	n, err := a.store.CountLiveChildren(ctx, parentID)
+	n, err := a.store.Reader().CountLiveChildren(ctx, parentID)
 	if err != nil {
 		return false, fmt.Errorf("has live children of %s: %w", parentID, err)
 	}
@@ -285,7 +285,7 @@ func (a *App) HasLiveChildren(ctx context.Context, parentID string) (bool, error
 // Returns ErrNotFound if no match exists.
 func (a *App) resolveEntityPath(ctx context.Context, path string) (*inventory.Entity, error) {
 	return a.resolveEntityPathWith(path, func(canonical string) ([]*inventory.Entity, error) {
-		return a.store.GetEntitiesByCanonicalName(ctx, canonical)
+		return a.store.Reader().GetLiveEntitiesByCanonicalName(ctx, canonical)
 	})
 }
 
@@ -303,7 +303,7 @@ func (a *App) LookupEntityByPath(ctx context.Context, path string) (EntityResult
 
 func (a *App) resolveEntityPathTx(ctx context.Context, tx store.Tx, path string) (*inventory.Entity, error) {
 	return a.resolveEntityPathWith(path, func(canonical string) ([]*inventory.Entity, error) {
-		return a.store.GetEntitiesByCanonicalNameTx(ctx, tx, canonical)
+		return tx.GetLiveEntitiesByCanonicalName(ctx, canonical)
 	})
 }
 
@@ -408,7 +408,7 @@ func (a *App) createEntityInTx(ctx context.Context, tx store.Tx, req CreateEntit
 		return EntityResult{}, fmt.Errorf("create entity %q: %w", req.DisplayName, err)
 	}
 
-	entity, err := a.store.GetEntityTx(ctx, tx, entityID)
+	entity, err := tx.GetEntityAnyStatus(ctx, entityID)
 	if err != nil {
 		return EntityResult{}, fmt.Errorf("get created entity %q: %w", entityID, err)
 	}

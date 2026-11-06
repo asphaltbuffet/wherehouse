@@ -39,7 +39,7 @@ func NewDefaultDoctorCmd() *cobra.Command {
 
 		configIssues := runConfigCheck(cfg)
 
-		s, a, dbErr := cli.OpenDatabase(cmd.Context())
+		a, dbErr := cli.OpenDatabase(cmd.Context())
 		if dbErr != nil {
 			configIssues = append(configIssues, app.DoctorIssue{
 				Kind:        app.DoctorKindConfig,
@@ -47,7 +47,7 @@ func NewDefaultDoctorCmd() *cobra.Command {
 			})
 			return runDoctor(cmd, args, configIssues, nil)
 		}
-		defer s.Close()
+		defer a.Close()
 
 		return runDoctor(cmd, args, configIssues, a)
 	}

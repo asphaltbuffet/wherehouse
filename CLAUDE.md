@@ -149,7 +149,7 @@ All styles live as private fields on the `Styles` struct in `internal/styles/sty
 - **Never redeclare a persistent flag as a local flag.** Persistent flags (`--quiet`/`-q`, `--json`, `--db`, `--as`, `--config`, `--no-config`) are defined on the root command and flow into the config via context. Read them via `cfg.IsQuiet()`, `cfg.IsJSON()`, etc. — never via `cmd.Flags().BoolP("quiet", ...)`.
 - `testify/assert` for non-fatal assertions, `testify/require` for preconditions
 - Wrap errors: `fmt.Errorf("context: %w", err)`
-- All DB operations use transactions via `ExecInTransaction`; lock contention is handled by SQLite's busy timeout, never app-level retry
+- All DB writes go through a `store.Tx` from `ExecInTransaction`; reads use `store.Reader` (`Store.Reader()` or the `Tx`) — ADR 0043. Lock contention is handled by SQLite's busy timeout, never app-level retry
 - Timestamps: RFC3339 with UTC `Z` suffix
 - No type assertions / `any` casts — prefer typed interfaces
 - No magic numbers — use stdlib constants

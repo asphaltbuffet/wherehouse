@@ -39,7 +39,7 @@ func (a *App) withHomePath(ctx context.Context, r EntityResult) (EntityResult, e
 	if !r.IsDisplaced() || r.HomeID == "" {
 		return r, nil
 	}
-	home, err := a.store.GetEntityAnyStatus(ctx, r.HomeID)
+	home, err := a.store.Reader().GetEntityAnyStatus(ctx, r.HomeID)
 	if err != nil {
 		return EntityResult{}, fmt.Errorf("get home of %q: %w", r.EntityID, err)
 	}
@@ -62,7 +62,7 @@ func (a *App) rehomeTx(ctx context.Context, tx store.Tx, entity *inventory.Entit
 func (a *App) UseEntity(ctx context.Context, req UseEntityRequest) (RelocationResult, error) {
 	var from string
 	if err := a.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		entity, facts, err := a.loadFactsTx(ctx, tx, req.EntityID)
+		entity, facts, err := a.loadFacts(ctx, tx.Reader(), req.EntityID)
 		if err != nil {
 			return err
 		}

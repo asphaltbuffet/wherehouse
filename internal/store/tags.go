@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// InsertTagTx inserts a tag for entityID within the given transaction. Duplicate inserts are a no-op.
-func (s *Store) InsertTagTx(ctx context.Context, tx Tx, entityID, tag string) error {
-	_, err := tx.ExecContext(ctx,
+// InsertTag inserts a tag for entityID. Duplicate inserts are a no-op.
+func (t Tx) InsertTag(ctx context.Context, entityID, tag string) error {
+	_, err := t.q.ExecContext(ctx,
 		`INSERT OR IGNORE INTO entity_tags (entity_id, tag) VALUES (?, ?)`,
 		entityID, tag,
 	)
@@ -19,9 +19,9 @@ func (s *Store) InsertTagTx(ctx context.Context, tx Tx, entityID, tag string) er
 	return nil
 }
 
-// DeleteTagTx deletes a tag for entityID within the given transaction. Deleting a missing tag is a no-op.
-func (s *Store) DeleteTagTx(ctx context.Context, tx Tx, entityID, tag string) error {
-	_, err := tx.ExecContext(ctx,
+// DeleteTag deletes a tag for entityID. Deleting a missing tag is a no-op.
+func (t Tx) DeleteTag(ctx context.Context, entityID, tag string) error {
+	_, err := t.q.ExecContext(ctx,
 		`DELETE FROM entity_tags WHERE entity_id = ? AND tag = ?`,
 		entityID, tag,
 	)
@@ -32,8 +32,8 @@ func (s *Store) DeleteTagTx(ctx context.Context, tx Tx, entityID, tag string) er
 }
 
 // GetTagsByEntity returns all tags for entityID, sorted alphabetically.
-func (s *Store) GetTagsByEntity(ctx context.Context, entityID string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx,
+func (r Reader) GetTagsByEntity(ctx context.Context, entityID string) ([]string, error) {
+	rows, err := r.q.QueryContext(ctx,
 		`SELECT tag FROM entity_tags WHERE entity_id = ? ORDER BY tag ASC`,
 		entityID,
 	)
@@ -43,10 +43,10 @@ func (s *Store) GetTagsByEntity(ctx context.Context, entityID string) ([]string,
 	return scanTags(rows)
 }
 
-// HasTagTx reports whether entityID currently has tag, within the given transaction.
-func (s *Store) HasTagTx(ctx context.Context, tx Tx, entityID, tag string) (bool, error) {
+// HasTag reports whether entityID currently has tag.
+func (r Reader) HasTag(ctx context.Context, entityID, tag string) (bool, error) {
 	var n int
-	err := tx.QueryRowContext(ctx,
+	err := r.q.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM entity_tags WHERE entity_id = ? AND tag = ?`,
 		entityID, tag,
 	).Scan(&n)
@@ -59,8 +59,8 @@ func (s *Store) HasTagTx(ctx context.Context, tx Tx, entityID, tag string) (bool
 // GetDistinctTags returns every distinct non-empty tag in entity_tags, sorted
 // alphabetically. Tags on removed entities are included; the empty tag that
 // older builds could record is not.
-func (s *Store) GetDistinctTags(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT tag FROM entity_tags WHERE tag <> '' ORDER BY tag ASC`)
+func (r Reader) GetDistinctTags(ctx context.Context) ([]string, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT DISTINCT tag FROM entity_tags WHERE tag <> '' ORDER BY tag ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("get distinct tags: %w", err)
 	}
@@ -86,9 +86,9 @@ func scanTags(rows *sql.Rows) ([]string, error) {
 	return tags, nil
 }
 
-// TruncateTagsTx deletes all rows from entity_tags within the given transaction.
-func (s *Store) TruncateTagsTx(ctx context.Context, tx Tx) error {
-	if _, err := tx.ExecContext(ctx, `DELETE FROM entity_tags`); err != nil {
+// TruncateTags deletes all rows from entity_tags.
+func (t Tx) TruncateTags(ctx context.Context) error {
+	if _, err := t.q.ExecContext(ctx, `DELETE FROM entity_tags`); err != nil {
 		return fmt.Errorf("truncate entity_tags: %w", err)
 	}
 	return nil
@@ -97,13 +97,13 @@ func (s *Store) TruncateTagsTx(ctx context.Context, tx Tx) error {
 // GetTagsByEntities returns a map of entityID → sorted tag slice for all given IDs.
 // IDs absent from entity_tags are not present in the returned map (nil slice on lookup).
 // Returns an empty map immediately when entityIDs is empty.
-func (s *Store) GetTagsByEntities(ctx context.Context, entityIDs []string) (map[string][]string, error) {
+func (r Reader) GetTagsByEntities(ctx context.Context, entityIDs []string) (map[string][]string, error) {
 	if len(entityIDs) == 0 {
 		return map[string][]string{}, nil
 	}
 
 	placeholders := strings.Repeat("?,", len(entityIDs)-1) + "?"
-	//nolint:gosec // placeholders is "?,?,..." — all values are parameterized, no user input in the query string
+	// placeholders is "?,?,..." — all values are parameterized, no user input in the query string
 	q := `SELECT entity_id, tag FROM entity_tags WHERE entity_id IN (` + placeholders + `) ORDER BY entity_id, tag ASC`
 
 	args := make([]any, len(entityIDs))
@@ -111,7 +111,7 @@ func (s *Store) GetTagsByEntities(ctx context.Context, entityIDs []string) (map[
 		args[i] = id
 	}
 
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := r.q.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get tags for entities: %w", err)
 	}

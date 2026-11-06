@@ -17,9 +17,11 @@ func TestMetadataRoundtrip(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	require.NoError(t, s.SetMetadata(ctx, "schema_version", "1"))
+	require.NoError(t, s.ExecInTransaction(ctx, func(tx store.Tx) error {
+		return tx.SetMetadata(ctx, "schema_version", "1")
+	}))
 
-	val, err := s.GetMetadata(ctx, "schema_version")
+	val, err := s.Reader().GetMetadata(ctx, "schema_version")
 	require.NoError(t, err)
 	assert.Equal(t, "1", val)
 }
@@ -37,7 +39,7 @@ func TestCountEntitiesByStatus_Empty(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	counts, err := s.CountEntitiesByStatus(ctx)
+	counts, err := s.Reader().CountEntitiesByStatus(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 0, counts["ok"])
 	assert.Equal(t, 0, counts["missing"])
@@ -69,7 +71,7 @@ func TestCountEntitiesByStatus_WithEntities(t *testing.T) {
 			e.Status = inventory.EntityStatusRemoved
 		}
 		err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-			return s.InsertEntityTx(ctx, tx, e)
+			return tx.InsertEntity(ctx, e)
 		})
 		require.NoError(t, err)
 	}
@@ -79,7 +81,7 @@ func TestCountEntitiesByStatus_WithEntities(t *testing.T) {
 	insertEntity("e3", "missing")
 	insertEntity("e4", "removed")
 
-	counts, err := s.CountEntitiesByStatus(ctx)
+	counts, err := s.Reader().CountEntitiesByStatus(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 2, counts["ok"])
 	assert.Equal(t, 1, counts["missing"])
@@ -92,6 +94,6 @@ func TestGetMetadata_Missing(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	_, err := s.GetMetadata(ctx, "nonexistent")
+	_, err := s.Reader().GetMetadata(ctx, "nonexistent")
 	assert.ErrorIs(t, err, store.ErrNotFound)
 }

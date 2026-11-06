@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -31,11 +32,11 @@ func TestInsertEntity(t *testing.T) {
 	}
 
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertEntityTx(ctx, tx, e)
+		return tx.InsertEntity(ctx, e)
 	})
 	require.NoError(t, err)
 
-	got, err := s.GetEntity(ctx, "e1")
+	got, err := s.Reader().GetLiveEntity(ctx, "e1")
 	require.NoError(t, err)
 	assert.Equal(t, "Garage", got.DisplayName)
 	assert.False(t, got.Locked)
@@ -46,7 +47,7 @@ func TestGetEntity_NotFound(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	_, err := s.GetEntity(ctx, "nonexistent")
+	_, err := s.Reader().GetLiveEntity(ctx, "nonexistent")
 	assert.ErrorIs(t, err, store.ErrNotFound)
 }
 
@@ -61,16 +62,16 @@ func TestGetEntitiesByCanonicalName(t *testing.T) {
 		LastEventID: 1, UpdatedAt: time.Now(),
 	}
 	err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-		return s.InsertEntityTx(ctx, tx, e)
+		return tx.InsertEntity(ctx, e)
 	})
 	require.NoError(t, err)
 
-	results, err := s.GetEntitiesByCanonicalName(ctx, "garage")
+	results, err := s.Reader().GetLiveEntitiesByCanonicalName(ctx, "garage")
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 }
 
-func TestTruncateEntitiesTx(t *testing.T) {
+func TestTruncateEntities(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
@@ -85,7 +86,7 @@ func TestTruncateEntitiesTx(t *testing.T) {
 			UpdatedAt:         time.Now(),
 		}
 		err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-			return s.InsertEntityTx(ctx, tx, e)
+			return tx.InsertEntity(ctx, e)
 		})
 		require.NoError(t, err)
 	}
@@ -95,11 +96,11 @@ func TestTruncateEntitiesTx(t *testing.T) {
 
 	t.Run("committed truncate empties table", func(t *testing.T) {
 		err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
-			return s.TruncateEntitiesTx(ctx, tx)
+			return tx.TruncateEntities(ctx)
 		})
 		require.NoError(t, err)
 
-		entities, err := s.ListEntities(ctx)
+		entities, err := s.Reader().ListLiveEntities(ctx)
 		require.NoError(t, err)
 		assert.Empty(t, entities)
 	})
@@ -107,15 +108,14 @@ func TestTruncateEntitiesTx(t *testing.T) {
 	t.Run("rolled-back truncate restores rows", func(t *testing.T) {
 		insert("e3", "Basement")
 
-		tx, err := s.DB().BeginTx(ctx, nil)
-		require.NoError(t, err)
+		errRollback := errors.New("rollback")
+		err := s.ExecInTransaction(ctx, func(tx store.Tx) error {
+			require.NoError(t, tx.TruncateEntities(ctx))
+			return errRollback
+		})
+		require.ErrorIs(t, err, errRollback)
 
-		err = s.TruncateEntitiesTx(ctx, tx)
-		require.NoError(t, err)
-
-		require.NoError(t, tx.Rollback())
-
-		entities, err := s.ListEntities(ctx)
+		entities, err := s.Reader().ListLiveEntities(ctx)
 		require.NoError(t, err)
 		assert.Len(t, entities, 1)
 	})

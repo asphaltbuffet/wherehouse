@@ -19,11 +19,11 @@ func NewDefaultInfoCmd() *cobra.Command {
 		Short: "Show database information and entity counts",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, a, err := cli.OpenDatabase(cmd.Context())
+			a, err := cli.OpenDatabase(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("failed to open database: %w", err)
 			}
-			defer s.Close()
+			defer a.Close()
 			return runInfo(cmd, a)
 		},
 	}

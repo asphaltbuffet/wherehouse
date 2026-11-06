@@ -183,18 +183,9 @@ func (b *Bus) writeEventInTx(
 	ev *inventory.Event,
 	applyFn func(context.Context, store.Tx, *inventory.Event) error,
 ) (int64, error) {
-	const q = `
-            INSERT INTO events (event_type, timestamp_utc, actor_user_id, payload, note, entity_id)
-            VALUES (?, ?, ?, ?, ?, ?)`
-	result, err := tx.ExecContext(ctx, q,
-		ev.EventType, ev.TimestampUTC, ev.ActorUserID,
-		string(ev.Payload), ev.Note, ev.EntityID)
+	id, err := tx.AppendEvent(ctx, ev)
 	if err != nil {
-		return 0, fmt.Errorf("insert event: %w", err)
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("get event ID: %w", err)
+		return 0, err
 	}
 	inserted := *ev
 	inserted.EventID = id
@@ -257,14 +248,14 @@ func (b *Bus) applyEventProjectionOnlyTx(ctx context.Context, tx store.Tx, ev *i
 func (b *Bus) TruncateAndReplay(ctx context.Context) (int, error) {
 	var count int
 	err := b.store.ExecInTransaction(ctx, func(tx store.Tx) error {
-		events, loadErr := b.store.GetAllEventsTx(ctx, tx)
+		events, loadErr := tx.GetAllEvents(ctx)
 		if loadErr != nil {
 			return fmt.Errorf("TruncateAndReplay: load events: %w", loadErr)
 		}
-		if truncErr := b.store.TruncateTagsTx(ctx, tx); truncErr != nil {
+		if truncErr := tx.TruncateTags(ctx); truncErr != nil {
 			return fmt.Errorf("truncate tags: %w", truncErr)
 		}
-		if truncErr := b.store.TruncateEntitiesTx(ctx, tx); truncErr != nil {
+		if truncErr := tx.TruncateEntities(ctx); truncErr != nil {
 			return fmt.Errorf("truncate entities: %w", truncErr)
 		}
 		for _, ev := range events {

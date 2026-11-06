@@ -8,10 +8,10 @@ import (
 )
 
 // GetMetadata retrieves a value from the schema_metadata table by key.
-func (s *Store) GetMetadata(ctx context.Context, key string) (string, error) {
+func (r Reader) GetMetadata(ctx context.Context, key string) (string, error) {
 	const query = `SELECT value FROM schema_metadata WHERE key = ?`
 	var val string
-	err := s.db.QueryRowContext(ctx, query, key).Scan(&val)
+	err := r.q.QueryRowContext(ctx, query, key).Scan(&val)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrNotFound
 	}
@@ -23,9 +23,9 @@ func (s *Store) GetMetadata(ctx context.Context, key string) (string, error) {
 
 // CountEntitiesByStatus returns the count of entities per status across all statuses.
 // All five known statuses are always present in the returned map (zero-filled if absent).
-func (s *Store) CountEntitiesByStatus(ctx context.Context) (map[string]int, error) {
+func (r Reader) CountEntitiesByStatus(ctx context.Context) (map[string]int, error) {
 	const query = `SELECT status, COUNT(*) FROM entities_current GROUP BY status`
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := r.q.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("count entities by status: %w", err)
 	}
@@ -46,9 +46,9 @@ func (s *Store) CountEntitiesByStatus(ctx context.Context) (map[string]int, erro
 }
 
 // DeleteMetadata removes a key from the schema_metadata table. No-op if absent.
-func (s *Store) DeleteMetadata(ctx context.Context, key string) error {
+func (t Tx) DeleteMetadata(ctx context.Context, key string) error {
 	const query = `DELETE FROM schema_metadata WHERE key = ?`
-	_, err := s.db.ExecContext(ctx, query, key)
+	_, err := t.q.ExecContext(ctx, query, key)
 	if err != nil {
 		return fmt.Errorf("delete metadata %q: %w", key, err)
 	}
@@ -56,11 +56,11 @@ func (s *Store) DeleteMetadata(ctx context.Context, key string) error {
 }
 
 // SetMetadata upserts a key/value pair in the schema_metadata table.
-func (s *Store) SetMetadata(ctx context.Context, key, value string) error {
+func (t Tx) SetMetadata(ctx context.Context, key, value string) error {
 	const query = `
 		INSERT INTO schema_metadata (key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-	_, err := s.db.ExecContext(ctx, query, key, value)
+	_, err := t.q.ExecContext(ctx, query, key, value)
 	if err != nil {
 		return fmt.Errorf("set metadata %q: %w", key, err)
 	}

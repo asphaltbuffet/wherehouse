@@ -35,7 +35,7 @@ func (a *App) TagEntity(ctx context.Context, req TagEntityRequest) error {
 func (a *App) applyTagChangesTx(
 	ctx context.Context, tx store.Tx, req TagEntityRequest, addSet, removeSet map[string]bool,
 ) error {
-	entity, err := a.store.GetLiveEntityTx(ctx, tx, req.EntityID)
+	entity, err := tx.GetLiveEntity(ctx, req.EntityID)
 	if err != nil {
 		return wrapEntityError(req.EntityID, err)
 	}
@@ -94,7 +94,7 @@ func (a *App) pruneNoOpTagsTx(
 	ctx context.Context, tx store.Tx, entityID string, addSet, removeSet map[string]bool,
 ) error {
 	for tag := range removeSet {
-		has, err := a.store.HasTagTx(ctx, tx, entityID, tag)
+		has, err := tx.HasTag(ctx, entityID, tag)
 		if err != nil {
 			return fmt.Errorf("check tag %q: %w", tag, err)
 		}
@@ -104,7 +104,7 @@ func (a *App) pruneNoOpTagsTx(
 		}
 	}
 	for tag := range addSet {
-		has, err := a.store.HasTagTx(ctx, tx, entityID, tag)
+		has, err := tx.HasTag(ctx, entityID, tag)
 		if err != nil {
 			return fmt.Errorf("check tag %q: %w", tag, err)
 		}
@@ -118,11 +118,11 @@ func (a *App) pruneNoOpTagsTx(
 
 // ListTags returns the canonical tags for the entity identified by req.EntityID, sorted alphabetically.
 func (a *App) ListTags(ctx context.Context, req ListTagsRequest) ([]string, error) {
-	entity, err := a.store.GetEntity(ctx, req.EntityID)
+	entity, err := a.store.Reader().GetLiveEntity(ctx, req.EntityID)
 	if err != nil {
 		return nil, wrapEntityError(req.EntityID, err)
 	}
-	tags, err := a.store.GetTagsByEntity(ctx, entity.EntityID)
+	tags, err := a.store.Reader().GetTagsByEntity(ctx, entity.EntityID)
 	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
@@ -132,7 +132,7 @@ func (a *App) ListTags(ctx context.Context, req ListTagsRequest) ([]string, erro
 // AllTags returns the tag vocabulary: every distinct tag in the inventory,
 // including tags on removed entities, sorted alphabetically.
 func (a *App) AllTags(ctx context.Context) ([]string, error) {
-	tags, err := a.store.GetDistinctTags(ctx)
+	tags, err := a.store.Reader().GetDistinctTags(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("all tags: %w", err)
 	}
