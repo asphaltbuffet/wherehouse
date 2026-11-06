@@ -66,6 +66,11 @@ Status changes may carry an optional `StatusContext` (free-text, e.g. borrower n
 
 Each status is reached by exactly one intent-driven command (`lost`, `found`, `loan`, `return`, `borrow`), and each command rejects illegal source statuses rather than performing a no-op transition. The full legal transition table is recorded in [ADR 0024](docs/adr/0024-status-transition-commands-enforce-source-preconditions.md).
 
+### Live
+
+An entity whose status is anything but `removed`. Every lookup of entities says whether it means live entities only or entities of any status (including `removed`); neither is the default.
+_Avoid_: active, existing, non-deleted.
+
 ### Action
 
 A user intent applied to a single existing entity: `lost`, `found`, `loan`, `return`, `move`, `use`, `remove`, `lock`, `unlock`, `set-discrete`, `clear-discrete`, `add-child`, or `tag`. Whether an action may apply depends on the entity's status, `locked` and `discrete` attributes, displacement, live children, and whether it is the home of a displaced entity — never on which interface (CLI or web) asks. For `move` and `use`, the answer covers only whether the entity may be relocated at all; whether a particular destination is a **legal destination** is a separate check. `borrow` and `add` are not actions: they create entities. _Avoid_: intent (in code), operation, capability.
