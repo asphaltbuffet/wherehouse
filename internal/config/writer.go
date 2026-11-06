@@ -3,8 +3,6 @@ package config
 import (
 	"fmt"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/afero"
@@ -64,46 +62,6 @@ func WriteDefault(fs afero.Fs, path string, force bool) error {
 	return v.WriteConfigAs(path)
 }
 
-// Set updates a single key-value pair in the config file at path.
-// Reads the existing config via viper, sets the override, validates the full
-// merged config, then rewrites via viper.WriteConfigAs.
-//
-// Returns error if key is unknown, value fails type conversion, file cannot be
-// read/written, or the resulting config fails validation.
-func Set(fs afero.Fs, path string, key string, value string) error {
-	// Validate key is known and parse/type-check value
-	parsedValue, parseErr := parseConfigValue(key, value)
-	if parseErr != nil {
-		return parseErr
-	}
-
-	v := newViperForFile(fs, path)
-
-	err := v.ReadInConfig()
-	if err != nil {
-		return fmt.Errorf("reading config file: %w", err)
-	}
-
-	v.Set(key, parsedValue)
-
-	// Validate the full merged config before writing
-	var cfg Config
-
-	err = v.Unmarshal(&cfg)
-	if err != nil {
-		return fmt.Errorf("invalid configuration: %w", err)
-	}
-
-	applyDefaults(&cfg)
-
-	validateErr := validate(&cfg)
-	if validateErr != nil {
-		return fmt.Errorf("configuration validation failed: %w", validateErr)
-	}
-
-	return v.WriteConfigAs(path)
-}
-
 // Check validates the config file at path.
 // Reads the file directly (not via viper) to test the raw TOML parse path.
 // Returns nil if the file is valid TOML and passes all validation constraints.
@@ -128,81 +86,4 @@ func Check(fs afero.Fs, path string) error {
 	}
 
 	return nil
-}
-
-// GetValue returns the value of a dot-separated config key from cfg.
-func GetValue(cfg *Config, key string) (any, error) {
-	switch key {
-	case "database.path":
-		return cfg.Database.Path, nil
-	case "logging.file_path":
-		return cfg.Logging.FilePath, nil
-	case "logging.level":
-		return cfg.Logging.Level, nil
-	case "logging.max_size_mb":
-		return cfg.Logging.MaxSizeMB, nil
-	case "logging.max_backups":
-		return cfg.Logging.MaxBackups, nil
-	case "user.default_identity":
-		return cfg.User.DefaultIdentity, nil
-	case "user.os_username_map":
-		return cfg.User.OSUsernameMap, nil
-	case "output.default_format":
-		return cfg.Output.DefaultFormat, nil
-	case "output.quiet":
-		return cfg.Output.Quiet, nil
-	case "web.actor_header":
-		return cfg.Web.ActorHeader, nil
-	default:
-		return nil, fmt.Errorf("unknown configuration key %q", key)
-	}
-}
-
-// parseConfigValue validates and parses a string value for the given config key.
-// Returns the typed value ready for viper.Set() or an error if invalid.
-// This is the single source of truth for type coercion and per-key validation.
-func parseConfigValue(key, value string) (any, error) {
-	switch key {
-	case "database.path":
-		return value, nil
-	case "logging.file_path":
-		return value, nil
-	case "logging.level":
-		normalized := strings.ToLower(value)
-		valid := map[string]bool{"debug": true, "info": true, "warn": true, "warning": true, "error": true}
-		if !valid[normalized] {
-			return nil, fmt.Errorf("logging.level must be one of [debug, info, warn, warning, error], got %q", value)
-		}
-		return normalized, nil
-	case "logging.max_size_mb":
-		n, err := strconv.Atoi(value)
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("logging.max_size_mb must be a non-negative integer, got %q", value)
-		}
-		return n, nil
-	case "logging.max_backups":
-		n, err := strconv.Atoi(value)
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("logging.max_backups must be a non-negative integer, got %q", value)
-		}
-		return n, nil
-	case "user.default_identity":
-		return value, nil
-	case "output.default_format":
-		if value != OutputFormatHuman && value != OutputFormatJSON {
-			return nil, fmt.Errorf("output.default_format must be 'human' or 'json', got %q", value)
-		}
-		return value, nil
-	case "output.quiet":
-		n, err := strconv.Atoi(value)
-		if err != nil || n < 0 || n > MaxQuietLevel {
-			return nil, fmt.Errorf("output.quiet must be an integer between 0 and %d, got %q", MaxQuietLevel, value)
-		}
-		return n, nil
-	case "web.actor_header":
-		// Name validity is checked by web.New at startup; config must not import internal/web.
-		return value, nil
-	default:
-		return nil, fmt.Errorf("unknown configuration key %q", key)
-	}
 }

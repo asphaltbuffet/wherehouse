@@ -59,7 +59,7 @@ cmd/                     # CLI commands (cobra); one subdir per command
   add/                   # add entities (batch, --file CSV)
   attr/                  # show/set locked and discrete attributes
   borrow/                # create entities in borrowed status
-  config/                # config init/get/set/check/edit/path
+  config/                # config init/check/path
   db/                    # database settings (display name)
   doctor/                # inventory health checks
   export/ import/        # NDJSON event export / import
