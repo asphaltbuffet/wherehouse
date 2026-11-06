@@ -30,7 +30,7 @@ func applyDefaults(cfg *Config) {
 }
 
 // GetDefaults returns a Config struct populated with default values.
-// Useful for testing and documentation purposes.
+// It is the source of the file written by WriteDefault (`config init`).
 func GetDefaults() *Config {
 	cfg := &Config{}
 	applyDefaults(cfg)

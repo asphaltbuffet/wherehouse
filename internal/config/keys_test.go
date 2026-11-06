@@ -14,8 +14,9 @@ var envExcluded = map[string]string{
 }
 
 // leafKeys returns the dotted mapstructure key of every non-struct field in
-// Config, in struct order. A field without a mapstructure tag fails the test,
-// so a new field can never be silently skipped.
+// Config, in struct order. A field without a mapstructure tag, or a pointer
+// field (which would be miscounted as a single leaf), fails the test, so a new
+// field can never be silently skipped or misread.
 func leafKeys(t *testing.T) []string {
 	t.Helper()
 
@@ -32,6 +33,10 @@ func leafKeys(t *testing.T) []string {
 			key := tag
 			if prefix != "" {
 				key = prefix + "." + tag
+			}
+
+			if field.Type.Kind() == reflect.Pointer {
+				t.Fatalf("field %s.%s is a pointer; leafKeys does not walk pointers", typ.Name(), field.Name)
 			}
 
 			if field.Type.Kind() == reflect.Struct {

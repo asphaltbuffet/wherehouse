@@ -499,6 +499,7 @@ max_backups = 0    # must be >= 0
 default_identity = ''
 
 [user.os_username_map]
+
 [output]
 default_format = 'human'
 quiet = 0          # 0 = normal, 1 = minimal (-q), 2 = silent (-qq)

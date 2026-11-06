@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 
@@ -31,6 +32,10 @@ func WriteDefault(fs afero.Fs, path string, force bool) error {
 	if err != nil {
 		return fmt.Errorf("encoding default config: %w", err)
 	}
+
+	// go-toml emits an empty table (user.os_username_map) with no blank line
+	// before the next header; add one so every table is visually separated.
+	data = bytes.ReplaceAll(data, []byte("]\n["), []byte("]\n\n["))
 
 	err = afero.WriteFile(fs, path, data, 0o644)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
@@ -27,6 +28,22 @@ func TestWriteDefault_AllDefaultsRoundTrip(t *testing.T) {
 	applyDefaults(&got)
 
 	assert.Equal(t, GetDefaults(), &got)
+}
+
+// TestWriteDefault_TablesSeparatedByBlankLine verifies every table header after
+// the first follows a blank line, so the generated file is easy to read and edit.
+func TestWriteDefault_TablesSeparatedByBlankLine(t *testing.T) {
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
+	data, err := afero.ReadFile(testFs, defaultCfgFile)
+	require.NoError(t, err)
+
+	lines := strings.Split(string(data), "\n")
+	for i := 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "[") {
+			assert.Empty(t, lines[i-1], "table %s should follow a blank line", lines[i])
+		}
+	}
 }
 
 // TestWriteDefault_QuotesUnusualPaths verifies a default database path with
@@ -81,17 +98,25 @@ func TestWriteDefault_CreatesFile(t *testing.T) {
 	})
 
 	t.Run("force overwrite", func(t *testing.T) {
-		// Overwrite with force=true
+		// Junk longer than the generated file: any leftover tail breaks parsing.
+		junk := strings.Repeat("not toml ", 1024)
+		require.NoError(t, afero.WriteFile(testFs, defaultCfgFile, []byte(junk), 0o644))
+
 		require.NoError(t, WriteDefault(testFs, defaultCfgFile, true))
 
-		// Verify file still exists
-		exists, err := afero.Exists(testFs, defaultCfgFile)
+		data, err := afero.ReadFile(testFs, defaultCfgFile)
 		require.NoError(t, err)
-		assert.True(t, exists)
+		assert.NotContains(t, string(data), "not toml")
+
+		var got Config
+
+		require.NoError(t, toml.Unmarshal(data, &got))
+		applyDefaults(&got)
+		assert.Equal(t, GetDefaults(), &got)
 	})
 }
 
-// TestWriteDefault_OutputIsParseable verifies viper output is valid TOML with expected sections.
+// TestWriteDefault_OutputIsParseable verifies the written file is valid TOML with expected sections.
 func TestWriteDefault_OutputIsParseable(t *testing.T) {
 	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
