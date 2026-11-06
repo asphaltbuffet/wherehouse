@@ -3,38 +3,64 @@ package config
 import (
 	"bytes"
 	"path/filepath"
+	"runtime"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestWriteDefault_AllDefaultsRoundTrip verifies round-trip: write via WriteDefault,
-// read back via viper, verify all keys match GetDefaults() values.
+// TestWriteDefault_AllDefaultsRoundTrip verifies the written file decodes back
+// to exactly GetDefaults(), field for field.
 func TestWriteDefault_AllDefaultsRoundTrip(t *testing.T) {
 	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
-	// Read back through viper to verify all keys/values
-	v := viper.New()
-	v.SetFs(testFs)
-	v.SetConfigFile(defaultCfgFile)
-	v.SetConfigType("toml")
-	require.NoError(t, v.ReadInConfig())
+	data, err := afero.ReadFile(testFs, defaultCfgFile)
+	require.NoError(t, err)
 
-	defaults := GetDefaults()
+	var got Config
 
-	// Verify all default values are present in the written file
-	assert.Equal(t, defaults.Database.Path, v.GetString("database.path"))
-	assert.Equal(t, defaults.Logging.Level, v.GetString("logging.level"))
-	assert.Equal(t, defaults.Logging.FilePath, v.GetString("logging.file_path"))
-	assert.Equal(t, defaults.Logging.MaxSizeMB, v.GetInt("logging.max_size_mb"))
-	assert.Equal(t, defaults.Logging.MaxBackups, v.GetInt("logging.max_backups"))
-	assert.Equal(t, defaults.User.DefaultIdentity, v.GetString("user.default_identity"))
-	assert.Equal(t, defaults.Output.DefaultFormat, v.GetString("output.default_format"))
-	assert.Equal(t, defaults.Output.Quiet, v.GetInt("output.quiet"))
-	assert.Equal(t, defaults.Web.ActorHeader, v.GetString("web.actor_header"))
+	require.NoError(t, toml.Unmarshal(data, &got))
+	applyDefaults(&got)
+
+	assert.Equal(t, GetDefaults(), &got)
+}
+
+// TestWriteDefault_QuotesUnusualPaths verifies a default database path with
+// quote and backslash characters survives the write/read round trip.
+func TestWriteDefault_QuotesUnusualPaths(t *testing.T) {
+	if runtime.GOOS != goosLinux {
+		t.Skip("default database path honours XDG_DATA_HOME only on linux")
+	}
+
+	t.Setenv("XDG_DATA_HOME", `/data/o'brien "quoted" \share`)
+
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
+	data, err := afero.ReadFile(testFs, defaultCfgFile)
+	require.NoError(t, err)
+
+	var got Config
+
+	require.NoError(t, toml.Unmarshal(data, &got))
+
+	assert.Equal(t, GetDefaults().Database.Path, got.Database.Path)
+}
+
+// TestWriteDefault_EnvOverridesGeneratedFile verifies a WHEREHOUSE_* env var
+// still wins over a freshly generated config file.
+func TestWriteDefault_EnvOverridesGeneratedFile(t *testing.T) {
+	t.Setenv("WHEREHOUSE_OUTPUT_DEFAULT_FORMAT", OutputFormatJSON)
+
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
+	cfg, err := NewWithFS(testFs, defaultCfgFile)
+	require.NoError(t, err)
+
+	assert.True(t, cfg.IsJSON(), "env default_format should override the generated file")
 }
 
 // TestWriteDefault_CreatesFile verifies file is created.
@@ -137,7 +163,8 @@ func TestCheck_EmptyFile(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestWriteDefault_AllKeysPresent verifies all expected keys are in the output.
+// TestWriteDefault_AllKeysPresent verifies every Config leaf key is written,
+// including zero-valued ones, so `config init` shows every setting.
 func TestWriteDefault_AllKeysPresent(t *testing.T) {
 	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
@@ -147,21 +174,8 @@ func TestWriteDefault_AllKeysPresent(t *testing.T) {
 	v.SetConfigType("toml")
 	require.NoError(t, v.ReadInConfig())
 
-	// Verify all expected keys exist
-	expectedKeys := []string{
-		"database.path",
-		"logging.file_path",
-		"logging.level",
-		"logging.max_size_mb",
-		"logging.max_backups",
-		"user.default_identity",
-		"user.os_username_map",
-		"output.default_format",
-		"output.quiet",
-	}
-
-	for _, key := range expectedKeys {
-		assert.True(t, v.IsSet(key), "key %q should be set", key)
+	for _, key := range leafKeys(t) {
+		assert.True(t, v.IsSet(key), "key %q should be written", key)
 	}
 }
 

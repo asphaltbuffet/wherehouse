@@ -1,0 +1,5 @@
+kind: Changed
+body: config init writes the default config directly from the built-in defaults; key order and quoting in the generated file differ slightly, and settings are unchanged
+time: 2026-11-06T07:42:03.587326526-05:00
+custom:
+    Issue: '#258'
