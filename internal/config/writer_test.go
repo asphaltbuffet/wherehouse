@@ -3,38 +3,81 @@ package config
 import (
 	"bytes"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestWriteDefault_AllDefaultsRoundTrip verifies round-trip: write via WriteDefault,
-// read back via viper, verify all keys match GetDefaults() values.
+// TestWriteDefault_AllDefaultsRoundTrip verifies the written file decodes back
+// to exactly GetDefaults(), field for field.
 func TestWriteDefault_AllDefaultsRoundTrip(t *testing.T) {
 	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
-	// Read back through viper to verify all keys/values
-	v := viper.New()
-	v.SetFs(testFs)
-	v.SetConfigFile(defaultCfgFile)
-	v.SetConfigType("toml")
-	require.NoError(t, v.ReadInConfig())
+	data, err := afero.ReadFile(testFs, defaultCfgFile)
+	require.NoError(t, err)
 
-	defaults := GetDefaults()
+	var got Config
 
-	// Verify all default values are present in the written file
-	assert.Equal(t, defaults.Database.Path, v.GetString("database.path"))
-	assert.Equal(t, defaults.Logging.Level, v.GetString("logging.level"))
-	assert.Equal(t, defaults.Logging.FilePath, v.GetString("logging.file_path"))
-	assert.Equal(t, defaults.Logging.MaxSizeMB, v.GetInt("logging.max_size_mb"))
-	assert.Equal(t, defaults.Logging.MaxBackups, v.GetInt("logging.max_backups"))
-	assert.Equal(t, defaults.User.DefaultIdentity, v.GetString("user.default_identity"))
-	assert.Equal(t, defaults.Output.DefaultFormat, v.GetString("output.default_format"))
-	assert.Equal(t, defaults.Output.Quiet, v.GetInt("output.quiet"))
-	assert.Equal(t, defaults.Web.ActorHeader, v.GetString("web.actor_header"))
+	require.NoError(t, toml.Unmarshal(data, &got))
+	applyDefaults(&got)
+
+	assert.Equal(t, GetDefaults(), &got)
+}
+
+// TestWriteDefault_TablesSeparatedByBlankLine verifies every table header after
+// the first follows a blank line, so the generated file is easy to read and edit.
+func TestWriteDefault_TablesSeparatedByBlankLine(t *testing.T) {
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
+	data, err := afero.ReadFile(testFs, defaultCfgFile)
+	require.NoError(t, err)
+
+	lines := strings.Split(string(data), "\n")
+	for i := 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "[") {
+			assert.Empty(t, lines[i-1], "table %s should follow a blank line", lines[i])
+		}
+	}
+}
+
+// TestWriteDefault_QuotesUnusualPaths verifies a default database path with
+// quote and backslash characters survives the write/read round trip.
+func TestWriteDefault_QuotesUnusualPaths(t *testing.T) {
+	if runtime.GOOS != goosLinux {
+		t.Skip("default database path honours XDG_DATA_HOME only on linux")
+	}
+
+	t.Setenv("XDG_DATA_HOME", `/data/o'brien "quoted" \share`)
+
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
+	data, err := afero.ReadFile(testFs, defaultCfgFile)
+	require.NoError(t, err)
+
+	var got Config
+
+	require.NoError(t, toml.Unmarshal(data, &got))
+
+	assert.Equal(t, GetDefaults().Database.Path, got.Database.Path)
+}
+
+// TestWriteDefault_EnvOverridesGeneratedFile verifies a WHEREHOUSE_* env var
+// still wins over a freshly generated config file.
+func TestWriteDefault_EnvOverridesGeneratedFile(t *testing.T) {
+	t.Setenv("WHEREHOUSE_OUTPUT_DEFAULT_FORMAT", OutputFormatJSON)
+
+	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
+
+	cfg, err := NewWithFS(testFs, defaultCfgFile)
+	require.NoError(t, err)
+
+	assert.True(t, cfg.IsJSON(), "env default_format should override the generated file")
 }
 
 // TestWriteDefault_CreatesFile verifies file is created.
@@ -55,17 +98,25 @@ func TestWriteDefault_CreatesFile(t *testing.T) {
 	})
 
 	t.Run("force overwrite", func(t *testing.T) {
-		// Overwrite with force=true
+		// Junk longer than the generated file: any leftover tail breaks parsing.
+		junk := strings.Repeat("not toml ", 1024)
+		require.NoError(t, afero.WriteFile(testFs, defaultCfgFile, []byte(junk), 0o644))
+
 		require.NoError(t, WriteDefault(testFs, defaultCfgFile, true))
 
-		// Verify file still exists
-		exists, err := afero.Exists(testFs, defaultCfgFile)
+		data, err := afero.ReadFile(testFs, defaultCfgFile)
 		require.NoError(t, err)
-		assert.True(t, exists)
+		assert.NotContains(t, string(data), "not toml")
+
+		var got Config
+
+		require.NoError(t, toml.Unmarshal(data, &got))
+		applyDefaults(&got)
+		assert.Equal(t, GetDefaults(), &got)
 	})
 }
 
-// TestWriteDefault_OutputIsParseable verifies viper output is valid TOML with expected sections.
+// TestWriteDefault_OutputIsParseable verifies the written file is valid TOML with expected sections.
 func TestWriteDefault_OutputIsParseable(t *testing.T) {
 	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
@@ -87,188 +138,6 @@ func TestWriteDefault_OutputIsParseable(t *testing.T) {
 	assert.True(t, v.IsSet("logging"))
 	assert.True(t, v.IsSet("user"))
 	assert.True(t, v.IsSet("output"))
-}
-
-// TestSet_UpdatesValue tests updating each settable key and verifying via viper re-read.
-func TestSet_UpdatesValue(t *testing.T) {
-	cases := []struct {
-		name  string
-		key   string
-		value string
-		want  any
-	}{
-		{
-			name:  "database.path",
-			key:   "database.path",
-			value: "/custom/db.sqlite",
-			want:  "/custom/db.sqlite",
-		},
-		{
-			name:  "logging.file_path",
-			key:   "logging.file_path",
-			value: "/custom/logfile.log",
-			want:  "/custom/logfile.log",
-		},
-		{
-			name:  "logging.level debug",
-			key:   "logging.level",
-			value: "debug",
-			want:  "debug",
-		},
-		{
-			name:  "logging.max_size_mb",
-			key:   "logging.max_size_mb",
-			value: "100",
-			want:  100,
-		},
-		{
-			name:  "logging.max_backups",
-			key:   "logging.max_backups",
-			value: "5",
-			want:  5,
-		},
-		{
-			name:  "user.default_identity",
-			key:   "user.default_identity",
-			value: "alice",
-			want:  "alice",
-		},
-		{
-			name:  "output.default_format human",
-			key:   "output.default_format",
-			value: "human",
-			want:  "human",
-		},
-		{
-			name:  "output.default_format json",
-			key:   "output.default_format",
-			value: "json",
-			want:  "json",
-		},
-		{
-			name:  "output.quiet 1",
-			key:   "output.quiet",
-			value: "1",
-			want:  1,
-		},
-		{
-			name:  "output.quiet 0",
-			key:   "output.quiet",
-			value: "0",
-			want:  0,
-		},
-		{
-			name:  "web.actor_header",
-			key:   "web.actor_header",
-			value: "Tailscale-User-Login",
-			want:  "Tailscale-User-Login",
-		},
-	}
-
-	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			// Update key
-			require.NoError(t, Set(testFs, defaultCfgFile, tt.key, tt.value))
-
-			// Re-read and verify
-			v := viper.New()
-			v.SetFs(testFs)
-			v.SetConfigFile(defaultCfgFile)
-			v.SetConfigType("toml")
-			require.NoError(t, v.ReadInConfig())
-
-			assert.EqualValues(t, tt.want, v.Get(tt.key))
-		})
-	}
-}
-
-// TestSet_InvalidValue tests various invalid values for type-specific keys.
-func TestSet_Invalid(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name      string
-		key       string
-		value     string
-		errorText string
-	}{
-		{
-			name:      "unknown key",
-			key:       "unknown.key",
-			value:     "fake",
-			errorText: "unknown configuration key",
-		},
-		{
-			name:      "logging.level invalid",
-			key:       "logging.level",
-			value:     "verbose",
-			errorText: "must be one of",
-		},
-		{
-			name:      "output.quiet non-numeric",
-			key:       "output.quiet",
-			value:     "true",
-			errorText: "must be an integer between 0 and 2",
-		},
-		{
-			name:      "output.quiet negative",
-			key:       "output.quiet",
-			value:     "-1",
-			errorText: "must be an integer between 0 and 2",
-		},
-		{
-			name:      "output.quiet above max",
-			key:       "output.quiet",
-			value:     "3",
-			errorText: "must be an integer between 0 and 2",
-		},
-		{
-			name:      "output.default_format invalid",
-			key:       "output.default_format",
-			value:     "xml",
-			errorText: "must be 'human' or 'json'",
-		},
-		{
-			name:      "logging.max_size_mb negative",
-			key:       "logging.max_size_mb",
-			value:     "-1",
-			errorText: "non-negative integer",
-		},
-		{
-			name:      "logging.max_size_mb non-integer",
-			key:       "logging.max_size_mb",
-			value:     "not-a-number",
-			errorText: "non-negative integer",
-		},
-		{
-			name:      "logging.max_backups negative",
-			key:       "logging.max_backups",
-			value:     "-1",
-			errorText: "non-negative integer",
-		},
-	}
-
-	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := Set(testFs, defaultCfgFile, tt.key, tt.value)
-			assert.ErrorContains(t, err, tt.errorText)
-		})
-	}
-}
-
-// TestSet_FileNotFound verifies error when file does not exist.
-func TestSet_FileNotFound(t *testing.T) {
-	testFs, _ := NewTestFs(t)
-	path := "fake/config/path/config.toml"
-
-	err := Set(testFs, path, "database.path", "/some/path.db")
-	assert.ErrorContains(t, err, "reading config file")
 }
 
 // TestCheck_ValidFile verifies Check returns nil for valid TOML.
@@ -306,155 +175,6 @@ default_format = "xml"
 	})
 }
 
-// TestGetValue_AllKeys tests GetValue for all supported keys.
-func TestGetValue_AllKeys(t *testing.T) {
-	cases := []struct {
-		name     string
-		key      string
-		setupCfg func(*Config)
-		want     any
-	}{
-		{
-			name: "database.path",
-			key:  "database.path",
-			setupCfg: func(cfg *Config) {
-				cfg.Database.Path = "/custom/db.sqlite"
-			},
-			want: "/custom/db.sqlite",
-		},
-		{
-			name: "logging.file_path",
-			key:  "logging.file_path",
-			setupCfg: func(cfg *Config) {
-				cfg.Logging.FilePath = "/custom/log.txt"
-			},
-			want: "/custom/log.txt",
-		},
-		{
-			name: "logging.level",
-			key:  "logging.level",
-			setupCfg: func(cfg *Config) {
-				cfg.Logging.Level = "debug"
-			},
-			want: "debug",
-		},
-		{
-			name: "logging.max_size_mb",
-			key:  "logging.max_size_mb",
-			setupCfg: func(cfg *Config) {
-				cfg.Logging.MaxSizeMB = 100
-			},
-			want: 100,
-		},
-		{
-			name: "logging.max_backups",
-			key:  "logging.max_backups",
-			setupCfg: func(cfg *Config) {
-				cfg.Logging.MaxBackups = 5
-			},
-			want: 5,
-		},
-		{
-			name: "user.default_identity",
-			key:  "user.default_identity",
-			setupCfg: func(cfg *Config) {
-				cfg.User.DefaultIdentity = "alice"
-			},
-			want: "alice",
-		},
-		{
-			name: "user.os_username_map",
-			key:  "user.os_username_map",
-			setupCfg: func(cfg *Config) {
-				cfg.User.OSUsernameMap = map[string]string{
-					"jdoe": "john.doe",
-				}
-			},
-			want: map[string]string{"jdoe": "john.doe"},
-		},
-		{
-			name: "output.default_format",
-			key:  "output.default_format",
-			setupCfg: func(cfg *Config) {
-				cfg.Output.DefaultFormat = "json"
-			},
-			want: "json",
-		},
-		{
-			name: "output.quiet",
-			key:  "output.quiet",
-			setupCfg: func(cfg *Config) {
-				cfg.Output.Quiet = 1
-			},
-			want: 1,
-		},
-		{
-			name: "web.actor_header",
-			key:  "web.actor_header",
-			setupCfg: func(cfg *Config) {
-				cfg.Web.ActorHeader = "Tailscale-User-Login"
-			},
-			want: "Tailscale-User-Login",
-		},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{}
-			applyDefaults(cfg)
-			tt.setupCfg(cfg)
-
-			val, err := GetValue(cfg, tt.key)
-			require.NoError(t, err)
-			assert.EqualValues(t, tt.want, val)
-		})
-	}
-}
-
-// TestGetValue_UnknownKey verifies error for unknown keys.
-func TestGetValue_UnknownKey(t *testing.T) {
-	cfg := &Config{}
-	applyDefaults(cfg)
-
-	_, err := GetValue(cfg, "unknown.key")
-	require.ErrorContains(t, err, "unknown configuration key")
-}
-
-// TestGetValue_InvalidFormat tests invalid key format.
-func TestGetValue_InvalidFormat(t *testing.T) {
-	cfg := &Config{}
-	applyDefaults(cfg)
-
-	// Test key without dot separator
-	_, err := GetValue(cfg, "invalid_key")
-	require.Error(t, err, "invalid key format")
-
-	// Test key with section that doesn't exist
-	_, err = GetValue(cfg, "nonexistent.field")
-	require.Error(t, err, "unknown configuration key")
-}
-
-// TestSet_PreservesOtherValues verifies that Set preserves other config values.
-func TestSet_PreservesOtherValues(t *testing.T) {
-	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
-
-	// Set one key
-	require.NoError(t, Set(testFs, defaultCfgFile, "database.path", "/custom/db.sqlite"))
-
-	// Set another key and verify the first is preserved
-	require.NoError(t, Set(testFs, defaultCfgFile, "output.quiet", "2"))
-
-	// Re-read and verify both values
-	v := viper.New()
-	v.SetFs(testFs)
-	v.SetConfigFile(defaultCfgFile)
-	v.SetConfigType("toml")
-	require.NoError(t, v.ReadInConfig())
-
-	assert.Equal(t, "/custom/db.sqlite", v.GetString("database.path"))
-	assert.Equal(t, 2, v.GetInt("output.quiet"))
-}
-
 // TestCheck_EmptyFile verifies Check handles empty TOML file gracefully.
 func TestCheck_EmptyFile(t *testing.T) {
 	testFs, testDir := NewTestFs(t)
@@ -468,38 +188,8 @@ func TestCheck_EmptyFile(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestSet_MultipleUpdates verifies sequential Set calls work correctly.
-func TestSet_MultipleUpdates(t *testing.T) {
-	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
-
-	// Make multiple updates
-	updates := []struct {
-		key   string
-		value string
-	}{
-		{"database.path", "/path/1.db"},
-		{"logging.level", "debug"},
-		{"output.quiet", "2"},
-		{"database.path", "/path/2.db"}, // Update again
-	}
-
-	for _, u := range updates {
-		require.NoError(t, Set(testFs, defaultCfgFile, u.key, u.value))
-	}
-
-	// Verify final values
-	v := viper.New()
-	v.SetFs(testFs)
-	v.SetConfigFile(defaultCfgFile)
-	v.SetConfigType("toml")
-	require.NoError(t, v.ReadInConfig())
-
-	assert.Equal(t, "/path/2.db", v.GetString("database.path"))
-	assert.Equal(t, "debug", v.GetString("logging.level"))
-	assert.Equal(t, 2, v.GetInt("output.quiet"))
-}
-
-// TestWriteDefault_AllKeysPresent verifies all expected keys are in the output.
+// TestWriteDefault_AllKeysPresent verifies every Config leaf key is written,
+// including zero-valued ones, so `config init` shows every setting.
 func TestWriteDefault_AllKeysPresent(t *testing.T) {
 	testFs, defaultCfgFile := NewTestFsWithDefaultFile(t)
 
@@ -509,21 +199,8 @@ func TestWriteDefault_AllKeysPresent(t *testing.T) {
 	v.SetConfigType("toml")
 	require.NoError(t, v.ReadInConfig())
 
-	// Verify all expected keys exist
-	expectedKeys := []string{
-		"database.path",
-		"logging.file_path",
-		"logging.level",
-		"logging.max_size_mb",
-		"logging.max_backups",
-		"user.default_identity",
-		"user.os_username_map",
-		"output.default_format",
-		"output.quiet",
-	}
-
-	for _, key := range expectedKeys {
-		assert.True(t, v.IsSet(key), "key %q should be set", key)
+	for _, key := range leafKeys(t) {
+		assert.True(t, v.IsSet(key), "key %q should be written", key)
 	}
 }
 

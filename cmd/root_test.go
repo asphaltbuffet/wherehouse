@@ -350,6 +350,33 @@ func TestInitConfig_ConfigSubtreeFallsBackWithWarning(t *testing.T) {
 	assert.Equal(t, config.GetDefaults().Output.DefaultFormat, globalConfig.Output.DefaultFormat)
 }
 
+// TestInitConfig_ConfigInitMissingFileIsSilent verifies `config init --config
+// <new path>` does not warn that the file it is about to create is missing.
+func TestInitConfig_ConfigInitMissingFileIsSilent(t *testing.T) {
+	initCmd, _, err := configpkg.NewConfigCmd().Find([]string{"init"})
+	require.NoError(t, err)
+	testCmd, stderr := newInitConfigTestCmd(t, initCmd)
+	require.NoError(t, testCmd.Flags().Set("config", filepath.Join(t.TempDir(), "new.toml")))
+
+	require.NoError(t, initConfig(testCmd, nil))
+
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, config.GetDefaults(), globalConfig)
+}
+
+// TestInitConfig_MissingFileOutsideInitWarns verifies only `config init` treats
+// a missing --config file as expected; other config subcommands still warn.
+func TestInitConfig_MissingFileOutsideInitWarns(t *testing.T) {
+	checkCmd, _, err := configpkg.NewConfigCmd().Find([]string{"check"})
+	require.NoError(t, err)
+	testCmd, stderr := newInitConfigTestCmd(t, checkCmd)
+	require.NoError(t, testCmd.Flags().Set("config", filepath.Join(t.TempDir(), "missing.toml")))
+
+	require.NoError(t, initConfig(testCmd, nil))
+
+	assert.Contains(t, stderr.String(), "warning: invalid configuration, using defaults: ")
+}
+
 func TestNewConfigCmd_AllowsInvalidConfig(t *testing.T) {
 	check, _, err := configpkg.NewConfigCmd().Find([]string{"check"})
 	require.NoError(t, err)

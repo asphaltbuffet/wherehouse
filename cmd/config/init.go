@@ -27,7 +27,8 @@ Examples:
   wherehouse config init --local                  # Create local config
   wherehouse config init --force                  # Overwrite existing global config
   wherehouse --config custom.toml config init     # Create config at custom path`,
-		RunE: runInit,
+		Annotations: map[string]string{AllowMissingConfigAnnotation: "true"},
+		RunE:        runInit,
 	}
 
 	// Add flags specific to this command

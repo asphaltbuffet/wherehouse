@@ -483,29 +483,29 @@ Global Flags:
 wherehouse config init
 ```
 
-Generated `~/.config/wherehouse/wherehouse.toml`:
+Generated `~/.config/wherehouse/wherehouse.toml` (every key with its default; the comments here are annotations and are not written by `config init`):
 
 ```toml
 [database]
-path = "~/.local/share/wherehouse/wherehouse.db"
+path = '/home/you/.local/share/wherehouse/wherehouse.db'
 
 [logging]
-level = "warn"
-# file_path = "~/.local/state/wherehouse/wherehouse.log"
-# file_path = "-"   # log to stderr; max_size_mb must stay 0
-# max_size_mb = 10   # must be >= 0
-# max_backups = 3    # must be >= 0
+file_path = ''     # '' = ~/.local/state/wherehouse/wherehouse.log; '-' = stderr (max_size_mb must stay 0)
+level = 'warn'
+max_size_mb = 0    # must be >= 0; 0 = no rotation
+max_backups = 0    # must be >= 0
 
 [user]
-default_identity = ""
-os_username_map = {}
+default_identity = ''
+
+[user.os_username_map]
 
 [output]
-default_format = "human"
-quiet = 0   # 0 = normal, 1 = minimal (-q), 2 = silent (-qq)
+default_format = 'human'
+quiet = 0          # 0 = normal, 1 = minimal (-q), 2 = silent (-qq)
 
 [web]
-actor_header = ""
+actor_header = ''
 ```
 
 ### Environment Variables
